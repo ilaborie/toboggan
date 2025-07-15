@@ -1,6 +1,43 @@
 [package]
 name = "toboggan-server"
 version = "0.1.0"
-edition = "2024"
+description = "Axum WebSocket server with REST API and real-time presentation synchronization"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
 
 [dependencies]
+toboggan-core = {path = "../toboggan-core", features = ["openapi"]}
+
+axum = { workspace = true, features = ["ws"] }
+tokio = { workspace = true, features = ["full"] }
+toml = {workspace = true}
+tracing = {workspace = true}
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+clap = { workspace = true, features = ["env", "derive"] }
+anyhow = {workspace = true}
+serde = { workspace = true, features = ["derive"] }
+serde_json = {workspace = true}
+tower-http = { workspace = true, features = ["trace", "cors", "fs"] }
+futures = { workspace = true }
+dashmap = { workspace = true }
+derive_more = { workspace = true, features = ["display",  "error"]}
+utoipa = { workspace = true }
+utoipa-scalar = { workspace = true, features = ["axum"] }
+rust-embed = { workspace = true }
+mime_guess = { workspace = true }
+notify = { workspace = true }
+
+[dev-dependencies]
+toboggan-core = { path = "../toboggan-core", features = ["openapi", "test-utils"] }
+clawspec-core = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+tokio-tungstenite = { workspace = true }
+
+[[test]]
+name = "multi_client_sync"
+harness = true
+
+[lints]
+workspace = true

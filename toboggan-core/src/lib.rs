@@ -1,14 +1,25 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+mod time;
+pub use self::time::*;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+mod config;
+pub use self::config::*;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub mod timeouts;
+
+mod content;
+pub use self::content::*;
+
+mod state;
+pub use self::state::*;
+
+mod slide;
+pub use self::slide::*;
+
+mod talk;
+pub use self::talk::*;
+
+mod command;
+pub use self::command::*;
+
+mod notification;
+pub use self::notification::*;

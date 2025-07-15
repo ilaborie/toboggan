@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+#MISE description="Auto-fix web code with Biome"
+
+set -eu
+
+echo "🌐 Running web auto-fixes..."
+
+# Fix toboggan-web with Biome
+echo "🔧 Auto-fixing toboggan-web with Biome..."
+cd toboggan-web && npm run check:fix && cd ..
+
+echo "✅ All web auto-fixes applied!"

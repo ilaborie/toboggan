@@ -1,0 +1,31 @@
+Available syntax highlighting themes:
+
+Base16 themes:
+  base16-ocean.dark
+  base16-ocean.light (default)
+  base16-mocha.dark
+  base16-eighties.dark
+
+Classic themes:
+  InspiredGitHub
+  Solarized (dark)
+  Solarized (light)
+
+Monokai themes:
+  Monokai
+  Monokai Extended
+  Monokai Extended Light
+  Monokai Extended Bright
+
+Other popular themes:
+  gruvbox-dark
+  gruvbox-light
+  Nord
+  Dracula
+  OneHalfDark
+  OneHalfLight
+  ayu-dark
+  ayu-light
+  ayu-mirage
+
+Note: Theme names are case-sensitive.

@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Run clippy linting with strict warnings as errors"
-
-set -eux
-
-# Tests
-cargo clippy --all-targets --all-features -- -D warnings

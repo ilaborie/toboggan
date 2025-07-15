@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#MISE description="Generate and lint OpenAPI specification"
+
+set -eux
+
+# Run OpenAPI generation driven by tests
+cargo test --test generate_openapi -- should_generate_openapi --exact
+
+# Lint generated openapi.json using npx
+npx --yes @stoplight/spectral-cli lint toboggan-server/openapi.json

@@ -1,6 +1,45 @@
 [package]
 name = "toboggan-ios"
 version = "0.1.0"
-edition = "2024"
+description = "iOS library for Toboggan presentations with UniFFI bindings for Swift"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+
+[lib]
+crate-type = ["lib", "cdylib", "staticlib"]
+name = "toboggan"
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "./uniffi-bindgen.rs"
+
+[[bin]]
+name = "uniffi-bindgen-swift"
+path = "./uniffi-bindgen-swift.rs"
+
 
 [dependencies]
+toboggan-core = { path = "../toboggan-core", features = ["std"] }
+toboggan-client = { path = "../toboggan-client" }
+
+uniffi = { workspace = true, features = ["cli"] }
+tokio = { workspace = true, features = [
+    "rt",
+    "rt-multi-thread",
+    "macros",
+    "sync",
+    "time",
+] }
+
+[dev-dependencies]
+
+[build-dependencies]
+uniffi = { workspace = true, features = ["build"] }
+
+
+[lints]
+workspace = true

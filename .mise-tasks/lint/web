@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+#MISE description="Run web linting checks with Biome"
+
+set -eu
+
+echo "🌐 Running web linting..."
+
+# Lint toboggan-web with Biome (check without fixing)
+echo "🔧 Checking toboggan-web with Biome (lint-only)..."
+cd toboggan-web && npm run check && cd ..
+
+echo "✅ All web linting checks passed!"

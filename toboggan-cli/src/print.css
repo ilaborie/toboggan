@@ -1,0 +1,58 @@
+body {
+	height: auto;
+	overflow: auto;
+	background-color: unset;
+	max-width: 100vw;
+	overflow-x: hidden;
+}
+
+main {
+	height: auto;
+	overflow: auto !important;
+	display: flex;
+	gap: 1rem;
+	background: unset;
+
+	.toboggan-slide {
+		min-height: 100vh;
+		max-height: 100vh;
+		outline: thin solid rgba(0, 0, 0, .25);
+		display: flex;
+		box-shadow: 1px 1px 1em rgba(0, 0, 0, .25);
+
+		.step {
+			opacity: 1 !important;
+		}
+	}
+}
+
+@media print {
+	html {
+		font-size: 24px;
+	}
+
+	body {
+		overflow: visible;
+	}
+
+	main {
+		overflow: visible;
+		gap: 0;
+	}
+
+	.toboggan-slide {
+		page-break-after: always;
+		page-break-inside: avoid;
+		min-height: 100vh;
+		overflow: visible;
+	}
+
+	.toboggan-slide:last-child {
+		page-break-after: auto;
+	}
+
+	/* Ensure steps are visible in print */
+	.step {
+		opacity: 1 !important;
+	}
+}

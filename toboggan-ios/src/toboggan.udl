@@ -1,0 +1,73 @@
+namespace toboggan {};
+
+dictionary ClientConfig {
+    string url;
+    u32 max_retries;
+    duration retry_delay;
+};
+
+
+enum SlideKind {
+    "Cover",
+    "Part",
+    "Standard",
+};
+
+dictionary Slide {
+    string title;
+    SlideKind kind;
+};
+
+dictionary Talk {
+    string title;
+    string date;
+    sequence<string> slides;
+};
+
+enum ConnectionStatus {
+    "Connecting",
+    "Connected",
+    "Closed",
+    "Reconnecting",
+    "Error",
+};
+
+enum Command {
+    "Next",
+    "Previous",
+    "First",
+    "Last",
+    "Resume",
+    "Pause",
+    "Blink",
+};
+
+[Enum]
+interface State {
+    Init(string next);
+    Running(u32? previous, u32 current, u32? next, duration total_duration);
+    Paused(u32? previous, u32 current, u32? next, duration total_duration);
+    Done(u32? previous, u32 current, duration total_duration);
+};
+
+[Trait, WithForeign]
+interface ClientNotificationHandler {
+    void on_state_change(State state);
+    void on_talk_change(State state);
+    void on_connection_status_change(ConnectionStatus status);
+    void on_error(string error);
+};
+
+interface TobogganClient {
+    constructor(ClientConfig config, ClientNotificationHandler handler);
+
+    void connect();
+
+    void send_command(Command command);
+
+    State? get_state();
+    Slide? get_slide(u32 slide_id);
+    Talk? get_talk();
+
+    boolean is_connected();
+};

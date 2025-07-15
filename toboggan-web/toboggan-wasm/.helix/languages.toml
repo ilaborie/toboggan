@@ -1,0 +1,30 @@
+[[language]]
+name = "rust"
+auto-format = true
+roots = ["Cargo.toml", "Cargo.lock"]
+
+[language-server.rust-analyzer]
+command = "rust-analyzer"
+
+[language-server.rust-analyzer.config]
+# Target WebAssembly
+cargo.target = "wasm32-unknown-unknown"
+
+# Build all crates (cdylib and rlib as specified in Cargo.toml)
+cargo.buildScripts.enable = true
+cargo.allTargets = false
+
+# Check with clippy
+checkOnSave.command = "clippy"
+
+# Inlay hints configuration
+inlayHints.bindingModeHints.enable = false
+inlayHints.closingBraceHints.minLines = 10
+
+# Proc macro support
+procMacro.enable = true
+procMacro.attributes.enable = true
+
+# Diagnostics
+diagnostics.disabled = []
+diagnostics.experimental.enable = true

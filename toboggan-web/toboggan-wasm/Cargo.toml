@@ -1,0 +1,88 @@
+[package]
+name = "toboggan-wasm"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT OR Apache-2.0"
+authors = ["Igor Laborie <ilaborie@gmail.com>"]
+description = "WebAssembly client for Toboggan presentation system"
+repository = "https://github.com/ilaborie/toboggan"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[workspace]
+# This empty workspace table prevents the package from inheriting workspace settings
+
+
+[dependencies]
+toboggan-core = { path = "../../toboggan-core", features = ["js"] }
+
+wasm-bindgen = "0.2.104"
+gloo = { version = "0.11.0", default-features = false, features = [
+    "timers",
+    "events",
+    "console",
+    "utils",
+    "net",
+] }
+web-sys = { version = "0.3.81", features = [
+    "HtmlElement",
+    "KeyboardEvent",
+    "Element",
+    "HtmlElement",
+    "CssStyleDeclaration",
+    "Document",
+    "Node",
+    "NodeList",
+    "ShadowRoot",
+    "ShadowRootInit",
+    "ShadowRootMode",
+    "AudioContext",
+    "AudioDestinationNode",
+    "AudioParam",
+    "OscillatorNode",
+    "GainNode",
+    "OscillatorType",
+] }
+js-sys = "0.3.81"
+serde-wasm-bindgen = "0.6.5"
+wasm-bindgen-futures = "0.4.54"
+futures = "0.3.31"
+serde = "1.0.228"
+console_error_panic_hook = "0.1.7"
+
+[dev-dependencies]
+
+[lints.rust]
+missing_docs = "allow"
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+
+undocumented_unsafe_blocks = "deny"
+
+dbg_macro = "warn"
+expect_used = "warn"
+if_then_some_else_none = "warn"
+indexing_slicing = "warn"
+large_include_file = "warn"
+min_ident_chars = "warn"
+print_stderr = "warn"
+print_stdout = "warn"
+rc_buffer = "warn"
+rc_mutex = "warn"
+unnecessary_safety_doc = "warn"
+unwrap_used = "warn"
+
+new_without_default = "allow"
+module_name_repetitions = "allow"
+
+# WASM size optimizations
+[profile.release]
+opt-level = "z"   # Optimize for size even more aggressively
+lto = "fat"       # More aggressive LTO
+codegen-units = 1 # Single codegen unit for better optimization
+panic = "abort"   # Smaller panic handling
+strip = true      # Strip symbols for smaller size

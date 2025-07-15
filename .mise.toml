@@ -1,9 +1,21 @@
 [env]
 RUST_LOG = "info"
 
+TOBOGGAN_HOST = "0.0.0.0"
+
 [settings]
 experimental = true
 cargo = { binstall = true }
 
 [tools]
+"cargo:bacon" = "latest"
+"cargo:cargo-machete" = "latest"
 "cargo:cargo-nextest" = "0.9"
+"cargo:wasm-pack" = "latest"
+"npm:rolldown-vite" = "latest"
+"npm:vite" = "latest"
+"npm:wasm-opt" = "latest"
+swiftlint = "latest"
+"pipx:esptool" = "latest"
+"cargo:espup" = "latest"
+"npm:@stoplight/spectral-cli" = "latest"

@@ -1,0 +1,29 @@
+[package]
+name = "toboggan-client"
+version = "0.1.0"
+description = "Async WebSocket and HTTP client library for connecting to Toboggan presentation servers"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+toboggan-core = {path = "../toboggan-core", features = ["std"]}
+
+tracing = {workspace = true}
+serde = { workspace = true }
+serde_json = { workspace = true }
+derive_more = { workspace = true, features = ["from", "error", "display"] }
+
+# Async dependencies (always available now)
+tokio = { workspace = true, features = ["sync", "time"] }
+tokio-tungstenite = { workspace = true }
+futures = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+
+[dev-dependencies]
+tokio= { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing-subscriber = { workspace = true }
+
+[lints]
+workspace = true

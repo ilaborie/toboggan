@@ -1,2 +1,78 @@
+# Rust build artifacts
 target/
 
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+
+# Xcode user-specific files
+**/xcuserdata/
+**/*.xcuserstate
+**/*.xcbkptlist
+**/*.xcscheme
+**/xcshareddata/WorkspaceSettings.xcsettings
+**/project.xcworkspace/xcshareddata/
+**/project.xcworkspace/xcuserdata/
+
+# Swift Package Manager
+.swiftpm/
+.build/
+**/Package.resolved
+
+# iOS build artifacts
+*.ipa
+*.dSYM
+*.dSYM.zip
+DerivedData/
+build/
+
+# Simulator and device logs
+simulator_logs/
+device_logs/
+
+# Provisioning profiles
+*.mobileprovision
+*.provisionprofile
+
+# General development temp files
+*.swp
+*.swo
+*~
+.tmp
+*.tmp
+*.bak
+*.orig
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-*
+
+# Log files
+*.log
+
+# Backup and temporary files with conflict markers
+.!*!*
+
+# UniFFI generated files (should be regenerated during build)
+**/TobogganCore.swift
+**/tobogganFFI.h
+**/tobogganFFI.modulemap
+**/libtoboggan_ios_core.a
+**/*.xcframework
+
+idea.md
+*.local.*
+TODO.md

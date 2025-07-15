@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+#MISE description="Launch the backend in dev mode"
+
+set -eu
+
+# Ensure web frontend is built first (required for server)
+echo "🌐 Ensuring web frontend is built..."
+mise build:web
+
+echo "🚀 Starting server in dev mode..."
+bacon run-long -- -p toboggan-server -- --public-dir ../riir/public/ --watch ../riir/riir.toml

@@ -1,0 +1,72 @@
+use iced::widget::{button, column, container, scrollable};
+use iced::{Element, Length};
+
+use super::content;
+use crate::constants::{PADDING_CONTAINER, SPACING_MEDIUM, SPACING_SMALL};
+use crate::message::Message;
+use crate::state::AppState;
+use crate::styles;
+use crate::widgets::{create_body_text, create_title_text};
+
+pub fn view(state: &AppState) -> Element<'_, Message> {
+    let mut sidebar_content = column![create_title_text("Slides")]
+        .spacing(SPACING_MEDIUM)
+        .padding(PADDING_CONTAINER);
+
+    if state.talk.is_some() && !state.slides.is_empty() {
+        let mut slides_list = column![].spacing(SPACING_SMALL);
+
+        for (index, slide) in state.slides.iter().enumerate() {
+            let is_current = Some(index) == state.current_slide_index;
+
+            let slide_text = if matches!(&slide.title, toboggan_core::Content::Text { text } if text.is_empty())
+            {
+                format!("{}. Slide {}", index + 1, index)
+            } else {
+                format!("{}. {}", index + 1, content::render_content(&slide.title))
+            };
+
+            let slide_button = iced::widget::button(iced::widget::text(slide_text))
+                .on_press(Message::SendCommand(toboggan_core::Command::GoTo {
+                    slide: index,
+                }))
+                .padding([4, 8])
+                .style(if is_current {
+                    |theme: &iced::Theme, status| button::primary(theme, status)
+                } else {
+                    |theme: &iced::Theme, status| button::secondary(theme, status)
+                });
+
+            slides_list = slides_list.push(slide_button);
+        }
+
+        sidebar_content = sidebar_content.push(scrollable(slides_list).height(Length::Fill));
+    }
+
+    // Next slide preview
+    if let Some(next_slide) = state.next_slide() {
+        sidebar_content = sidebar_content.push(
+            container(
+                column![
+                    create_body_text("Next Slide"),
+                    container(if matches!(&next_slide.title, toboggan_core::Content::Text { text } if text.is_empty()) {
+                        iced::widget::text("No title").size(12)
+                    } else {
+                        let title_content = content::render_content(&next_slide.title);
+                        iced::widget::text(title_content).size(12)
+                    })
+                    .padding(SPACING_SMALL)
+                    .style(styles::preview_container())
+                ]
+                .spacing(SPACING_SMALL),
+            )
+            .padding(PADDING_CONTAINER),
+        );
+    }
+
+    container(sidebar_content)
+        .width(Length::Fixed(250.0))
+        .height(Length::Fill)
+        .style(styles::card_container())
+        .into()
+}

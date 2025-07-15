@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+#MISE description="Auto-format code and apply clippy suggested fixes"
+
+set -eu
+
+RUST_LOG="info,wasm_pack=warn"
+WASM_PROJECT="toboggan-web/toboggan-wasm"
+
+# Build WASM
+wasm-pack build --target web --no-pack --no-opt --release --out-dir pkg $WASM_PROJECT
+
+# Try to compress
+wasm-opt --enable-bulk-memory --enable-nontrapping-float-to-int -Os -o $WASM_PROJECT/pkg/toboggan_wasm_bg.wasm $WASM_PROJECT/pkg/toboggan_wasm_bg.wasm
+
+# Show file size
+echo "Build complete! File sizes:"
+ls -lh $WASM_PROJECT/pkg/toboggan_wasm_bg*.wasm
+echo "Gzipped size:"
+gzip -c $WASM_PROJECT/pkg/toboggan_wasm_bg.wasm | wc -c | awk '{print $1/1024 " KB"}'

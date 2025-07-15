@@ -1,0 +1,88 @@
+date = "2025-11-13"
+
+[title]
+type = "Text"
+text = "Peut-on RIIR de tout ?"
+
+[[slides]]
+kind = "Cover"
+style = []
+
+[slides.title]
+type = "Text"
+text = "Peut-on RIIR de tout ?"
+
+[slides.body]
+type = "Empty"
+
+[slides.notes]
+type = "Empty"
+
+[[slides]]
+kind = "Standard"
+style = []
+
+[slides.title]
+type = "Text"
+text = "Introduction"
+
+[slides.body]
+type = "Html"
+raw = """
+
+<p>
+<strong>RIIR</strong> : "Have you considered Rewriting It In Rust?"
+</p>
+<p>
+Une question qui fait sourire... mais qui cache une réalité : Rust gagne du terrain partout.
+</p>
+                """
+
+[slides.notes]
+type = "Empty"
+
+[[slides]]
+kind = "Part"
+style = []
+
+[slides.title]
+type = "Text"
+text = "1. Les Success Stories du RIIR"
+
+[slides.body]
+type = "Empty"
+
+[slides.notes]
+type = "Empty"
+
+[[slides]]
+kind = "Standard"
+style = []
+
+[slides.title]
+type = "Text"
+text = "Des réécritures qui ont fait leurs preuves"
+
+[slides.body]
+type = "Html"
+raw = """
+
+
+- **ripgrep** (`rg`) : grep réécrit en Rust
+  - 10x plus rapide que grep classique
+  - Recherche récursive native
+  - Support Unicode complet
+
+- **fd** : find réécrit en Rust
+  - Interface plus intuitive
+  - Performances supérieures
+  - Respect des .gitignore par défaut
+
+- **Fish Shell** : Shell moderne
+  - Autocomplétion intelligente
+  - Sécurité mémoire
+  - Configuration simple
+                """
+
+[slides.notes]
+type = "Empty"

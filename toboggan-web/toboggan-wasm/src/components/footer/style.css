@@ -1,0 +1,14 @@
+:host {
+	display: block;
+	font-family: var(--font-family-primary);
+	/* inversed colors */
+	color: var(--bg);
+	background-color: var(--fg);
+}
+
+/* Default content when footer is empty */
+footer:empty::before {
+	content: "🛝 Toboggan Presentation System";
+	font-style: normal;
+	color: inherit;
+}

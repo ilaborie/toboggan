@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+#MISE description="Run web tests"
+
+set -eu
+
+echo "🌐 Running web tests..."
+
+# Check if toboggan-web has test script
+echo "🔧 Checking for web tests..."
+cd toboggan-web
+if npm run | grep -q "test"; then
+    echo "🧪 Running web tests..."
+    npm run test
+else
+    echo "ℹ️  No test script found in toboggan-web package.json, skipping web tests"
+fi
+cd ..
+
+echo "✅ All web tests completed!"

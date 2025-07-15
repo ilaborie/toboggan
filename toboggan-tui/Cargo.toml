@@ -1,0 +1,25 @@
+[package]
+name = "toboggan-tui"
+version = "0.1.0"
+description = "Terminal user interface (TUI) for Toboggan presentations using ratatui"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+toboggan-core = {path = "../toboggan-core", features = ["std"]}
+toboggan-client = {path = "../toboggan-client"}
+
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["env", "derive"] }
+tracing= { workspace = true }
+tracing-subscriber= { workspace = true }
+tui-logger = { workspace = true, features = ["tracing-support"]}
+derive_more = { workspace = true, features = ["display"] }
+
+[lints]
+workspace = true
