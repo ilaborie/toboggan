@@ -4,3 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+derive_more = { version = "2.0.1", features = ["full"] }
+jiff = { version = "0.2.15", features = ["serde"] }
+serde = { version = "1.0.219", features = ["derive"] }

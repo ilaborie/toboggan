@@ -1,14 +1,19 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! Toboggan Core
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+mod content;
+pub use self::content::*;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+mod state;
+pub use self::state::*;
+
+mod slide;
+pub use self::slide::*;
+
+mod talk;
+pub use self::talk::*;
+
+mod command;
+pub use self::command::*;
+
+mod notification;
+pub use self::notification::*;
