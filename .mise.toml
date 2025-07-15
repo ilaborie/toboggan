@@ -1,0 +1,9 @@
+[env]
+RUST_LOG = "info"
+
+[settings]
+experimental = true
+cargo = { binstall = true }
+
+[tools]
+"cargo:cargo-nextest" = "0.9"
