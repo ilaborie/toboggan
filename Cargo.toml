@@ -7,6 +7,21 @@ rust-version = "1.88"
 license = "MIT OR Apache-2.0"
 authors = ["Igor Laborie <ilaborie@gmail.com>"]
 
+[workspace.dependencies]
+derive_more = "2.0.1"
+jiff =  "0.2.15"
+serde =  "1.0.219"
+axum =  "0.8.4"
+tokio =  "1.46.1"
+toml = "0.9.2"
+tracing = "0.1.41"
+tracing-subscriber =  "0.3.19"
+clap =  "4.5.41"
+anyhow = "1.0.98"
+serde_json = "1.0.140"
+slug= "0.1.6"
+tower-http = "0.6.6"
+
 [workspace.lints.rust]
 unsafe_code = "deny"
 missing_docs = "warn"

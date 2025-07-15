@@ -4,3 +4,16 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+toboggan-core = {path = "../toboggan-core"}
+
+axum = { workspace = true, features = ["ws"] }
+tokio = { workspace = true, features = ["full"] }
+toml = {workspace = true}
+tracing = {workspace = true}
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+clap = { workspace = true, features = ["env", "derive"] }
+anyhow = {workspace = true}
+serde_json = {workspace = true}
+jiff = {workspace = true}
+derive_more = { workspace = true, features = ["full"] }
+tower-http = { workspace = true, features = ["trace", "cors"] }

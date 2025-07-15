@@ -25,13 +25,13 @@ pub struct Slide {
     pub style: Style,
     pub title: Content,
     pub body: Content,
-    pub notes: Option<Content>,
+    pub notes: Content,
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub enum SlideKind {
     Cover,
-    PartTitle,
+    Part,
     #[default]
     Standard,
 }

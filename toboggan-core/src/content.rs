@@ -8,7 +8,9 @@ use serde::{Deserialize, Serialize};
 pub enum Content {
     #[default]
     Empty,
-    String(String),
+    Text {
+        text: String,
+    },
     Html {
         raw: String,
         alt: Option<String>,
@@ -35,7 +37,7 @@ impl Display for Content {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Empty => write!(f, "<no content>"),
-            Self::String(s) => write!(f, "{s}"),
+            Self::Text { text } => write!(f, "{text}"),
             Self::Html { raw, alt } => {
                 if let Some(alt) = alt {
                     write!(f, "{alt}")
