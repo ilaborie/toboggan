@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use jiff::civil::DateTime;
 use serde::{Deserialize, Serialize};
 

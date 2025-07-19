@@ -3,7 +3,16 @@ name = "toboggan-core"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["std"]
+std = ["jiff/std", "serde/std", "once_cell/std"]
+alloc = ["jiff/alloc", "serde/alloc", "getrandom", "once_cell/critical-section"]
+js = ["jiff/js", "getrandom/js"]
+
 [dependencies]
 derive_more = { workspace = true, features = ["full"] }
 jiff = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
+uuid = { workspace = true, features = ["serde", "v4"] }
+once_cell = { workspace = true }
+getrandom = { workspace = true, optional = true }

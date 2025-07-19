@@ -2,12 +2,12 @@ use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
 
-mod settings;
 use anyhow::Context;
 use toboggan_core::Talk;
 use tracing::info;
 use tracing::instrument;
 
+mod settings;
 pub use self::settings::*;
 
 mod state;
@@ -16,6 +16,7 @@ pub use self::state::*;
 mod router;
 pub use self::router::*;
 
+#[doc(hidden)]
 #[instrument]
 pub async fn launch(settings: Settings) -> anyhow::Result<()> {
     info!(?settings, "launching server...");

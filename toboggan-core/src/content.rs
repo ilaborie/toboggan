@@ -1,4 +1,7 @@
-use std::fmt::Display;
+use core::fmt::Display;
+use alloc::vec::Vec;
+use alloc::string::String;
+#[cfg(feature = "std")]
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -15,9 +18,14 @@ pub enum Content {
         raw: String,
         alt: Option<String>,
     },
+    Md {
+        raw: String,
+        alt: Option<String>,
+    },
     IFrame {
         url: String,
     },
+    #[cfg(feature = "std")]
     Term {
         cwd: PathBuf,
         bootstrap: Vec<String>,
@@ -34,7 +42,7 @@ pub enum Content {
 }
 
 impl Display for Content {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Empty => write!(f, "<no content>"),
             Self::Text { text } => write!(f, "{text}"),
@@ -45,7 +53,15 @@ impl Display for Content {
                     write!(f, "{raw}")
                 }
             }
+            Self::Md { raw, alt } => {
+                if let Some(alt) = alt {
+                    write!(f, "{alt}")
+                } else {
+                    write!(f, "{raw}")
+                }
+            }
             Self::IFrame { url } => write!(f, "{url}"),
+            #[cfg(feature = "std")]
             Self::Term { cwd, bootstrap } => {
                 write!(f, "{}", cwd.display())?;
                 if let Some(cmd) = bootstrap.last() {

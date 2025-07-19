@@ -33,7 +33,7 @@ Une question qui fait sourire... mais qui cache une réalité : Rust gagne du te
             },
             slide(
                 "Des réécritures qui ont fait leurs preuves",
-                r#"
+                r"
 
 - **ripgrep** (`rg`) : grep réécrit en Rust
   - 10x plus rapide que grep classique
@@ -49,7 +49,7 @@ Une question qui fait sourire... mais qui cache une réalité : Rust gagne du te
   - Autocomplétion intelligente
   - Sécurité mémoire
   - Configuration simple
-                "#,
+                ",
             ),
         ],
     };

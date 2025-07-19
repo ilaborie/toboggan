@@ -1,5 +1,12 @@
 //! Toboggan Core
 
+#![no_std]
+
+#[cfg(feature = "std")]
+extern crate std;
+
+extern crate alloc;
+
 mod content;
 pub use self::content::*;
 

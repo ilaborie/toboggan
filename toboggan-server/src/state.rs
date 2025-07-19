@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use jiff::Timestamp;
-use serde_json::json;
 use toboggan_core::{Slide, SlideId, Talk};
 
 #[derive(Clone)]
@@ -14,6 +13,7 @@ pub struct TobogganState {
 }
 
 impl TobogganState {
+    #[must_use]
     pub fn new(talk: Talk) -> Self {
         let started = Timestamp::now();
         let talk = Arc::new(talk);
@@ -30,15 +30,5 @@ impl TobogganState {
             talk,
             slides,
         }
-    }
-
-    pub fn health(&self) -> serde_json::Value {
-        let elapsed = Timestamp::now() - self.started_at;
-
-        json!({
-            "status": "OK",
-            "started_at": self.started_at,
-            "elapsed": elapsed,
-        })
     }
 }
