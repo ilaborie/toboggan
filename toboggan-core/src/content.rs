@@ -1,6 +1,6 @@
-use core::fmt::Display;
-use alloc::vec::Vec;
 use alloc::string::String;
+use alloc::vec::Vec;
+use core::fmt::Display;
 #[cfg(feature = "std")]
 use std::path::PathBuf;
 
@@ -15,10 +15,6 @@ pub enum Content {
         text: String,
     },
     Html {
-        raw: String,
-        alt: Option<String>,
-    },
-    Md {
         raw: String,
         alt: Option<String>,
     },
@@ -47,13 +43,6 @@ impl Display for Content {
             Self::Empty => write!(f, "<no content>"),
             Self::Text { text } => write!(f, "{text}"),
             Self::Html { raw, alt } => {
-                if let Some(alt) = alt {
-                    write!(f, "{alt}")
-                } else {
-                    write!(f, "{raw}")
-                }
-            }
-            Self::Md { raw, alt } => {
                 if let Some(alt) = alt {
                     write!(f, "{alt}")
                 } else {

@@ -7,7 +7,7 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-toboggan-core = {path = "../toboggan-core"}
+toboggan-core = {path = "../toboggan-core", features = ["std"]}
 
 toml = {workspace = true}
 tracing = {workspace = true}

@@ -1,8 +1,8 @@
 use alloc::string::String;
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 #[cfg(all(not(feature = "std"), feature = "getrandom"))]
 use getrandom;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::SlideId;
 
@@ -14,7 +14,7 @@ impl ClientId {
     pub fn new() -> Self {
         #[cfg(feature = "std")]
         {
-            // Use v4 UUID (random) when std is available 
+            // Use v4 UUID (random) when std is available
             Self(Uuid::new_v4())
         }
         #[cfg(not(feature = "std"))]

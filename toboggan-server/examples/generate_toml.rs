@@ -1,6 +1,6 @@
 use std::fs;
 
-use jiff::civil::DateTime;
+use jiff::civil::Date;
 use toboggan_core::{Content, Slide, SlideKind, Style, Talk};
 
 fn main() -> anyhow::Result<()> {
@@ -8,7 +8,7 @@ fn main() -> anyhow::Result<()> {
         title: Content::Text {
             text: "Peut-on RIIR de tout ?".to_string(),
         },
-        date: DateTime::new(2025, 11, 13, 9, 10, 0, 0)?,
+        date: Date::new(2025, 11, 13)?,
         slides: vec![
             Slide {
                 kind: SlideKind::Cover,

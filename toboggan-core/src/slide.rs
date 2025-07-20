@@ -1,10 +1,10 @@
-use core::sync::atomic::{AtomicU8, Ordering};
+#[cfg(feature = "alloc")]
+use alloc::string::String;
 #[cfg(feature = "alloc")]
 use alloc::sync::Arc;
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
-#[cfg(feature = "alloc")]
-use alloc::string::String;
+use core::sync::atomic::{AtomicU8, Ordering};
 #[cfg(feature = "alloc")]
 use once_cell::sync::Lazy;
 
