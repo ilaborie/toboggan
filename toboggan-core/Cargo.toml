@@ -2,12 +2,16 @@
 name = "toboggan-core"
 version = "0.1.0"
 edition = "2024"
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
 
 [features]
 default = ["std"]
 std = ["alloc", "jiff/std", "serde/std", "once_cell/std"]
 alloc = ["jiff/alloc", "serde/alloc", "getrandom", "once_cell/critical-section"]
 js = ["jiff/js", "getrandom/js"]
+openapi = ["utoipa"]
 
 [dependencies]
 derive_more = { workspace = true, features = ["full"] }
@@ -16,3 +20,7 @@ serde = { workspace = true, features = ["derive"] }
 uuid = { workspace = true, features = ["serde", "v4"] }
 once_cell = { workspace = true }
 getrandom = { workspace = true, optional = true }
+utoipa = { workspace = true, optional = true }
+
+[lints]
+workspace = true

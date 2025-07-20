@@ -1,3 +1,5 @@
+#[cfg(feature = "openapi")]
+use alloc::{string::String, vec::Vec};
 #[cfg(all(not(feature = "std"), feature = "getrandom"))]
 use getrandom;
 use serde::{Deserialize, Serialize};
@@ -11,6 +13,7 @@ pub struct ClientId(Uuid);
 impl ClientId {
     #[allow(clippy::new_without_default)]
     // TODO should be present if feature 'std' or feature 'getrandom'
+    #[must_use]
     pub fn new() -> Self {
         #[cfg(feature = "std")]
         {
@@ -62,6 +65,7 @@ pub enum Command {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum Renderer {
     Title,
     Thumbnail,

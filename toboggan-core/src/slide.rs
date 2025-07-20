@@ -19,9 +19,11 @@ static ID_SEQ: Lazy<Arc<AtomicU8>> = Lazy::new(Arc::default);
 static ID_SEQ: AtomicU8 = AtomicU8::new(0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SlideId(u8);
 
 impl SlideId {
+    #[must_use]
     pub fn next() -> Self {
         #[cfg(feature = "alloc")]
         {
@@ -48,6 +50,7 @@ pub struct Slide {
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum SlideKind {
     Cover,
     Part,
@@ -57,8 +60,10 @@ pub enum SlideKind {
 
 #[cfg(feature = "alloc")]
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Style(Vec<String>);
 
 #[cfg(not(feature = "alloc"))]
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Style;

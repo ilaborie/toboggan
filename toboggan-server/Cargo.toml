@@ -7,7 +7,7 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-toboggan-core = {path = "../toboggan-core"}
+toboggan-core = {path = "../toboggan-core", features = ["openapi"]}
 
 axum = { workspace = true, features = ["ws"] }
 tokio = { workspace = true, features = ["full"] }
@@ -20,6 +20,13 @@ serde_json = {workspace = true}
 jiff = {workspace = true}
 derive_more = { workspace = true, features = ["full"] }
 tower-http = { workspace = true, features = ["trace", "cors"] }
+futures = { workspace = true }
+
+[dev-dependencies]
+tower = { workspace = true }
+clawspec-core = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+utoipa = { workspace = true }
 
 [lints]
 workspace = true

@@ -23,6 +23,7 @@ pub enum State {
 }
 
 impl State {
+    #[must_use]
     pub fn current(&self) -> SlideId {
         match self {
             Self::Paused { current, .. }
@@ -32,16 +33,19 @@ impl State {
     }
 
     #[cfg(feature = "std")]
+    #[must_use]
     pub fn is_first_slide(&self, slide_order: &[SlideId]) -> bool {
         slide_order.first() == Some(&self.current())
     }
 
     #[cfg(feature = "std")]
+    #[must_use]
     pub fn is_last_slide(&self, slide_order: &[SlideId]) -> bool {
         slide_order.last() == Some(&self.current())
     }
 
     #[cfg(feature = "std")]
+    #[must_use]
     pub fn next(&self, slide_order: &[SlideId]) -> Option<SlideId> {
         let current = self.current();
         slide_order
@@ -51,6 +55,7 @@ impl State {
     }
 
     #[cfg(feature = "std")]
+    #[must_use]
     pub fn previous(&self, slide_order: &[SlideId]) -> Option<SlideId> {
         let current = self.current();
         slide_order
@@ -103,6 +108,7 @@ impl State {
     }
 
     #[cfg(feature = "std")]
+    #[must_use]
     pub fn calculate_total_duration(&self) -> Duration {
         match self {
             Self::Paused { total_duration, .. } | Self::Done { total_duration, .. } => {

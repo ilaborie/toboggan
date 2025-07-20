@@ -5,12 +5,13 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde_json::json;
 use tower_http::cors::{Any, CorsLayer};
-
-use toboggan_core::{Command, Notification};
 use tower_http::trace::TraceLayer;
 use tracing::warn;
 
 use crate::TobogganState;
+use toboggan_core::{Command, Notification};
+
+mod ws;
 
 pub fn routes() -> Router<TobogganState> {
     let cors = CorsLayer::new()
@@ -23,7 +24,8 @@ pub fn routes() -> Router<TobogganState> {
             Router::new()
                 .route("/talk", get(get_talk))
                 .route("/slides", get(get_slides))
-                .route("/command", post(post_command)),
+                .route("/command", post(post_command))
+                .route("/ws", get(ws::websocket_handler)),
         )
         .layer(TraceLayer::new_for_http())
         .route("/health", get(health))

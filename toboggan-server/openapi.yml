@@ -1,0 +1,116 @@
+openapi: 3.1.0
+info:
+  title: Toboggan Server API
+  description: REST API for the Toboggan presentation system that allows creating and serving slide-based talks with real-time WebSocket communication for Command/Notification interactions.
+  contact:
+    name: Igor Laborie
+    email: ilaborie@gmail.com
+  license:
+    name: MIT OR Apache-2.0
+    identifier: MIT OR Apache-2.0
+  version: 0.1.0
+servers:
+- url: http://localhost:3000
+  description: Local development server
+paths:
+  /api/command:
+    post:
+      tags:
+      - command
+      description: Create command
+      operationId: post-api-command
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Value'
+            example:
+              command: Pause
+      responses:
+        '200':
+          description: Status code 200
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Value'
+  /api/slides:
+    get:
+      tags:
+      - slides
+      description: Retrieve slides
+      operationId: get-api-slides
+      parameters: []
+      responses:
+        '200':
+          description: Status code 200
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Value'
+  /api/talk:
+    get:
+      tags:
+      - talk
+      description: Retrieve talk
+      operationId: get-api-talk
+      parameters: []
+      responses:
+        '200':
+          description: Status code 200
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Value'
+  /api/ws:
+    get:
+      tags:
+      - ws
+      description: Retrieve ws
+      operationId: get-api-ws
+      parameters: []
+      responses: {}
+  /health:
+    get:
+      tags:
+      - health
+      description: Retrieve health
+      operationId: get-health
+      parameters: []
+      responses:
+        '200':
+          description: Status code 200
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Value'
+components:
+  schemas:
+    Renderer:
+      type: string
+      enum:
+      - Title
+      - Thumbnail
+      - Html
+      - Raw
+    SlideId:
+      type: integer
+      format: int32
+      minimum: 0
+    SlideKind:
+      type: string
+      enum:
+      - Cover
+      - Part
+      - Standard
+    Style:
+      type: array
+      items:
+        type: string
+    Value: {}
+tags:
+- name: command
+- name: health
+- name: slides
+- name: talk
+- name: ws

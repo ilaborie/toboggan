@@ -38,23 +38,23 @@ pub enum Content {
 }
 
 impl Display for Content {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, fmt: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::Empty => write!(f, "<no content>"),
-            Self::Text { text } => write!(f, "{text}"),
+            Self::Empty => write!(fmt, "<no content>"),
+            Self::Text { text } => write!(fmt, "{text}"),
             Self::Html { raw, alt } => {
                 if let Some(alt) = alt {
-                    write!(f, "{alt}")
+                    write!(fmt, "{alt}")
                 } else {
-                    write!(f, "{raw}")
+                    write!(fmt, "{raw}")
                 }
             }
-            Self::IFrame { url } => write!(f, "{url}"),
+            Self::IFrame { url } => write!(fmt, "{url}"),
             #[cfg(feature = "std")]
             Self::Term { cwd, bootstrap } => {
-                write!(f, "{}", cwd.display())?;
+                write!(fmt, "{}", cwd.display())?;
                 if let Some(cmd) = bootstrap.last() {
-                    write!(f, " - {cmd}")?;
+                    write!(fmt, " - {cmd}")?;
                 }
                 Ok(())
             }
@@ -68,10 +68,10 @@ impl Display for Content {
                     if first {
                         first = false;
                     } else {
-                        write!(f, " - ")?;
+                        write!(fmt, " - ")?;
                     }
 
-                    write!(f, "{content}")?;
+                    write!(fmt, "{content}")?;
                 }
                 Ok(())
             }

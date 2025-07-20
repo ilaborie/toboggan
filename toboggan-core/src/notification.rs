@@ -24,6 +24,7 @@ pub enum Notification {
 }
 
 impl Notification {
+    #[must_use]
     pub fn state(state: State) -> Self {
         let timestamp = Timestamp::now();
         Self::State { timestamp, state }
@@ -35,6 +36,7 @@ impl Notification {
         Self::Error { timestamp, message }
     }
 
+    #[must_use]
     pub fn pong() -> Self {
         let timestamp = Timestamp::now();
         Self::Pong { timestamp }

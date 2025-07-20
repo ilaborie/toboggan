@@ -4,16 +4,16 @@ use std::time::Duration;
 
 use jiff::Timestamp;
 use serde_json::json;
-use toboggan_core::{Command, Notification, Slide, SlideId, State, Talk};
-use tokio::sync::RwLock;
+use toboggan_core::{ClientId, Command, Notification, Slide, SlideId, State, Talk};
+use tokio::sync::{RwLock, watch};
 #[derive(Clone)]
 pub struct TobogganState {
     started_at: Timestamp,
     talk: Arc<Talk>,
     slides: Arc<HashMap<SlideId, Slide>>,
     slide_order: Arc<[SlideId]>,
-    // Later capture client sender
     current_state: Arc<RwLock<State>>,
+    clients: Arc<RwLock<HashMap<ClientId, watch::Sender<Notification>>>>,
 }
 
 impl TobogganState {
@@ -44,6 +44,7 @@ impl TobogganState {
             slides,
             slide_order,
             current_state,
+            clients: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -68,11 +69,54 @@ impl TobogganState {
         &self.slides
     }
 
+    pub(crate) async fn current_state(&self) -> State {
+        let state = self.current_state.read().await;
+
+        state.clone()
+    }
+
+    pub async fn register_client(&self, client_id: ClientId) -> watch::Receiver<Notification> {
+        let (tx, rx) = watch::channel(Notification::state(State::Paused {
+            current: self
+                .slide_order
+                .first()
+                .copied()
+                .unwrap_or_else(SlideId::next),
+            total_duration: Duration::ZERO,
+        }));
+
+        let mut clients = self.clients.write().await;
+        clients.insert(client_id, tx);
+        rx
+    }
+
+    pub async fn unregister_client(&self, client_id: ClientId) {
+        let mut clients = self.clients.write().await;
+        clients.remove(&client_id);
+    }
+
+    async fn broadcast_notification(&self, notification: &Notification) {
+        let clients = self.clients.read().await;
+        for (client_id, sender) in clients.iter() {
+            if sender.send(notification.clone()).is_err() {
+                tracing::warn!(
+                    ?client_id,
+                    "Failed to send notification to client, client may have disconnected"
+                );
+            }
+        }
+    }
+
     pub async fn handle_command(&self, command: &Command) -> Notification {
         let mut state = self.current_state.write().await;
-        match command {
-            Command::Register { .. } | Command::Unregister { .. } => {
-                // register/unregister will be handled later
+        let notification = match command {
+            Command::Register { .. } => {
+                // Registration is handled separately via WebSocket
+                Notification::state(state.clone())
+            }
+            Command::Unregister { .. } => {
+                // Unregistration is handled separately via WebSocket
+                Notification::state(state.clone())
             }
             Command::First => {
                 if !state.is_first_slide(&self.slide_order) {
@@ -80,6 +124,7 @@ impl TobogganState {
                         state.update_slide(first_slide);
                     }
                 }
+                Notification::state(state.clone())
             }
             Command::Last => {
                 if !state.is_last_slide(&self.slide_order) {
@@ -87,10 +132,12 @@ impl TobogganState {
                         state.update_slide(last_slide);
                     }
                 }
+                Notification::state(state.clone())
             }
             Command::GoTo(slide_id) => {
                 if self.slide_order.contains(slide_id) {
                     state.update_slide(*slide_id);
+                    Notification::state(state.clone())
                 } else {
                     return Notification::error(format!("Slide with id {slide_id:?} not found"));
                 }
@@ -106,11 +153,13 @@ impl TobogganState {
                         total_duration,
                     };
                 }
+                Notification::state(state.clone())
             }
             Command::Previous => {
                 if let Some(prev_slide) = state.previous(&self.slide_order) {
                     state.update_slide(prev_slide);
                 }
+                Notification::state(state.clone())
             }
             Command::Pause => {
                 // Skip if already paused or done
@@ -121,19 +170,22 @@ impl TobogganState {
                         total_duration,
                     };
                 }
+                Notification::state(state.clone())
             }
             Command::Resume => {
                 // Skip if already running or done
                 if matches!(*state, State::Paused { .. }) {
                     state.auto_resume();
                 }
+                Notification::state(state.clone())
             }
-            Command::Ping => {
-                return Notification::pong();
-            }
-        }
+            Command::Ping => Notification::pong(),
+        };
 
-        Notification::state(state.clone())
+        // Broadcast the notification to all registered clients
+        self.broadcast_notification(&notification).await;
+
+        notification
     }
 }
 
