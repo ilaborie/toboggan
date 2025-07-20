@@ -1,4 +1,3 @@
-use alloc::string::String;
 #[cfg(all(not(feature = "std"), feature = "getrandom"))]
 use getrandom;
 use serde::{Deserialize, Serialize};
@@ -11,6 +10,7 @@ pub struct ClientId(Uuid);
 
 impl ClientId {
     #[allow(clippy::new_without_default)]
+    // TODO should be present if feature 'std' or feature 'getrandom'
     pub fn new() -> Self {
         #[cfg(feature = "std")]
         {
@@ -40,8 +40,13 @@ impl ClientId {
 #[serde(tag = "command")]
 pub enum Command {
     // General
-    Register { client: String, renderer: Renderer },
-    Unregister { client: String },
+    Register {
+        client: ClientId,
+        renderer: Renderer,
+    },
+    Unregister {
+        client: ClientId,
+    },
     // Move fast
     First,
     Last,

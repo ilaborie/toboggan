@@ -1,3 +1,6 @@
+use core::fmt::Debug;
+use std::format;
+
 use alloc::string::String;
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
@@ -18,4 +21,22 @@ pub enum Notification {
     Pong {
         timestamp: Timestamp,
     },
+}
+
+impl Notification {
+    pub fn state(state: State) -> Self {
+        let timestamp = Timestamp::now();
+        Self::State { timestamp, state }
+    }
+
+    pub fn error(err: impl Debug) -> Self {
+        let message = format!("{err:?}");
+        let timestamp = Timestamp::now();
+        Self::Error { timestamp, message }
+    }
+
+    pub fn pong() -> Self {
+        let timestamp = Timestamp::now();
+        Self::Pong { timestamp }
+    }
 }
