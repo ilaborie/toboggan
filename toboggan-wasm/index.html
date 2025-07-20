@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toboggan WASM Presentation</title>
+</head>
+<body>
+    <header>
+        <nav>
+            <button id="first-btn" title="First slide">⏮️</button>
+            <button id="prev-btn" title="Previous slide">⏪</button>
+            <button id="next-btn" title="Next slide">⏩</button>
+            <button id="last-btn" title="Last slide">⏭️</button>
+            <button id="pause-btn" title="Pause presentation">⏸️</button>
+            <button id="resume-btn" title="Resume presentation">▶️</button>
+        </nav>
+        
+        <div>
+            <span id="connection-status">Disconnected</span>
+            <span> | </span>
+            <span id="slide-counter">Slide: - / -</span>
+            <span> | </span>
+            <span id="duration-display">Duration: 00:00:00</span>
+        </div>
+    </header>
+    
+    <div id="error-display" style="display: none;"></div>
+    
+    <div id="app">
+        <p>Loading presentation...</p>
+    </div>
+
+    <script type="module">
+        import init, { init_app } from './pkg/toboggan_wasm.js';
+        
+        async function run() {
+            try {
+                // Initialize WASM module
+                await init();
+                
+                // Create and start the application
+                const app = init_app();
+                app.start();
+                
+                // Store reference globally for debugging
+                window.tobogganApp = app;
+                
+                // Clean up on page unload
+                window.addEventListener('beforeunload', () => {
+                    app.dispose();
+                });
+                
+            } catch (error) {
+                console.error('Failed to initialize Toboggan WASM app:', error);
+                
+                const errorDisplay = document.getElementById('error-display');
+                if (errorDisplay) {
+                    errorDisplay.textContent = `WASM initialization failed: ${error.message}`;
+                    errorDisplay.style.display = 'block';
+                }
+            }
+        }
+        
+        run();
+    </script>
+</body>
+</html>
