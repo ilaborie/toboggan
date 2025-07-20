@@ -46,16 +46,18 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_register_command() {
+    #[tokio::test]
+    async fn test_register_command() {
         let talk = create_test_talk();
-        let mut state = TobogganState::new(talk);
+        let state = TobogganState::new(talk);
         let client_id = ClientId::new();
 
-        let notification = state.handle_command(&Command::Register {
-            client: client_id,
-            renderer: Renderer::Html,
-        });
+        let notification = state
+            .handle_command(&Command::Register {
+                client: client_id,
+                renderer: Renderer::Html,
+            })
+            .await;
 
         match notification {
             Notification::State {
@@ -68,13 +70,15 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_unregister_command() {
+    #[tokio::test]
+    async fn test_unregister_command() {
         let talk = create_test_talk();
-        let mut state = TobogganState::new(talk);
+        let state = TobogganState::new(talk);
         let client_id = ClientId::new();
 
-        let notification = state.handle_command(&Command::Unregister { client: client_id });
+        let notification = state
+            .handle_command(&Command::Unregister { client: client_id })
+            .await;
 
         match notification {
             Notification::State { .. } => {}
@@ -82,16 +86,16 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_first_command() {
+    #[tokio::test]
+    async fn test_first_command() {
         let talk = create_test_talk();
-        let mut state = TobogganState::new(talk);
+        let state = TobogganState::new(talk);
 
         // Move to last slide first
-        state.handle_command(&Command::Last);
+        state.handle_command(&Command::Last).await;
 
         // Then go back to first
-        let notification = state.handle_command(&Command::First);
+        let notification = state.handle_command(&Command::First).await;
 
         match notification {
             Notification::State {
@@ -106,12 +110,12 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_last_command() {
+    #[tokio::test]
+    async fn test_last_command() {
         let talk = create_test_talk();
-        let mut state = TobogganState::new(talk);
+        let state = TobogganState::new(talk);
 
-        let notification = state.handle_command(&Command::Last);
+        let notification = state.handle_command(&Command::Last).await;
 
         match notification {
             Notification::State {
@@ -126,13 +130,13 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_goto_valid_slide() {
+    #[tokio::test]
+    async fn test_goto_valid_slide() {
         let talk = create_test_talk();
-        let mut state = TobogganState::new(talk);
+        let state = TobogganState::new(talk);
         let target_slide = *state.slide_order.get(1).unwrap();
 
-        let notification = state.handle_command(&Command::GoTo(target_slide));
+        let notification = state.handle_command(&Command::GoTo(target_slide)).await;
 
         match notification {
             Notification::State {
@@ -147,13 +151,13 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_goto_invalid_slide() {
+    #[tokio::test]
+    async fn test_goto_invalid_slide() {
         let talk = create_test_talk();
-        let mut state = TobogganState::new(talk);
+        let state = TobogganState::new(talk);
         let invalid_slide = SlideId::next();
 
-        let notification = state.handle_command(&Command::GoTo(invalid_slide));
+        let notification = state.handle_command(&Command::GoTo(invalid_slide)).await;
 
         match notification {
             Notification::Error { message, .. } => {
@@ -163,12 +167,12 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_next_command() {
+    #[tokio::test]
+    async fn test_next_command() {
         let talk = create_test_talk();
-        let mut state = TobogganState::new(talk);
+        let state = TobogganState::new(talk);
 
-        let notification = state.handle_command(&Command::Next);
+        let notification = state.handle_command(&Command::Next).await;
 
         match notification {
             Notification::State {
@@ -183,16 +187,16 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_next_at_last_slide() {
+    #[tokio::test]
+    async fn test_next_at_last_slide() {
         let talk = create_test_talk();
-        let mut state = TobogganState::new(talk);
+        let state = TobogganState::new(talk);
 
         // Go to last slide
-        state.handle_command(&Command::Last);
+        state.handle_command(&Command::Last).await;
 
         // Try to go next
-        let notification = state.handle_command(&Command::Next);
+        let notification = state.handle_command(&Command::Next).await;
 
         match notification {
             Notification::State {
@@ -205,16 +209,16 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_previous_command() {
+    #[tokio::test]
+    async fn test_previous_command() {
         let talk = create_test_talk();
-        let mut state = TobogganState::new(talk);
+        let state = TobogganState::new(talk);
 
         // Move to second slide first
-        state.handle_command(&Command::Next);
+        state.handle_command(&Command::Next).await;
 
         // Then go back
-        let notification = state.handle_command(&Command::Previous);
+        let notification = state.handle_command(&Command::Previous).await;
 
         match notification {
             Notification::State {
@@ -229,14 +233,14 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_previous_at_first_slide() {
+    #[tokio::test]
+    async fn test_previous_at_first_slide() {
         let talk = create_test_talk();
-        let mut state = TobogganState::new(talk);
+        let state = TobogganState::new(talk);
         let first_slide = *state.slide_order.first().unwrap();
 
         // Try to go previous from first slide
-        let notification = state.handle_command(&Command::Previous);
+        let notification = state.handle_command(&Command::Previous).await;
 
         match notification {
             Notification::State {
@@ -251,16 +255,16 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_pause_command() {
+    #[tokio::test]
+    async fn test_pause_command() {
         let talk = create_test_talk();
-        let mut state = TobogganState::new(talk);
+        let state = TobogganState::new(talk);
 
         // Resume first
-        state.handle_command(&Command::Resume);
+        state.handle_command(&Command::Resume).await;
 
         // Then pause
-        let notification = state.handle_command(&Command::Pause);
+        let notification = state.handle_command(&Command::Pause).await;
 
         match notification {
             Notification::State {
@@ -273,12 +277,12 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_resume_command() {
+    #[tokio::test]
+    async fn test_resume_command() {
         let talk = create_test_talk();
-        let mut state = TobogganState::new(talk);
+        let state = TobogganState::new(talk);
 
-        let notification = state.handle_command(&Command::Resume);
+        let notification = state.handle_command(&Command::Resume).await;
 
         match notification {
             Notification::State {
@@ -291,12 +295,12 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_ping_command() {
+    #[tokio::test]
+    async fn test_ping_command() {
         let talk = create_test_talk();
-        let mut state = TobogganState::new(talk);
+        let state = TobogganState::new(talk);
 
-        let notification = state.handle_command(&Command::Ping);
+        let notification = state.handle_command(&Command::Ping).await;
 
         match notification {
             Notification::Pong { .. } => {}
@@ -304,16 +308,16 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_state_preservation_during_navigation() {
+    #[tokio::test]
+    async fn test_state_preservation_during_navigation() {
         let talk = create_test_talk();
-        let mut state = TobogganState::new(talk);
+        let state = TobogganState::new(talk);
 
         // Start in Running state
-        state.handle_command(&Command::Resume);
+        state.handle_command(&Command::Resume).await;
 
         // Navigate while running
-        let notification = state.handle_command(&Command::Next);
+        let notification = state.handle_command(&Command::Next).await;
 
         match notification {
             Notification::State {
@@ -326,17 +330,17 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_navigation_from_done_state() {
+    #[tokio::test]
+    async fn test_navigation_from_done_state() {
         let talk = create_test_talk();
-        let mut state = TobogganState::new(talk);
+        let state = TobogganState::new(talk);
 
         // Go to last slide and then next to reach Done state
-        state.handle_command(&Command::Last);
-        state.handle_command(&Command::Next);
+        state.handle_command(&Command::Last).await;
+        state.handle_command(&Command::Next).await;
 
         // Navigate from Done state
-        let notification = state.handle_command(&Command::Previous);
+        let notification = state.handle_command(&Command::Previous).await;
 
         match notification {
             Notification::State {
@@ -349,19 +353,19 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_duration_tracking() {
+    #[tokio::test]
+    async fn test_duration_tracking() {
         let talk = create_test_talk();
-        let mut state = TobogganState::new(talk);
+        let state = TobogganState::new(talk);
 
         // Resume to start tracking
-        state.handle_command(&Command::Resume);
+        state.handle_command(&Command::Resume).await;
 
         // Wait a tiny bit to ensure duration > 0
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
         // Pause and check duration
-        let notification = state.handle_command(&Command::Pause);
+        let notification = state.handle_command(&Command::Pause).await;
 
         match notification {
             Notification::State {
