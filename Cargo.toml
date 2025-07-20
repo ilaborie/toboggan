@@ -28,6 +28,7 @@ anyhow = "1.0.98"
 serde_json = "1.0.140"
 tower-http = "0.6.6"
 futures = "0.3"
+dashmap = "6.1.0"
 
 # OpenAPI dependencies (dev-only)
 utoipa = "5.0"

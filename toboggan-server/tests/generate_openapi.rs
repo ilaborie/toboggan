@@ -66,7 +66,7 @@ impl TobogganTestServer {
             ],
         };
 
-        let state = TobogganState::new(talk);
+        let state = TobogganState::new(talk, 100);
         let router = routes().with_state(state);
 
         Ok(Self { router })
@@ -152,21 +152,25 @@ async fn should_generate_openapi() -> anyhow::Result<()> {
 #[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 async fn basic_api_operations(app: &mut TestClient<TobogganTestServer>) -> anyhow::Result<()> {
     // Test health endpoint using Value for clawspec compatibility
-    let health_data: Value = app.get("/health")?.await?.as_json().await?;
+    let health_response: Value = app.get("/health")?.await?.as_json().await?;
+    let health_data = &health_response["data"];
     assert_eq!(health_data["status"].as_str().unwrap(), "OK");
     assert_eq!(health_data["talk"].as_str().unwrap(), "Test Presentation");
     assert!(health_data["elapsed"].is_string());
     assert!(health_data["started_at"].is_string());
+    assert!(health_data["active_clients"].is_number());
 
     // Test get talk endpoint
-    let talk_data: Value = app.get("/api/talk")?.await?.as_json().await?;
+    let talk_response: Value = app.get("/api/talk")?.await?.as_json().await?;
+    let talk_data = &talk_response["data"];
     assert!(talk_data["talk"].is_object());
     let talk = &talk_data["talk"];
     assert_eq!(talk["title"]["text"].as_str().unwrap(), "Test Presentation");
     assert_eq!(talk["slides"].as_array().unwrap().len(), 3);
 
     // Test get slides endpoint
-    let slides_data: Value = app.get("/api/slides")?.await?.as_json().await?;
+    let slides_response: Value = app.get("/api/slides")?.await?.as_json().await?;
+    let slides_data = &slides_response["data"];
     assert!(slides_data["slides"].is_object());
     let slides = slides_data["slides"].as_object().unwrap();
     assert!(!slides.is_empty());
@@ -188,8 +192,9 @@ async fn test_command_operations(app: &mut TestClient<TobogganTestServer>) -> an
         .as_json()
         .await?;
 
-    assert_eq!(ping_response["type"].as_str().unwrap(), "Pong");
-    assert!(ping_response["timestamp"].is_string());
+    let ping_data = &ping_response["data"];
+    assert_eq!(ping_data["type"].as_str().unwrap(), "Pong");
+    assert!(ping_data["timestamp"].is_string());
 
     // Test register command
     let register_command = json!({
@@ -204,9 +209,10 @@ async fn test_command_operations(app: &mut TestClient<TobogganTestServer>) -> an
         .as_json()
         .await?;
 
-    assert_eq!(register_response["type"].as_str().unwrap(), "State");
-    assert!(register_response["timestamp"].is_string());
-    assert!(register_response["state"].is_object());
+    let register_data = &register_response["data"];
+    assert_eq!(register_data["type"].as_str().unwrap(), "State");
+    assert!(register_data["timestamp"].is_string());
+    assert!(register_data["state"].is_object());
 
     // Test navigation commands
     let commands = vec![
@@ -227,9 +233,10 @@ async fn test_command_operations(app: &mut TestClient<TobogganTestServer>) -> an
             .await?;
 
         // Most commands return State notification
-        let response_type = response["type"].as_str().unwrap();
+        let response_data = &response["data"];
+        let response_type = response_data["type"].as_str().unwrap();
         assert!(response_type == "State" || response_type == "Error");
-        assert!(response["timestamp"].is_string());
+        assert!(response_data["timestamp"].is_string());
     }
 
     Ok(())
@@ -246,7 +253,8 @@ async fn test_error_cases(app: &mut TestClient<TobogganTestServer>) -> anyhow::R
     // Since it's a client-side error, we can't check the server response
 
     // Test GoTo command with invalid slide ID
-    let slides_data: Value = app.get("/api/slides")?.await?.as_json().await?;
+    let slides_response: Value = app.get("/api/slides")?.await?.as_json().await?;
+    let slides_data = &slides_response["data"];
     let slides = slides_data["slides"].as_object().unwrap();
 
     if let Some(first_slide_id) = slides.keys().next() {
@@ -315,12 +323,13 @@ mod command_variants {
                 .await?;
 
             // All valid commands should return proper Notification responses
-            let response_type = response["type"].as_str().unwrap();
+            let response_data = &response["data"];
+            let response_type = response_data["type"].as_str().unwrap();
             assert!(
                 response_type == "State" || response_type == "Pong" || response_type == "Error",
                 "Unexpected response type: {response_type}"
             );
-            assert!(response["timestamp"].is_string());
+            assert!(response_data["timestamp"].is_string());
         }
 
         Ok(())

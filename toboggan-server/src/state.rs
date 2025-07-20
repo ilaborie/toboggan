@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use dashmap::DashMap;
 use jiff::Timestamp;
-use serde_json::json;
 use toboggan_core::{ClientId, Command, Notification, Slide, SlideId, State, Talk};
 use tokio::sync::{RwLock, watch};
 #[derive(Clone)]
@@ -13,12 +13,13 @@ pub struct TobogganState {
     slides: Arc<HashMap<SlideId, Slide>>,
     slide_order: Arc<[SlideId]>,
     current_state: Arc<RwLock<State>>,
-    clients: Arc<RwLock<HashMap<ClientId, watch::Sender<Notification>>>>,
+    clients: Arc<DashMap<ClientId, watch::Sender<Notification>>>,
+    max_clients: usize,
 }
 
 impl TobogganState {
     #[must_use]
-    pub fn new(talk: Talk) -> Self {
+    pub fn new(talk: Talk, max_clients: usize) -> Self {
         let started = Timestamp::now();
         let talk = Arc::new(talk);
 
@@ -44,28 +45,33 @@ impl TobogganState {
             slides,
             slide_order,
             current_state,
-            clients: Arc::new(RwLock::new(HashMap::new())),
+            clients: Arc::new(DashMap::new()),
+            max_clients,
         }
     }
 
-    pub(crate) fn health(&self) -> serde_json::Value {
-        let started_at = self.started_at;
-        let elasped = Timestamp::now().duration_since(started_at);
-        let name = self.talk.title.to_string();
+    pub(crate) fn health(&self) -> crate::router::HealthResponse {
+        use crate::router::HealthResponse;
 
-        json!({
-            "status": "OK",
-            "started_at": started_at,
-            "elapsed": elasped,
-            "talk": name
-        })
+        let started_at = self.started_at;
+        let elapsed = Timestamp::now().duration_since(started_at);
+        let name = self.talk.title.to_string();
+        let active_clients = self.clients.len();
+
+        HealthResponse {
+            status: "OK".to_string(),
+            started_at,
+            elapsed,
+            talk: name,
+            active_clients,
+        }
     }
 
     pub(crate) fn talk(&self) -> &Talk {
         &self.talk
     }
 
-    pub(crate) fn slides(&self) -> &HashMap<SlideId, Slide> {
+    pub(crate) fn slides_arc(&self) -> &Arc<HashMap<SlideId, Slide>> {
         &self.slides
     }
 
@@ -75,7 +81,22 @@ impl TobogganState {
         state.clone()
     }
 
-    pub async fn register_client(&self, client_id: ClientId) -> watch::Receiver<Notification> {
+    /// Registers a new client for notifications
+    ///
+    /// # Errors
+    /// Returns an error if the maximum number of clients is exceeded
+    pub fn register_client(
+        &self,
+        client_id: ClientId,
+    ) -> Result<watch::Receiver<Notification>, &'static str> {
+        // Clean up disconnected clients first
+        self.cleanup_disconnected_clients();
+
+        // Check client limit
+        if self.clients.len() >= self.max_clients {
+            return Err("Maximum number of clients exceeded");
+        }
+
         let (tx, rx) = watch::channel(Notification::state(State::Paused {
             current: self
                 .slide_order
@@ -85,19 +106,59 @@ impl TobogganState {
             total_duration: Duration::ZERO,
         }));
 
-        let mut clients = self.clients.write().await;
-        clients.insert(client_id, tx);
-        rx
+        self.clients.insert(client_id, tx);
+        tracing::info!(
+            ?client_id,
+            active_clients = self.clients.len(),
+            "Client registered"
+        );
+
+        Ok(rx)
     }
 
-    pub async fn unregister_client(&self, client_id: ClientId) {
-        let mut clients = self.clients.write().await;
-        clients.remove(&client_id);
+    fn cleanup_disconnected_clients(&self) {
+        let initial_count = self.clients.len();
+
+        self.clients.retain(|client_id, tx| {
+            let is_connected = !tx.is_closed();
+            if !is_connected {
+                tracing::debug!(?client_id, "Removing disconnected client");
+            }
+            is_connected
+        });
+
+        let removed_count = initial_count - self.clients.len();
+        if removed_count > 0 {
+            tracing::info!(
+                removed_count,
+                active_clients = self.clients.len(),
+                "Cleaned up disconnected clients"
+            );
+        }
     }
 
-    async fn broadcast_notification(&self, notification: &Notification) {
-        let clients = self.clients.read().await;
-        for (client_id, sender) in clients.iter() {
+    pub async fn cleanup_clients_task(&self, cleanup_interval: Duration) {
+        let mut interval = tokio::time::interval(cleanup_interval);
+
+        loop {
+            interval.tick().await;
+            self.cleanup_disconnected_clients();
+        }
+    }
+
+    pub fn unregister_client(&self, client_id: ClientId) {
+        self.clients.remove(&client_id);
+        tracing::info!(
+            ?client_id,
+            active_clients = self.clients.len(),
+            "Client unregistered"
+        );
+    }
+
+    fn broadcast_notification(&self, notification: &Notification) {
+        for client_entry in self.clients.iter() {
+            let client_id = client_entry.key();
+            let sender = client_entry.value();
             if sender.send(notification.clone()).is_err() {
                 tracing::warn!(
                     ?client_id,
@@ -108,6 +169,7 @@ impl TobogganState {
     }
 
     pub async fn handle_command(&self, command: &Command) -> Notification {
+        let start_time = std::time::Instant::now();
         let mut state = self.current_state.write().await;
         let notification = match command {
             Command::Register { .. } => {
@@ -183,7 +245,14 @@ impl TobogganState {
         };
 
         // Broadcast the notification to all registered clients
-        self.broadcast_notification(&notification).await;
+        self.broadcast_notification(&notification);
+
+        tracing::debug!(
+            ?command,
+            duration_ms = start_time.elapsed().as_millis(),
+            active_clients = self.clients.len(),
+            "Command handled and broadcast completed"
+        );
 
         notification
     }

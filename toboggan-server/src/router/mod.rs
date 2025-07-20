@@ -1,22 +1,26 @@
 use axum::extract::State;
-use axum::http::{Method, StatusCode};
+use axum::http::Method;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde_json::json;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
-use tracing::warn;
+use tracing::{error, warn};
 
 use crate::TobogganState;
 use toboggan_core::{Command, Notification};
 
+mod responses;
 mod ws;
 
+pub use responses::*;
+
 pub fn routes() -> Router<TobogganState> {
-    let cors = CorsLayer::new()
-        .allow_methods([Method::GET, Method::POST])
-        .allow_origin(Any);
+    routes_with_cors(None)
+}
+
+pub fn routes_with_cors(allowed_origins: Option<&[String]>) -> Router<TobogganState> {
+    let cors = create_cors_layer(allowed_origins);
 
     Router::new()
         .nest(
@@ -33,32 +37,86 @@ pub fn routes() -> Router<TobogganState> {
 }
 
 async fn health(State(state): State<TobogganState>) -> impl IntoResponse {
-    Json(state.health())
+    let start_time = std::time::Instant::now();
+    let health_data = state.health();
+
+    tracing::debug!(
+        duration_ms = start_time.elapsed().as_millis(),
+        active_clients = health_data.active_clients,
+        "Health check completed"
+    );
+
+    ApiResponse::new(health_data)
 }
 
 async fn get_talk(State(state): State<TobogganState>) -> impl IntoResponse {
-    let talk = state.talk();
-    Json(json!({
-        "talk": talk,
-    }))
+    let talk = state.talk().clone();
+    ApiResponse::new(TalkResponse { talk })
 }
 
 async fn get_slides(State(state): State<TobogganState>) -> impl IntoResponse {
-    let slides = state.slides();
-    Json(json!({
-        "slides": slides,
-    }))
+    // Use Arc clone instead of deep clone for better performance
+    let slides = state.slides_arc().clone();
+    ApiResponse::new(SlidesResponse {
+        slides: (*slides).clone(),
+    })
 }
 
 async fn post_command(
     State(state): State<TobogganState>,
     Json(command): Json<Command>,
 ) -> impl IntoResponse {
-    let result = state.handle_command(&command).await;
-    if let Notification::Error { message, .. } = &result {
-        warn!(?result, "{message}");
-        (StatusCode::BAD_REQUEST, Json(result))
-    } else {
-        (StatusCode::OK, Json(result))
+    let start_time = std::time::Instant::now();
+
+    match state.handle_command(&command).await {
+        Notification::Error { ref message, .. } => {
+            warn!(
+                ?command,
+                duration_ms = start_time.elapsed().as_millis(),
+                "Command failed: {message}"
+            );
+            ErrorResponse::bad_request(message.clone()).into_response()
+        }
+        notification => {
+            tracing::info!(
+                ?command,
+                duration_ms = start_time.elapsed().as_millis(),
+                "Command processed successfully"
+            );
+            ApiResponse::new(notification).into_response()
+        }
     }
+}
+
+fn create_cors_layer(allowed_origins: Option<&[String]>) -> CorsLayer {
+    let mut cors = CorsLayer::new()
+        .allow_methods([Method::GET, Method::POST])
+        .allow_headers([
+            axum::http::header::CONTENT_TYPE,
+            axum::http::header::AUTHORIZATION,
+        ]);
+
+    match allowed_origins {
+        Some(origins) if !origins.is_empty() => {
+            let parsed_origins: Result<Vec<_>, _> =
+                origins.iter().map(|origin| origin.parse()).collect();
+
+            match parsed_origins {
+                Ok(origins) => {
+                    tracing::info!(?origins, "CORS configured with specific origins");
+                    cors = cors.allow_origin(origins);
+                }
+                Err(err) => {
+                    error!("Invalid CORS origin format: {err}, falling back to Any");
+                    cors = cors.allow_origin(Any);
+                }
+            }
+        }
+        _ => {
+            cors = cors.allow_origin(Any);
+            tracing::warn!("CORS configured to allow any origin - not recommended for production");
+        }
+    }
+
+    cors
 }

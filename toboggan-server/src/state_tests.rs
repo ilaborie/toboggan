@@ -49,7 +49,7 @@ mod tests {
     #[tokio::test]
     async fn test_register_command() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk);
+        let state = TobogganState::new(talk, 100);
         let client_id = ClientId::new();
 
         let notification = state
@@ -73,7 +73,7 @@ mod tests {
     #[tokio::test]
     async fn test_unregister_command() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk);
+        let state = TobogganState::new(talk, 100);
         let client_id = ClientId::new();
 
         let notification = state
@@ -89,7 +89,7 @@ mod tests {
     #[tokio::test]
     async fn test_first_command() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk);
+        let state = TobogganState::new(talk, 100);
 
         // Move to last slide first
         state.handle_command(&Command::Last).await;
@@ -113,7 +113,7 @@ mod tests {
     #[tokio::test]
     async fn test_last_command() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk);
+        let state = TobogganState::new(talk, 100);
 
         let notification = state.handle_command(&Command::Last).await;
 
@@ -133,7 +133,7 @@ mod tests {
     #[tokio::test]
     async fn test_goto_valid_slide() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk);
+        let state = TobogganState::new(talk, 100);
         let target_slide = *state.slide_order.get(1).unwrap();
 
         let notification = state.handle_command(&Command::GoTo(target_slide)).await;
@@ -154,7 +154,7 @@ mod tests {
     #[tokio::test]
     async fn test_goto_invalid_slide() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk);
+        let state = TobogganState::new(talk, 100);
         let invalid_slide = SlideId::next();
 
         let notification = state.handle_command(&Command::GoTo(invalid_slide)).await;
@@ -170,7 +170,7 @@ mod tests {
     #[tokio::test]
     async fn test_next_command() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk);
+        let state = TobogganState::new(talk, 100);
 
         let notification = state.handle_command(&Command::Next).await;
 
@@ -190,7 +190,7 @@ mod tests {
     #[tokio::test]
     async fn test_next_at_last_slide() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk);
+        let state = TobogganState::new(talk, 100);
 
         // Go to last slide
         state.handle_command(&Command::Last).await;
@@ -212,7 +212,7 @@ mod tests {
     #[tokio::test]
     async fn test_previous_command() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk);
+        let state = TobogganState::new(talk, 100);
 
         // Move to second slide first
         state.handle_command(&Command::Next).await;
@@ -236,7 +236,7 @@ mod tests {
     #[tokio::test]
     async fn test_previous_at_first_slide() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk);
+        let state = TobogganState::new(talk, 100);
         let first_slide = *state.slide_order.first().unwrap();
 
         // Try to go previous from first slide
@@ -258,7 +258,7 @@ mod tests {
     #[tokio::test]
     async fn test_pause_command() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk);
+        let state = TobogganState::new(talk, 100);
 
         // Resume first
         state.handle_command(&Command::Resume).await;
@@ -280,7 +280,7 @@ mod tests {
     #[tokio::test]
     async fn test_resume_command() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk);
+        let state = TobogganState::new(talk, 100);
 
         let notification = state.handle_command(&Command::Resume).await;
 
@@ -298,7 +298,7 @@ mod tests {
     #[tokio::test]
     async fn test_ping_command() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk);
+        let state = TobogganState::new(talk, 100);
 
         let notification = state.handle_command(&Command::Ping).await;
 
@@ -311,7 +311,7 @@ mod tests {
     #[tokio::test]
     async fn test_state_preservation_during_navigation() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk);
+        let state = TobogganState::new(talk, 100);
 
         // Start in Running state
         state.handle_command(&Command::Resume).await;
@@ -333,7 +333,7 @@ mod tests {
     #[tokio::test]
     async fn test_navigation_from_done_state() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk);
+        let state = TobogganState::new(talk, 100);
 
         // Go to last slide and then next to reach Done state
         state.handle_command(&Command::Last).await;
@@ -356,7 +356,7 @@ mod tests {
     #[tokio::test]
     async fn test_duration_tracking() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk);
+        let state = TobogganState::new(talk, 100);
 
         // Resume to start tracking
         state.handle_command(&Command::Resume).await;

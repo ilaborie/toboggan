@@ -2,6 +2,7 @@ use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::response::Response;
 use futures::{SinkExt, StreamExt};
+use std::time::Duration;
 use tracing::{error, info, warn};
 
 use toboggan_core::{ClientId, Command, Notification};
@@ -22,7 +23,13 @@ async fn handle_websocket(socket: WebSocket, state: TobogganState) {
     info!(?client_id, "New WebSocket connection established");
 
     // Register the client and get a notification receiver
-    let notification_rx = state.register_client(client_id).await;
+    let notification_rx = match state.register_client(client_id) {
+        Ok(rx) => rx,
+        Err(err) => {
+            error!(?client_id, "Failed to register client: {err}");
+            return;
+        }
+    };
 
     let (mut ws_sender, ws_receiver) = socket.split();
 
@@ -38,12 +45,14 @@ async fn handle_websocket(socket: WebSocket, state: TobogganState) {
     // Clone the sender for the error handling
     let error_notification_tx = notification_tx.clone();
 
-    // Spawn the three main tasks
-    let watcher_task = spawn_notification_watcher_task(notification_rx, notification_tx, client_id);
+    // Spawn the main tasks including heartbeat
+    let watcher_task =
+        spawn_notification_watcher_task(notification_rx, notification_tx.clone(), client_id);
     let sender_task =
         spawn_notification_sender_task(notification_rx_internal, ws_sender, client_id);
     let receiver_task =
         spawn_message_receiver_task(ws_receiver, state.clone(), error_notification_tx, client_id);
+    let heartbeat_task = spawn_heartbeat_task(notification_tx, client_id, Duration::from_secs(30));
 
     // Wait for any task to finish
     tokio::select! {
@@ -56,10 +65,13 @@ async fn handle_websocket(socket: WebSocket, state: TobogganState) {
         _ = receiver_task => {
             info!(?client_id, "Receiver task completed");
         }
+        _ = heartbeat_task => {
+            info!(?client_id, "Heartbeat task completed");
+        }
     }
 
     // Unregister the client when the connection is closed
-    state.unregister_client(client_id).await;
+    state.unregister_client(client_id);
     info!(
         ?client_id,
         "Client unregistered and WebSocket connection closed"
@@ -211,5 +223,31 @@ fn spawn_message_receiver_task(
             }
         }
         info!(?client_id, "Message receiver task finished");
+    })
+}
+
+/// Spawn heartbeat task to send periodic ping notifications
+fn spawn_heartbeat_task(
+    notification_tx: tokio::sync::mpsc::UnboundedSender<Notification>,
+    client_id: ClientId,
+    heartbeat_interval: Duration,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(heartbeat_interval);
+
+        loop {
+            interval.tick().await;
+
+            let ping_notification = Notification::pong();
+            if notification_tx.send(ping_notification).is_err() {
+                info!(
+                    ?client_id,
+                    "Heartbeat task stopping - notification channel closed"
+                );
+                break;
+            }
+        }
+
+        info!(?client_id, "Heartbeat task finished");
     })
 }
