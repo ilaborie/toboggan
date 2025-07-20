@@ -8,3 +8,5 @@ cargo = { binstall = true }
 [tools]
 "cargo:bacon" = "latest"
 "cargo:cargo-nextest" = "0.9"
+"npm:rolldown-vite" = "latest"
+"npm:vite" = "latest"
