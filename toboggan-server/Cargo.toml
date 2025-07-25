@@ -29,6 +29,7 @@ tower = { workspace = true }
 clawspec-core = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 utoipa = { workspace = true }
+tokio-tungstenite = "0.21"
 
 [lints]
 workspace = true

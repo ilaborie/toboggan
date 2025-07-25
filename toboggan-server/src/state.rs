@@ -85,7 +85,7 @@ impl TobogganState {
     ///
     /// # Errors
     /// Returns an error if the maximum number of clients is exceeded
-    pub fn register_client(
+    pub async fn register_client(
         &self,
         client_id: ClientId,
     ) -> Result<watch::Receiver<Notification>, &'static str> {
@@ -97,14 +97,11 @@ impl TobogganState {
             return Err("Maximum number of clients exceeded");
         }
 
-        let (tx, rx) = watch::channel(Notification::state(State::Paused {
-            current: self
-                .slide_order
-                .first()
-                .copied()
-                .unwrap_or_else(SlideId::next),
-            total_duration: Duration::ZERO,
-        }));
+        // Get the current state to send to the new client
+        let current_state = self.current_state.read().await;
+        let initial_notification = Notification::state(current_state.clone());
+
+        let (tx, rx) = watch::channel(initial_notification);
 
         self.clients.insert(client_id, tx);
         tracing::info!(

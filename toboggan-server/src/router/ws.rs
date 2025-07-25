@@ -23,7 +23,7 @@ async fn handle_websocket(socket: WebSocket, state: TobogganState) {
     info!(?client_id, "New WebSocket connection established");
 
     // Register the client and get a notification receiver
-    let notification_rx = match state.register_client(client_id) {
+    let notification_rx = match state.register_client(client_id).await {
         Ok(rx) => rx,
         Err(err) => {
             error!(?client_id, "Failed to register client: {err}");

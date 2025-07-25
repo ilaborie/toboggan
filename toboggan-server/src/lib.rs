@@ -43,16 +43,20 @@ pub async fn launch(settings: Settings) -> anyhow::Result<()> {
     let cleanup_interval = settings.cleanup_interval();
     tokio::spawn(async move {
         cleanup_state.cleanup_clients_task(cleanup_interval).await;
+        info!("Cleanup task completed");
     });
 
     let router = routes_with_cors(settings.allowed_origins.as_deref()).with_state(state);
 
     let shutdown_signal = setup_shutdown_signal(settings.shutdown_timeout());
 
+    // Start the server with graceful shutdown
     axum::serve(listener, router.into_make_service())
         .with_graceful_shutdown(shutdown_signal)
         .await
         .context("Axum server")?;
+
+    info!("Server shutdown complete");
 
     Ok(())
 }
@@ -101,5 +105,6 @@ async fn setup_shutdown_signal(timeout: Duration) {
         "Waiting up to {} seconds for graceful shutdown",
         timeout.as_secs()
     );
-    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    info!("Shutdown signal processed, server will now terminate gracefully");
 }
