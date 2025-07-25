@@ -38,10 +38,12 @@ The implementation follows these design principles:
 - **Connection Retry Logic**: Automatic reconnection with exponential backoff
 
 ### Dependencies
-- **gloo**: Provides clean abstractions for timers, events, and utilities
-- **web-sys**: Minimal feature set for DOM manipulation and WebSocket
+- **gloo 0.11.0**: Provides clean abstractions for timers, events, and utilities
+- **web-sys 0.3.77**: Minimal feature set for DOM manipulation and WebSocket
+- **wasm-bindgen 0.2.100**: JavaScript/Rust interop for WebAssembly
+- **js-sys 0.3.77**: JavaScript API bindings for WebAssembly
 - **toboggan-core**: Shared types and protocol implementation
-- **serde_json**: JSON serialization for WebSocket communication
+- **serde_json 1.0.140**: JSON serialization for WebSocket communication
 
 ### Key Components
 
