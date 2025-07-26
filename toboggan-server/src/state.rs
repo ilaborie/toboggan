@@ -4,10 +4,9 @@ use std::time::Duration;
 
 use dashmap::DashMap;
 use jiff::Timestamp;
+use toboggan_core::{ClientId, Command, Notification, Slide, SlideId, State, Talk};
 use tokio::sync::{RwLock, watch};
 use tracing::info;
-
-use toboggan_core::{ClientId, Command, Notification, Slide, SlideId, State, Talk};
 
 #[derive(Clone)]
 pub struct TobogganState {

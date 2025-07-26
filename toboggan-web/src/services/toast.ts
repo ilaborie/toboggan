@@ -26,7 +26,7 @@ export interface ToastMessage {
  * Custom element for the toast container
  */
 export class TobogganToastContainer extends HTMLElement {
-  declare shadowRoot: ShadowRoot;
+  declare root: ShadowRoot;
   private container!: HTMLDivElement;
   private messages = new Map<string, ToastMessage>();
   // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Used in show method for ID generation
@@ -36,7 +36,7 @@ export class TobogganToastContainer extends HTMLElement {
     super();
 
     // Create shadow DOM
-    this.shadowRoot = this.attachShadow({ mode: "open" });
+    this.root = this.attachShadow({ mode: "open" });
 
     // Create the internal structure
     this.createStructure();
@@ -152,7 +152,10 @@ export class TobogganToastContainer extends HTMLElement {
     const type: ToastType =
       status === "connected" ? "success" : status === "disconnected" ? "error" : "info";
 
-    return this.show(message, { type, duration: status === "connected" ? 2000 : 4000 });
+    return this.show(message, {
+      type,
+      duration: status === "connected" ? 2000 : 4000,
+    });
   }
 
   /**
@@ -175,7 +178,7 @@ export class TobogganToastContainer extends HTMLElement {
   private createStructure(): void {
     this.container = document.createElement("div");
     this.container.className = "toast-container";
-    this.shadowRoot.appendChild(this.container);
+    this.root.appendChild(this.container);
   }
 
   /**
@@ -193,7 +196,7 @@ export class TobogganToastContainer extends HTMLElement {
         pointer-events: none;
         display: block;
       }
-      
+
       :host([hidden]) {
         display: none !important;
       }
@@ -206,7 +209,7 @@ export class TobogganToastContainer extends HTMLElement {
       }
     `;
 
-    this.shadowRoot.appendChild(style);
+    this.root.appendChild(style);
   }
 
   /**

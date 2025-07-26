@@ -9,7 +9,7 @@ export type ToastType = "error" | "warning" | "info" | "success";
  * Custom element for individual toast messages
  */
 export class TobogganToast extends HTMLElement {
-  declare shadowRoot: ShadowRoot;
+  declare root: ShadowRoot;
   private toastContainer!: HTMLDivElement;
   private closeButton!: HTMLButtonElement;
   private autoHideTimeout: number | null = null;
@@ -18,7 +18,7 @@ export class TobogganToast extends HTMLElement {
     super();
 
     // Create shadow DOM
-    this.shadowRoot = this.attachShadow({ mode: "open" });
+    this.root = this.attachShadow({ mode: "open" });
 
     // Create the internal structure
     this.createStructure();
@@ -180,7 +180,7 @@ export class TobogganToast extends HTMLElement {
 
     this.toastContainer.appendChild(messageElement);
     this.toastContainer.appendChild(this.closeButton);
-    this.shadowRoot.appendChild(this.toastContainer);
+    this.root.appendChild(this.toastContainer);
   }
 
   /**
@@ -194,7 +194,7 @@ export class TobogganToast extends HTMLElement {
         margin-bottom: 8px;
         max-width: 400px;
       }
-      
+
       :host([hidden]) {
         display: none !important;
       }
@@ -273,7 +273,7 @@ export class TobogganToast extends HTMLElement {
       }
     `;
 
-    this.shadowRoot.appendChild(style);
+    this.root.appendChild(style);
   }
 
   /**
@@ -311,7 +311,7 @@ export class TobogganToast extends HTMLElement {
    * Update the message content
    */
   private updateMessage(): void {
-    const messageElement = this.shadowRoot.querySelector(".toast-message");
+    const messageElement = this.root.querySelector(".toast-message");
     if (messageElement) {
       messageElement.textContent = this.message;
     }

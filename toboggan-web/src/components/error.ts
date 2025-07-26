@@ -12,7 +12,7 @@ export interface ErrorDisplayConfig {
  * Custom element for displaying error messages with shadow DOM encapsulation
  */
 export class TobogganErrorDisplay extends HTMLElement {
-  declare shadowRoot: ShadowRoot;
+  declare root: ShadowRoot;
   private errorContainer!: HTMLDivElement;
   private config: ErrorDisplayConfig;
   private hideTimeout: number | null = null;
@@ -21,7 +21,7 @@ export class TobogganErrorDisplay extends HTMLElement {
     super();
 
     // Create shadow DOM
-    this.shadowRoot = this.attachShadow({ mode: "open" });
+    this.root = this.attachShadow({ mode: "open" });
 
     // Set default configuration
     this.config = {
@@ -130,7 +130,7 @@ export class TobogganErrorDisplay extends HTMLElement {
     this.errorContainer.setAttribute("aria-live", "assertive");
     this.errorContainer.style.display = "none";
 
-    this.shadowRoot.appendChild(this.errorContainer);
+    this.root.appendChild(this.errorContainer);
   }
 
   /**
@@ -143,7 +143,7 @@ export class TobogganErrorDisplay extends HTMLElement {
         display: block;
         width: 100%;
       }
-      
+
       :host([hidden]) {
         display: none !important;
       }
@@ -167,7 +167,7 @@ export class TobogganErrorDisplay extends HTMLElement {
       }
     `;
 
-    this.shadowRoot.appendChild(style);
+    this.root.appendChild(style);
   }
 
   /**

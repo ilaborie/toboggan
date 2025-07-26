@@ -9,7 +9,4 @@ export {
   TobogganErrorDisplay,
 } from "./error.js";
 
-export {
-  type ToastType,
-  TobogganToast,
-} from "./toast.js";
+export { type ToastType, TobogganToast } from "./toast.js";

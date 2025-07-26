@@ -189,7 +189,8 @@ export interface TalkResponse {
 }
 
 export interface SlidesResponse {
-  slides: Record<string, Slide>;
+  data: { slides: Record<string, Slide> };
+  timestamp: Timestamp;
 }
 
 export interface HealthResponse {

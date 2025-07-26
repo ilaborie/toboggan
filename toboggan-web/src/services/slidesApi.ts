@@ -63,7 +63,8 @@ export class SlidesApiService {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const data: SlidesResponse = await response.json();
+    const { data }: SlidesResponse = await response.json();
+    console.log("fetched", data);
 
     // Create ordered slide IDs array
     const orderedIds = Object.keys(data.slides)

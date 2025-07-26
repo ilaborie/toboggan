@@ -4,12 +4,11 @@
 //! individual slides within a presentation. Slides have different kinds
 //! (Cover, Part, Standard) and support styling, content, and speaker notes.
 
-use core::fmt::Display;
-
 #[cfg(feature = "alloc")]
 use alloc::string::String;
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
+use core::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
