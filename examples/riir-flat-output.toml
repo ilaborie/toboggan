@@ -1,0 +1,510 @@
+date = "2025-07-26"
+
+[title]
+type = "Text"
+text = "Peut-on RIIR de tout ?"
+
+[[slides]]
+kind = "Cover"
+style = []
+
+[slides.title]
+type = "Empty"
+
+[slides.body]
+type = "Empty"
+
+[slides.notes]
+type = "Text"
+text = "Rewriting It In Rust - De la startup aux multinationales"
+
+[[slides]]
+kind = "Part"
+style = []
+
+[slides.title]
+type = "Text"
+text = "Introduction"
+
+[slides.body]
+type = "Html"
+raw = """
+<p><strong>RIIR</strong> : “Have you considered Rewriting It In Rust?”</p>
+<p>Une question qui fait sourire… mais qui cache une réalité : Rust gagne du terrain partout.</p>"""
+alt = """
+**RIIR** : “Have you considered Rewriting It In Rust?”
+Une question qui fait sourire… mais qui cache une réalité : Rust gagne du terrain partout."""
+
+[slides.notes]
+type = "Empty"
+
+[[slides]]
+kind = "Part"
+style = []
+
+[slides.title]
+type = "Text"
+text = "1. Les Success Stories du RIIR"
+
+[slides.body]
+type = "Html"
+raw = """
+<p>Des réécritures qui ont fait leurs preuves</p>
+<p>Pourquoi ces réécritures réussissent ?</p>
+<ul>
+<li>
+<p><strong>ripgrep</strong> (<code>rg</code>) : grep réécrit en Rust</p>
+<ul>
+<li>10x plus rapide que grep classique</li>
+<li>Recherche récursive native</li>
+<li>Support Unicode complet</li>
+</ul>
+</li>
+<li>
+<p><strong>fd</strong> : find réécrit en Rust</p>
+<ul>
+<li>Interface plus intuitive</li>
+<li>Performances supérieures</li>
+<li>Respect des .gitignore par défaut</li>
+</ul>
+</li>
+<li>
+<p><strong>Fish Shell</strong> : Shell moderne</p>
+<ul>
+<li>Autocomplétion intelligente</li>
+<li>Sécurité mémoire</li>
+<li>Configuration simple</li>
+</ul>
+</li>
+<li>
+<p><strong>Performance</strong> : Compilation native + optimisations</p>
+</li>
+<li>
+<p><strong>Sécurité</strong> : Zéro segfault, gestion mémoire automatique</p>
+</li>
+<li>
+<p><strong>Ergonomie</strong> : APIs modernes et intuitives</p>
+</li>
+<li>
+<p><strong>Fiabilité</strong> : System de types expressif</p>
+</li>
+</ul>"""
+alt = """
+Des réécritures qui ont fait leurs preuves
+Pourquoi ces réécritures réussissent ?
+- 
+**ripgrep** (`rg`) : grep réécrit en Rust
+  - 10x plus rapide que grep classique
+  - Recherche récursive native
+  - Support Unicode complet
+
+- 
+**fd** : find réécrit en Rust
+  - Interface plus intuitive
+  - Performances supérieures
+  - Respect des .gitignore par défaut
+
+- 
+**Fish Shell** : Shell moderne
+  - Autocomplétion intelligente
+  - Sécurité mémoire
+  - Configuration simple
+
+- 
+**Performance** : Compilation native + optimisations
+
+- 
+**Sécurité** : Zéro segfault, gestion mémoire automatique
+
+- 
+**Ergonomie** : APIs modernes et intuitives
+
+- 
+**Fiabilité** : System de types expressif"""
+
+[slides.notes]
+type = "Empty"
+
+[[slides]]
+kind = "Part"
+style = []
+
+[slides.title]
+type = "Text"
+text = "2. Rust, le couteau suisse moderne"
+
+[slides.body]
+type = "Html"
+raw = """
+<p>Au-delà des outils CLI</p>
+<p>Les forces de Rust</p>
+<p>Rust ne se limite pas aux applications terminal :</p>
+<h4>Web &amp; Backend</h4>
+<ul>
+<li><strong>Actix-web</strong>, <strong>Axum</strong> : Serveurs web haute performance</li>
+<li><strong>Diesel</strong>, <strong>SQLx</strong> : ORMs type-safe</li>
+<li><strong>Tokio</strong> : Runtime async de référence</li>
+</ul>
+<h4>Applications Desktop</h4>
+<ul>
+<li><strong>Tauri</strong> : Alternative à Electron</li>
+<li><strong>egui</strong>, <strong>iced</strong> : GUI natives</li>
+<li><strong>Bevy</strong> : Moteur de jeu en ECS</li>
+</ul>
+<h4>Microcontrôleurs &amp; IoT</h4>
+<ul>
+<li><strong>Embassy</strong> : Framework async pour embedded</li>
+<li>Support natif ARM, RISC-V</li>
+<li>Consommation mémoire optimisée</li>
+</ul>
+<h4>Blockchain &amp; Crypto</h4>
+<ul>
+<li><strong>Solana</strong> : Runtime blockchain</li>
+<li><strong>Substrate</strong> : Framework pour blockchains</li>
+<li>Performances critiques + sécurité</li>
+</ul>
+<ol>
+<li><strong>Zero-cost abstractions</strong> : Performance sans compromis</li>
+<li><strong>Memory safety</strong> : Pas de garbage collector, pas de segfault</li>
+<li><strong>Concurrence</strong> : Ownership model + async/await</li>
+<li><strong>Écosystème</strong> : Cargo + crates.io</li>
+<li><strong>Cross-platform</strong> : Linux, macOS, Windows, WASM, mobile</li>
+</ol>"""
+alt = """
+Au-delà des outils CLI
+Les forces de Rust
+Rust ne se limite pas aux applications terminal :
+#### Web & Backend
+- **Actix-web**, **Axum** : Serveurs web haute performance
+- **Diesel**, **SQLx** : ORMs type-safe
+- **Tokio** : Runtime async de référence
+#### Applications Desktop
+- **Tauri** : Alternative à Electron
+- **egui**, **iced** : GUI natives
+- **Bevy** : Moteur de jeu en ECS
+#### Microcontrôleurs & IoT
+- **Embassy** : Framework async pour embedded
+- Support natif ARM, RISC-V
+- Consommation mémoire optimisée
+#### Blockchain & Crypto
+- **Solana** : Runtime blockchain
+- **Substrate** : Framework pour blockchains
+- Performances critiques + sécurité
+- **Zero-cost abstractions** : Performance sans compromis
+- **Memory safety** : Pas de garbage collector, pas de segfault
+- **Concurrence** : Ownership model + async/await
+- **Écosystème** : Cargo + crates.io
+- **Cross-platform** : Linux, macOS, Windows, WASM, mobile"""
+
+[slides.notes]
+type = "Empty"
+
+[[slides]]
+kind = "Part"
+style = []
+
+[slides.title]
+type = "Text"
+text = "3. Rust s’intègre partout"
+
+[slides.body]
+type = "Html"
+raw = """
+<p>WebAssembly (WASM)</p>
+<p>Python avec PyO3 + Maturin</p>
+<p>Mobile avec UniFFI</p>
+<p>Autres intégrations</p>
+<pre><code class="language-rust">use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen]
+pub fn process_data(input: &amp;str) -&gt; String {
+    // Logique métier en Rust
+    format!("Processed: {}", input)
+}
+</code></pre>
+<ul>
+<li>Performance native dans le navigateur</li>
+<li>Interopérabilité JavaScript seamless</li>
+<li>Utilisé par Figma, Discord, Dropbox</li>
+</ul>
+<pre><code class="language-rust">use pyo3::prelude::*;
+
+#[pyfunction]
+fn compute_heavy_task(data: Vec&lt;f64&gt;) -&gt; PyResult&lt;f64&gt; {
+    // Calculs intensifs en Rust
+    Ok(data.iter().sum())
+}
+
+#[pymodule]
+fn mymodule(_py: Python, m: &amp;PyModule) -&gt; PyResult&lt;()&gt; {
+    m.add_function(wrap_pyfunction!(compute_heavy_task, m)?)?;
+    Ok(())
+}
+</code></pre>
+<ul>
+<li>Accélération des parties critiques</li>
+<li>Distribution via pip</li>
+<li>Exemples : Pydantic v2, Polars</li>
+</ul>
+<pre><code class="language-rust">// Logique métier partagée
+pub struct UserService {
+    // ...
+}
+
+impl UserService {
+    pub fn authenticate(&amp;self, token: String) -&gt; Result&lt;User, Error&gt; {
+        // ...
+    }
+}
+</code></pre>
+<ul>
+<li>
+<p>Code partagé iOS/Android</p>
+</li>
+<li>
+<p>Bindings automatiques Swift/Kotlin</p>
+</li>
+<li>
+<p>Utilisé par Mozilla Firefox</p>
+</li>
+<li>
+<p><strong>Node.js</strong> : NAPI-RS</p>
+</li>
+<li>
+<p><strong>Ruby</strong> : magnus, rutie</p>
+</li>
+<li>
+<p><strong>C/C++</strong> : FFI direct</p>
+</li>
+<li>
+<p><strong>Java</strong> : JNI</p>
+</li>
+<li>
+<p><strong>Go</strong> : CGO</p>
+</li>
+</ul>"""
+alt = """
+WebAssembly (WASM)
+Python avec PyO3 + Maturin
+Mobile avec UniFFI
+Autres intégrations
+```
+use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen]
+pub fn process_data(input: &str) -> String {
+    // Logique métier en Rust
+    format!("Processed: {}", input)
+}
+```
+- Performance native dans le navigateur
+- Interopérabilité JavaScript seamless
+- Utilisé par Figma, Discord, Dropbox
+```
+use pyo3::prelude::*;
+
+#[pyfunction]
+fn compute_heavy_task(data: Vec<f64>) -> PyResult<f64> {
+    // Calculs intensifs en Rust
+    Ok(data.iter().sum())
+}
+
+#[pymodule]
+fn mymodule(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(compute_heavy_task, m)?)?;
+    Ok(())
+}
+```
+- Accélération des parties critiques
+- Distribution via pip
+- Exemples : Pydantic v2, Polars
+```
+// Logique métier partagée
+pub struct UserService {
+    // ...
+}
+
+impl UserService {
+    pub fn authenticate(&self, token: String) -> Result<User, Error> {
+        // ...
+    }
+}
+```
+- 
+Code partagé iOS/Android
+
+- 
+Bindings automatiques Swift/Kotlin
+
+- 
+Utilisé par Mozilla Firefox
+
+- 
+**Node.js** : NAPI-RS
+
+- 
+**Ruby** : magnus, rutie
+
+- 
+**C/C++** : FFI direct
+
+- 
+**Java** : JNI
+
+- 
+**Go** : CGO"""
+
+[slides.notes]
+type = "Empty"
+
+[[slides]]
+kind = "Part"
+style = []
+
+[slides.title]
+type = "Text"
+text = "4. Rust en startup : Retour d’expérience"
+
+[slides.body]
+type = "Html"
+raw = """
+<p>Pourquoi choisir Rust en startup ?</p>
+<p>Stratégie d’adoption progressive</p>
+<p>Success stories startup</p>
+<h4>Avantages</h4>
+<ul>
+<li><strong>Performance</strong> : Moins de serveurs = coûts réduits</li>
+<li><strong>Fiabilité</strong> : Moins de bugs en production</li>
+<li><strong>Productivité</strong> : Détection d’erreurs à la compilation</li>
+<li><strong>Évolutivité</strong> : Refactoring sûr et confiant</li>
+</ul>
+<h4>Défis</h4>
+<ul>
+<li><strong>Courbe d’apprentissage</strong> : Concepts ownership/borrowing</li>
+<li><strong>Écosystème</strong> : Plus jeune que Java/.NET</li>
+<li><strong>Recrutement</strong> : Développeurs Rust plus rares</li>
+</ul>
+<ol>
+<li><strong>Microservices critiques</strong> : Performance-sensitive</li>
+<li><strong>Outils internes</strong> : CLI, scripts automation</li>
+<li><strong>Extensions</strong> : Plugins Python/Node.js</li>
+<li><strong>Migration graduelle</strong> : Module par module</li>
+</ol>
+<ul>
+<li><strong>Discord</strong> : Backend haute performance</li>
+<li><strong>Dropbox</strong> : Storage engine</li>
+<li><strong>Figma</strong> : Moteur de rendu WASM</li>
+<li><strong>Vercel</strong> : Bundlers (SWC, Turbo)</li>
+</ul>"""
+alt = """
+Pourquoi choisir Rust en startup ?
+Stratégie d’adoption progressive
+Success stories startup
+#### Avantages
+- **Performance** : Moins de serveurs = coûts réduits
+- **Fiabilité** : Moins de bugs en production
+- **Productivité** : Détection d’erreurs à la compilation
+- **Évolutivité** : Refactoring sûr et confiant
+#### Défis
+- **Courbe d’apprentissage** : Concepts ownership/borrowing
+- **Écosystème** : Plus jeune que Java/.NET
+- **Recrutement** : Développeurs Rust plus rares
+- **Microservices critiques** : Performance-sensitive
+- **Outils internes** : CLI, scripts automation
+- **Extensions** : Plugins Python/Node.js
+- **Migration graduelle** : Module par module
+- **Discord** : Backend haute performance
+- **Dropbox** : Storage engine
+- **Figma** : Moteur de rendu WASM
+- **Vercel** : Bundlers (SWC, Turbo)"""
+
+[slides.notes]
+type = "Empty"
+
+[[slides]]
+kind = "Part"
+style = []
+
+[slides.title]
+type = "Text"
+text = "Conclusion"
+
+[slides.body]
+type = "Html"
+raw = """
+<p>RIIR : Pas qu’un mème</p>
+<p>Quand envisager Rust ?</p>
+<p>Le futur est rouillé ? 🦀</p>
+<ul>
+<li><strong>Réalité technique</strong> : Gains mesurables performance/fiabilité</li>
+<li><strong>Écosystème mature</strong> : Outils production-ready</li>
+<li><strong>Adoption croissante</strong> : Startups → GAFAM</li>
+</ul>
+<p>✅ <strong>OUI</strong> pour :</p>
+<ul>
+<li>Performance critique</li>
+<li>Sécurité prioritaire</li>
+<li>Code partagé multi-plateformes</li>
+<li>Outils système</li>
+</ul>
+<p>❌ <strong>NON</strong> pour :</p>
+<ul>
+<li>Prototypage rapide</li>
+<li>Équipe junior exclusive</li>
+<li>Deadline très serrée</li>
+<li>Domain métier complexe</li>
+</ul>
+<p>Rust n’est pas la solution à tout, mais il repousse les limites du possible.</p>
+<p><strong>Question finale</strong> : <em>“Have you considered Rewriting It In Rust?”</em></p>
+<p>Peut-être que la réponse n’est plus si farfelue…</p>"""
+alt = """
+RIIR : Pas qu’un mème
+Quand envisager Rust ?
+Le futur est rouillé ? 🦀
+- **Réalité technique** : Gains mesurables performance/fiabilité
+- **Écosystème mature** : Outils production-ready
+- **Adoption croissante** : Startups → GAFAM
+✅ **OUI** pour :
+- Performance critique
+- Sécurité prioritaire
+- Code partagé multi-plateformes
+- Outils système
+❌ **NON** pour :
+- Prototypage rapide
+- Équipe junior exclusive
+- Deadline très serrée
+- Domain métier complexe
+Rust n’est pas la solution à tout, mais il repousse les limites du possible.
+**Question finale** : *“Have you considered Rewriting It In Rust?”*
+Peut-être que la réponse n’est plus si farfelue…"""
+
+[slides.notes]
+type = "Empty"
+
+[[slides]]
+kind = "Part"
+style = []
+
+[slides.title]
+type = "Text"
+text = "Ressources"
+
+[slides.body]
+type = "Html"
+raw = """
+<p><em>Merci pour votre attention !</em></p>
+<ul>
+<li><a href="https://doc.rust-lang.org/book/">Rust Book</a></li>
+<li><a href="https://github.com/ansuz/RIIR">RIIR repository</a></li>
+<li><a href="https://wiki.mozilla.org/Areweyet">Are we X yet?</a></li>
+<li><a href="https://this-week-in-rust.org/">This Week in Rust</a></li>
+</ul>"""
+alt = """
+*Merci pour votre attention !*
+- Rust Book
+- RIIR repository
+- Are we X yet?
+- This Week in Rust"""
+
+[slides.notes]
+type = "Empty"

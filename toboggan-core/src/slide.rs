@@ -41,16 +41,16 @@ use crate::Content;
 pub struct Slide {
     /// The kind of slide (Cover, Part, or Standard).
     pub kind: SlideKind,
-    
+
     /// Styling information for the slide.
     pub style: Style,
-    
+
     /// The main title of the slide.
     pub title: Content,
-    
+
     /// The main content body of the slide.
     pub body: Content,
-    
+
     /// Speaker notes (not visible to audience).
     pub notes: Content,
 }
@@ -187,10 +187,10 @@ impl Slide {
 pub enum SlideKind {
     /// Cover slide, typically used for the presentation title page.
     Cover,
-    
+
     /// Part slide, used as section dividers within the presentation.
     Part,
-    
+
     /// Standard content slide (default).
     #[default]
     Standard,

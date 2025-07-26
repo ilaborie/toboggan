@@ -15,6 +15,7 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 clap = { workspace = true, features = ["env", "derive"] }
 anyhow = {workspace = true}
 pulldown-cmark = {workspace = true}
+regex = {workspace = true}
 
 [lints]
 workspace = true

@@ -13,7 +13,7 @@
 //!
 //! - **[`Talk`]**: Main presentation container with title, date, and slides
 //! - **[`Slide`]**: Individual slide with kind, style, title, body, and notes
-//! - **[`Content`]**: Rich content types (Text, Html, IFrame, Terminal, Layout containers)
+//! - **[`Content`]**: Rich content types (Text, Html, `IFrame`, Terminal, Layout containers)
 //! - **[`State`]**: Presentation state management (Paused, Running, Done)
 //! - **[`Command`]**: Actions that can be performed on presentations
 //! - **[`Notification`]**: Events broadcast to connected clients
@@ -43,7 +43,7 @@
 //!   - Use this when targeting WASM in browsers
 //!
 //! ### Optional Features
-//! - **`openapi`**: Enables OpenAPI schema generation via `utoipa`
+//! - **`openapi`**: Enables `OpenAPI` schema generation via `utoipa`
 //! - **`test-utils`**: Provides testing utilities like `SlideId::reset_sequence()`
 //!
 //! ## Usage Examples
@@ -79,7 +79,7 @@
 //!
 //! // HTML with alt text for accessibility
 //! let accessible = Content::html_with_alt(
-//!     "<img src='chart.png' alt='Sales chart'>", 
+//!     "<img src='chart.png' alt='Sales chart'>",
 //!     "Chart showing 50% increase in sales"
 //! );
 //!
@@ -101,7 +101,7 @@
 //! // Automatically detects file type and converts accordingly
 //! let content = Content::from(Path::new("slides/intro.md"));
 //! // Markdown files are converted to HTML with original markdown as alt text
-//! 
+//!
 //! let html_content = Content::from(Path::new("slides/chart.html"));
 //! // HTML files are used directly
 //! # }
@@ -138,13 +138,13 @@
 //! toboggan-core = { version = "0.1.0", default-features = false, features = ["alloc", "js"] }
 //! ```
 //!
-//! ### Embedded Systems (no_std with alloc)
+//! ### Embedded Systems (`no_std` with alloc)
 //! ```toml
 //! [dependencies]
 //! toboggan-core = { version = "0.1.0", default-features = false, features = ["alloc"] }
 //! ```
 //!
-//! ### Minimal Embedded (no_std, no alloc)
+//! ### Minimal Embedded (`no_std`, no alloc)
 //! ```toml
 //! [dependencies]
 //! toboggan-core = { version = "0.1.0", default-features = false }

@@ -29,10 +29,10 @@ use crate::{Content, Date, Slide};
 pub struct Talk {
     /// The title of the presentation.
     pub title: Content,
-    
+
     /// The date of the presentation.
     pub date: Date,
-    
+
     /// The slides that make up the presentation.
     pub slides: Vec<Slide>,
 }

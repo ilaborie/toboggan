@@ -43,15 +43,13 @@ pub enum Content {
     /// Empty content (default).
     #[default]
     Empty,
-    
+
     /// Plain text content.
     ///
     /// The text will be rendered as-is, with appropriate escaping
     /// applied by the renderer to prevent XSS attacks.
-    Text {
-        text: String,
-    },
-    
+    Text { text: String },
+
     /// HTML content with optional alt text for accessibility.
     ///
     /// The `raw` field contains the HTML markup, while the optional `alt`
@@ -61,29 +59,22 @@ pub enum Content {
     /// **Security Note**: HTML content should be sanitized before display
     /// to prevent XSS attacks. The WASM client includes comprehensive
     /// HTML sanitization.
-    Html {
-        raw: String,
-        alt: Option<String>,
-    },
-    
+    Html { raw: String, alt: Option<String> },
+
     /// Embedded iframe content.
     ///
     /// Displays content from an external URL within an iframe.
     /// Useful for embedding videos, interactive content, or external sites.
-    IFrame {
-        url: String,
-    },
-    
+    IFrame { url: String },
+
     /// Terminal session (only available with `std` feature).
     ///
     /// Provides an interactive terminal within the slide, starting
     /// in the specified working directory. Useful for live coding
     /// demonstrations and command-line tutorials.
     #[cfg(feature = "std")]
-    Term {
-        cwd: PathBuf,
-    },
-    
+    Term { cwd: PathBuf },
+
     /// Horizontal layout container.
     ///
     /// Arranges child content in a horizontal row. The `columns` field
@@ -93,7 +84,7 @@ pub enum Content {
         columns: String,
         contents: Vec<Content>,
     },
-    
+
     /// Vertical layout container.
     ///
     /// Arranges child content in a vertical column. The `rows` field
@@ -112,7 +103,7 @@ impl Content {
     ///
     /// ```rust
     /// use toboggan_core::Content;
-    /// 
+    ///
     /// let content = Content::text("Hello, world!");
     /// let content2 = Content::text(String::from("Dynamic text"));
     /// ```
@@ -130,7 +121,7 @@ impl Content {
     ///
     /// ```rust
     /// use toboggan_core::Content;
-    /// 
+    ///
     /// let content = Content::html("<h1>Title</h1>");
     /// let content2 = Content::html(format!("<p>Count: {}</p>", 42));
     /// ```
@@ -149,7 +140,7 @@ impl Content {
     ///
     /// ```rust
     /// use toboggan_core::Content;
-    /// 
+    ///
     /// let content = Content::html_with_alt(
     ///     "<img src='chart.png' width='400'>",
     ///     "Bar chart showing sales growth from Q1 to Q4"
@@ -167,7 +158,7 @@ impl Content {
     ///
     /// ```rust
     /// use toboggan_core::Content;
-    /// 
+    ///
     /// let content = Content::iframe("https://example.com");
     /// let video = Content::iframe("https://youtube.com/embed/dQw4w9WgXcQ");
     /// ```
@@ -187,7 +178,7 @@ impl Content {
     /// # {
     /// use toboggan_core::Content;
     /// use std::path::Path;
-    /// 
+    ///
     /// let content = Content::term("/home/user/project");
     /// let content2 = Content::term(Path::new("./demo"));
     /// # }
@@ -210,12 +201,12 @@ impl Content {
     ///
     /// ```rust
     /// use toboggan_core::Content;
-    /// 
+    ///
     /// let content = Content::hbox("1fr 1fr", [
     ///     Content::from("Left column"),
     ///     Content::from("Right column")
     /// ]);
-    /// 
+    ///
     /// let sidebar = Content::hbox("250px 1fr", [
     ///     Content::html("<nav>Navigation</nav>"),
     ///     Content::html("<main>Content</main>")
@@ -239,7 +230,7 @@ impl Content {
     ///
     /// ```rust
     /// use toboggan_core::Content;
-    /// 
+    ///
     /// let content = Content::vbox("auto 1fr auto", [
     ///     Content::html("<header>Header</header>"),
     ///     Content::from("Main content area"),
@@ -261,7 +252,7 @@ impl Content {
 ///
 /// ```rust
 /// use toboggan_core::Content;
-/// 
+///
 /// let content: Content = "Hello, world!".into();
 /// // Equivalent to: Content::text("Hello, world!")
 /// ```
@@ -271,11 +262,29 @@ impl From<&str> for Content {
     }
 }
 
+/// Converts an owned string into text content.
+///
+/// This is a convenience implementation that creates [`Content::Text`].
+///
+/// # Examples
+///
+/// ```rust
+/// use toboggan_core::Content;
+///
+/// let content: Content = String::from("Hello, world!").into();
+/// // Equivalent to: Content::text("Hello, world!")
+/// ```
+impl From<String> for Content {
+    fn from(text: String) -> Self {
+        Self::text(text)
+    }
+}
+
 /// Converts a file path into appropriate content (only available with `std` feature).
 ///
 /// This implementation automatically detects the file type based on the extension
 /// and creates the appropriate content:
-/// 
+///
 /// - `.html`, `.htm` → [`Content::Html`] with file content as raw HTML
 /// - `.md`, `.markdown` → [`Content::Html`] with converted HTML and original Markdown as alt text
 /// - Other extensions → [`Content::Text`] with file content as plain text
@@ -291,7 +300,7 @@ impl From<&str> for Content {
 /// # {
 /// use toboggan_core::Content;
 /// use std::path::Path;
-/// 
+///
 /// // Automatically detects file type
 /// let html_content: Content = Path::new("slides/intro.html").into();
 /// let md_content: Content = Path::new("slides/overview.md").into();
@@ -350,7 +359,7 @@ impl From<&Path> for Content {
 /// # {
 /// use toboggan_core::Content;
 /// use std::path::PathBuf;
-/// 
+///
 /// let path = PathBuf::from("slides/intro.md");
 /// let content: Content = path.into();
 /// # }

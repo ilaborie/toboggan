@@ -99,6 +99,7 @@ components:
       minimum: 0
     SlideKind:
       type: string
+      description: The kind of slide, which affects its styling and role in the presentation.
       enum:
       - Cover
       - Part
@@ -107,6 +108,11 @@ components:
       type: array
       items:
         type: string
+      description: |-
+        Styling information for slides (only available with `alloc` feature).
+
+        Contains a list of CSS class names that can be applied to customize
+        the appearance of individual slides.
     Value: {}
 tags:
 - name: command
