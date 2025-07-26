@@ -4,6 +4,7 @@ use alloc::string::String;
 use alloc::sync::Arc;
 #[cfg(feature = "openapi")]
 use alloc::vec::Vec;
+use core::fmt::Display;
 use core::sync::atomic::{AtomicU8, Ordering};
 #[cfg(any(test, feature = "test-utils"))]
 use std::sync::Mutex;
@@ -92,5 +93,11 @@ impl SlideId {
         {
             ID_SEQ.load(Ordering::SeqCst)
         }
+    }
+}
+
+impl Display for SlideId {
+    fn fmt(&self, fmt: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(fmt, "{}", self.0)
     }
 }

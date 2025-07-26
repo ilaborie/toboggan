@@ -19,6 +19,8 @@ futures = "0.3"
 url = "2.5"
 thiserror = "2.0"
 uniffi_bindgen = "0.28"
+uuid = { workspace = true, features = ["v4"] }
+reqwest = { version = "0.12", features = ["json"] }
 
 [build-dependencies]
 uniffi = { version = "0.28", features = ["build"] }

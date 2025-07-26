@@ -4,8 +4,11 @@ use std::time::Duration;
 
 use dashmap::DashMap;
 use jiff::Timestamp;
-use toboggan_core::{ClientId, Command, Notification, Slide, SlideId, State, Talk};
 use tokio::sync::{RwLock, watch};
+use tracing::info;
+
+use toboggan_core::{ClientId, Command, Notification, Slide, SlideId, State, Talk};
+
 #[derive(Clone)]
 pub struct TobogganState {
     started_at: Timestamp,
@@ -28,6 +31,15 @@ impl TobogganState {
             .iter()
             .map(|slide| (SlideId::next(), slide.clone()))
             .collect();
+
+        info!(
+            "\n=== Slides ===\n{}",
+            slide_data
+                .iter()
+                .map(|(id, slide)| format!("[{id}]: {slide}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
         let slides = slide_data.iter().cloned().collect::<HashMap<_, _>>();
         let slide_order: Vec<SlideId> = slide_data.iter().map(|(id, _)| *id).collect();
         let first_slide = slide_order.first().copied().unwrap_or_else(SlideId::next);

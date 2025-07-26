@@ -4,6 +4,8 @@
 //! individual slides within a presentation. Slides have different kinds
 //! (Cover, Part, Standard) and support styling, content, and speaker notes.
 
+use core::fmt::Display;
+
 #[cfg(feature = "alloc")]
 use alloc::string::String;
 #[cfg(feature = "alloc")]
@@ -194,6 +196,16 @@ pub enum SlideKind {
     /// Standard content slide (default).
     #[default]
     Standard,
+}
+
+impl Display for Slide {
+    fn fmt(&self, fmt: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if let Content::Empty = self.title {
+            write!(fmt, "{}", self.body)
+        } else {
+            write!(fmt, "{}", self.title)
+        }
+    }
 }
 
 /// Styling information for slides (only available with `alloc` feature).
