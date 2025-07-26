@@ -13,3 +13,4 @@ cargo = { binstall = true }
 "npm:@anthropic-ai/claude-code" = "latest"
 "npm:rolldown-vite" = "latest"
 "npm:vite" = "latest"
+swiftlint = "latest"

@@ -7,6 +7,34 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+toboggan-core = { path = "../toboggan-core", features = ["std"] }
+uniffi = "0.28"
+tokio = { workspace = true, features = ["full"] }
+tokio-tungstenite = "0.24"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+futures = "0.3"
+url = "2.5"
+thiserror = "2.0"
+uniffi_bindgen = "0.28"
+
+[build-dependencies]
+uniffi = { version = "0.28", features = ["build"] }
+uniffi_bindgen = "0.28"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+name = "toboggan_ios_core"
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"
+
+[[bin]]
+name = "toboggan-ios-stub"
+path = "src/main.rs"
 
 [lints]
 workspace = true
