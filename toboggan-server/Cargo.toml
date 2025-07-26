@@ -25,11 +25,16 @@ futures = { workspace = true }
 dashmap = { workspace = true }
 
 [dev-dependencies]
+toboggan-core = { path = "../toboggan-core", features = ["openapi", "test-utils"] }
 tower = { workspace = true }
 clawspec-core = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 utoipa = { workspace = true }
 tokio-tungstenite = "0.21"
+
+[[test]]
+name = "multi_client_sync"
+harness = true
 
 [lints]
 workspace = true

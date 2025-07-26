@@ -12,6 +12,7 @@ std = ["alloc", "jiff/std", "serde/std", "once_cell/std"]
 alloc = ["jiff/alloc", "serde/alloc", "getrandom", "once_cell/critical-section"]
 js = ["jiff/js", "getrandom/js"]
 openapi = ["utoipa"]
+test-utils = []
 
 [dependencies]
 derive_more = { workspace = true, features = ["full"] }

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::SlideId;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-// #[serde(tag = "state")]
+#[serde(tag = "state")]
 pub enum State {
     Paused {
         current: SlideId,
@@ -304,4 +304,5 @@ mod tests {
         assert_eq!(state.next(&slide_order), None);
         assert_eq!(state.previous(&slide_order), None);
     }
+
 }

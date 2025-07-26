@@ -3,7 +3,7 @@
  * Handles fetching and caching of slides data
  */
 
-import type { Slide, SlideId, SlidesCache, SlidesResponse } from '../types.js';
+import type { Slide, SlideId, SlidesCache, SlidesResponse } from "../types.js";
 
 export class SlidesApiService {
   private cache: SlidesCache | null = null;
@@ -42,7 +42,7 @@ export class SlidesApiService {
    */
   public getSlideDisplayNumber(slideId: SlideId): number {
     if (!this.cache) return slideId + 1;
-    
+
     const index = this.cache.orderedIds.indexOf(slideId);
     return index >= 0 ? index + 1 : slideId + 1;
   }
@@ -62,18 +62,18 @@ export class SlidesApiService {
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
-    
+
     const data: SlidesResponse = await response.json();
-    
+
     // Create ordered slide IDs array
     const orderedIds = Object.keys(data.slides)
-      .map(id => parseInt(id, 10))
+      .map((id) => parseInt(id, 10))
       .sort((a, b) => a - b);
-    
+
     // Cache the slides data
     this.cache = {
       slides: data.slides,
-      orderedIds: orderedIds
+      orderedIds: orderedIds,
     };
   }
 }

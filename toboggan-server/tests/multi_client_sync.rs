@@ -76,6 +76,9 @@ fn create_test_talk() -> Talk {
 
 /// Helper to create a test server with the given talk
 async fn create_test_server() -> (String, TobogganState) {
+    // Reset SlideId sequence to ensure deterministic IDs
+    toboggan_core::SlideId::reset_sequence();
+    
     let talk = create_test_talk();
     let state = TobogganState::new(talk, 100);
 
@@ -424,11 +427,16 @@ async fn test_two_clients_navigation_sync() {
     // Test 3: Client 1 resumes presentation, both should receive Running state
     println!("\n=== Test 3: Client 1 resumes presentation ===");
 
-    let resume_notification = send_command_and_get_response(
-        &mut client1_sender,
+    // Send Resume command and wait for recent notification
+    let cmd_msg = serde_json::to_string(&Command::Resume).unwrap();
+    client1_sender.send(TungsteniteMessage::Text(cmd_msg)).await.unwrap();
+    println!("[Client1] Sent command: Resume");
+    
+    let resume_notification = wait_for_recent_notification(
         &mut client1_receiver,
-        Command::Resume,
         "Client1",
+        2000,
+        Some(last_timestamp),
     )
     .await
     .expect("Failed to get resume response");

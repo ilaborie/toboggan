@@ -6,6 +6,9 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU8, Ordering};
 
+#[cfg(any(test, feature = "test-utils"))]
+use std::sync::Mutex;
+
 #[cfg(feature = "alloc")]
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -17,6 +20,9 @@ static ID_SEQ: Lazy<Arc<AtomicU8>> = Lazy::new(Arc::default);
 
 #[cfg(not(feature = "alloc"))]
 static ID_SEQ: AtomicU8 = AtomicU8::new(0);
+
+#[cfg(any(test, feature = "test-utils"))]
+static RESET_MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -35,6 +41,22 @@ impl SlideId {
         {
             let id = ID_SEQ.fetch_add(1, Ordering::Relaxed);
             Self(id)
+        }
+    }
+
+    /// Reset the global ID sequence to 0. Only available for testing.
+    /// This function is thread-safe and can be used in multi-threaded test environments.
+    #[cfg(any(test, feature = "test-utils"))]
+    pub fn reset_sequence() {
+        let _guard = RESET_MUTEX.lock().unwrap();
+        #[cfg(feature = "alloc")]
+        {
+            let seq = Lazy::force(&ID_SEQ);
+            seq.store(0, Ordering::SeqCst);
+        }
+        #[cfg(not(feature = "alloc"))]
+        {
+            ID_SEQ.store(0, Ordering::SeqCst);
         }
     }
 }

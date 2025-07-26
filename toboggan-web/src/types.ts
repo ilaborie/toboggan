@@ -18,50 +18,50 @@ export type Timestamp = string;
 /**
  * Renderer types for client registration
  */
-export type Renderer = 'Title' | 'Thumbnail' | 'Html' | 'Raw';
+export type Renderer = "Title" | "Thumbnail" | "Html" | "Raw";
 
 /**
  * Content types for slide content
  */
 export interface EmptyContent {
-  type: 'Empty';
+  type: "Empty";
 }
 
 export interface TextContent {
-  type: 'Text';
+  type: "Text";
   text: string;
 }
 
 export interface HtmlContent {
-  type: 'Html';
+  type: "Html";
   raw: string;
   alt: string;
 }
 
 export interface MdContent {
-  type: 'Md';
+  type: "Md";
   content: string;
   alt?: string;
 }
 
 export interface IFrameContent {
-  type: 'IFrame';
+  type: "IFrame";
   url: string;
   alt?: string;
 }
 
-export type Content = 
-  | EmptyContent 
-  | TextContent 
-  | HtmlContent 
-  | MdContent 
+export type Content =
+  | EmptyContent
+  | TextContent
+  | HtmlContent
+  | MdContent
   | IFrameContent;
 
 /**
  * Slide structure
  */
 export interface Slide {
-  kind: 'Cover' | 'Part' | 'Standard';
+  kind: "Cover" | "Part" | "Standard";
   style: string[];
   title: Content;
   body: Content;
@@ -72,25 +72,22 @@ export interface Slide {
  * Presentation state variants
  */
 export interface PausedState {
-  Paused: {
-    current: SlideId;
-    total_duration: Duration;
-  };
+  state: "Paused";
+  current: SlideId;
+  total_duration: Duration;
 }
 
 export interface RunningState {
-  Running: {
-    since: Timestamp;
-    current: SlideId;
-    total_duration: Duration;
-  };
+  state: "Running";
+  since: Timestamp;
+  current: SlideId;
+  total_duration: Duration;
 }
 
 export interface DoneState {
-  Done: {
-    current: SlideId;
-    total_duration: Duration;
-  };
+  state: "Done";
+  current: SlideId;
+  total_duration: Duration;
 }
 
 export type State = PausedState | RunningState | DoneState;
@@ -100,91 +97,92 @@ export type State = PausedState | RunningState | DoneState;
  */
 export interface Duration {
   secs: number;
-  nanos: number;
+  // XXX We don't care about nanos
+  // nanos: number;
 }
 
 /**
  * Commands that can be sent to the server
  */
 export interface FirstCommand {
-  command: 'First';
+  command: "First";
 }
 
 export interface LastCommand {
-  command: 'Last';
+  command: "Last";
 }
 
 export interface NextCommand {
-  command: 'Next';
+  command: "Next";
 }
 
 export interface PreviousCommand {
-  command: 'Previous';
+  command: "Previous";
 }
 
 export interface GoToCommand {
-  command: 'GoTo';
+  command: "GoTo";
   0: SlideId;
 }
 
 export interface PauseCommand {
-  command: 'Pause';
+  command: "Pause";
 }
 
 export interface ResumeCommand {
-  command: 'Resume';
+  command: "Resume";
 }
 
 export interface RegisterCommand {
-  command: 'Register';
+  command: "Register";
   client: ClientId;
   renderer: Renderer;
 }
 
 export interface UnregisterCommand {
-  command: 'Unregister';
+  command: "Unregister";
   client: ClientId;
 }
 
 export interface PingCommand {
-  command: 'Ping';
+  command: "Ping";
 }
 
-export type Command = 
-  | FirstCommand 
-  | LastCommand 
-  | NextCommand 
-  | PreviousCommand 
-  | GoToCommand 
-  | PauseCommand 
-  | ResumeCommand 
-  | RegisterCommand 
-  | UnregisterCommand 
+export type Command =
+  | FirstCommand
+  | LastCommand
+  | NextCommand
+  | PreviousCommand
+  | GoToCommand
+  | PauseCommand
+  | ResumeCommand
+  | RegisterCommand
+  | UnregisterCommand
   | PingCommand;
 
 /**
  * Notifications sent by the server
  */
 export interface StateNotification {
-  type: 'State';
+  type: "State";
   timestamp: Timestamp;
   state: State;
 }
 
 export interface ErrorNotification {
-  type: 'Error';
+  type: "Error";
   timestamp: Timestamp;
   message: string;
 }
 
 export interface PongNotification {
-  type: 'Pong';
+  type: "Pong";
   timestamp: Timestamp;
 }
 
-export type Notification = 
-  | StateNotification 
-  | ErrorNotification 
+export type Notification =
+  | StateNotification
+  | ErrorNotification
   | PongNotification;
 
 /**
@@ -203,7 +201,7 @@ export interface SlidesResponse {
 }
 
 export interface HealthResponse {
-  status: 'OK';
+  status: "OK";
   started_at: Timestamp;
   elapsed: string;
   talk: string;
@@ -212,14 +210,14 @@ export interface HealthResponse {
 /**
  * Connection status types
  */
-export type ConnectionStatus = 
-  | 'connecting' 
-  | 'connected' 
-  | 'disconnected' 
-  | 'reconnecting' 
-  | 'running' 
-  | 'paused' 
-  | 'done';
+export type ConnectionStatus =
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "reconnecting"
+  | "running"
+  | "paused"
+  | "done";
 
 /**
  * DOM element getter type safety

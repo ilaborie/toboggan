@@ -3,8 +3,12 @@
  * Manages presentation duration timing
  */
 
-import type { State } from '../types.js';
-import { formatDuration, calculateElapsedSeconds, calculateStartTime } from '../utils/duration.js';
+import type { State } from "../types.js";
+import {
+  formatDuration,
+  calculateElapsedSeconds,
+  calculateStartTime,
+} from "../utils/duration.js";
 
 export class TimerService {
   private interval: number | null = null;
@@ -21,23 +25,22 @@ export class TimerService {
    */
   public updateState(state: State): void {
     this.currentState = state;
-    
-    if ('Running' in state) {
+
+    if (state.state === "Running") {
       // Calculate start time from 'since' timestamp and total_duration
       this.startTime = calculateStartTime(
-        state.Running.since,
-        state.Running.total_duration.secs,
-        state.Running.total_duration.nanos
+        state.since,
+        state.total_duration.secs,
       );
       this.start();
-    } else if ('Paused' in state) {
+    } else if (state.state === "Paused") {
       this.stop();
       // Display the paused duration
-      this.updateDisplay(state.Paused.total_duration.secs);
-    } else if ('Done' in state) {
+      this.updateDisplay(state.total_duration.secs);
+    } else if (state.state === "Done") {
       this.stop();
       // Display the final duration
-      this.updateDisplay(state.Done.total_duration.secs);
+      this.updateDisplay(state.total_duration.secs);
     }
   }
 
@@ -57,10 +60,10 @@ export class TimerService {
   private start(): void {
     // Clear any existing timer
     this.stop();
-    
+
     // Update immediately
     this.updateFromStartTime();
-    
+
     // Update every second
     this.interval = window.setInterval(() => {
       this.updateFromStartTime();
@@ -71,10 +74,14 @@ export class TimerService {
    * Update display from start time
    */
   private updateFromStartTime(): void {
-    if (!this.startTime || !this.currentState || !('Running' in this.currentState)) {
+    if (
+      !this.startTime ||
+      !this.currentState ||
+      this.currentState?.state !== "Running"
+    ) {
       return;
     }
-    
+
     const elapsedSeconds = calculateElapsedSeconds(this.startTime);
     this.updateDisplay(elapsedSeconds);
   }
