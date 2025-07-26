@@ -7,7 +7,6 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-toboggan-core = { path = "../toboggan-core", features = ["alloc"] }
 
 [lints]
 workspace = true

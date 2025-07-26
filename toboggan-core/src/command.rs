@@ -12,8 +12,8 @@ use crate::SlideId;
 pub struct ClientId(Uuid);
 
 impl ClientId {
+    #[cfg(any(feature = "std", feature = "getrandom"))]
     #[allow(clippy::new_without_default)]
-    // TODO should be present if feature 'std' or feature 'getrandom'
     #[must_use]
     pub fn new() -> Self {
         #[cfg(feature = "std")]
@@ -31,11 +31,6 @@ impl ClientId {
                 getrandom::getrandom(&mut bytes).expect("Failed to generate random bytes for UUID");
                 Self(Uuid::from_bytes(bytes))
             }
-            #[cfg(not(feature = "getrandom"))]
-            {
-                // Fallback to nil UUID when no randomness is available
-                Self(Uuid::nil())
-            }
         }
     }
 }
@@ -46,6 +41,7 @@ pub enum Command {
     // General
     Register {
         client: ClientId,
+        #[serde(default)]
         renderer: Renderer,
     },
     Unregister {
@@ -65,9 +61,10 @@ pub enum Command {
     Ping,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum Renderer {
+    #[default]
     Title,
     Thumbnail,
     Html,

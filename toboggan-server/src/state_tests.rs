@@ -4,48 +4,17 @@ mod tests {
     use std::time::Duration;
 
     use toboggan_core::{
-        ClientId, Command, Content, Notification, Renderer, Slide, SlideId, SlideKind, State,
-        Style, Talk,
+        ClientId, Command, Date, Notification, Renderer, Slide, SlideId, State, Talk,
     };
 
     use crate::TobogganState;
 
     fn create_test_talk() -> Talk {
-        Talk {
-            title: Content::Text {
-                text: "Test Talk".to_string(),
-            },
-            date: jiff::civil::Date::new(2025, 1, 1).unwrap(),
-            slides: vec![
-                Slide {
-                    kind: SlideKind::Cover,
-                    style: Style::default(),
-                    title: Content::Text {
-                        text: "Cover Slide".to_string(),
-                    },
-                    body: Content::Empty,
-                    notes: Content::Empty,
-                },
-                Slide {
-                    kind: SlideKind::Standard,
-                    style: Style::default(),
-                    title: Content::Text {
-                        text: "Second Slide".to_string(),
-                    },
-                    body: Content::Empty,
-                    notes: Content::Empty,
-                },
-                Slide {
-                    kind: SlideKind::Standard,
-                    style: Style::default(),
-                    title: Content::Text {
-                        text: "Third Slide".to_string(),
-                    },
-                    body: Content::Empty,
-                    notes: Content::Empty,
-                },
-            ],
-        }
+        Talk::new("Test Talk")
+            .with_date(Date::new(2025, 1, 1))
+            .add_slide(Slide::cover("Cover Slide"))
+            .add_slide(Slide::new("Second Slide"))
+            .add_slide(Slide::new("Third Slide"))
     }
 
     #[tokio::test]

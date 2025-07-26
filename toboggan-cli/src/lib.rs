@@ -4,7 +4,7 @@ use std::path::Path;
 
 use anyhow::{Context, bail};
 use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
-use toboggan_core::{Content, Slide, SlideKind, Style, Talk};
+use toboggan_core::{Content, Slide, SlideKind, Talk};
 use tracing::info;
 
 mod settings;
@@ -87,13 +87,7 @@ impl<'i> TalkParseState<'i> {
                     && level == &HeadingLevel::H1
                 {
                     let title = events_to_content(current);
-                    let zoned = jiff::Zoned::now();
-                    let date = zoned.date();
-                    let talk = Talk {
-                        title,
-                        date,
-                        slides: vec![],
-                    };
+                    let talk = Talk::new(title);
                     *self = Self::Slide {
                         talk,
                         current: vec![],
@@ -110,9 +104,17 @@ impl<'i> TalkParseState<'i> {
             } => {
                 if let Event::Rule = event {
                     if !current.is_empty() {
-                        let mut slide = events_to_slide(current);
+                        let slide = events_to_slide(current);
+                        let slide = if *is_first_slide {
+                            // Convert to cover slide by extracting components
+                            let Slide {
+                                title, body, notes, ..
+                            } = slide;
+                            Slide::cover(title).with_body(body).with_notes(notes)
+                        } else {
+                            slide
+                        };
                         if *is_first_slide {
-                            slide.kind = SlideKind::Cover;
                             *is_first_slide = false;
                         }
                         talk.slides.push(slide);
@@ -135,10 +137,16 @@ impl<'i> TalkParseState<'i> {
                 is_first_slide,
             } => {
                 if !current.is_empty() {
-                    let mut slide = events_to_slide(&current);
-                    if is_first_slide {
-                        slide.kind = SlideKind::Cover;
-                    }
+                    let slide = events_to_slide(&current);
+                    let slide = if is_first_slide {
+                        // Convert to cover slide by extracting components
+                        let Slide {
+                            title, body, notes, ..
+                        } = slide;
+                        Slide::cover(title).with_body(body).with_notes(notes)
+                    } else {
+                        slide
+                    };
                     talk.slides.push(slide);
                 }
                 Ok(talk)
@@ -250,13 +258,13 @@ fn events_to_slide(events: &[Event]) -> Slide {
         events_to_content(&notes_events)
     };
 
-    Slide {
-        kind: slide_kind,
-        style: Style::default(),
-        title,
-        body,
-        notes,
-    }
+    let slide = match slide_kind {
+        SlideKind::Cover => Slide::cover(title),
+        SlideKind::Part => Slide::part(title),
+        SlideKind::Standard => Slide::new(title),
+    };
+
+    slide.with_body(body).with_notes(notes)
 }
 
 fn events_to_markdown_content(events: &[Event]) -> Content {

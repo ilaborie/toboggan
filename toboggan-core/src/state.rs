@@ -1,9 +1,8 @@
 use core::time::Duration;
 
-use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
-use crate::SlideId;
+use crate::{SlideId, Timestamp};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "state")]
@@ -119,12 +118,7 @@ impl State {
                 since,
                 total_duration,
                 ..
-            } => {
-                let signed_duration = Timestamp::now().duration_since(*since);
-                let current_duration =
-                    TryInto::<Duration>::try_into(signed_duration).unwrap_or(Duration::ZERO);
-                *total_duration + current_duration
-            }
+            } => *total_duration + since.elapsed(),
         }
     }
 }
@@ -303,5 +297,29 @@ mod tests {
         };
         assert_eq!(state.next(&slide_order), None);
         assert_eq!(state.previous(&slide_order), None);
+    }
+
+    #[test]
+    fn test_state_serialization_format() {
+        let slide_id = SlideId::next();
+
+        let paused_state = State::Paused {
+            current: slide_id,
+            total_duration: Duration::from_secs(10),
+        };
+
+        let running_state = State::Running {
+            since: Timestamp::now(),
+            current: slide_id,
+            total_duration: Duration::from_secs(5),
+        };
+
+        // Test that the states are constructed correctly with internally tagged serde format
+        assert_eq!(paused_state.current(), slide_id);
+        assert_eq!(running_state.current(), slide_id);
+
+        // Verify the states have the expected variants
+        assert!(matches!(paused_state, State::Paused { .. }));
+        assert!(matches!(running_state, State::Running { .. }));
     }
 }

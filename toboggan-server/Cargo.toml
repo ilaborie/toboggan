@@ -19,14 +19,12 @@ anyhow = {workspace = true}
 serde = { workspace = true, features = ["derive"] }
 serde_json = {workspace = true}
 jiff = {workspace = true}
-derive_more = { workspace = true, features = ["full"] }
 tower-http = { workspace = true, features = ["trace", "cors"] }
 futures = { workspace = true }
 dashmap = { workspace = true }
 
 [dev-dependencies]
 toboggan-core = { path = "../toboggan-core", features = ["openapi", "test-utils"] }
-tower = { workspace = true }
 clawspec-core = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 utoipa = { workspace = true }

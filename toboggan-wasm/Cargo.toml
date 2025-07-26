@@ -30,9 +30,6 @@ regex = { workspace = true }
 once_cell = { workspace = true }
 # Removed wee_alloc - deprecated and default allocator is now better
 
-[dependencies.getrandom]
-workspace = true
-features = ["js"]
 
 [features]
 default = ["console_error_panic_hook"]
@@ -45,7 +42,6 @@ optional = true
 # Add test dependencies
 [dev-dependencies]
 wasm-bindgen-test = "0.3.43"
-mockall = "0.13"
 regex = "1.11"
 once_cell = "1.21"
 

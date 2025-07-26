@@ -27,15 +27,13 @@ pub fn render_content(content: &Content) -> Element<'_, Message> {
                 .into()
         }
 
-        Content::Term { cwd, bootstrap } => {
+        Content::Term { cwd } => {
             // For now, show terminal info
             // TODO: Implement terminal emulation
-            let commands = bootstrap.join(" && ");
             container(
                 column![
                     text("Terminal:").size(16),
                     text(format!("Working Directory: {}", cwd.display())).size(14),
-                    text(format!("Commands: {commands}")).size(14),
                 ]
                 .spacing(5),
             )

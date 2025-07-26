@@ -7,6 +7,12 @@ extern crate std;
 
 extern crate alloc;
 
+mod time;
+pub use self::time::*;
+
+mod slide_id;
+pub use self::slide_id::*;
+
 mod content;
 pub use self::content::*;
 

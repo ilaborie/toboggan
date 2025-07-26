@@ -2,10 +2,9 @@ use alloc::string::String;
 use core::fmt::Debug;
 use std::format;
 
-use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
-use crate::State;
+use crate::{State, Timestamp};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]

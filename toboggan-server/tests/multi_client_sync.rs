@@ -8,9 +8,7 @@
 use std::time::Duration;
 
 use futures::{SinkExt, StreamExt};
-use toboggan_core::{
-    ClientId, Command, Content, Notification, Renderer, Slide, SlideKind, State, Style, Talk,
-};
+use toboggan_core::{ClientId, Command, Date, Notification, Renderer, Slide, State, Talk};
 use toboggan_server::{TobogganState, routes_with_cors};
 use tokio::net::TcpListener;
 use tokio_tungstenite::connect_async;
@@ -21,60 +19,16 @@ static GLOBAL_TEST_COUNTER: std::sync::atomic::AtomicU8 = std::sync::atomic::Ato
 
 /// Creates a test talk with multiple slides for navigation testing
 fn create_test_talk() -> Talk {
-    Talk {
-        title: Content::Text {
-            text: "Multi-Client Sync Test Talk".to_string(),
-        },
-        date: jiff::civil::Date::new(2025, 1, 25).unwrap(),
-        slides: vec![
-            Slide {
-                kind: SlideKind::Cover,
-                style: Style::default(),
-                title: Content::Text {
-                    text: "Cover Slide".to_string(),
-                },
-                body: Content::Text {
-                    text: "This is the cover slide".to_string(),
-                },
-                notes: Content::Empty,
-            },
-            Slide {
-                kind: SlideKind::Standard,
-                style: Style::default(),
-                title: Content::Text {
-                    text: "First Content Slide".to_string(),
-                },
-                body: Content::Text {
-                    text: "This is the first content slide".to_string(),
-                },
-                notes: Content::Text {
-                    text: "Notes for first slide".to_string(),
-                },
-            },
-            Slide {
-                kind: SlideKind::Standard,
-                style: Style::default(),
-                title: Content::Text {
-                    text: "Second Content Slide".to_string(),
-                },
-                body: Content::Text {
-                    text: "This is the second content slide".to_string(),
-                },
-                notes: Content::Empty,
-            },
-            Slide {
-                kind: SlideKind::Standard,
-                style: Style::default(),
-                title: Content::Text {
-                    text: "Final Slide".to_string(),
-                },
-                body: Content::Text {
-                    text: "This is the final slide".to_string(),
-                },
-                notes: Content::Empty,
-            },
-        ],
-    }
+    Talk::new("Multi-Client Sync Test Talk")
+        .with_date(Date::new(2025, 1, 25))
+        .add_slide(Slide::cover("Cover Slide").with_body("This is the cover slide"))
+        .add_slide(
+            Slide::new("First Content Slide")
+                .with_body("This is the first content slide")
+                .with_notes("Notes for first slide"),
+        )
+        .add_slide(Slide::new("Second Content Slide").with_body("This is the second content slide"))
+        .add_slide(Slide::new("Final Slide").with_body("This is the final slide"))
 }
 
 /// Helper to create a test server with the given talk
@@ -238,7 +192,7 @@ async fn wait_for_recent_notification(
     >,
     client_name: &str,
     timeout_ms: u64,
-    after_timestamp: Option<jiff::Timestamp>,
+    after_timestamp: Option<toboggan_core::Timestamp>,
 ) -> Result<Notification, Box<dyn std::error::Error + Send + Sync>> {
     // Use timeout to avoid waiting indefinitely
     let timeout = tokio::time::timeout(Duration::from_millis(timeout_ms), async {
@@ -297,7 +251,7 @@ async fn wait_for_recent_notification(
 #[tokio::test]
 async fn test_two_clients_navigation_sync() {
     // Use a unique SlideId starting point for this test to avoid interference
-    let test_id = GLOBAL_TEST_COUNTER.fetch_add(20, std::sync::atomic::Ordering::SeqCst);
+    let test_id = GLOBAL_TEST_COUNTER.fetch_add(100, std::sync::atomic::Ordering::SeqCst);
     let current_seq = 100 + test_id;
     toboggan_core::SlideId::reset_sequence_to(current_seq);
 
@@ -563,7 +517,7 @@ async fn test_two_clients_navigation_sync() {
 #[tokio::test]
 async fn test_client_disconnect_and_reconnect_sync() {
     // Use a unique SlideId starting point for this test to avoid interference
-    let test_id = GLOBAL_TEST_COUNTER.fetch_add(20, std::sync::atomic::Ordering::SeqCst);
+    let test_id = GLOBAL_TEST_COUNTER.fetch_add(100, std::sync::atomic::Ordering::SeqCst);
     let current_seq = 50 + test_id;
     toboggan_core::SlideId::reset_sequence_to(current_seq);
 
