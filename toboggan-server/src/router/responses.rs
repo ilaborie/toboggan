@@ -1,8 +1,10 @@
+use std::time::Duration;
+
 use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use jiff::Timestamp;
 use serde::Serialize;
+use toboggan_core::Timestamp;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ApiResponse<T> {
@@ -74,11 +76,17 @@ impl IntoResponse for ErrorResponse {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct HealthResponse {
-    pub status: String,
+    pub status: HealthResponseStatus,
     pub started_at: Timestamp,
-    pub elapsed: jiff::SignedDuration,
+    pub elapsed: Duration,
     pub talk: String,
     pub active_clients: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum HealthResponseStatus {
+    Ok,
+    Oops,
 }
 
 #[derive(Debug, Clone, Serialize)]

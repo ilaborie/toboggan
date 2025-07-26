@@ -423,11 +423,11 @@ async fn test_two_clients_navigation_sync() {
     // Verify Client 1 received the state change
     let client1_current = match &client1_response {
         Notification::State { state, .. } => {
-            if let State::Paused { current, .. } = state {
+            if let State::Running { current, .. } = state {
                 println!("Client 1 moved to slide: {:?}", current);
                 *current
             } else {
-                panic!("Expected Paused state, got: {:?}", state);
+                panic!("Expected Running state, got: {:?}", state);
             }
         }
         _ => panic!("Expected State notification, got: {:?}", client1_response),
@@ -436,7 +436,7 @@ async fn test_two_clients_navigation_sync() {
     // Verify Client 2 received the sync update
     match client2_sync {
         Notification::State { state, .. } => {
-            if let State::Paused { current, .. } = state {
+            if let State::Running { current, .. } = state {
                 println!("Client 2 synced to slide: {:?}", current);
 
                 // Verify both clients are on the same slide
@@ -446,7 +446,7 @@ async fn test_two_clients_navigation_sync() {
                 );
                 println!("✅ Both clients successfully synced to the same slide");
             } else {
-                panic!("Expected Paused state for Client 2, got: {:?}", state);
+                panic!("Expected Running state for Client 2, got: {:?}", state);
             }
         }
         _ => panic!(

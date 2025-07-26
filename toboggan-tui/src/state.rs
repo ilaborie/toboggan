@@ -39,7 +39,7 @@ impl AppState {
     }
 
     pub fn update_presentation_state(&mut self, state: State) {
-        self.current_slide = Some(state.current());
+        self.current_slide = state.current();
         self.presentation_state = Some(state);
     }
 }

@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
-use toboggan_core::{Command, Notification};
+use toboggan_core::{Command, Notification, State};
 use tokio::sync::mpsc;
 use tracing::{debug, info};
 
@@ -123,13 +123,13 @@ impl App {
                         // Toggle play/pause based on current state
                         if let Some(state) = &self.state.presentation_state {
                             match state {
-                                toboggan_core::State::Running { .. } => {
+                                State::Running { .. } => {
                                     self.send_command(Command::Pause);
                                 }
-                                toboggan_core::State::Paused { .. } => {
+                                State::Paused { .. } => {
                                     self.send_command(Command::Resume);
                                 }
-                                toboggan_core::State::Done { .. } => {
+                                State::Init | State::Done { .. } => {
                                     self.send_command(Command::Next);
                                 }
                             }

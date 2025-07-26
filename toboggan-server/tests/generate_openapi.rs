@@ -118,9 +118,9 @@ async fn basic_api_operations(app: &mut TestClient<TobogganTestServer>) -> anyho
     // Test health endpoint using Value for clawspec compatibility
     let health_response: Value = app.get("/health")?.await?.as_json().await?;
     let health_data = &health_response["data"];
-    assert_eq!(health_data["status"].as_str().unwrap(), "OK");
+    assert_eq!(health_data["status"].as_str().unwrap(), "Ok");
     assert_eq!(health_data["talk"].as_str().unwrap(), "Test Presentation");
-    assert!(health_data["elapsed"].is_string());
+    assert!(health_data["elapsed"].is_object());
     assert!(health_data["started_at"].is_string());
     assert!(health_data["active_clients"].is_number());
 

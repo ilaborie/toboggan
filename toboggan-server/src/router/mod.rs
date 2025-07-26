@@ -31,9 +31,15 @@ pub fn routes_with_cors(allowed_origins: Option<&[String]>) -> Router<TobogganSt
                 .route("/command", post(post_command))
                 .route("/ws", get(ws::websocket_handler)),
         )
+        .route("/", get(home))
         .layer(TraceLayer::new_for_http())
         .route("/health", get(health))
         .layer(cors)
+}
+
+async fn home(State(state): State<TobogganState>) -> impl IntoResponse {
+    let talk = &state.talk().title;
+    format!("🛝 {talk}")
 }
 
 async fn health(State(state): State<TobogganState>) -> impl IntoResponse {

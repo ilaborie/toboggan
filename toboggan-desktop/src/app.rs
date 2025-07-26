@@ -256,7 +256,7 @@ impl TobogganApp {
         match notification {
             Notification::State { state, .. } => {
                 self.presentation_state = Some(state.clone());
-                self.current_slide = Some(state.current());
+                self.current_slide = state.current();
                 info!("Received state update: {:?}", state);
             }
             Notification::Pong { .. } => {

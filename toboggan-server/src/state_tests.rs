@@ -34,8 +34,8 @@ mod tests {
             Notification::State {
                 state: inner_state, ..
             } => match inner_state {
-                State::Paused { .. } => {}
-                _ => panic!("Expected Paused state"),
+                State::Init => {}
+                _ => panic!("Expected Init state"),
             },
             _ => panic!("Expected State notification"),
         }
@@ -62,20 +62,20 @@ mod tests {
         let talk = create_test_talk();
         let state = TobogganState::new(talk, 100);
 
-        // Move to last slide first
+        // Move to last slide first (this will go to Running from Init)
         state.handle_command(&Command::Last).await;
 
-        // Then go back to first
+        // Then go back to first (this should go to Running since we're not in Init anymore)
         let notification = state.handle_command(&Command::First).await;
 
         match notification {
             Notification::State {
                 state: inner_state, ..
             } => match inner_state {
-                State::Paused { current, .. } => {
+                State::Running { current, .. } => {
                     assert_eq!(current, *state.slide_order.first().unwrap());
                 }
-                _ => panic!("Expected Paused state"),
+                _ => panic!("Expected Running state"),
             },
             _ => panic!("Expected State notification"),
         }
@@ -92,10 +92,11 @@ mod tests {
             Notification::State {
                 state: inner_state, ..
             } => match inner_state {
-                State::Paused { current, .. } => {
-                    assert_eq!(current, *state.slide_order.get(2).unwrap());
+                State::Running { current, .. } => {
+                    // From Init state, Last command should go to first slide
+                    assert_eq!(current, *state.slide_order.first().unwrap());
                 }
-                _ => panic!("Expected Paused state"),
+                _ => panic!("Expected Running state"),
             },
             _ => panic!("Expected State notification"),
         }
@@ -113,10 +114,11 @@ mod tests {
             Notification::State {
                 state: inner_state, ..
             } => match inner_state {
-                State::Paused { current, .. } => {
-                    assert_eq!(current, target_slide);
+                State::Running { current, .. } => {
+                    // From Init state, GoTo command should go to first slide
+                    assert_eq!(current, *state.slide_order.first().unwrap());
                 }
-                _ => panic!("Expected Paused state"),
+                _ => panic!("Expected Running state"),
             },
             _ => panic!("Expected State notification"),
         }
@@ -149,10 +151,11 @@ mod tests {
             Notification::State {
                 state: inner_state, ..
             } => match inner_state {
-                State::Paused { current, .. } => {
-                    assert_eq!(current, *state.slide_order.get(1).unwrap());
+                State::Running { current, .. } => {
+                    // From Init state, Next command should go to first slide
+                    assert_eq!(current, *state.slide_order.first().unwrap());
                 }
-                _ => panic!("Expected Paused state"),
+                _ => panic!("Expected Running state"),
             },
             _ => panic!("Expected State notification"),
         }
@@ -163,10 +166,13 @@ mod tests {
         let talk = create_test_talk();
         let state = TobogganState::new(talk, 100);
 
-        // Go to last slide
+        // Go to last slide (from Init this will go to first slide)
         state.handle_command(&Command::Last).await;
 
-        // Try to go next
+        // Navigate to last slide properly
+        state.handle_command(&Command::Last).await;
+
+        // Try to go next from last slide
         let notification = state.handle_command(&Command::Next).await;
 
         match notification {
@@ -185,20 +191,23 @@ mod tests {
         let talk = create_test_talk();
         let state = TobogganState::new(talk, 100);
 
-        // Move to second slide first
+        // Move to first slide (from Init)
         state.handle_command(&Command::Next).await;
 
-        // Then go back
+        // Move to second slide
+        state.handle_command(&Command::Next).await;
+
+        // Then go back to first
         let notification = state.handle_command(&Command::Previous).await;
 
         match notification {
             Notification::State {
                 state: inner_state, ..
             } => match inner_state {
-                State::Paused { current, .. } => {
+                State::Running { current, .. } => {
                     assert_eq!(current, *state.slide_order.first().unwrap());
                 }
-                _ => panic!("Expected Paused state"),
+                _ => panic!("Expected Running state"),
             },
             _ => panic!("Expected State notification"),
         }
@@ -210,17 +219,17 @@ mod tests {
         let state = TobogganState::new(talk, 100);
         let first_slide = *state.slide_order.first().unwrap();
 
-        // Try to go previous from first slide
+        // From Init state, Previous command should go to first slide
         let notification = state.handle_command(&Command::Previous).await;
 
         match notification {
             Notification::State {
                 state: inner_state, ..
             } => match inner_state {
-                State::Paused { current, .. } => {
+                State::Running { current, .. } => {
                     assert_eq!(current, first_slide);
                 }
-                _ => panic!("Expected Paused state"),
+                _ => panic!("Expected Running state"),
             },
             _ => panic!("Expected State notification"),
         }
@@ -231,8 +240,8 @@ mod tests {
         let talk = create_test_talk();
         let state = TobogganState::new(talk, 100);
 
-        // Resume first
-        state.handle_command(&Command::Resume).await;
+        // Get to Running state first by using a navigation command
+        state.handle_command(&Command::Next).await;
 
         // Then pause
         let notification = state.handle_command(&Command::Pause).await;
@@ -253,6 +262,11 @@ mod tests {
         let talk = create_test_talk();
         let state = TobogganState::new(talk, 100);
 
+        // Get to Running state first, then pause
+        state.handle_command(&Command::Next).await;
+        state.handle_command(&Command::Pause).await;
+
+        // Now resume
         let notification = state.handle_command(&Command::Resume).await;
 
         match notification {
@@ -285,7 +299,7 @@ mod tests {
         let state = TobogganState::new(talk, 100);
 
         // Start in Running state
-        state.handle_command(&Command::Resume).await;
+        state.handle_command(&Command::Next).await;
 
         // Navigate while running
         let notification = state.handle_command(&Command::Next).await;
@@ -306,8 +320,11 @@ mod tests {
         let talk = create_test_talk();
         let state = TobogganState::new(talk, 100);
 
-        // Go to last slide and then next to reach Done state
+        // Go to first slide (from Init), then navigate to last slide
+        state.handle_command(&Command::Next).await;
         state.handle_command(&Command::Last).await;
+
+        // Go next from last slide to reach Done state
         state.handle_command(&Command::Next).await;
 
         // Navigate from Done state
@@ -329,8 +346,8 @@ mod tests {
         let talk = create_test_talk();
         let state = TobogganState::new(talk, 100);
 
-        // Resume to start tracking
-        state.handle_command(&Command::Resume).await;
+        // Start tracking by getting to Running state
+        state.handle_command(&Command::Next).await;
 
         // Wait a tiny bit to ensure duration > 0
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
@@ -348,6 +365,131 @@ mod tests {
                 _ => panic!("Expected Paused state"),
             },
             _ => panic!("Expected State notification"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_init_to_running_transition() {
+        let talk = create_test_talk();
+        let state = TobogganState::new(talk, 100);
+
+        // Verify initial state is Init
+        let initial_state = state.current_state().await;
+        assert!(matches!(initial_state, State::Init));
+
+        // Send Next command
+        let notification = state.handle_command(&Command::Next).await;
+
+        // Verify notification contains Running state
+        match notification {
+            Notification::State {
+                state: inner_state, ..
+            } => match inner_state {
+                State::Running { current, .. } => {
+                    assert_eq!(current, *state.slide_order.first().unwrap());
+                }
+                _ => panic!("Expected Running state in notification, got: {inner_state:?}"),
+            },
+            _ => panic!("Expected State notification"),
+        }
+
+        // Verify current state is also Running
+        let current_state = state.current_state().await;
+        assert!(matches!(current_state, State::Running { .. }));
+    }
+
+    #[tokio::test]
+    async fn test_paused_navigation_to_running() {
+        let talk = create_test_talk();
+        let state = TobogganState::new(talk, 100);
+
+        // Start running and move to second slide
+        state.handle_command(&Command::Next).await; // Init -> Running (first slide)
+        state.handle_command(&Command::Next).await; // Running (second slide)
+
+        // Pause
+        let notification = state.handle_command(&Command::Pause).await;
+        match notification {
+            Notification::State {
+                state: inner_state, ..
+            } => assert!(matches!(inner_state, State::Paused { .. })),
+            _ => panic!("Expected State notification"),
+        }
+
+        // Now navigate next - should go to Running
+        let notification = state.handle_command(&Command::Next).await;
+        match notification {
+            Notification::State {
+                state: inner_state, ..
+            } => match inner_state {
+                State::Running { current, .. } => {
+                    // Should be on third (last) slide
+                    assert_eq!(current, *state.slide_order.get(2).unwrap());
+                }
+                _ => panic!("Expected Running state, got: {inner_state:?}"),
+            },
+            _ => panic!("Expected State notification"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_paused_on_last_slide_next_stays_paused() {
+        let talk = create_test_talk();
+        let state = TobogganState::new(talk, 100);
+
+        // Go to first slide, then navigate to last slide
+        state.handle_command(&Command::Next).await; // Init -> Running (first slide)
+        state.handle_command(&Command::Last).await; // Running -> Running (last slide)
+
+        // Pause
+        state.handle_command(&Command::Pause).await;
+
+        // Try next from last slide - should stay paused (no next slide available)
+        let notification = state.handle_command(&Command::Next).await;
+        match notification {
+            Notification::State {
+                state: inner_state, ..
+            } => assert!(matches!(inner_state, State::Paused { .. })),
+            _ => panic!("Expected State notification"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_first_command_resets_timestamp() {
+        let talk = create_test_talk();
+        let state = TobogganState::new(talk, 100);
+
+        // Start running and navigate to second slide
+        state.handle_command(&Command::Next).await; // Init -> Running (first slide)
+        state.handle_command(&Command::Next).await; // Running (second slide)
+
+        // Wait a bit to accumulate some duration
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+        // Pause to capture current duration
+        let pause_notification = state.handle_command(&Command::Pause).await;
+        let paused_duration = match pause_notification {
+            Notification::State {
+                state: State::Paused { total_duration, .. },
+                ..
+            } => total_duration,
+            _ => panic!("Expected Paused state"),
+        };
+
+        // Verify we have some accumulated duration
+        assert!(paused_duration > Duration::from_secs(0));
+
+        // Now go to first slide - this should reset the timestamp
+        let first_notification = state.handle_command(&Command::First).await;
+        match first_notification {
+            Notification::State {
+                state: State::Running { total_duration, .. },
+                ..
+            } => {
+                // Duration should be reset to zero
+                assert_eq!(total_duration, Duration::ZERO);
+            }
+            _ => panic!("Expected Running state after First command"),
         }
     }
 }

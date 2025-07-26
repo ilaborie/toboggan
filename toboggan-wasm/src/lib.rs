@@ -538,6 +538,10 @@ impl TobogganAppState {
         self.presentation_state = Some(state.clone());
 
         match &state {
+            State::Init => {
+                self.current_slide = None;
+                // TODO check if we need to do something else
+            }
             State::Running {
                 current,
                 since,
