@@ -16,6 +16,9 @@ use tokio::net::TcpListener;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::protocol::Message as TungsteniteMessage;
 
+// Global test counter to ensure unique SlideId ranges per test
+static GLOBAL_TEST_COUNTER: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
 /// Creates a test talk with multiple slides for navigation testing
 fn create_test_talk() -> Talk {
     Talk {
@@ -76,9 +79,7 @@ fn create_test_talk() -> Talk {
 
 /// Helper to create a test server with the given talk
 async fn create_test_server() -> (String, TobogganState) {
-    // Reset SlideId sequence to ensure deterministic IDs
-    toboggan_core::SlideId::reset_sequence();
-    
+    // Note: SlideId sequence is managed by the calling test for better isolation
     let talk = create_test_talk();
     let state = TobogganState::new(talk, 100);
 
@@ -295,6 +296,11 @@ async fn wait_for_recent_notification(
 
 #[tokio::test]
 async fn test_two_clients_navigation_sync() {
+    // Use a unique SlideId starting point for this test to avoid interference
+    let test_id = GLOBAL_TEST_COUNTER.fetch_add(20, std::sync::atomic::Ordering::SeqCst);
+    let current_seq = 100 + test_id;
+    toboggan_core::SlideId::reset_sequence_to(current_seq);
+
     // Create test server
     let (server_url, _state) = create_test_server().await;
 
@@ -313,7 +319,7 @@ async fn test_two_clients_navigation_sync() {
     println!("Client 1 ID: {:?}", client1_id);
     println!("Client 2 ID: {:?}", client2_id);
 
-    // Wait a bit to ensure both clients are fully connected
+    // Wait a bit to ensure both clients are fully connected and get initial state
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Test 1: Client 1 navigates to next slide, Client 2 should receive the update
@@ -427,25 +433,22 @@ async fn test_two_clients_navigation_sync() {
     // Test 3: Client 1 resumes presentation, both should receive Running state
     println!("\n=== Test 3: Client 1 resumes presentation ===");
 
-    // Send Resume command and wait for recent notification
-    let cmd_msg = serde_json::to_string(&Command::Resume).unwrap();
-    client1_sender.send(TungsteniteMessage::Text(cmd_msg)).await.unwrap();
-    println!("[Client1] Sent command: Resume");
-    
-    let resume_notification = wait_for_recent_notification(
+    // Use send_command_and_get_response for Resume to ensure proper synchronization
+    let resume_notification = send_command_and_get_response(
+        &mut client1_sender,
         &mut client1_receiver,
+        Command::Resume,
         "Client1",
-        2000,
-        Some(last_timestamp),
     )
     .await
     .expect("Failed to get resume response");
 
     // Verify Client 1 received the Running state
-    match resume_notification {
-        Notification::State { state, .. } => match state {
+    let (resume_timestamp, resume_slide_id) = match resume_notification {
+        Notification::State { state, timestamp } => match state {
             State::Running { current, .. } => {
                 println!("Client 1 resumed presentation on slide: {:?}", current);
+                (timestamp, current)
             }
             _ => panic!("Expected Running state, got: {:?}", state),
         },
@@ -453,17 +456,30 @@ async fn test_two_clients_navigation_sync() {
             "Expected State notification, got: {:?}",
             resume_notification
         ),
-    }
+    };
+
+    // Verify the slide ID is consistent with our expectations
 
     // Client 2 should receive the Running state update
-    let client2_resume_notification = wait_for_notification(&mut client2_receiver, "Client2", 1000)
-        .await
-        .expect("Client 2 should receive resume notification");
+    let client2_resume_notification = wait_for_recent_notification(
+        &mut client2_receiver,
+        "Client2",
+        2000,
+        Some(resume_timestamp),
+    )
+    .await
+    .expect("Client 2 should receive resume notification");
 
     match client2_resume_notification {
         Notification::State { state, .. } => match state {
             State::Running { current, .. } => {
                 println!("Client 2 synced to running state on slide: {:?}", current);
+
+                // Verify both clients are on the same slide
+                assert_eq!(
+                    current, resume_slide_id,
+                    "Both clients should be on the same slide after resume"
+                );
                 println!("✅ Both clients successfully synced to Running state");
             }
             _ => panic!("Expected Running state for Client 2, got: {:?}", state),
@@ -546,6 +562,11 @@ async fn test_two_clients_navigation_sync() {
 
 #[tokio::test]
 async fn test_client_disconnect_and_reconnect_sync() {
+    // Use a unique SlideId starting point for this test to avoid interference
+    let test_id = GLOBAL_TEST_COUNTER.fetch_add(20, std::sync::atomic::Ordering::SeqCst);
+    let current_seq = 50 + test_id;
+    toboggan_core::SlideId::reset_sequence_to(current_seq);
+
     // Create test server
     let (server_url, _state) = create_test_server().await;
 

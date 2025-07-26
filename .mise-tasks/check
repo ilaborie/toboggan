@@ -15,3 +15,7 @@ cargo nextest run
 # Run doc tests
 cargo test --doc
 
+# Check toboggan-web with Biome
+echo "Checking toboggan-web with Biome..."
+cd toboggan-web && npm run check && cd ..
+

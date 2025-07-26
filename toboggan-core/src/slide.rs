@@ -5,7 +5,6 @@ use alloc::sync::Arc;
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU8, Ordering};
-
 #[cfg(any(test, feature = "test-utils"))]
 use std::sync::Mutex;
 
@@ -44,19 +43,56 @@ impl SlideId {
         }
     }
 
-    /// Reset the global ID sequence to 0. Only available for testing.
+    /// Reset the global ID sequence to a specific value. Only available for testing.
     /// This function is thread-safe and can be used in multi-threaded test environments.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the mutex is poisoned (which should not happen in normal test scenarios).
     #[cfg(any(test, feature = "test-utils"))]
+    #[allow(clippy::unwrap_used)] // Acceptable in test-only code
     pub fn reset_sequence() {
+        Self::reset_sequence_to(0);
+    }
+
+    /// Reset the global ID sequence to a specific value. Only available for testing.
+    /// This allows tests to start with predictable IDs even when running in parallel.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the mutex is poisoned (which should not happen in normal test scenarios).
+    #[cfg(any(test, feature = "test-utils"))]
+    #[allow(clippy::unwrap_used)] // Acceptable in test-only code
+    pub fn reset_sequence_to(value: u8) {
         let _guard = RESET_MUTEX.lock().unwrap();
         #[cfg(feature = "alloc")]
         {
             let seq = Lazy::force(&ID_SEQ);
-            seq.store(0, Ordering::SeqCst);
+            seq.store(value, Ordering::SeqCst);
         }
         #[cfg(not(feature = "alloc"))]
         {
-            ID_SEQ.store(0, Ordering::SeqCst);
+            ID_SEQ.store(value, Ordering::SeqCst);
+        }
+    }
+
+    /// Get the current sequence value. Only available for testing.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the mutex is poisoned (which should not happen in normal test scenarios).
+    #[cfg(any(test, feature = "test-utils"))]
+    #[allow(clippy::unwrap_used)] // Acceptable in test-only code
+    pub fn current_sequence() -> u8 {
+        let _guard = RESET_MUTEX.lock().unwrap();
+        #[cfg(feature = "alloc")]
+        {
+            let seq = Lazy::force(&ID_SEQ);
+            seq.load(Ordering::SeqCst)
+        }
+        #[cfg(not(feature = "alloc"))]
+        {
+            ID_SEQ.load(Ordering::SeqCst)
         }
     }
 }

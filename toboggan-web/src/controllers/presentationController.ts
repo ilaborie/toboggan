@@ -3,6 +3,10 @@
  * Coordinates the presentation state and services
  */
 
+import { SlideRenderer } from "../services/slideRenderer.js";
+import { SlidesApiService } from "../services/slidesApi.js";
+import { TimerService } from "../services/timer.js";
+import { type CommunicationCallbacks, CommunicationService } from "../services/websocket.js";
 import type {
   AppConfig,
   Command,
@@ -11,37 +15,26 @@ import type {
   SlideId,
   State,
 } from "../types.js";
-import {
-  WebSocketService,
-  type WebSocketCallbacks,
-} from "../services/websocket.js";
-import { SlidesApiService } from "../services/slidesApi.js";
-import { SlideRenderer } from "../services/slideRenderer.js";
-import { TimerService } from "../services/timer.js";
-import { showError } from "../utils/dom.js";
+// Note: showError is deprecated, will be replaced by ErrorComponent
 
 export interface PresentationElements {
-  connectionStatus: HTMLSpanElement;
-  slideCounter: HTMLSpanElement;
-  durationDisplay: HTMLSpanElement;
-  errorDisplay: HTMLDivElement;
-  appElement: HTMLDivElement;
+  connectionStatus: HTMLElement;
+  slideCounter: HTMLElement;
+  durationDisplay: HTMLElement;
+  errorDisplay: HTMLElement;
+  appElement: HTMLElement;
 }
 
 export class PresentationController {
   private readonly elements: PresentationElements;
-  private readonly websocket: WebSocketService;
+  private readonly communicationService: CommunicationService;
   private readonly slidesApi: SlidesApiService;
   private readonly slideRenderer: SlideRenderer;
   private readonly timer: TimerService;
 
   private currentSlide: SlideId | null = null;
 
-  constructor(
-    clientId: string,
-    config: AppConfig,
-    elements: PresentationElements,
-  ) {
+  constructor(clientId: string, config: AppConfig, elements: PresentationElements) {
     this.elements = elements;
 
     // Initialize services
@@ -49,27 +42,18 @@ export class PresentationController {
     this.slideRenderer = new SlideRenderer(elements.appElement);
     this.timer = new TimerService(elements.durationDisplay);
 
-    // Initialize WebSocket with callbacks
-    const wsCallbacks: WebSocketCallbacks = {
+    // Initialize communication service with callbacks
+    const callbacks: CommunicationCallbacks = {
       onOpen: () => this.handleWebSocketOpen(),
       onNotification: (notification) => this.handleNotification(notification),
       onClose: () => this.handleWebSocketClose(),
       onError: (error) => this.handleError(error),
-      onReconnecting: (attempt, max, delay) =>
-        this.handleReconnecting(attempt, max, delay),
+      onReconnecting: (attempt, max, delay) => this.handleReconnecting(attempt, max, delay),
       onMaxRetriesReached: () => this.handleMaxRetriesReached(),
+      onLatencyUpdate: (latency) => this.handleLatencyUpdate(latency),
     };
 
-    this.websocket = new WebSocketService(
-      clientId,
-      {
-        wsUrl: config.wsUrl,
-        maxRetries: config.maxRetries,
-        initialRetryDelay: config.initialRetryDelay,
-        maxRetryDelay: config.maxRetryDelay,
-      },
-      wsCallbacks,
-    );
+    this.communicationService = new CommunicationService(clientId, config.websocket, callbacks);
   }
 
   /**
@@ -77,14 +61,14 @@ export class PresentationController {
    */
   public start(): void {
     this.updateConnectionStatus("Connecting...", "connecting");
-    this.websocket.connect();
+    this.communicationService.connect();
   }
 
   /**
    * Send a navigation command
    */
   public sendCommand(command: Command): void {
-    this.websocket.sendCommand(command);
+    this.communicationService.sendCommand(command);
   }
 
   /**
@@ -92,12 +76,12 @@ export class PresentationController {
    */
   public dispose(): void {
     this.timer.stop();
-    this.websocket.dispose();
+    this.communicationService.dispose();
   }
 
   private handleWebSocketOpen(): void {
     this.updateConnectionStatus("Connected", "connected");
-    this.websocket.register();
+    this.communicationService.register();
   }
 
   private handleWebSocketClose(): void {
@@ -106,25 +90,32 @@ export class PresentationController {
     this.timer.stop();
   }
 
-  private handleReconnecting(
-    attempt: number,
-    max: number,
-    delaySeconds: number,
-  ): void {
+  private handleReconnecting(attempt: number, max: number, delaySeconds: number): void {
     this.updateConnectionStatus(
       `Reconnecting in ${delaySeconds}s... (${attempt}/${max})`,
-      "reconnecting",
+      "reconnecting"
     );
   }
 
   private handleMaxRetriesReached(): void {
-    this.handleError(
-      "Max reconnection attempts reached. Please refresh the page.",
-    );
+    this.handleError("Max reconnection attempts reached. Please refresh the page.");
+  }
+
+  private handleLatencyUpdate(latency: number): void {
+    // TODO: Display latency in UI or use for diagnostics
+    console.log(`Connection latency: ${latency}ms`);
   }
 
   private handleError(message: string): void {
-    showError(this.elements.errorDisplay, message);
+    // TODO: Replace with ErrorComponent injection
+    console.error("PresentationController error:", message);
+    this.elements.errorDisplay.textContent = message;
+    this.elements.errorDisplay.style.display = "block";
+
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+      this.elements.errorDisplay.style.display = "none";
+    }, 5000);
   }
 
   private handleNotification(notification: Notification): void {
@@ -136,10 +127,10 @@ export class PresentationController {
         this.handleError(notification.message);
         break;
       case "Pong":
-        console.log("Received pong");
+        // Latency calculation is handled in the communication service
         break;
       default:
-        console.warn("Unknown notification type:", (notification as any).type);
+        console.warn("Unknown notification type:", (notification as { type?: string }).type);
     }
   }
 
@@ -171,8 +162,7 @@ export class PresentationController {
       this.slideRenderer.displaySlide(slide);
       this.updateSlideCounter();
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
       console.error("Failed to load slide:", error);
       this.handleError(`Failed to load slide: ${errorMessage}`);
     }
@@ -180,9 +170,7 @@ export class PresentationController {
 
   private updateSlideCounter(): void {
     if (this.currentSlide !== null) {
-      const displayNumber = this.slidesApi.getSlideDisplayNumber(
-        this.currentSlide,
-      );
+      const displayNumber = this.slidesApi.getSlideDisplayNumber(this.currentSlide);
       const total = this.slidesApi.getTotalSlides();
       const totalStr = total ? ` / ${total}` : "";
       this.elements.slideCounter.textContent = `Slide: ${displayNumber}${totalStr}`;
@@ -191,10 +179,7 @@ export class PresentationController {
     }
   }
 
-  private updateConnectionStatus(
-    status: string,
-    className: ConnectionStatus,
-  ): void {
+  private updateConnectionStatus(status: string, className: ConnectionStatus): void {
     this.elements.connectionStatus.textContent = status;
     this.elements.connectionStatus.className = className;
   }

@@ -304,5 +304,4 @@ mod tests {
         assert_eq!(state.next(&slide_order), None);
         assert_eq!(state.previous(&slide_order), None);
     }
-
 }

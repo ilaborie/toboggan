@@ -50,12 +50,7 @@ export interface IFrameContent {
   alt?: string;
 }
 
-export type Content =
-  | EmptyContent
-  | TextContent
-  | HtmlContent
-  | MdContent
-  | IFrameContent;
+export type Content = EmptyContent | TextContent | HtmlContent | MdContent | IFrameContent;
 
 /**
  * Slide structure
@@ -180,10 +175,7 @@ export interface PongNotification {
   timestamp: Timestamp;
 }
 
-export type Notification =
-  | StateNotification
-  | ErrorNotification
-  | PongNotification;
+export type Notification = StateNotification | ErrorNotification | PongNotification;
 
 /**
  * API response structures
@@ -225,14 +217,21 @@ export type ConnectionStatus =
 export type RequiredElement<T extends Element> = T;
 
 /**
- * Application configuration
+ * WebSocket configuration
  */
-export interface AppConfig {
+export interface WebSocketConfig {
   readonly wsUrl: string;
-  readonly apiBaseUrl: string;
   readonly maxRetries: number;
   readonly initialRetryDelay: number;
   readonly maxRetryDelay: number;
+}
+
+/**
+ * Application configuration
+ */
+export interface AppConfig {
+  readonly apiBaseUrl: string;
+  readonly websocket: WebSocketConfig;
 }
 
 /**

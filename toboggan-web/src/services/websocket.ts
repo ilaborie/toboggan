@@ -1,36 +1,35 @@
 /**
- * WebSocket Connection Service
- * Manages WebSocket connection lifecycle and message handling
+ * Real-time Communication Service
+ * Manages WebSocket connection lifecycle, message handling, and latency monitoring
  */
 
-import type { Command, Notification, ClientId } from '../types.js';
+import { COMMANDS, DEFAULTS } from "../constants/index.js";
+import type { ClientId, Command, Notification, WebSocketConfig } from "../types.js";
 
-export interface WebSocketConfig {
-  wsUrl: string;
-  maxRetries: number;
-  initialRetryDelay: number;
-  maxRetryDelay: number;
-}
-
-export interface WebSocketCallbacks {
+export interface CommunicationCallbacks {
   onOpen: () => void;
   onNotification: (notification: Notification) => void;
   onClose: () => void;
   onError: (error: string) => void;
   onReconnecting: (attempt: number, maxAttempts: number, delaySeconds: number) => void;
   onMaxRetriesReached: () => void;
+  onLatencyUpdate: (latency: number) => void;
 }
 
-export class WebSocketService {
+export class CommunicationService {
   private ws: WebSocket | null = null;
   private readonly config: WebSocketConfig;
-  private readonly callbacks: WebSocketCallbacks;
+  private readonly callbacks: CommunicationCallbacks;
   private readonly clientId: ClientId;
   private connectionRetryCount = 0;
   private retryDelay: number;
   private isDisposed = false;
+  private pingInterval: number | null = null;
+  private pendingPings = new Map<number, number>(); // timestamp -> sent time
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Used in sendPing method for ping ID generation
+  private pingCounter = 0;
 
-  constructor(clientId: ClientId, config: WebSocketConfig, callbacks: WebSocketCallbacks) {
+  constructor(clientId: ClientId, config: WebSocketConfig, callbacks: CommunicationCallbacks) {
     this.clientId = clientId;
     this.config = config;
     this.callbacks = callbacks;
@@ -42,16 +41,16 @@ export class WebSocketService {
    */
   public connect(): void {
     if (this.isDisposed) return;
-    
+
     try {
       this.ws = new WebSocket(this.config.wsUrl);
-      
+
       this.ws.onopen = () => this.handleOpen();
       this.ws.onmessage = (event: MessageEvent<string>) => this.handleMessage(event);
       this.ws.onclose = () => this.handleClose();
       this.ws.onerror = () => this.handleError();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown connection error';
+      const errorMessage = error instanceof Error ? error.message : "Unknown connection error";
       this.callbacks.onError(`Connection failed: ${errorMessage}`);
       this.scheduleReconnect();
     }
@@ -62,17 +61,17 @@ export class WebSocketService {
    */
   public sendCommand(command: Command): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      this.callbacks.onError('Not connected to server');
+      this.callbacks.onError("Not connected to server");
       return;
     }
 
     try {
       const message = JSON.stringify(command);
-      console.log('Sending command:', command);
+      console.log("Sending command:", command);
       this.ws.send(message);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('Failed to send command:', error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      console.error("Failed to send command:", error);
       this.callbacks.onError(`Failed to send command: ${errorMessage}`);
     }
   }
@@ -82,9 +81,9 @@ export class WebSocketService {
    */
   public register(): void {
     this.sendCommand({
-      command: 'Register',
+      command: "Register",
       client: this.clientId,
-      renderer: 'Html'
+      renderer: "Html",
     });
   }
 
@@ -93,6 +92,7 @@ export class WebSocketService {
    */
   public dispose(): void {
     this.isDisposed = true;
+    this.stopPinging();
     if (this.ws) {
       this.ws.close();
       this.ws = null;
@@ -100,25 +100,33 @@ export class WebSocketService {
   }
 
   private handleOpen(): void {
-    console.log('WebSocket connected');
+    console.log("WebSocket connected");
     this.connectionRetryCount = 0;
     this.retryDelay = this.config.initialRetryDelay;
+    this.startPinging();
     this.callbacks.onOpen();
   }
 
   private handleMessage(event: MessageEvent<string>): void {
     try {
       const notification: Notification = JSON.parse(event.data);
-      console.log('Received notification:', notification);
+      console.log("Received notification:", notification);
+
+      // Handle pong responses for latency calculation
+      if (notification.type === "Pong") {
+        this.handlePong(notification.timestamp);
+      }
+
       this.callbacks.onNotification(notification);
     } catch (error) {
-      console.error('Failed to parse notification:', error);
-      this.callbacks.onError('Failed to parse server message');
+      console.error("Failed to parse notification:", error);
+      this.callbacks.onError("Failed to parse server message");
     }
   }
 
   private handleClose(): void {
-    console.log('WebSocket connection closed');
+    console.log("WebSocket connection closed");
+    this.stopPinging();
     this.callbacks.onClose();
     if (!this.isDisposed) {
       this.scheduleReconnect();
@@ -126,8 +134,8 @@ export class WebSocketService {
   }
 
   private handleError(): void {
-    console.error('WebSocket error occurred');
-    this.callbacks.onError('Connection error occurred');
+    console.error("WebSocket error occurred");
+    this.callbacks.onError("Connection error occurred");
   }
 
   private scheduleReconnect(): void {
@@ -138,7 +146,7 @@ export class WebSocketService {
 
     this.connectionRetryCount++;
     const delaySeconds = this.retryDelay / 1000;
-    
+
     this.callbacks.onReconnecting(this.connectionRetryCount, this.config.maxRetries, delaySeconds);
 
     setTimeout(() => {
@@ -149,5 +157,70 @@ export class WebSocketService {
 
     // Exponential backoff
     this.retryDelay = Math.min(this.retryDelay * 2, this.config.maxRetryDelay);
+  }
+
+  /**
+   * Start periodic ping to monitor connection latency
+   */
+  private startPinging(): void {
+    this.stopPinging(); // Clear any existing interval
+
+    this.pingInterval = window.setInterval(() => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.sendPing();
+      }
+    }, DEFAULTS.PING_INTERVAL);
+  }
+
+  /**
+   * Stop periodic pinging
+   */
+  private stopPinging(): void {
+    if (this.pingInterval !== null) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+    this.pendingPings.clear();
+  }
+
+  /**
+   * Send a ping command to measure latency
+   */
+  private sendPing(): void {
+    const pingId = ++this.pingCounter;
+    const sentTime = Date.now();
+
+    this.pendingPings.set(pingId, sentTime);
+    this.sendCommand(COMMANDS.PING);
+
+    // Clean up old pings after timeout
+    setTimeout(() => {
+      this.pendingPings.delete(pingId);
+    }, 10000); // 10 seconds timeout
+  }
+
+  /**
+   * Handle pong response and calculate latency
+   */
+  private handlePong(_serverTimestamp: string): void {
+    const receivedTime = Date.now();
+
+    // Find the most recent pending ping
+    let latestPing: [number, number] | undefined;
+    for (const [pingId, sentTime] of this.pendingPings.entries()) {
+      if (!latestPing || sentTime > latestPing[1]) {
+        latestPing = [pingId, sentTime];
+      }
+    }
+
+    if (latestPing) {
+      const [pingId, sentTime] = latestPing;
+      const latency = receivedTime - sentTime;
+
+      this.pendingPings.delete(pingId);
+      this.callbacks.onLatencyUpdate(latency);
+
+      console.log(`Ping latency: ${latency}ms`);
+    }
   }
 }

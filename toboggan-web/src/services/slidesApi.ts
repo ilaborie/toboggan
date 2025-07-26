@@ -22,7 +22,7 @@ export class SlidesApiService {
       await this.fetchSlides();
     }
 
-    const slide = this.cache!.slides[slideId.toString()];
+    const slide = this.cache?.slides[slideId.toString()];
     if (!slide) {
       throw new Error(`Slide ${slideId} not found`);
     }

@@ -8,3 +8,7 @@ cargo +nightly fmt
 
 # Fix lint
 cargo fix --allow-dirty --allow-staged
+
+# Fix toboggan-web with Biome
+echo "Fixing toboggan-web with Biome..."
+cd toboggan-web && npm run check:fix && cd ..

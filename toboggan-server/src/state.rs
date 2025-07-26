@@ -169,6 +169,8 @@ impl TobogganState {
     pub async fn handle_command(&self, command: &Command) -> Notification {
         let start_time = std::time::Instant::now();
         let mut state = self.current_state.write().await;
+
+        // Process command and create notification atomically
         let notification = match command {
             Command::Register { .. } => {
                 // Registration is handled separately via WebSocket
@@ -242,8 +244,11 @@ impl TobogganState {
             Command::Ping => Notification::pong(),
         };
 
-        // Broadcast the notification to all registered clients
+        // Broadcast the notification while still holding the write lock to ensure atomicity
         self.broadcast_notification(&notification);
+
+        // Drop the write lock explicitly after broadcasting
+        drop(state);
 
         tracing::debug!(
             ?command,

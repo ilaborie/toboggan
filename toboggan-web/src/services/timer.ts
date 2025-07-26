@@ -4,11 +4,7 @@
  */
 
 import type { State } from "../types.js";
-import {
-  formatDuration,
-  calculateElapsedSeconds,
-  calculateStartTime,
-} from "../utils/duration.js";
+import { calculateElapsedSeconds, calculateStartTime, formatDuration } from "../utils/duration.js";
 
 export class TimerService {
   private interval: number | null = null;
@@ -28,10 +24,7 @@ export class TimerService {
 
     if (state.state === "Running") {
       // Calculate start time from 'since' timestamp and total_duration
-      this.startTime = calculateStartTime(
-        state.since,
-        state.total_duration.secs,
-      );
+      this.startTime = calculateStartTime(state.since, state.total_duration.secs);
       this.start();
     } else if (state.state === "Paused") {
       this.stop();
@@ -74,11 +67,7 @@ export class TimerService {
    * Update display from start time
    */
   private updateFromStartTime(): void {
-    if (
-      !this.startTime ||
-      !this.currentState ||
-      this.currentState?.state !== "Running"
-    ) {
+    if (!this.startTime || !this.currentState || this.currentState?.state !== "Running") {
       return;
     }
 
