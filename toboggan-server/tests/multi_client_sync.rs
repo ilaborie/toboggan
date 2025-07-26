@@ -248,6 +248,136 @@ async fn wait_for_recent_notification(
     }
 }
 
+/// Helper to receive next non-pong notification from WebSocket stream
+async fn receive_next_non_pong_notification(
+    ws_receiver: &mut futures::stream::SplitStream<
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+    >,
+    client_name: &str,
+) -> Result<Notification, Box<dyn std::error::Error + Send + Sync>> {
+    loop {
+        if let Some(msg) = ws_receiver.next().await {
+            let msg = msg?;
+            if let TungsteniteMessage::Text(text) = msg {
+                let notification: Notification = serde_json::from_str(&text)?;
+
+                // Filter out pong messages and only return state/error notifications
+                if let Notification::Pong { .. } = notification {
+                    println!("[{}] Ignoring pong, continuing...", client_name);
+                } else {
+                    println!(
+                        "[{}] Received notification: {:?}",
+                        client_name, notification
+                    );
+                    return Ok(notification);
+                }
+            }
+        } else {
+            return Err(format!("[{}] No notification received", client_name).into());
+        }
+    }
+}
+
+/// Coordinated command execution with proper synchronization using oneshot channels
+async fn coordinated_command_execution(
+    client1_sender: &mut futures::stream::SplitSink<
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+        TungsteniteMessage,
+    >,
+    client1_receiver: &mut futures::stream::SplitStream<
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+    >,
+    client2_receiver: &mut futures::stream::SplitStream<
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+    >,
+    command: Command,
+    client1_name: &str,
+    client2_name: &str,
+) -> Result<(Notification, Notification), Box<dyn std::error::Error + Send + Sync>> {
+    // Record timestamp before sending command to filter out stale notifications
+    let command_start_time = toboggan_core::Timestamp::now();
+
+    // Send command from client1
+    let cmd_msg = serde_json::to_string(&command)?;
+    client1_sender
+        .send(TungsteniteMessage::Text(cmd_msg))
+        .await?;
+    println!("[{}] Sent command: {:?}", client1_name, command);
+
+    // Wait for client1 response first (the command sender)
+    let client1_response = receive_next_non_pong_notification(client1_receiver, client1_name)
+        .await
+        .map_err(|err| format!("Client1 response error: {}", err))?;
+
+    // Extract timestamp from client1 response to ensure client2 gets newer notification
+    let response_timestamp = match &client1_response {
+        Notification::State { timestamp, .. } => *timestamp,
+        _ => command_start_time, // fallback to command start time
+    };
+
+    // Now wait for client2 sync notification that's newer than the command response
+    let client2_sync =
+        receive_recent_non_pong_notification(client2_receiver, client2_name, response_timestamp)
+            .await
+            .map_err(|err| format!("Client2 sync error: {}", err))?;
+
+    Ok((client1_response, client2_sync))
+}
+
+/// Helper to receive next non-pong notification that's newer than given timestamp
+async fn receive_recent_non_pong_notification(
+    ws_receiver: &mut futures::stream::SplitStream<
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+    >,
+    client_name: &str,
+    after_timestamp: toboggan_core::Timestamp,
+) -> Result<Notification, Box<dyn std::error::Error + Send + Sync>> {
+    loop {
+        if let Some(msg) = ws_receiver.next().await {
+            let msg = msg?;
+            if let TungsteniteMessage::Text(text) = msg {
+                let notification: Notification = serde_json::from_str(&text)?;
+
+                // Filter out pong messages and old notifications
+                if let Notification::Pong { .. } = &notification {
+                    println!("[{}] Ignoring pong, continuing...", client_name);
+                } else if let Notification::State { timestamp, .. } = &notification {
+                    if *timestamp < after_timestamp {
+                        println!(
+                            "[{}] Ignoring old notification with timestamp {:?} (before {:?})",
+                            client_name, timestamp, after_timestamp
+                        );
+                    } else {
+                        println!(
+                            "[{}] Received notification: {:?}",
+                            client_name, notification
+                        );
+                        return Ok(notification);
+                    }
+                } else {
+                    println!(
+                        "[{}] Received notification: {:?}",
+                        client_name, notification
+                    );
+                    return Ok(notification);
+                }
+            }
+        } else {
+            return Err(format!("[{}] No notification received", client_name).into());
+        }
+    }
+}
+
 #[tokio::test]
 async fn test_two_clients_navigation_sync() {
     // Use a unique SlideId starting point for this test to avoid interference
@@ -279,17 +409,19 @@ async fn test_two_clients_navigation_sync() {
     // Test 1: Client 1 navigates to next slide, Client 2 should receive the update
     println!("\n=== Test 1: Client 1 navigates next ===");
 
-    let next_notification = send_command_and_get_response(
+    let (client1_response, client2_sync) = coordinated_command_execution(
         &mut client1_sender,
         &mut client1_receiver,
+        &mut client2_receiver,
         Command::Next,
         "Client1",
+        "Client2",
     )
     .await
-    .expect("Failed to get next response");
+    .expect("Failed to coordinate Next command");
 
     // Verify Client 1 received the state change
-    let client1_current = match &next_notification {
+    let client1_current = match &client1_response {
         Notification::State { state, .. } => {
             if let State::Paused { current, .. } = state {
                 println!("Client 1 moved to slide: {:?}", current);
@@ -298,15 +430,11 @@ async fn test_two_clients_navigation_sync() {
                 panic!("Expected Paused state, got: {:?}", state);
             }
         }
-        _ => panic!("Expected State notification, got: {:?}", next_notification),
+        _ => panic!("Expected State notification, got: {:?}", client1_response),
     };
 
-    // Client 2 should automatically receive the same state update
-    let client2_sync_notification = wait_for_notification(&mut client2_receiver, "Client2", 2000)
-        .await
-        .expect("Client 2 should receive sync notification");
-
-    match client2_sync_notification {
+    // Verify Client 2 received the sync update
+    match client2_sync {
         Notification::State { state, .. } => {
             if let State::Paused { current, .. } = state {
                 println!("Client 2 synced to slide: {:?}", current);
@@ -323,47 +451,39 @@ async fn test_two_clients_navigation_sync() {
         }
         _ => panic!(
             "Expected State notification for Client 2, got: {:?}",
-            client2_sync_notification
+            client2_sync
         ),
     }
 
     // Test 2: Client 2 navigates to last slide, Client 1 should receive the update
     println!("\n=== Test 2: Client 2 navigates to last ===");
 
-    let last_notification = send_command_and_get_response(
+    let (client2_response, client1_sync) = coordinated_command_execution(
         &mut client2_sender,
         &mut client2_receiver,
+        &mut client1_receiver,
         Command::Last,
         "Client2",
+        "Client1",
     )
     .await
-    .expect("Failed to get last response");
+    .expect("Failed to coordinate Last command");
 
     // Verify Client 2 received the state change
-    let (client2_current, last_timestamp) = match &last_notification {
-        Notification::State { state, timestamp } => {
+    let client2_current = match &client2_response {
+        Notification::State { state, .. } => {
             if let State::Paused { current, .. } = state {
                 println!("Client 2 moved to last slide: {:?}", current);
-                (*current, *timestamp)
+                *current
             } else {
                 panic!("Expected Paused state, got: {:?}", state);
             }
         }
-        _ => panic!("Expected State notification, got: {:?}", last_notification),
+        _ => panic!("Expected State notification, got: {:?}", client2_response),
     };
 
-    // Client 1 should automatically receive the same state update
-    // We want to make sure Client 1 gets a notification that's at least as recent as Client 2's
-    let client1_sync_notification = wait_for_recent_notification(
-        &mut client1_receiver,
-        "Client1",
-        2000, // Increased timeout to be safer
-        Some(last_timestamp),
-    )
-    .await
-    .expect("Client 1 should receive sync notification");
-
-    match client1_sync_notification {
+    // Verify Client 1 received the sync update
+    match client1_sync {
         Notification::State { state, .. } => {
             if let State::Paused { current, .. } = state {
                 println!("Client 1 synced to slide: {:?}", current);
@@ -380,51 +500,38 @@ async fn test_two_clients_navigation_sync() {
         }
         _ => panic!(
             "Expected State notification for Client 1, got: {:?}",
-            client1_sync_notification
+            client1_sync
         ),
     }
 
     // Test 3: Client 1 resumes presentation, both should receive Running state
     println!("\n=== Test 3: Client 1 resumes presentation ===");
 
-    // Use send_command_and_get_response for Resume to ensure proper synchronization
-    let resume_notification = send_command_and_get_response(
+    let (client1_response, client2_sync) = coordinated_command_execution(
         &mut client1_sender,
         &mut client1_receiver,
+        &mut client2_receiver,
         Command::Resume,
         "Client1",
+        "Client2",
     )
     .await
-    .expect("Failed to get resume response");
+    .expect("Failed to coordinate Resume command");
 
     // Verify Client 1 received the Running state
-    let (resume_timestamp, resume_slide_id) = match resume_notification {
-        Notification::State { state, timestamp } => match state {
+    let resume_slide_id = match client1_response {
+        Notification::State { state, .. } => match state {
             State::Running { current, .. } => {
                 println!("Client 1 resumed presentation on slide: {:?}", current);
-                (timestamp, current)
+                current
             }
             _ => panic!("Expected Running state, got: {:?}", state),
         },
-        _ => panic!(
-            "Expected State notification, got: {:?}",
-            resume_notification
-        ),
+        _ => panic!("Expected State notification, got: {:?}", client1_response),
     };
 
-    // Verify the slide ID is consistent with our expectations
-
-    // Client 2 should receive the Running state update
-    let client2_resume_notification = wait_for_recent_notification(
-        &mut client2_receiver,
-        "Client2",
-        2000,
-        Some(resume_timestamp),
-    )
-    .await
-    .expect("Client 2 should receive resume notification");
-
-    match client2_resume_notification {
+    // Verify Client 2 received the Running state update
+    match client2_sync {
         Notification::State { state, .. } => match state {
             State::Running { current, .. } => {
                 println!("Client 2 synced to running state on slide: {:?}", current);
@@ -440,24 +547,26 @@ async fn test_two_clients_navigation_sync() {
         },
         _ => panic!(
             "Expected State notification for Client 2, got: {:?}",
-            client2_resume_notification
+            client2_sync
         ),
     }
 
     // Test 4: Client 2 pauses, both should receive Paused state
     println!("\n=== Test 4: Client 2 pauses presentation ===");
 
-    let pause_notification = send_command_and_get_response(
+    let (client2_response, client1_sync) = coordinated_command_execution(
         &mut client2_sender,
         &mut client2_receiver,
+        &mut client1_receiver,
         Command::Pause,
         "Client2",
+        "Client1",
     )
     .await
-    .expect("Failed to get pause response");
+    .expect("Failed to coordinate Pause command");
 
     // Verify Client 2 received the Paused state
-    match pause_notification {
+    match client2_response {
         Notification::State { state, .. } => match state {
             State::Paused {
                 current,
@@ -474,15 +583,11 @@ async fn test_two_clients_navigation_sync() {
             }
             _ => panic!("Expected Paused state, got: {:?}", state),
         },
-        _ => panic!("Expected State notification, got: {:?}", pause_notification),
+        _ => panic!("Expected State notification, got: {:?}", client2_response),
     }
 
-    // Client 1 should receive the Paused state update
-    let client1_pause_notification = wait_for_notification(&mut client1_receiver, "Client1", 1000)
-        .await
-        .expect("Client 1 should receive pause notification");
-
-    match client1_pause_notification {
+    // Verify Client 1 received the Paused state update
+    match client1_sync {
         Notification::State { state, .. } => match state {
             State::Paused {
                 current,
@@ -504,7 +609,7 @@ async fn test_two_clients_navigation_sync() {
         },
         _ => panic!(
             "Expected State notification for Client 1, got: {:?}",
-            client1_pause_notification
+            client1_sync
         ),
     }
 
