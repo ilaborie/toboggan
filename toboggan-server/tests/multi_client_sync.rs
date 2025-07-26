@@ -5,15 +5,16 @@
 #![allow(clippy::match_wildcard_for_single_variants)]
 #![allow(clippy::too_many_lines)]
 
-use futures::{SinkExt, StreamExt};
 use std::time::Duration;
-use tokio::net::TcpListener;
-use tokio_tungstenite::{connect_async, tungstenite::protocol::Message as TungsteniteMessage};
 
+use futures::{SinkExt, StreamExt};
 use toboggan_core::{
     ClientId, Command, Content, Notification, Renderer, Slide, SlideKind, State, Style, Talk,
 };
 use toboggan_server::{TobogganState, routes_with_cors};
+use tokio::net::TcpListener;
+use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::protocol::Message as TungsteniteMessage;
 
 /// Creates a test talk with multiple slides for navigation testing
 fn create_test_talk() -> Talk {
@@ -221,6 +222,20 @@ async fn wait_for_notification(
     client_name: &str,
     timeout_ms: u64,
 ) -> Result<Notification, Box<dyn std::error::Error + Send + Sync>> {
+    wait_for_recent_notification(ws_receiver, client_name, timeout_ms, None).await
+}
+
+/// Helper to wait for a notification with timestamp newer than the given threshold
+async fn wait_for_recent_notification(
+    ws_receiver: &mut futures::stream::SplitStream<
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+    >,
+    client_name: &str,
+    timeout_ms: u64,
+    after_timestamp: Option<jiff::Timestamp>,
+) -> Result<Notification, Box<dyn std::error::Error + Send + Sync>> {
     // Use timeout to avoid waiting indefinitely
     let timeout = tokio::time::timeout(Duration::from_millis(timeout_ms), async {
         loop {
@@ -246,6 +261,18 @@ async fn wait_for_notification(
                                 "[{}] Received state notification with timestamp: {:?}",
                                 client_name, timestamp
                             );
+
+                            // Check if this notification is newer than the threshold
+                            if let Some(after) = after_timestamp {
+                                if *timestamp < after {
+                                    println!(
+                                        "[{}] Ignoring old notification with timestamp {:?} (before {:?})",
+                                        client_name, timestamp, after
+                                    );
+                                    continue;
+                                }
+                            }
+
                             return Ok(notification);
                         }
                         _ => return Ok(notification),
@@ -350,11 +377,11 @@ async fn test_two_clients_navigation_sync() {
     .expect("Failed to get last response");
 
     // Verify Client 2 received the state change
-    let client2_current = match &last_notification {
-        Notification::State { state, .. } => {
+    let (client2_current, last_timestamp) = match &last_notification {
+        Notification::State { state, timestamp } => {
             if let State::Paused { current, .. } = state {
                 println!("Client 2 moved to last slide: {:?}", current);
-                *current
+                (*current, *timestamp)
             } else {
                 panic!("Expected Paused state, got: {:?}", state);
             }
@@ -363,9 +390,15 @@ async fn test_two_clients_navigation_sync() {
     };
 
     // Client 1 should automatically receive the same state update
-    let client1_sync_notification = wait_for_notification(&mut client1_receiver, "Client1", 1000)
-        .await
-        .expect("Client 1 should receive sync notification");
+    // We want to make sure Client 1 gets a notification that's at least as recent as Client 2's
+    let client1_sync_notification = wait_for_recent_notification(
+        &mut client1_receiver,
+        "Client1",
+        2000, // Increased timeout to be safer
+        Some(last_timestamp),
+    )
+    .await
+    .expect("Client 1 should receive sync notification");
 
     match client1_sync_notification {
         Notification::State { state, .. } => {

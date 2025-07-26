@@ -2,16 +2,13 @@ use std::net::TcpListener;
 use std::time::Duration;
 
 use anyhow::Context;
-use clawspec_core::{
-    ApiClient, register_schemas,
-    test_client::{TestClient, TestServer, TestServerConfig},
-};
+use clawspec_core::test_client::{TestClient, TestServer, TestServerConfig};
+use clawspec_core::{ApiClient, register_schemas};
 use jiff::civil::Date;
 use serde_json::{Value, json};
-use utoipa::openapi::{ContactBuilder, InfoBuilder, LicenseBuilder, ServerBuilder};
-
 use toboggan_core::{Content, Renderer, SlideId, SlideKind, Style, Talk};
 use toboggan_server::{TobogganState, routes};
+use utoipa::openapi::{ContactBuilder, InfoBuilder, LicenseBuilder, ServerBuilder};
 
 #[derive(Debug, Clone)]
 struct TobogganTestServer {

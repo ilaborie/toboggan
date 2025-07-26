@@ -23,12 +23,13 @@ impl TobogganState {
         let started = Timestamp::now();
         let talk = Arc::new(talk);
 
-        let slides = talk
+        let slide_data: Vec<_> = talk
             .slides
             .iter()
             .map(|slide| (SlideId::next(), slide.clone()))
-            .collect::<HashMap<_, _>>();
-        let slide_order = slides.keys().copied().collect::<Vec<_>>();
+            .collect();
+        let slides = slide_data.iter().cloned().collect::<HashMap<_, _>>();
+        let slide_order: Vec<SlideId> = slide_data.iter().map(|(id, _)| *id).collect();
         let first_slide = slide_order.first().copied().unwrap_or_else(SlideId::next);
         let slides = Arc::new(slides);
 

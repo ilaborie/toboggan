@@ -5,9 +5,9 @@ use alloc::sync::Arc;
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU8, Ordering};
+
 #[cfg(feature = "alloc")]
 use once_cell::sync::Lazy;
-
 use serde::{Deserialize, Serialize};
 
 use crate::Content;

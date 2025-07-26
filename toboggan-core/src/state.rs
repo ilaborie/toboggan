@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::SlideId;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+// #[serde(tag = "state")]
 pub enum State {
     Paused {
         current: SlideId,
@@ -130,9 +131,10 @@ impl State {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use alloc::vec;
     use alloc::vec::Vec;
+
+    use super::*;
 
     #[test]
     fn test_current() {

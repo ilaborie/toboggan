@@ -1,7 +1,7 @@
+use alloc::string::String;
 use core::fmt::Debug;
 use std::format;
 
-use alloc::string::String;
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 

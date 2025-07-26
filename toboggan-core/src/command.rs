@@ -1,5 +1,6 @@
 #[cfg(feature = "openapi")]
 use alloc::{string::String, vec::Vec};
+
 #[cfg(all(not(feature = "std"), feature = "getrandom"))]
 use getrandom;
 use serde::{Deserialize, Serialize};

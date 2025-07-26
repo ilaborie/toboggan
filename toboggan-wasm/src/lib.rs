@@ -1347,7 +1347,7 @@ mod tests {
         test_policy.jitter = false;
 
         assert_eq!(test_policy.calculate_delay(1), 1000); // 1000 * 2^0
-        assert_eq!(test_policy.calculate_delay(2), 2000); // 1000 * 2^1  
+        assert_eq!(test_policy.calculate_delay(2), 2000); // 1000 * 2^1
         assert_eq!(test_policy.calculate_delay(3), 4000); // 1000 * 2^2
         assert_eq!(test_policy.calculate_delay(4), 8000); // 1000 * 2^3
 
@@ -1423,8 +1423,9 @@ mod tests {
 // WASM-specific tests (run with wasm-pack test)
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
-    use super::*;
     use wasm_bindgen_test::*;
+
+    use super::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
 

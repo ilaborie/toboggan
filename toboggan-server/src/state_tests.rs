@@ -1,12 +1,14 @@
 #[cfg(test)]
 #[allow(clippy::module_inception, clippy::unwrap_used)]
 mod tests {
-    use crate::TobogganState;
     use std::time::Duration;
+
     use toboggan_core::{
         ClientId, Command, Content, Notification, Renderer, Slide, SlideId, SlideKind, State,
         Style, Talk,
     };
+
+    use crate::TobogganState;
 
     fn create_test_talk() -> Talk {
         Talk {

@@ -1,11 +1,11 @@
+use std::time::Duration;
+
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::response::Response;
 use futures::{SinkExt, StreamExt};
-use std::time::Duration;
-use tracing::{error, info, warn};
-
 use toboggan_core::{ClientId, Command, Notification};
+use tracing::{error, info, warn};
 
 use crate::TobogganState;
 

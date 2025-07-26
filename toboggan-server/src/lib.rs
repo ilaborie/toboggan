@@ -5,8 +5,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use toboggan_core::Talk;
-use tracing::instrument;
-use tracing::{info, warn};
+use tracing::{info, instrument, warn};
 
 mod settings;
 pub use self::settings::*;

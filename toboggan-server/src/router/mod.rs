@@ -3,12 +3,12 @@ use axum::http::Method;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use toboggan_core::{Command, Notification};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing::{error, warn};
 
 use crate::TobogganState;
-use toboggan_core::{Command, Notification};
 
 mod responses;
 mod ws;

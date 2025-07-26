@@ -4,7 +4,7 @@
 set -eux
 
 # Format
-cargo fmt
+cargo +nightly fmt
 
 # Fix lint
 cargo fix --allow-dirty --allow-staged
