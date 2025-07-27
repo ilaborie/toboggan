@@ -8,22 +8,13 @@
 </head>
 <body>
     <header>
-        <nav role="navigation" aria-label="Presentation controls">
-            <h1>Toboggan Presentation</h1>
-            <div class="controls">
-                <button id="first-btn" aria-label="Go to first slide" title="First slide">🏠</button>
-                <button id="prev-btn" aria-label="Go to previous slide" title="Previous slide">⬅️</button>
-                <button id="next-btn" aria-label="Go to next slide" title="Next slide">➡️</button>
-                <button id="last-btn" aria-label="Go to last slide" title="Last slide">🏁</button>
-                <button id="pause-btn" aria-label="Pause presentation" title="Pause">⏸️</button>
-                <button id="resume-btn" aria-label="Resume presentation" title="Resume">▶️</button>
-            </div>
-            <div class="status">
-                <span id="connection-status" aria-live="polite">Connecting...</span>
-                <span id="slide-counter" aria-live="polite">Slide: - / -</span>
-                <span id="duration-display" aria-live="polite">Duration: --:--:--</span>
-            </div>
-        </nav>
+        <toboggan-navigation 
+            id="navigation"
+            presentation-title="Toboggan Presentation"
+            connection-status="Connecting..."
+            slide-counter="Slide: - / -"
+            duration="Duration: --:--:--">
+        </toboggan-navigation>
     </header>
 
     <main>

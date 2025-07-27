@@ -15,6 +15,7 @@ import type { Command } from "./types.js";
 // Import web components to ensure they are registered
 import "./components/toast.js";
 import "./components/error.js";
+import "./components/navigation.js";
 // Import service modules to register toast container component
 import "./services/toast.js";
 
