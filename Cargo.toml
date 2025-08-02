@@ -36,21 +36,21 @@ utoipa-swagger-ui = "9.0"
 
 # Dev dependencies
 tower = "0.5"
-clawspec-core = { git = "https://github.com/ilaborie/clawspec", package = "clawspec-core" }
+clawspec-core = "0.2.0"
 
 # Other dependencies
 slug = "0.1.6"
 pulldown-cmark = "0.13.0"
 
 # Desktop dependencies
-iced = { version = "0.12", features = ["tokio", "advanced"] }
-tokio-tungstenite = "0.21"
-dirs = "5.0"
+iced = { version = "0.12.1", features = ["tokio", "advanced"] }
+tokio-tungstenite = "0.27.0"
+dirs = "6.0.0"
 reqwest = { version = "0.12", features = ["json"] }
 futures-util = "0.3"
 web-sys = "0.3.67"
 
-# WASM dependencies  
+# WASM dependencies
 wasm-bindgen = "0.2.100"
 gloo = { version = "0.11.0", features = ["timers", "events", "utils"] }
 js-sys = "0.3.67"
@@ -85,9 +85,8 @@ module_name_repetitions = "allow"
 
 # WASM size optimizations
 [profile.release]
-opt-level = "z"     # Optimize for size even more aggressively  
-lto = "fat"         # More aggressive LTO
-codegen-units = 1   # Single codegen unit for better optimization
-panic = "abort"     # Smaller panic handling
-strip = true        # Strip symbols for smaller size
-
+opt-level = "z"   # Optimize for size even more aggressively
+lto = "fat"       # More aggressive LTO
+codegen-units = 1 # Single codegen unit for better optimization
+panic = "abort"   # Smaller panic handling
+strip = true      # Strip symbols for smaller size

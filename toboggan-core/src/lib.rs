@@ -18,7 +18,7 @@
 //! - **[`Command`]**: Actions that can be performed on presentations
 //! - **[`Notification`]**: Events broadcast to connected clients
 //! - **[`SlideId`]**: Unique identifiers for slides
-//! - **[`Timestamp`]** and **[`Date`]**: Time handling primitives
+//! - **[`Timestamp`]** and **[`Date`]**: Time handling type aliases for jiff types
 //!
 //! ## Feature Flags
 //!
@@ -51,10 +51,10 @@
 //! ### Creating a Basic Talk
 //!
 //! ```rust
-//! use toboggan_core::{Talk, Slide, Content, Date};
+//! use toboggan_core::{Talk, Slide, Content, date_utils};
 //!
 //! let talk = Talk::new("My Presentation")
-//!     .with_date(Date::new(2025, 1, 26))
+//!     .with_date(date_utils::ymd(2025, 1, 26))
 //!     .add_slide(
 //!         Slide::cover("Welcome")
 //!             .with_body("Welcome to my presentation")
@@ -77,35 +77,10 @@
 //! // HTML content
 //! let html = Content::html("<h1>Title</h1>");
 //!
-//! // HTML with alt text for accessibility
-//! let accessible = Content::html_with_alt(
-//!     "<img src='chart.png' alt='Sales chart'>",
-//!     "Chart showing 50% increase in sales"
-//! );
-//!
-//! // Layout containers
-//! let columns = Content::hbox("1fr 1fr", [
-//!     Content::from("Left column"),
-//!     Content::from("Right column")
-//! ]);
+//! // HTML content
+//! let image = Content::html("<img src='chart.png' alt='Chart showing 50% increase in sales'>");
 //! ```
 //!
-//! ### File-based Content (std feature only)
-//!
-//! ```rust,no_run
-//! # #[cfg(feature = "std")]
-//! # {
-//! use std::path::Path;
-//! use toboggan_core::Content;
-//!
-//! // Automatically detects file type and converts accordingly
-//! let content = Content::from(Path::new("slides/intro.md"));
-//! // Markdown files are converted to HTML with original markdown as alt text
-//!
-//! let html_content = Content::from(Path::new("slides/chart.html"));
-//! // HTML files are used directly
-//! # }
-//! ```
 //!
 //! ### Presentation State Management
 //!
@@ -115,7 +90,7 @@
 //!
 //! let slide1 = SlideId::next();
 //! let mut state = State::Paused {
-//!     current: slide1,
+//!     current: Some(slide1),
 //!     total_duration: Duration::ZERO,
 //! };
 //!

@@ -3,17 +3,40 @@
  * Manages WebSocket connection lifecycle, message handling, and latency monitoring
  */
 
-import { COMMANDS, DEFAULTS } from "../constants/index.js";
-import type { ClientId, Command, Notification, WebSocketConfig } from "../types.js";
+import { COMMANDS, DEFAULTS } from "../constants.js";
+import type { ClientId, Command, ConnectionStatus, Notification, State, WebSocketConfig } from "../types.js";
 
 export interface CommunicationCallbacks {
-  onOpen: () => void;
-  onNotification: (notification: Notification) => void;
-  onClose: () => void;
+  onConnectionStatusChange: (status: ConnectionStatus) => void;
+  onStateChange: (state: State) => void;
   onError: (error: string) => void;
+
   onReconnecting: (attempt: number, maxAttempts: number, delaySeconds: number) => void;
   onMaxRetriesReached: () => void;
   onLatencyUpdate: (latency: number) => void;
+}
+
+/**
+ * Connection status types
+ */
+export type ConnectionStatus =
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "reconnecting"
+  | "running"
+  | "paused"
+  | "done";
+
+
+/**
+ * WebSocket configuration
+ */
+export interface WebSocketConfig {
+  readonly wsUrl: string;
+  readonly maxRetries: number;
+  readonly initialRetryDelay: number;
+  readonly maxRetryDelay: number;
 }
 
 export class CommunicationService {
@@ -104,7 +127,7 @@ export class CommunicationService {
     this.connectionRetryCount = 0;
     this.retryDelay = this.config.initialRetryDelay;
     this.startPinging();
-    this.callbacks.onOpen();
+    this.callbacks.onConnectionStatusChange("connected");
   }
 
   private handleMessage(event: MessageEvent<string>): void {
@@ -112,12 +135,18 @@ export class CommunicationService {
       const notification: Notification = JSON.parse(event.data);
       console.log("Received notification:", notification);
 
-      // Handle pong responses for latency calculation
-      if (notification.type === "Pong") {
-        this.handlePong(notification.timestamp);
+      switch (notification.type) {
+        case "State":
+          this.callbacks.onStateChange(notification.state);
+          break;
+        case "Error":
+          this.callbacks.onError(notification.message);
+          break;
+        case "Pong":
+          this.handlePong(notification.timestamp);
+          break;
       }
 
-      this.callbacks.onNotification(notification);
     } catch (error) {
       console.error("Failed to parse notification:", error);
       this.callbacks.onError("Failed to parse server message");
@@ -127,7 +156,7 @@ export class CommunicationService {
   private handleClose(): void {
     console.log("WebSocket connection closed");
     this.stopPinging();
-    this.callbacks.onClose();
+    this.callbacks.onConnectionStatusChange("done");
     if (!this.isDisposed) {
       this.scheduleReconnect();
     }

@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -7,15 +6,13 @@ use toboggan_core::{ClientId, Command, Notification, Slide, SlideId, State, Talk
 use tokio::sync::{RwLock, watch};
 use tracing::{info, warn};
 
-use crate::HealthResponseStatus;
-use crate::router::HealthResponse;
+use crate::{HealthResponse, HealthResponseStatus};
 
 #[derive(Clone)]
 pub struct TobogganState {
     started_at: Timestamp,
     talk: Arc<Talk>,
-    slides: Arc<HashMap<SlideId, Slide>>,
-    slide_order: Arc<[SlideId]>,
+    slide_order: Vec<SlideId>,
     current_state: Arc<RwLock<State>>,
     clients: Arc<DashMap<ClientId, watch::Sender<Notification>>>,
     max_clients: usize,
@@ -50,18 +47,14 @@ impl TobogganState {
                 .collect::<Vec<_>>()
                 .join("\n")
         );
-        let slides = slide_data.iter().cloned().collect::<HashMap<_, _>>();
-        let slide_order: Vec<SlideId> = slide_data.iter().map(|(id, _)| *id).collect();
-        let slides = Arc::new(slides);
 
-        let current_state = State::Init;
+        let slide_order: Vec<SlideId> = slide_data.iter().map(|(id, _)| *id).collect();
+        let current_state = State::default(); // Init state
         let current_state = Arc::new(RwLock::new(current_state));
-        let slide_order: Arc<[SlideId]> = slide_order.into();
 
         Self {
             started_at: started,
             talk,
-            slides,
             slide_order,
             current_state,
             clients: Arc::new(DashMap::new()),
@@ -89,8 +82,8 @@ impl TobogganState {
         &self.talk
     }
 
-    pub(crate) fn slides_arc(&self) -> &Arc<HashMap<SlideId, Slide>> {
-        &self.slides
+    pub(crate) fn slides(&self) -> Vec<Slide> {
+        self.talk().slides.clone()
     }
 
     pub(crate) async fn current_state(&self) -> State {
@@ -183,17 +176,16 @@ impl TobogganState {
         }
     }
 
+    #[allow(clippy::expect_used)]
     fn command_first(&self, state: &mut State) -> Notification {
         match state {
             State::Init => {
                 // In Init state, go to first slide and start running
-                if let Some(&first_slide) = self.slide_order.first() {
-                    *state = State::Running {
-                        since: Timestamp::now(),
-                        current: first_slide,
-                        total_duration: Duration::ZERO,
-                    };
-                }
+                *state = State::Running {
+                    since: Timestamp::now(),
+                    current: self.slide_order.first().copied().expect("a first slide"),
+                    total_duration: Duration::ZERO,
+                };
             }
             State::Paused { .. } => {
                 // In Paused state, go to first slide and start running with reset timestamp
@@ -224,7 +216,7 @@ impl TobogganState {
     fn command_last(&self, state: &mut State) -> Notification {
         match state {
             State::Init => {
-                // In Init state, go to first slide and start running
+                // In Init state, go to first slide and start running (last command from init goes to first)
                 if let Some(&first_slide) = self.slide_order.first() {
                     *state = State::Running {
                         since: Timestamp::now(),
@@ -265,14 +257,12 @@ impl TobogganState {
         if self.slide_order.contains(&slide_id) {
             match state {
                 State::Init => {
-                    // In Init state, go to first slide and start running
-                    if let Some(&first_slide) = self.slide_order.first() {
-                        *state = State::Running {
-                            since: Timestamp::now(),
-                            current: first_slide,
-                            total_duration: Duration::ZERO,
-                        };
-                    }
+                    // In Init state, go to specified slide and start running
+                    *state = State::Running {
+                        since: Timestamp::now(),
+                        current: slide_id,
+                        total_duration: Duration::ZERO,
+                    };
                 }
                 State::Paused { .. } => {
                     // In Paused state, navigate and start running (unless going to last slide)
@@ -392,7 +382,7 @@ impl TobogganState {
         if let State::Running { current, .. } = *state {
             let total_duration = state.calculate_total_duration();
             *state = State::Paused {
-                current,
+                current: Some(current),
                 total_duration,
             };
         }

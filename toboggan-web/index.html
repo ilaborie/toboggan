@@ -1,35 +1,24 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Toboggan Presentation</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.fluid.classless.violet.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.cyan.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.colors.min.css">
 </head>
-<body>
-    <header>
-        <toboggan-navigation 
-            id="navigation"
-            presentation-title="Toboggan Presentation"
-            connection-status="Connecting..."
-            slide-counter="Slide: - / -"
-            duration="Duration: --:--:--">
-        </toboggan-navigation>
-    </header>
 
-    <main>
+<body>
+    <toboggan-navigation></toboggan-navigation>
+    <main class="container">
         <div id="app" role="main" aria-live="polite" aria-label="Slide content">
             <p>Loading presentation...</p>
         </div>
     </main>
-
-    <footer>
-        <toboggan-error-display id="error-display"></toboggan-error-display>
-    </footer>
-
-    <!-- Toast container for notifications -->
-    <toboggan-toast-container id="toast-container"></toboggan-toast-container>
+    <toboggan-toast></toboggan-toast>
 
     <script type="module" src="/src/main.ts"></script>
 </body>
+
 </html>

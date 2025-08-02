@@ -1,4 +1,4 @@
-use iced::widget::{Column, column, container, row, text};
+use iced::widget::{Column, column, container, text};
 use iced::{Element, Length};
 use toboggan_core::Content;
 
@@ -33,7 +33,7 @@ pub fn render_content(content: &Content) -> Element<'_, Message> {
             container(
                 column![
                     text("Terminal:").size(16),
-                    text(format!("Working Directory: {}", cwd.display())).size(14),
+                    text(format!("Working Directory: {cwd}")).size(14),
                 ]
                 .spacing(5),
             )
@@ -41,18 +41,9 @@ pub fn render_content(content: &Content) -> Element<'_, Message> {
             .into()
         }
 
-        Content::HBox {
-            columns: _,
-            contents,
-        } => {
-            let mut row_contents = row![].spacing(10);
-            for content in contents {
-                row_contents = row_contents.push(render_content(content));
-            }
-            container(row_contents).width(Length::Fill).into()
-        }
-
-        Content::VBox { rows: _, contents } => {
+        Content::Grid { style: _, contents } => {
+            // For now, render as a column layout
+            // TODO: Implement proper CSS Grid layout based on style
             let mut column_contents = column![].spacing(10);
             for content in contents {
                 column_contents = column_contents.push(render_content(content));

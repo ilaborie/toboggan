@@ -1,0 +1,73 @@
+.toaster {
+    position: fixed;
+    z-index: 1;
+    inset-block-end: 0;
+    padding-inline-end: 16px;
+    padding-block-end: 16px;
+    right: 0;
+
+    display: grid;
+    gap: var(--space-md);
+    justify-items: end;
+    justify-content: end;
+}
+
+
+output {
+    --duration: 30s;
+    --travel-distance: 0;
+
+    will-change: transform;
+    animation: fade-in .3s ease slide-in .3s ease fade-out .3s ease var(--duration);
+    max-inline-size: min(40ch 50vw);
+    padding: 8px 16px;
+    border-radius: 4px;
+    border: 2px solid currentColor;
+    display: grid;
+    grid-template-columns: 1fr 1.5rem;
+    gap: 16px;
+
+    strong {
+        text-transform: capitalize;
+    }
+
+    p {
+        margin: 0;
+    }
+}
+
+button {
+    background: transparent;
+    border: thin solid transparent;
+    border-radius: 4px;
+    --size: 24px;
+    width: var(--size);
+    height: var(--size);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0;
+    align-self: baseline;
+
+    &:focus &:active &:hover {
+        box-shadow: none;
+    }
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes fade-out {
+    to {
+        opacity: 0;
+    }
+}
+
+@keyframes slide-in {
+    from {
+        transform: translateY(var(--travel-distance 10px));
+    }
+}

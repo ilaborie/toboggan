@@ -4,14 +4,14 @@ mod tests {
     use std::time::Duration;
 
     use toboggan_core::{
-        ClientId, Command, Date, Notification, Renderer, Slide, SlideId, State, Talk,
+        ClientId, Command, Notification, Renderer, Slide, SlideId, State, Talk, date_utils,
     };
 
     use crate::TobogganState;
 
     fn create_test_talk() -> Talk {
         Talk::new("Test Talk")
-            .with_date(Date::new(2025, 1, 1))
+            .with_date(date_utils::ymd(2025, 1, 1))
             .add_slide(Slide::cover("Cover Slide"))
             .add_slide(Slide::new("Second Slide"))
             .add_slide(Slide::new("Third Slide"))
@@ -35,7 +35,7 @@ mod tests {
                 state: inner_state, ..
             } => match inner_state {
                 State::Init => {}
-                _ => panic!("Expected Init state"),
+                _ => panic!("Expected initial state (Init)"),
             },
             _ => panic!("Expected State notification"),
         }
@@ -116,7 +116,7 @@ mod tests {
             } => match inner_state {
                 State::Running { current, .. } => {
                     // From Init state, GoTo command should go to first slide
-                    assert_eq!(current, *state.slide_order.first().unwrap());
+                    assert_eq!(current, target_slide);
                 }
                 _ => panic!("Expected Running state"),
             },

@@ -3,15 +3,10 @@
  * Exports all UI components for easy importing
  */
 
-export {
-  ErrorComponent,
-  type ErrorDisplayConfig,
-  TobogganErrorDisplay,
-} from "./error.js";
 
-export { 
+export {
   type NavigationState,
-  TobogganNavigation,
+  TobogganNavigationElement as TobogganNavigation,
 } from "./navigation.js";
 
-export { type ToastType, TobogganToast } from "./toast.js";
+export { type ToastType, TobogganToastElement as TobogganToast } from "./toast.js";

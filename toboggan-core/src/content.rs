@@ -12,6 +12,101 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::Style;
+
+/// Working directory path for terminal content.
+///
+/// A simple wrapper around `PathBuf` for std environments and `String` for `no_std` environments.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg(feature = "std")]
+pub struct WorkingDirectory(PathBuf);
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg(not(feature = "std"))]
+pub struct WorkingDirectory(String);
+
+impl WorkingDirectory {
+    /// Creates a new working directory from a path-like input.
+    pub fn new(path: impl Into<Self>) -> Self {
+        path.into()
+    }
+
+    /// Returns the path as a string slice.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        #[cfg(feature = "std")]
+        {
+            self.0.to_str().unwrap_or("")
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            &self.0
+        }
+    }
+
+    /// Returns the underlying `PathBuf` (only available with `std` feature).
+    #[cfg(feature = "std")]
+    #[must_use]
+    pub fn as_path_buf(&self) -> &PathBuf {
+        &self.0
+    }
+
+    /// Returns the underlying Path (only available with `std` feature).
+    #[cfg(feature = "std")]
+    #[must_use]
+    pub fn as_path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Display for WorkingDirectory {
+    fn fmt(&self, fmt: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(fmt, "{}", self.as_str())
+    }
+}
+
+#[cfg(feature = "std")]
+impl From<String> for WorkingDirectory {
+    fn from(path: String) -> Self {
+        Self(PathBuf::from(path))
+    }
+}
+
+#[cfg(not(feature = "std"))]
+impl From<String> for WorkingDirectory {
+    fn from(path: String) -> Self {
+        Self(path)
+    }
+}
+
+#[cfg(feature = "std")]
+impl From<&str> for WorkingDirectory {
+    fn from(path: &str) -> Self {
+        Self(PathBuf::from(path))
+    }
+}
+
+#[cfg(not(feature = "std"))]
+impl From<&str> for WorkingDirectory {
+    fn from(path: &str) -> Self {
+        Self(path.to_string())
+    }
+}
+
+#[cfg(feature = "std")]
+impl From<PathBuf> for WorkingDirectory {
+    fn from(path: PathBuf) -> Self {
+        Self(path)
+    }
+}
+
+#[cfg(feature = "std")]
+impl From<&Path> for WorkingDirectory {
+    fn from(path: &Path) -> Self {
+        Self(path.to_path_buf())
+    }
+}
+
 /// Rich content that can be displayed in a slide.
 ///
 /// Content supports various media types and layout containers. All content types
@@ -25,19 +120,10 @@ use serde::{Deserialize, Serialize};
 /// // Simple text
 /// let text = Content::from("Hello, world!");
 ///
-/// // HTML with accessibility
-/// let html = Content::html_with_alt(
-///     "<img src='chart.png'>",
-///     "Sales chart showing upward trend"
-/// );
-///
-/// // Layout containers
-/// let layout = Content::hbox("1fr 2fr", [
-///     Content::from("Left sidebar"),
-///     Content::html("<main>Main content</main>")
-/// ]);
+/// // HTML content
+/// let html = Content::html("<img src='chart.png' alt='Sales chart showing upward trend'>");
 /// ```
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Content {
     /// Empty content (default).
@@ -61,39 +147,28 @@ pub enum Content {
     /// HTML sanitization.
     Html { raw: String, alt: Option<String> },
 
+    /// Grid layout container.
+    Grid {
+        style: Style,
+        contents: Vec<Content>,
+    },
+
     /// Embedded iframe content.
     ///
     /// Displays content from an external URL within an iframe.
     /// Useful for embedding videos, interactive content, or external sites.
     IFrame { url: String },
 
-    /// Terminal session (only available with `std` feature).
+    /// Terminal session.
     ///
     /// Provides an interactive terminal within the slide, starting
     /// in the specified working directory. Useful for live coding
     /// demonstrations and command-line tutorials.
-    #[cfg(feature = "std")]
-    Term { cwd: PathBuf },
-
-    /// Horizontal layout container.
     ///
-    /// Arranges child content in a horizontal row. The `columns` field
-    /// defines the sizing using CSS Grid syntax (e.g., "1fr 2fr" for
-    /// a 1:2 ratio).
-    HBox {
-        columns: String,
-        contents: Vec<Content>,
-    },
-
-    /// Vertical layout container.
-    ///
-    /// Arranges child content in a vertical column. The `rows` field
-    /// defines the sizing using CSS Grid syntax (e.g., "auto 1fr auto"
-    /// for header, content, footer).
-    VBox {
-        rows: String,
-        contents: Vec<Content>,
-    },
+    /// Available in both `std` and `no_std` environments:
+    /// - `std`: Uses proper path handling with `PathBuf`
+    /// - `no_std`: Uses string-based path storage
+    Term { cwd: WorkingDirectory },
 }
 
 impl Content {
@@ -152,6 +227,63 @@ impl Content {
         Self::Html { raw, alt }
     }
 
+    /// Creates grid layout content.
+    ///
+    /// Provides a CSS Grid layout using the provided style and contents.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use toboggan_core::{Content, Style};
+    ///
+    /// let style = Style::default();
+    /// let grid = Content::grid(style, [
+    ///     Content::from("Cell 1"),
+    ///     Content::from("Cell 2")
+    /// ]);
+    /// ```
+    pub fn grid(style: Style, contents: impl IntoIterator<Item = Content>) -> Self {
+        let contents = Vec::from_iter(contents);
+        Self::Grid { style, contents }
+    }
+
+    /// Creates horizontal layout content.
+    ///
+    /// This is a convenience method that creates a grid with horizontal layout.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use toboggan_core::Content;
+    ///
+    /// let content = Content::hbox([
+    ///     Content::from("Left column"),
+    ///     Content::from("Right column")
+    /// ]);
+    /// ```
+    pub fn hbox(contents: impl IntoIterator<Item = Content>) -> Self {
+        Self::grid(Style::default(), contents)
+    }
+
+    /// Creates vertical layout content.
+    ///
+    /// This is a convenience method that creates a grid with vertical layout.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use toboggan_core::Content;
+    ///
+    /// let content = Content::vbox([
+    ///     Content::html("<header>Header</header>"),
+    ///     Content::from("Main content area"),
+    ///     Content::html("<footer>Footer</footer>")
+    /// ]);
+    /// ```
+    pub fn vbox(contents: impl IntoIterator<Item = Content>) -> Self {
+        Self::grid(Style::default(), contents)
+    }
+
     /// Creates iframe content for embedding external URLs.
     ///
     /// # Examples
@@ -167,11 +299,19 @@ impl Content {
         Self::IFrame { url }
     }
 
-    /// Creates terminal content (only available with `std` feature).
+    /// Creates terminal content.
     ///
     /// The terminal will start in the specified working directory.
+    /// Works in both `std` and `no_std` environments.
     ///
     /// # Examples
+    ///
+    /// ```rust
+    /// use toboggan_core::Content;
+    ///
+    /// let content = Content::term("/home/user/project");
+    /// let content2 = Content::term(String::from("./demo"));
+    /// ```
     ///
     /// ```rust,no_run
     /// # #[cfg(feature = "std")]
@@ -179,68 +319,12 @@ impl Content {
     /// use toboggan_core::Content;
     /// use std::path::Path;
     ///
-    /// let content = Content::term("/home/user/project");
-    /// let content2 = Content::term(Path::new("./demo"));
+    /// let content3 = Content::term(Path::new("./demo"));
     /// # }
     /// ```
-    #[cfg(feature = "std")]
-    pub fn term(cwd: impl Into<PathBuf>) -> Self {
+    pub fn term(cwd: impl Into<WorkingDirectory>) -> Self {
         let cwd = cwd.into();
         Self::Term { cwd }
-    }
-
-    /// Creates horizontal layout content.
-    ///
-    /// The `columns` parameter uses CSS Grid syntax to define column sizes.
-    /// Common patterns:
-    /// - `"1fr 1fr"` - Equal width columns
-    /// - `"200px 1fr"` - Fixed width sidebar, flexible content
-    /// - `"1fr 2fr 1fr"` - Three columns with 1:2:1 ratio
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use toboggan_core::Content;
-    ///
-    /// let content = Content::hbox("1fr 1fr", [
-    ///     Content::from("Left column"),
-    ///     Content::from("Right column")
-    /// ]);
-    ///
-    /// let sidebar = Content::hbox("250px 1fr", [
-    ///     Content::html("<nav>Navigation</nav>"),
-    ///     Content::html("<main>Content</main>")
-    /// ]);
-    /// ```
-    pub fn hbox(columns: impl Into<String>, contents: impl IntoIterator<Item = Content>) -> Self {
-        let columns = columns.into();
-        let contents = Vec::from_iter(contents);
-        Self::HBox { columns, contents }
-    }
-
-    /// Creates vertical layout content.
-    ///
-    /// The `rows` parameter uses CSS Grid syntax to define row sizes.
-    /// Common patterns:
-    /// - `"auto 1fr auto"` - Header, flexible content, footer
-    /// - `"1fr 1fr"` - Equal height rows
-    /// - `"100px 1fr"` - Fixed height header, flexible content
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use toboggan_core::Content;
-    ///
-    /// let content = Content::vbox("auto 1fr auto", [
-    ///     Content::html("<header>Header</header>"),
-    ///     Content::from("Main content area"),
-    ///     Content::html("<footer>Footer</footer>")
-    /// ]);
-    /// ```
-    pub fn vbox(rows: impl Into<String>, contents: impl IntoIterator<Item = Content>) -> Self {
-        let rows = rows.into();
-        let contents = Vec::from_iter(contents);
-        Self::VBox { rows, contents }
     }
 }
 
@@ -277,6 +361,39 @@ impl From<&str> for Content {
 impl From<String> for Content {
     fn from(text: String) -> Self {
         Self::text(text)
+    }
+}
+
+impl Display for Content {
+    fn fmt(&self, fmt: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Empty => write!(fmt, "<no content>"),
+            Self::Text { text } => write!(fmt, "{text}"),
+            Self::Html { raw, alt } => {
+                if let Some(alt) = alt {
+                    write!(fmt, "{alt}")
+                } else {
+                    write!(fmt, "{raw}")
+                }
+            }
+            Self::IFrame { url } => write!(fmt, "{url}"),
+            Self::Grid { contents, .. } => {
+                let mut first = true;
+                for content in contents {
+                    if first {
+                        first = false;
+                    } else {
+                        write!(fmt, " - ")?;
+                    }
+
+                    write!(fmt, "{content}")?;
+                }
+                Ok(())
+            }
+            Self::Term { cwd } => {
+                write!(fmt, "{cwd}")
+            }
+        }
     }
 }
 
@@ -371,45 +488,6 @@ impl From<PathBuf> for Content {
     }
 }
 
-impl Display for Content {
-    fn fmt(&self, fmt: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::Empty => write!(fmt, "<no content>"),
-            Self::Text { text } => write!(fmt, "{text}"),
-            Self::Html { raw, alt } => {
-                if let Some(alt) = alt {
-                    write!(fmt, "{alt}")
-                } else {
-                    write!(fmt, "{raw}")
-                }
-            }
-            Self::IFrame { url } => write!(fmt, "{url}"),
-            #[cfg(feature = "std")]
-            Self::Term { cwd } => {
-                write!(fmt, "{}", cwd.display())?;
-                Ok(())
-            }
-            Self::HBox {
-                columns: _,
-                contents,
-            }
-            | Self::VBox { rows: _, contents } => {
-                let mut first = false;
-                for content in contents {
-                    if first {
-                        first = false;
-                    } else {
-                        write!(fmt, " - ")?;
-                    }
-
-                    write!(fmt, "{content}")?;
-                }
-                Ok(())
-            }
-        }
-    }
-}
-
 #[cfg(all(test, feature = "std"))]
 #[allow(clippy::expect_used)]
 mod tests {
@@ -422,64 +500,5 @@ mod tests {
             Content::Text { text } => assert_eq!(text, "test string"),
             _ => panic!("Expected Text content"),
         }
-    }
-
-    #[test]
-    fn test_from_path_html() {
-        // Create a temporary HTML file for testing
-        let temp_dir = std::env::temp_dir();
-        let html_path = temp_dir.join("test.html");
-        std::fs::write(&html_path, "<h1>Test HTML</h1>").expect("Failed to write test HTML file");
-
-        let content = Content::from(html_path.as_path());
-        match content {
-            Content::Html { raw, alt } => {
-                assert_eq!(raw, "<h1>Test HTML</h1>");
-                assert_eq!(alt, None);
-            }
-            _ => panic!("Expected HTML content"),
-        }
-
-        // Clean up
-        let _ = std::fs::remove_file(html_path);
-    }
-
-    #[test]
-    fn test_from_path_markdown() {
-        // Create a temporary Markdown file for testing
-        let temp_dir = std::env::temp_dir();
-        let md_path = temp_dir.join("test.md");
-        let markdown_content = "# Test\nThis is **bold** text.";
-        std::fs::write(&md_path, markdown_content).expect("Failed to write test Markdown file");
-
-        let content = Content::from(md_path.as_path());
-        match content {
-            Content::Html { raw, alt } => {
-                assert!(raw.contains("<h1>Test</h1>"));
-                assert!(raw.contains("<strong>bold</strong>"));
-                assert_eq!(alt, Some(String::from(markdown_content)));
-            }
-            _ => panic!("Expected HTML content from Markdown"),
-        }
-
-        // Clean up
-        let _ = std::fs::remove_file(md_path);
-    }
-
-    #[test]
-    fn test_from_path_text() {
-        // Create a temporary text file for testing
-        let temp_dir = std::env::temp_dir();
-        let txt_path = temp_dir.join("test.txt");
-        std::fs::write(&txt_path, "plain text content").expect("Failed to write test text file");
-
-        let content = Content::from(txt_path.as_path());
-        match content {
-            Content::Text { text } => assert_eq!(text, "plain text content"),
-            _ => panic!("Expected Text content"),
-        }
-
-        // Clean up
-        let _ = std::fs::remove_file(txt_path);
     }
 }

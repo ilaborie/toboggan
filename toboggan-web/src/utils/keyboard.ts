@@ -3,8 +3,8 @@
  * Handles keyboard shortcuts for presentation navigation
  */
 
-import { KEYBOARD_SHORTCUTS } from "../constants/index.js";
-import type { Command } from "../types.js";
+import { KEYBOARD_SHORTCUTS } from "../constants";
+import type { Command } from "../types";
 
 export interface KeyboardHandler {
   onCommand: (command: Command) => void;

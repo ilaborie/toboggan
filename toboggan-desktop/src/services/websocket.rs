@@ -36,7 +36,7 @@ impl WebSocketClient {
             renderer: Renderer::Html,
         };
         let register_msg = serde_json::to_string(&register_cmd)?;
-        ws_sender.send(WsMessage::Text(register_msg)).await?;
+        ws_sender.send(WsMessage::Text(register_msg.into())).await?;
 
         let msg_sender_clone = msg_sender.clone();
 
@@ -45,7 +45,7 @@ impl WebSocketClient {
             while let Some(command) = cmd_receiver.recv().await {
                 match serde_json::to_string(&command) {
                     Ok(msg) => {
-                        if let Err(send_error) = ws_sender.send(WsMessage::Text(msg)).await {
+                        if let Err(send_error) = ws_sender.send(WsMessage::Text(msg.into())).await {
                             error!("Failed to send WebSocket message: {}", send_error);
                             let _ = msg_sender_clone
                                 .send(Message::WebSocketError(send_error.to_string()));

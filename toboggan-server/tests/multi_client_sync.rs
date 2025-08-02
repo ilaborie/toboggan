@@ -8,7 +8,7 @@
 use std::time::Duration;
 
 use futures::{SinkExt, StreamExt};
-use toboggan_core::{ClientId, Command, Date, Notification, Renderer, Slide, State, Talk};
+use toboggan_core::{ClientId, Command, Notification, Renderer, Slide, State, Talk, date_utils};
 use toboggan_server::{TobogganState, routes_with_cors};
 use tokio::net::TcpListener;
 use tokio_tungstenite::connect_async;
@@ -20,7 +20,7 @@ static GLOBAL_TEST_COUNTER: std::sync::atomic::AtomicU8 = std::sync::atomic::Ato
 /// Creates a test talk with multiple slides for navigation testing
 fn create_test_talk() -> Talk {
     Talk::new("Multi-Client Sync Test Talk")
-        .with_date(Date::new(2025, 1, 25))
+        .with_date(date_utils::ymd(2025, 1, 25))
         .add_slide(Slide::cover("Cover Slide").with_body("This is the cover slide"))
         .add_slide(
             Slide::new("First Content Slide")

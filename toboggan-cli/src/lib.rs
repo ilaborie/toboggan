@@ -342,8 +342,9 @@ pub fn parse_date_string(date_str: &str) -> anyhow::Result<Date> {
         let day = caps[3]
             .parse::<i8>()
             .with_context(|| format!("invalid day '{}'", &caps[3]))?;
+        let date = Date::new(year, month, day).context("build date")?;
 
-        Ok(Date::new(year, month, day))
+        Ok(date)
     } else {
         bail!("date must be in YYYY-MM-DD format, got '{}'", date_str)
     }
@@ -473,7 +474,7 @@ fn find_date_in_folder(folder: &Path) -> Option<Date> {
                     caps[2].parse::<i8>(),
                     caps[3].parse::<i8>(),
                 ) {
-                    return Some(Date::new(year, month, day));
+                    return Date::new(year, month, day).ok();
                 }
             }
         }

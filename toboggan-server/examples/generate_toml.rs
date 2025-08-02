@@ -4,7 +4,7 @@ use toboggan_core::{Content, Date, Slide, Talk};
 
 fn main() -> anyhow::Result<()> {
     let talk = Talk::new("Peut-on RIIR de tout ?")
-        .with_date(Date::new(2025, 11, 13))
+        .with_date(Date::ymd(2025, 11, 13))
         .add_slide(Slide::cover("Peut-on RIIR de tout ?"))
         .add_slide(slide(
             "Introduction",

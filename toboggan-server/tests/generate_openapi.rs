@@ -5,7 +5,7 @@ use anyhow::Context;
 use clawspec_core::test_client::{TestClient, TestServer, TestServerConfig};
 use clawspec_core::{ApiClient, register_schemas};
 use serde_json::{Value, json};
-use toboggan_core::{Content, Date, Renderer, Slide, SlideId, SlideKind, Style, Talk};
+use toboggan_core::{Content, Renderer, Slide, SlideId, SlideKind, Style, Talk, date_utils};
 use toboggan_server::{TobogganState, routes};
 use utoipa::openapi::{ContactBuilder, InfoBuilder, LicenseBuilder, ServerBuilder};
 
@@ -18,14 +18,11 @@ impl TobogganTestServer {
     fn new() -> Self {
         // Create a test talk
         let talk = Talk::new("Test Presentation")
-            .with_date(Date::new(2025, 1, 20))
+            .with_date(date_utils::ymd(2025, 1, 20))
             .add_slide(Slide::cover("Welcome").with_body("This is a test presentation"))
             .add_slide(
                 Slide::new("Content Slide")
-                    .with_body(Content::html_with_alt(
-                        "<h1>Hello World</h1>",
-                        "Hello World heading",
-                    ))
+                    .with_body(Content::html("<h1>Hello World</h1>"))
                     .with_notes("Some notes for the presenter"),
             )
             .add_slide(Slide::new("Final Slide").with_body(Content::iframe("https://example.com")));

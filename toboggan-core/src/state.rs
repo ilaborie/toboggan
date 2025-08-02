@@ -4,13 +4,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::{SlideId, Timestamp};
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "state")]
 pub enum State {
-    #[default]
     Init,
     Paused {
-        current: SlideId,
+        current: Option<SlideId>,
         total_duration: Duration,
     },
     Running {
@@ -27,15 +26,11 @@ pub enum State {
 impl State {
     #[must_use]
     pub fn current(&self) -> Option<SlideId> {
-        let result = match self {
-            Self::Init => {
-                return None;
-            }
-            Self::Paused { current, .. }
-            | Self::Running { current, .. }
-            | Self::Done { current, .. } => *current,
-        };
-        Some(result)
+        match self {
+            Self::Init => None,
+            Self::Paused { current, .. } => *current,
+            Self::Running { current, .. } | Self::Done { current, .. } => Some(*current),
+        }
     }
 
     #[cfg(feature = "std")]
@@ -78,15 +73,17 @@ impl State {
 
     #[cfg(feature = "std")]
     pub fn auto_resume(&mut self) {
-        let Some(current) = self.current() else {
-            return;
-        };
-        let total_duration = self.calculate_total_duration();
-        *self = Self::Running {
-            since: Timestamp::now(),
-            current,
+        if let Self::Paused {
+            current: Some(slide_id),
             total_duration,
-        };
+        } = self
+        {
+            *self = Self::Running {
+                since: Timestamp::now(),
+                current: *slide_id,
+                total_duration: *total_duration,
+            };
+        }
     }
 
     #[cfg(feature = "std")]
@@ -94,10 +91,11 @@ impl State {
         let total_duration = self.calculate_total_duration();
         match self {
             Self::Init => {
+                // When navigating from Init state, go to Running
                 *self = Self::Running {
                     since: Timestamp::now(),
                     current: slide_id,
-                    total_duration,
+                    total_duration: Duration::ZERO,
                 };
             }
             Self::Running { since, .. } => {
@@ -109,14 +107,14 @@ impl State {
             }
             Self::Paused { .. } => {
                 *self = Self::Paused {
-                    current: slide_id,
+                    current: Some(slide_id),
                     total_duration,
                 };
             }
             Self::Done { .. } => {
                 // When navigating from Done state, go back to Paused
                 *self = Self::Paused {
-                    current: slide_id,
+                    current: Some(slide_id),
                     total_duration,
                 };
             }
@@ -140,6 +138,12 @@ impl State {
     }
 }
 
+impl Default for State {
+    fn default() -> Self {
+        Self::Init
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use alloc::vec;
@@ -155,7 +159,7 @@ mod tests {
         let slide1 = SlideId::next();
 
         let state = State::Paused {
-            current: slide1,
+            current: Some(slide1),
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.current(), Some(slide1));
@@ -183,7 +187,7 @@ mod tests {
 
         // Test with first slide
         let state = State::Paused {
-            current: slide1,
+            current: Some(slide1),
             total_duration: Duration::from_secs(0),
         };
         assert!(state.is_first_slide(&slide_order));
@@ -213,7 +217,7 @@ mod tests {
         let empty_order: Vec<SlideId> = vec![];
 
         let state = State::Paused {
-            current: slide1,
+            current: Some(slide1),
             total_duration: Duration::from_secs(0),
         };
         assert!(!state.is_first_slide(&empty_order));
@@ -226,7 +230,7 @@ mod tests {
         let slide_order = vec![slide1];
 
         let state = State::Paused {
-            current: slide1,
+            current: Some(slide1),
             total_duration: Duration::from_secs(0),
         };
         assert!(state.is_first_slide(&slide_order));
@@ -242,7 +246,7 @@ mod tests {
 
         // Test next from first slide
         let state = State::Paused {
-            current: slide1,
+            current: Some(slide1),
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.next(&slide_order), Some(slide2));
@@ -272,7 +276,7 @@ mod tests {
 
         // Test previous from first slide
         let state = State::Paused {
-            current: slide1,
+            current: Some(slide1),
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.previous(&slide_order), None);
@@ -299,7 +303,7 @@ mod tests {
         let empty_order: Vec<SlideId> = vec![];
 
         let state = State::Paused {
-            current: slide1,
+            current: Some(slide1),
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.next(&empty_order), None);
@@ -312,7 +316,7 @@ mod tests {
         let slide_order = vec![slide1];
 
         let state = State::Paused {
-            current: slide1,
+            current: Some(slide1),
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.next(&slide_order), None);
@@ -324,7 +328,7 @@ mod tests {
         let slide_id = SlideId::next();
 
         let paused_state = State::Paused {
-            current: slide_id,
+            current: Some(slide_id),
             total_duration: Duration::from_secs(10),
         };
 

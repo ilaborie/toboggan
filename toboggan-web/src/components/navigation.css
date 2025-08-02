@@ -1,0 +1,53 @@
+nav {
+    position: relative;
+    border: thick dotted limegreen;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "title status" "title buttons";
+    grid-gap: 1rem 1px;
+}
+
+progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+}
+
+h1 {
+    grid-area: title;
+    outline: thin red;
+}
+
+.buttons {
+    grid-area: buttons;
+    outline: thin blue;
+}
+
+.status {
+    grid-area: status;
+    outline: thin green;
+
+    .duration {
+        visibility: hidden;
+    }
+}
+
+.Running .status {
+    .connection::before {
+        content: '🏃';
+    }
+
+    .duration {
+        visibility: visible;
+    }
+}
+
+/* 
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "reconnecting"
+  | "running"
+  | "paused"
+  | "done"; */

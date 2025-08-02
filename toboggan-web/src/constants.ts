@@ -3,7 +3,7 @@
  * Centralized constants for better maintainability
  */
 
-import type { Command } from "../types.js";
+import type { Command } from "./types.js";
 
 /**
  * Button IDs enum for type safety and maintainability
@@ -21,12 +21,7 @@ export enum ButtonId {
  * Element IDs for DOM access
  */
 export enum ElementId {
-  CONNECTION_STATUS = "connection-status",
-  SLIDE_COUNTER = "slide-counter",
-  DURATION_DISPLAY = "duration-display",
-  ERROR_DISPLAY = "error-display",
   APP = "app",
-  TOAST_CONTAINER = "toast-container",
 }
 
 /**

@@ -3,8 +3,14 @@
  * Manages environment variables with sensible defaults
  */
 
-import type { AppConfig } from "../types.js";
+import { WebSocketConfig } from "./services/communication";
 
+
+
+export interface AppConfig {
+  readonly apiBaseUrl: string;
+  readonly websocket: WebSocketConfig;
+}
 /**
  * Get environment variable with fallback
  */

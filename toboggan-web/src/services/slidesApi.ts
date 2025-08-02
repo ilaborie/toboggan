@@ -3,10 +3,36 @@
  * Handles fetching and caching of slides data
  */
 
-import type { Slide, SlideId, SlidesCache, SlidesResponse } from "../types.js";
+import { Content, Slide, SlideId, Timestamp } from "../types";
+
+/**
+ * API response structures
+ */
+interface TalkResponse {
+  talk: {
+    title: Content;
+    date: string;
+    slides: Slide[];
+  };
+}
+
+interface SlidesResponse {
+  data: { slides: Record<string, Slide> };
+  timestamp: Timestamp;
+}
+
+interface HealthResponse {
+  status: "OK";
+  started_at: Timestamp;
+  elapsed: string;
+  talk: string;
+}
+export interface SlidesApiCallbacks {
+
+}
 
 export class SlidesApiService {
-  private cache: SlidesCache | null = null;
+  // private cache: SlidesCache | null = null;
   private readonly apiBaseUrl: string;
 
   constructor(apiBaseUrl: string) {

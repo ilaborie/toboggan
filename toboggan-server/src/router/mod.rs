@@ -3,17 +3,14 @@ use axum::http::Method;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use toboggan_core::{Command, Notification};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
-use tracing::{error, warn};
+use tracing::error;
 
 use crate::TobogganState;
 
-mod responses;
+mod api;
 mod ws;
-
-pub use responses::*;
 
 pub fn routes() -> Router<TobogganState> {
     routes_with_cors(None)
@@ -26,9 +23,9 @@ pub fn routes_with_cors(allowed_origins: Option<&[String]>) -> Router<TobogganSt
         .nest(
             "/api",
             Router::new()
-                .route("/talk", get(get_talk))
-                .route("/slides", get(get_slides))
-                .route("/command", post(post_command))
+                .route("/talk", get(api::get_talk))
+                .route("/slides", get(api::get_slides))
+                .route("/command", post(api::post_command))
                 .route("/ws", get(ws::websocket_handler)),
         )
         .route("/", get(home))
@@ -52,46 +49,7 @@ async fn health(State(state): State<TobogganState>) -> impl IntoResponse {
         "Health check completed"
     );
 
-    ApiResponse::new(health_data)
-}
-
-async fn get_talk(State(state): State<TobogganState>) -> impl IntoResponse {
-    let talk = state.talk().clone();
-    ApiResponse::new(TalkResponse { talk })
-}
-
-async fn get_slides(State(state): State<TobogganState>) -> impl IntoResponse {
-    // Use Arc clone instead of deep clone for better performance
-    let slides = state.slides_arc().clone();
-    ApiResponse::new(SlidesResponse {
-        slides: (*slides).clone(),
-    })
-}
-
-async fn post_command(
-    State(state): State<TobogganState>,
-    Json(command): Json<Command>,
-) -> impl IntoResponse {
-    let start_time = std::time::Instant::now();
-
-    match state.handle_command(&command).await {
-        Notification::Error { ref message, .. } => {
-            warn!(
-                ?command,
-                duration_ms = start_time.elapsed().as_millis(),
-                "Command failed: {message}"
-            );
-            ErrorResponse::bad_request(message.clone()).into_response()
-        }
-        notification => {
-            tracing::info!(
-                ?command,
-                duration_ms = start_time.elapsed().as_millis(),
-                "Command processed successfully"
-            );
-            ApiResponse::new(notification).into_response()
-        }
-    }
+    Json(health_data)
 }
 
 fn create_cors_layer(allowed_origins: Option<&[String]>) -> CorsLayer {

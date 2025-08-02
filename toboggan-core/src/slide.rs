@@ -12,7 +12,7 @@ use core::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-use crate::Content;
+use crate::{Content, SlideId};
 
 /// A single slide within a presentation.
 ///
@@ -37,9 +37,12 @@ use crate::Content;
 /// // Create a section divider
 /// let section = Slide::part("Chapter 2: Ownership");
 /// ```
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Slide {
+    /// The slide id
+    pub id: SlideId,
+
     /// The kind of slide (Cover, Part, or Standard).
     pub kind: SlideKind,
 
@@ -183,7 +186,7 @@ impl Slide {
 }
 
 /// The kind of slide, which affects its styling and role in the presentation.
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum SlideKind {
     /// Cover slide, typically used for the presentation title page.
@@ -212,7 +215,7 @@ impl Display for Slide {
 /// Contains a list of CSS class names that can be applied to customize
 /// the appearance of individual slides.
 #[cfg(feature = "alloc")]
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Style(Vec<String>);
 
