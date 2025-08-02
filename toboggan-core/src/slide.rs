@@ -4,6 +4,7 @@
 //! individual slides within a presentation. Slides have different kinds
 //! (Cover, Part, Standard) and support styling, content, and speaker notes.
 
+use alloc::format;
 #[cfg(feature = "alloc")]
 use alloc::string::String;
 #[cfg(feature = "alloc")]
@@ -38,6 +39,7 @@ use crate::{Content, SlideId};
 /// let section = Slide::part("Chapter 2: Ownership");
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(default)]
 pub struct Slide {
     /// The slide id

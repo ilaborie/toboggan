@@ -1,6 +1,6 @@
 [workspace]
 members = ["toboggan-*"]
-exclude = ["toboggan-web"]
+exclude = ["toboggan-web", "toboggan-wasm"]
 resolver = "2"
 
 [workspace.package]

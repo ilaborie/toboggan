@@ -3,7 +3,7 @@
  * Centralized constants for better maintainability
  */
 
-import type { Command } from "./types.js";
+import type { Command } from "../types";
 
 /**
  * Button IDs enum for type safety and maintainability

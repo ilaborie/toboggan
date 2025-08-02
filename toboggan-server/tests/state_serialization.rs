@@ -1,6 +1,4 @@
-use core::time::Duration;
-
-use toboggan_core::{SlideId, State, Timestamp, TimestampExt};
+use toboggan_core::{Duration, SlideId, State, Timestamp};
 
 #[test]
 #[allow(clippy::unwrap_used, clippy::print_stdout)] // Acceptable in test code

@@ -3,7 +3,7 @@
  * Manages environment variables with sensible defaults
  */
 
-import { WebSocketConfig } from "./services/communication";
+import { WebSocketConfig } from "./app/communication";
 
 
 

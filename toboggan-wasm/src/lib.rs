@@ -531,6 +531,7 @@ impl TobogganAppState {
             } => state.handle_state_notification(new_state),
             Notification::Error { message, .. } => state.show_error(&message),
             Notification::Pong { .. } => console::log!("Received pong"),
+            Notification::Blink => todo!(),
         }
     }
 

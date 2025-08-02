@@ -20,6 +20,7 @@ pub enum Notification {
     Pong {
         timestamp: Timestamp,
     },
+    Blink,
 }
 
 impl Notification {
@@ -39,5 +40,10 @@ impl Notification {
     pub fn pong() -> Self {
         let timestamp = Timestamp::now();
         Self::Pong { timestamp }
+    }
+
+    #[must_use]
+    pub fn blink() -> Self {
+        Self::Blink
     }
 }

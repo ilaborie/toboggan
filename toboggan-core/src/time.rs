@@ -4,9 +4,43 @@
 //! additional utility methods and trait implementations.
 
 use core::fmt::{self, Display, Formatter};
-use core::time::Duration;
 
 use serde::{Deserialize, Serialize};
+
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Default,
+    Serialize,
+    Deserialize,
+    derive_more::Add,
+)]
+pub struct Duration(core::time::Duration);
+
+impl Duration {
+    pub const ZERO: Self = Self(core::time::Duration::ZERO);
+
+    #[must_use]
+    pub fn from_secs(secs: u64) -> Self {
+        Self(core::time::Duration::from_secs(secs))
+    }
+
+    #[must_use]
+    pub fn from_millis(millis: u64) -> Self {
+        Self(core::time::Duration::from_millis(millis))
+    }
+}
+
+impl From<Duration> for core::time::Duration {
+    fn from(value: Duration) -> Self {
+        value.0
+    }
+}
 
 /// Wrapper around `jiff::Timestamp` with additional utility methods.
 ///
@@ -26,7 +60,9 @@ impl Timestamp {
     #[must_use]
     pub fn elapsed(&self) -> Duration {
         let signed_duration = jiff::Timestamp::now().duration_since(self.0);
-        TryInto::<Duration>::try_into(signed_duration).unwrap_or(Duration::ZERO)
+        let duration = TryInto::<core::time::Duration>::try_into(signed_duration)
+            .unwrap_or(core::time::Duration::ZERO);
+        Duration(duration)
     }
 }
 
@@ -75,5 +111,85 @@ impl Date {
 impl Display for Date {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> fmt::Result {
         Display::fmt(&self.0, fmt)
+    }
+}
+
+#[cfg(feature = "openapi")]
+mod openapi {
+    use std::borrow::Cow;
+
+    use utoipa::openapi::KnownFormat;
+    use utoipa::openapi::schema::Schema;
+    use utoipa::openapi::{ObjectBuilder, RefOr, SchemaFormat, Type};
+    use utoipa::{PartialSchema, ToSchema};
+
+    use super::{Date, Duration, Timestamp};
+
+    impl ToSchema for Duration {
+        fn name() -> Cow<'static, str> {
+            Cow::Borrowed("Duration")
+        }
+    }
+
+    impl PartialSchema for Duration {
+        fn schema() -> RefOr<Schema> {
+            RefOr::T(Schema::Object(
+                ObjectBuilder::new()
+                    .schema_type(Type::Object)
+                    .property(
+                        "secs",
+                        RefOr::T(Schema::Object(
+                            ObjectBuilder::new()
+                                .schema_type(Type::Number)
+                                .format(Some(SchemaFormat::KnownFormat(KnownFormat::Int64)))
+                                .build(),
+                        )),
+                    )
+                    .property(
+                        "nanos",
+                        RefOr::T(Schema::Object(
+                            ObjectBuilder::new()
+                                .schema_type(Type::Number)
+                                .format(Some(SchemaFormat::KnownFormat(KnownFormat::Int64)))
+                                .build(),
+                        )),
+                    )
+                    .build(),
+            ))
+        }
+    }
+
+    impl ToSchema for Timestamp {
+        fn name() -> Cow<'static, str> {
+            Cow::Borrowed("Timestamp")
+        }
+    }
+
+    impl PartialSchema for Timestamp {
+        fn schema() -> RefOr<Schema> {
+            RefOr::T(Schema::Object(
+                ObjectBuilder::new()
+                    .schema_type(Type::String)
+                    .format(Some(SchemaFormat::KnownFormat(KnownFormat::DateTime)))
+                    .build(),
+            ))
+        }
+    }
+
+    impl ToSchema for Date {
+        fn name() -> Cow<'static, str> {
+            Cow::Borrowed("Date")
+        }
+    }
+
+    impl PartialSchema for Date {
+        fn schema() -> RefOr<Schema> {
+            RefOr::T(Schema::Object(
+                ObjectBuilder::new()
+                    .schema_type(Type::String)
+                    .format(Some(SchemaFormat::KnownFormat(KnownFormat::Date)))
+                    .build(),
+            ))
+        }
     }
 }

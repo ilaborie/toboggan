@@ -9,48 +9,48 @@ export type ClientId = string;
 /**
  * Commands that can be sent to the server
  */
-export interface FirstCommand {
+export type FirstCommand = {
     command: "First";
-}
+};
 
-export interface LastCommand {
+export type LastCommand = {
     command: "Last";
-}
+};
 
-export interface NextCommand {
+export type NextCommand = {
     command: "Next";
-}
+};
 
-export interface PreviousCommand {
+export type PreviousCommand = {
     command: "Previous";
-}
+};
 
-export interface GoToCommand {
+export type GoToCommand = {
     command: "GoTo";
     0: SlideId;
-}
+};
 
-export interface PauseCommand {
+export type PauseCommand = {
     command: "Pause";
-}
+};
 
-export interface ResumeCommand {
+export type ResumeCommand = {
     command: "Resume";
-}
+};
 
-export interface RegisterCommand {
+export type RegisterCommand = {
     command: "Register";
     client: ClientId;
-}
+};
 
-export interface UnregisterCommand {
+export type UnregisterCommand = {
     command: "Unregister";
     client: ClientId;
-}
+};
 
-export interface PingCommand {
+export type PingCommand = {
     command: "Ping";
-}
+};
 
 export type Command =
     | FirstCommand

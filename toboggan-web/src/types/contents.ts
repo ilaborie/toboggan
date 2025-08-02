@@ -2,31 +2,31 @@
 /**
  * Content types for slide content
  */
-export interface EmptyContent {
+export type EmptyContent = {
     type: "Empty";
-}
+};
 
-export interface TextContent {
+export type TextContent = {
     type: "Text";
     text: string;
-}
+};
 
-export interface HtmlContent {
+export type HtmlContent = {
     type: "Html";
     raw: string;
     alt: string;
-}
+};
 
-export interface MdContent {
+export type MdContent = {
     type: "Md";
     content: string;
     alt?: string;
-}
+};
 
-export interface IFrameContent {
+export type IFrameContent = {
     type: "IFrame";
     url: string;
     alt?: string;
-}
+};
 
 export type Content = EmptyContent | TextContent | HtmlContent | MdContent | IFrameContent;

@@ -4,11 +4,13 @@
 //! rich content within slides. Content can be text, HTML, embedded iframes,
 //! terminal sessions (std only), or layout containers.
 
+use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt::Display;
 #[cfg(feature = "std")]
 use std::path::{Path, PathBuf};
+use std::string::ToString;
 
 use serde::{Deserialize, Serialize};
 
@@ -18,11 +20,7 @@ use crate::Style;
 ///
 /// A simple wrapper around `PathBuf` for std environments and `String` for `no_std` environments.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[cfg(feature = "std")]
-pub struct WorkingDirectory(PathBuf);
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[cfg(not(feature = "std"))]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct WorkingDirectory(String);
 
 impl WorkingDirectory {
@@ -34,27 +32,6 @@ impl WorkingDirectory {
     /// Returns the path as a string slice.
     #[must_use]
     pub fn as_str(&self) -> &str {
-        #[cfg(feature = "std")]
-        {
-            self.0.to_str().unwrap_or("")
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            &self.0
-        }
-    }
-
-    /// Returns the underlying `PathBuf` (only available with `std` feature).
-    #[cfg(feature = "std")]
-    #[must_use]
-    pub fn as_path_buf(&self) -> &PathBuf {
-        &self.0
-    }
-
-    /// Returns the underlying Path (only available with `std` feature).
-    #[cfg(feature = "std")]
-    #[must_use]
-    pub fn as_path(&self) -> &Path {
         &self.0
     }
 }
@@ -65,45 +42,9 @@ impl Display for WorkingDirectory {
     }
 }
 
-#[cfg(feature = "std")]
-impl From<String> for WorkingDirectory {
-    fn from(path: String) -> Self {
-        Self(PathBuf::from(path))
-    }
-}
-
-#[cfg(not(feature = "std"))]
-impl From<String> for WorkingDirectory {
-    fn from(path: String) -> Self {
-        Self(path)
-    }
-}
-
-#[cfg(feature = "std")]
-impl From<&str> for WorkingDirectory {
-    fn from(path: &str) -> Self {
-        Self(PathBuf::from(path))
-    }
-}
-
-#[cfg(not(feature = "std"))]
 impl From<&str> for WorkingDirectory {
     fn from(path: &str) -> Self {
         Self(path.to_string())
-    }
-}
-
-#[cfg(feature = "std")]
-impl From<PathBuf> for WorkingDirectory {
-    fn from(path: PathBuf) -> Self {
-        Self(path)
-    }
-}
-
-#[cfg(feature = "std")]
-impl From<&Path> for WorkingDirectory {
-    fn from(path: &Path) -> Self {
-        Self(path.to_path_buf())
     }
 }
 
@@ -124,6 +65,7 @@ impl From<&Path> for WorkingDirectory {
 /// let html = Content::html("<img src='chart.png' alt='Sales chart showing upward trend'>");
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(tag = "type")]
 pub enum Content {
     /// Empty content (default).

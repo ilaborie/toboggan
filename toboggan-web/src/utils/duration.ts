@@ -3,6 +3,8 @@
  * Handles time display formatting using Intl.DateTimeFormat
  */
 
+/// <reference path="../types/intl-duration-format.d.ts" />
+
 import { Duration } from "../types";
 
 const LANG = 'FR';

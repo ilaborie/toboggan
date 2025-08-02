@@ -1,17 +1,16 @@
 #[cfg(test)]
 #[allow(clippy::module_inception, clippy::unwrap_used)]
 mod tests {
-    use std::time::Duration;
 
     use toboggan_core::{
-        ClientId, Command, Notification, Renderer, Slide, SlideId, State, Talk, date_utils,
+        ClientId, Command, Date, Duration, Notification, Renderer, Slide, SlideId, State, Talk,
     };
 
     use crate::TobogganState;
 
     fn create_test_talk() -> Talk {
         Talk::new("Test Talk")
-            .with_date(date_utils::ymd(2025, 1, 1))
+            .with_date(Date::ymd(2025, 1, 1))
             .add_slide(Slide::cover("Cover Slide"))
             .add_slide(Slide::new("Second Slide"))
             .add_slide(Slide::new("Third Slide"))
@@ -468,16 +467,16 @@ mod tests {
 
         // Pause to capture current duration
         let pause_notification = state.handle_command(&Command::Pause).await;
-        let paused_duration = match pause_notification {
-            Notification::State {
-                state: State::Paused { total_duration, .. },
-                ..
-            } => total_duration,
-            _ => panic!("Expected Paused state"),
+        let Notification::State {
+            state: State::Paused { total_duration, .. },
+            ..
+        } = pause_notification
+        else {
+            panic!("Expected Paused state");
         };
 
         // Verify we have some accumulated duration
-        assert!(paused_duration > Duration::from_secs(0));
+        assert!(total_duration > Duration::from_secs(0));
 
         // Now go to first slide - this should reset the timestamp
         let first_notification = state.handle_command(&Command::First).await;

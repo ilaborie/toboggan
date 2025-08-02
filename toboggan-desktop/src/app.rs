@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use iced::widget::{button, column, container, row, text};
-use iced::{Application, Element, Length, Theme, keyboard, Command};
+use iced::{Application, Command, Element, Length, Theme, keyboard};
 use toboggan_core::{ClientId, Command as TobogganCommand, Slide, SlideId, State, Talk};
 use tracing::{error, info};
 
@@ -265,6 +265,7 @@ impl TobogganApp {
             Notification::Error { message, .. } => {
                 self.error_message = Some(message);
             }
+            Notification::Blink => todo!(),
         }
     }
 

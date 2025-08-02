@@ -186,6 +186,7 @@ impl App {
             Notification::Error { message, .. } => {
                 self.state.error_message = Some(message);
             }
+            Notification::Blink => todo!(),
         }
         Ok(())
     }

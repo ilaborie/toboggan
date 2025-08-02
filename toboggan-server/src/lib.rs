@@ -4,11 +4,15 @@ use std::path::Path;
 use std::time::Duration;
 
 use anyhow::Context;
-use toboggan_core::Talk;
 use tracing::{info, instrument, warn};
+
+use toboggan_core::Talk;
 
 mod settings;
 pub use self::settings::*;
+
+mod error;
+pub use self::error::*;
 
 mod domain;
 pub use self::domain::*;

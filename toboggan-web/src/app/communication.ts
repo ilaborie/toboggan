@@ -1,33 +1,47 @@
 /**
  * Real-time Communication Service
- * Manages WebSocket connection lifecycle, message handling, and latency monitoring
+ * Manages WebSocket connection life cycle, message handling, and latency monitoring
  */
 
-import { COMMANDS, DEFAULTS } from "../constants.js";
-import type { ClientId, Command, ConnectionStatus, Notification, State, WebSocketConfig } from "../types.js";
+import { COMMANDS, DEFAULTS } from "../utils/constants";
+import type { ClientId, Command, Notification, State, } from "../types/index";
 
 export interface CommunicationCallbacks {
   onConnectionStatusChange: (status: ConnectionStatus) => void;
   onStateChange: (state: State) => void;
   onError: (error: string) => void;
-
-  onReconnecting: (attempt: number, maxAttempts: number, delaySeconds: number) => void;
-  onMaxRetriesReached: () => void;
-  onLatencyUpdate: (latency: number) => void;
 }
+
+export type Connecting = { status: "connecting" };
+export type Connected = { status: "connected", latency?: number };
+export type Closed = { status: "closed" };
+export type Reconnecting = { status: "reconnecting", attempt: number, maxAttempts: number, delaySeconds: number };
+export type Error = { status: "error", message: string };
 
 /**
  * Connection status types
  */
 export type ConnectionStatus =
-  | "connecting"
-  | "connected"
-  | "disconnected"
-  | "reconnecting"
-  | "running"
-  | "paused"
-  | "done";
+  | Connecting
+  | Connected
+  | Reconnecting
+  | Closed
+  | Error;
 
+export const formatConnectionStatus = (status: ConnectionStatus): string => {
+  switch (status.status) {
+    case "connecting":
+      return "Connecting...";
+    case "connected":
+      return `🛜 Connected ${status.latency ? `${status.latency}ms` : ''}`;
+    case "reconnecting":
+      return `Reconnecting in ${status.delaySeconds}s ${status.attempt}/${status.maxAttempts}`;
+    case "closed":
+      return 'Closed';
+    case "error":
+      return `Error: ${status.message}`;
+  }
+};
 
 /**
  * WebSocket configuration
@@ -66,6 +80,7 @@ export class CommunicationService {
     if (this.isDisposed) return;
 
     try {
+      this.callbacks.onConnectionStatusChange({ status: "connecting" });
       this.ws = new WebSocket(this.config.wsUrl);
 
       this.ws.onopen = () => this.handleOpen();
@@ -103,11 +118,7 @@ export class CommunicationService {
    * Register this client with the server
    */
   public register(): void {
-    this.sendCommand({
-      command: "Register",
-      client: this.clientId,
-      renderer: "Html",
-    });
+    this.sendCommand({ command: "Register", client: this.clientId, });
   }
 
   /**
@@ -123,11 +134,10 @@ export class CommunicationService {
   }
 
   private handleOpen(): void {
-    console.log("WebSocket connected");
     this.connectionRetryCount = 0;
     this.retryDelay = this.config.initialRetryDelay;
     this.startPinging();
-    this.callbacks.onConnectionStatusChange("connected");
+    this.callbacks.onConnectionStatusChange({ status: "connected" });
   }
 
   private handleMessage(event: MessageEvent<string>): void {
@@ -156,7 +166,7 @@ export class CommunicationService {
   private handleClose(): void {
     console.log("WebSocket connection closed");
     this.stopPinging();
-    this.callbacks.onConnectionStatusChange("done");
+    this.callbacks.onConnectionStatusChange({ status: "closed" });
     if (!this.isDisposed) {
       this.scheduleReconnect();
     }
@@ -164,19 +174,23 @@ export class CommunicationService {
 
   private handleError(): void {
     console.error("WebSocket error occurred");
+    this.callbacks.onConnectionStatusChange({ status: "error", message: "WebSocket error occurred" })
     this.callbacks.onError("Connection error occurred");
   }
 
   private scheduleReconnect(): void {
     if (this.connectionRetryCount >= this.config.maxRetries) {
-      this.callbacks.onMaxRetriesReached();
+      this.callbacks.onConnectionStatusChange({ status: "error", message: `Max retries reached! (${this.config.maxRetries})` });
       return;
     }
 
     this.connectionRetryCount++;
     const delaySeconds = this.retryDelay / 1000;
 
-    this.callbacks.onReconnecting(this.connectionRetryCount, this.config.maxRetries, delaySeconds);
+    this.callbacks.onConnectionStatusChange({
+      status: "reconnecting",
+      attempt: this.connectionRetryCount, maxAttempts: this.config.maxRetries, delaySeconds
+    });
 
     setTimeout(() => {
       if (!this.isDisposed) {
@@ -225,7 +239,7 @@ export class CommunicationService {
     // Clean up old pings after timeout
     setTimeout(() => {
       this.pendingPings.delete(pingId);
-    }, 10000); // 10 seconds timeout
+    }, 10_000); // 10 seconds timeout
   }
 
   /**
@@ -247,7 +261,7 @@ export class CommunicationService {
       const latency = receivedTime - sentTime;
 
       this.pendingPings.delete(pingId);
-      this.callbacks.onLatencyUpdate(latency);
+      this.callbacks.onConnectionStatusChange({ status: "connected", latency });
 
       console.log(`Ping latency: ${latency}ms`);
     }

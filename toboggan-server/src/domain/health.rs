@@ -1,10 +1,9 @@
-use std::time::Duration;
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-use serde::Serialize;
+use toboggan_core::{Duration, Timestamp};
 
-use toboggan_core::Timestamp;
-
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HealthResponse {
     pub status: HealthResponseStatus,
     pub started_at: Timestamp,
@@ -13,7 +12,7 @@ pub struct HealthResponse {
     pub active_clients: usize,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub enum HealthResponseStatus {
     Ok,
     Oops,

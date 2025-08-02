@@ -4,22 +4,22 @@ import { Timestamp } from "./times";
 /**
  * Notifications sent by the server
  */
-export interface StateNotification {
+export type StateNotification = {
     type: "State";
     timestamp: Timestamp;
     state: State;
-}
+};
 
-export interface ErrorNotification {
+export type ErrorNotification = {
     type: "Error";
     timestamp: Timestamp;
     message: string;
-}
+};
 
-export interface PongNotification {
+export type PongNotification = {
     type: "Pong";
     timestamp: Timestamp;
-}
+};
 
 
 export type Notification = StateNotification | ErrorNotification | PongNotification;

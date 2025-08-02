@@ -1,8 +1,6 @@
-use core::time::Duration;
-
 use serde::{Deserialize, Serialize};
 
-use crate::{SlideId, Timestamp};
+use crate::{Duration, SlideId, Timestamp};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "state")]
@@ -95,7 +93,7 @@ impl State {
                 *self = Self::Running {
                     since: Timestamp::now(),
                     current: slide_id,
-                    total_duration: Duration::ZERO,
+                    total_duration: Duration::default(),
                 };
             }
             Self::Running { since, .. } => {
@@ -125,7 +123,7 @@ impl State {
     #[must_use]
     pub fn calculate_total_duration(&self) -> Duration {
         match self {
-            Self::Init => Duration::ZERO,
+            Self::Init => Duration::default(),
             Self::Paused { total_duration, .. } | Self::Done { total_duration, .. } => {
                 *total_duration
             }

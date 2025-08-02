@@ -57,6 +57,8 @@ pub enum Command {
     // Pause/Resume
     Pause,
     Resume,
+    // Effects
+    Blink,
     // Ping
     Ping,
 }

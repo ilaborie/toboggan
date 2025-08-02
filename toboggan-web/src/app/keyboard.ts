@@ -3,7 +3,7 @@
  * Handles keyboard shortcuts for presentation navigation
  */
 
-import { KEYBOARD_SHORTCUTS } from "../constants";
+import { KEYBOARD_SHORTCUTS } from "../utils/constants";
 import type { Command } from "../types";
 
 export interface KeyboardHandler {

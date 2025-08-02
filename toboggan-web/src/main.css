@@ -1,0 +1,11 @@
+body {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    max-height: 100vh;
+    height: 100vh;
+    max-width: 100vw;
+    overflow: hidden;
+    gap: 1rem;
+    padding: 1rem;
+    ;
+}

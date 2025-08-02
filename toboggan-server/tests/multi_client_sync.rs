@@ -5,14 +5,15 @@
 #![allow(clippy::match_wildcard_for_single_variants)]
 #![allow(clippy::too_many_lines)]
 
-use std::time::Duration;
-
 use futures::{SinkExt, StreamExt};
-use toboggan_core::{ClientId, Command, Notification, Renderer, Slide, State, Talk, date_utils};
-use toboggan_server::{TobogganState, routes_with_cors};
 use tokio::net::TcpListener;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::protocol::Message as TungsteniteMessage;
+
+use toboggan_core::{
+    ClientId, Command, Date, Duration, Notification, Renderer, Slide, State, Talk,
+};
+use toboggan_server::{TobogganState, routes_with_cors};
 
 // Global test counter to ensure unique SlideId ranges per test
 static GLOBAL_TEST_COUNTER: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
@@ -20,7 +21,7 @@ static GLOBAL_TEST_COUNTER: std::sync::atomic::AtomicU8 = std::sync::atomic::Ato
 /// Creates a test talk with multiple slides for navigation testing
 fn create_test_talk() -> Talk {
     Talk::new("Multi-Client Sync Test Talk")
-        .with_date(date_utils::ymd(2025, 1, 25))
+        .with_date(Date::ymd(2025, 1, 25))
         .add_slide(Slide::cover("Cover Slide").with_body("This is the cover slide"))
         .add_slide(
             Slide::new("First Content Slide")
@@ -52,7 +53,7 @@ async fn create_test_server() -> (String, TobogganState) {
     });
 
     // Give the server a moment to start
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     (server_url, state)
 }
@@ -195,7 +196,7 @@ async fn wait_for_recent_notification(
     after_timestamp: Option<toboggan_core::Timestamp>,
 ) -> Result<Notification, Box<dyn std::error::Error + Send + Sync>> {
     // Use timeout to avoid waiting indefinitely
-    let timeout = tokio::time::timeout(Duration::from_millis(timeout_ms), async {
+    let timeout = tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), async {
         loop {
             if let Some(msg) = ws_receiver.next().await {
                 let msg = msg?;
@@ -404,7 +405,7 @@ async fn test_two_clients_navigation_sync() {
     println!("Client 2 ID: {:?}", client2_id);
 
     // Wait a bit to ensure both clients are fully connected and get initial state
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     // Test 1: Client 1 navigates to next slide, Client 2 should receive the update
     println!("\n=== Test 1: Client 1 navigates next ===");

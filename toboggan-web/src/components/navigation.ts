@@ -5,10 +5,11 @@ import navigationCss from "./navigation.css?raw";
  * Native web component that handles presentation navigation controls
  */
 
-import type { Command, Duration, StateState } from "../types";
-import { COMMANDS } from "../constants.js";
-import { elapsed } from "../utils/duration.js";
-import { ConnectionStatus } from "../services/communication.js";
+import type { Command, Duration, StateState, Talk } from "../types";
+import { COMMANDS } from "../utils/constants";
+import { elapsed } from "../utils/duration";
+import { ConnectionStatus, formatConnectionStatus } from "../app/communication";
+import { renderContent } from "./slide";
 
 export interface NavigationState {
   connectionStatus?: string;
@@ -46,21 +47,20 @@ export class TobogganNavigationElement extends HTMLElement {
   }
 
   private talkElement!: HTMLElement;
-  private _talk: string = "";
-  public get talk(): string {
+  private _talk: Talk | null = null;
+  public get talk(): Talk | null {
     return this._talk;
   }
-  public set talk(value: string) {
+  public set talk(value: Talk) {
     console.log('👋', { talk: value });
     this._talk = value;
     if (this.talkElement) {
-      this.talkElement.className = value ?? 'none';
-      this.talkElement.textContent = value;
+      this.talkElement.innerHTML = renderContent(value.title);
     }
   }
 
   private connectionStatusElement!: HTMLElement;
-  private _connectionStatus: ConnectionStatus = "paused";
+  private _connectionStatus: ConnectionStatus = { status: 'closed' };
   public get connectionStatus(): ConnectionStatus {
     return this._connectionStatus;
   }
@@ -68,8 +68,8 @@ export class TobogganNavigationElement extends HTMLElement {
     console.log('👋', { connectionStatus: value });
     this._connectionStatus = value;
     if (this.connectionStatusElement) {
-      this.connectionStatusElement.className = value ?? 'none';
-      this.connectionStatusElement.textContent = value;
+      this.connectionStatusElement.className = value.status ?? 'none';
+      this.connectionStatusElement.textContent = formatConnectionStatus(value);
     }
   }
 
@@ -107,18 +107,29 @@ export class TobogganNavigationElement extends HTMLElement {
 
   private durationElement!: HTMLElement;
   private _duration: Duration | null = null;
+  private interval: number | null = null
   public get duration(): Duration | null {
     return this._duration;
   }
   public set duration(value: Duration | null) {
     console.log('👋', { duration: value });
     this._duration = value;
-    if (this.durationElement) {
-      if (value) {
-        this.durationElement.textContent = elapsed(value);
-      } else {
-        this.durationElement.textContent = '';
-      }
+
+    if (this.interval !== null) {
+      clearInterval(this.interval);
+      this.interval = null;
+    }
+
+    if (value) {
+      this.interval = setInterval(() => {
+        if (this._duration && this.durationElement) {
+          this._duration.secs += 1;
+          this.durationElement.textContent = elapsed(this._duration);
+        }
+
+      }, 1000);
+    } else if (this.durationElement) {
+      this.durationElement.textContent = '';
     }
   }
 
@@ -141,7 +152,7 @@ export class TobogganNavigationElement extends HTMLElement {
     ).join('\n ');
 
     this.navigationElement.innerHTML = `
-<progress></progress>
+<progress value="0"></progress>
 <h1></h1>
 <div class="buttons>${buttons}</div>
 <div class="status">

@@ -22,12 +22,12 @@ tower-http = { workspace = true, features = ["trace", "cors"] }
 futures = { workspace = true }
 dashmap = { workspace = true }
 derive_more = { workspace = true, features = ["display",  "error"]}
+utoipa = { workspace = true }
 
 [dev-dependencies]
 toboggan-core = { path = "../toboggan-core", features = ["openapi", "test-utils"] }
 clawspec-core = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-utoipa = { workspace = true }
 tokio-tungstenite = "0.21"
 
 [[test]]

@@ -22,6 +22,7 @@ once_cell = { workspace = true }
 getrandom = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 pulldown-cmark = { workspace = true, optional = true }
+derive_more = {workspace = true, features = ["add"]}
 
 [lints]
 workspace = true

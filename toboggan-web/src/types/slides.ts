@@ -10,10 +10,14 @@ export type SlideId = number;
 /**
  * Slide structure
  */
-export interface Slide {
+export type Slide = {
     kind: "Cover" | "Part" | "Standard";
     style: string[];
     title: Content;
     body: Content;
     notes: Content;
-}
+};
+
+export type SlidesResponse = {
+    slides: Slide[];
+};

@@ -12,21 +12,19 @@ progress {
     top: 0;
     left: 0;
     right: 0;
+    transform: translateY(-50%);
 }
 
 h1 {
     grid-area: title;
-    outline: thin red;
 }
 
 .buttons {
     grid-area: buttons;
-    outline: thin blue;
 }
 
 .status {
     grid-area: status;
-    outline: thin green;
 
     .duration {
         visibility: hidden;

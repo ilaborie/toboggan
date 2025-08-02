@@ -1,12 +1,14 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 use dashmap::DashMap;
-use toboggan_core::{ClientId, Command, Notification, Slide, SlideId, State, Talk, Timestamp};
 use tokio::sync::{RwLock, watch};
 use tracing::{info, warn};
 
-use crate::{HealthResponse, HealthResponseStatus};
+use toboggan_core::{
+    ClientId, Command, Duration, Notification, Slide, SlideId, State, Talk, Timestamp,
+};
+
+use crate::{ApiError, HealthResponse, HealthResponseStatus};
 
 #[derive(Clone)]
 pub struct TobogganState {
@@ -99,13 +101,13 @@ impl TobogganState {
     pub async fn register_client(
         &self,
         client_id: ClientId,
-    ) -> Result<watch::Receiver<Notification>, &'static str> {
+    ) -> Result<watch::Receiver<Notification>, ApiError> {
         // Clean up disconnected clients first
         self.cleanup_disconnected_clients();
 
         // Check client limit
         if self.clients.len() >= self.max_clients {
-            return Err("Maximum number of clients exceeded");
+            return Err(ApiError::TooManyClients);
         }
 
         // Get the current state to send to the new client
@@ -145,7 +147,7 @@ impl TobogganState {
         }
     }
 
-    pub async fn cleanup_clients_task(&self, cleanup_interval: Duration) {
+    pub async fn cleanup_clients_task(&self, cleanup_interval: std::time::Duration) {
         let mut interval = tokio::time::interval(cleanup_interval);
 
         loop {
@@ -184,7 +186,7 @@ impl TobogganState {
                 *state = State::Running {
                     since: Timestamp::now(),
                     current: self.slide_order.first().copied().expect("a first slide"),
-                    total_duration: Duration::ZERO,
+                    total_duration: Duration::default(),
                 };
             }
             State::Paused { .. } => {
@@ -193,7 +195,7 @@ impl TobogganState {
                     *state = State::Running {
                         since: Timestamp::now(),
                         current: first_slide,
-                        total_duration: Duration::ZERO,
+                        total_duration: Duration::default(),
                     };
                 }
             }
@@ -204,7 +206,7 @@ impl TobogganState {
                         *state = State::Running {
                             since: Timestamp::now(),
                             current: first_slide,
-                            total_duration: Duration::ZERO,
+                            total_duration: Duration::default(),
                         };
                     }
                 }
@@ -397,6 +399,11 @@ impl TobogganState {
         Notification::state(state.clone())
     }
 
+    fn command_blink() -> Notification {
+        // Blink command creates a blink notification without changing state
+        Notification::blink()
+    }
+
     pub async fn handle_command(&self, command: &Command) -> Notification {
         let start_time = std::time::Instant::now();
         let mut state = self.current_state.write().await;
@@ -418,6 +425,7 @@ impl TobogganState {
             Command::Previous => self.command_previous(&mut state),
             Command::Pause => Self::command_pause(&mut state),
             Command::Resume => Self::command_resume(&mut state),
+            Command::Blink => Self::command_blink(),
             Command::Ping => Notification::pong(),
         };
 
