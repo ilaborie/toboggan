@@ -31,15 +31,15 @@ export type ConnectionStatus =
 export const formatConnectionStatus = (status: ConnectionStatus): string => {
   switch (status.status) {
     case "connecting":
-      return "Connecting...";
+      return "📡 Connecting...";
     case "connected":
       return `🛜 Connected ${status.latency ? `${status.latency}ms` : ''}`;
     case "reconnecting":
-      return `Reconnecting in ${status.delaySeconds}s ${status.attempt}/${status.maxAttempts}`;
+      return `⛓️‍💥 Reconnecting in ${status.delaySeconds}s ${status.attempt}/${status.maxAttempts}`;
     case "closed":
-      return 'Closed';
+      return '🚪 Closed';
     case "error":
-      return `Error: ${status.message}`;
+      return `💥 Error: ${status.message}`;
   }
 };
 
@@ -263,7 +263,7 @@ export class CommunicationService {
       this.pendingPings.delete(pingId);
       this.callbacks.onConnectionStatusChange({ status: "connected", latency });
 
-      console.log(`Ping latency: ${latency}ms`);
+      console.log(`⏳ Ping latency: ${latency}ms`);
     }
   }
 }

@@ -1,6 +1,5 @@
 :host {
-    border: thick dotted yellow;
-
+    border: thick dotted purple;
 }
 
 .toaster {
@@ -12,25 +11,24 @@
     right: 0;
 
     display: grid;
-    gap: var(--space-md);
+    gap: .5rem;
     justify-items: end;
     justify-content: end;
 }
 
-
 output {
-    --duration: 30s;
+    --duration: 10s;
     --travel-distance: 0;
 
     will-change: transform;
-    animation: fade-in .3s ease slide-in .3s ease fade-out .3s ease var(--duration);
+    animation: fade-in .3s ease, slide-in .3s ease, fade-out .3s ease var(--duration);
     max-inline-size: min(40ch 50vw);
-    padding: 8px 16px;
-    border-radius: 4px;
-    border: 2px solid currentColor;
+    padding: .5rem 1rem;
+    border-radius: .25rem;
+    border: .125rem solid currentColor;
     display: grid;
     grid-template-columns: 1fr 1.5rem;
-    gap: 16px;
+    gap: 1rem;
 
     strong {
         text-transform: capitalize;

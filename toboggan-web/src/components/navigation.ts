@@ -52,7 +52,6 @@ export class TobogganNavigationElement extends HTMLElement {
     return this._talk;
   }
   public set talk(value: Talk) {
-    console.log('👋', { talk: value });
     this._talk = value;
     if (this.talkElement) {
       this.talkElement.innerHTML = renderContent(value.title);
@@ -65,7 +64,6 @@ export class TobogganNavigationElement extends HTMLElement {
     return this._connectionStatus;
   }
   public set connectionStatus(value: ConnectionStatus) {
-    console.log('👋', { connectionStatus: value });
     this._connectionStatus = value;
     if (this.connectionStatusElement) {
       this.connectionStatusElement.className = value.status ?? 'none';
@@ -79,7 +77,6 @@ export class TobogganNavigationElement extends HTMLElement {
     return this._slideCurrent;
   }
   public set slideCurrent(value: number | null) {
-    console.log('👋', { current: value });
     this._slideCurrent = value;
     if (this.slideCurrentElement) {
       this.slideCurrentElement.textContent = value?.toString() ?? '-';
@@ -95,7 +92,6 @@ export class TobogganNavigationElement extends HTMLElement {
     return this._slideCount;
   }
   public set slideCount(value: number | null) {
-    console.log('👋', { count: value });
     this._slideCount = value;
     if (this.slideCountElement) {
       this.slideCountElement.textContent = value?.toString() ?? '-';
@@ -112,7 +108,6 @@ export class TobogganNavigationElement extends HTMLElement {
     return this._duration;
   }
   public set duration(value: Duration | null) {
-    console.log('👋', { duration: value });
     this._duration = value;
 
     if (this.interval !== null) {
@@ -146,6 +141,7 @@ export class TobogganNavigationElement extends HTMLElement {
 
   connectedCallback(): void {
     this.navigationElement = document.createElement("nav");
+    this.navigationElement.dataset.theme = 'dark';
 
     const buttons = BUTTONS.map(({ id, label, title, icon, command }) =>
       `<button id="${id}-btn" aria-label="${label}" title="${title}" data-command="${command.command}">${icon}</button>`
@@ -165,6 +161,7 @@ export class TobogganNavigationElement extends HTMLElement {
   <span class="duration"></duration>
 </div>
 `;
+
     this.root.appendChild(this.navigationElement);
     this.talkElement = this.navigationElement.querySelector("h1")!;
     this.connectionStatusElement = this.navigationElement.querySelector(".connection")!;

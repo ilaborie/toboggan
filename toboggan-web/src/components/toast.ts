@@ -37,6 +37,7 @@ export class TobogganToastElement extends HTMLElement {
   }
 
   public async toast(type: ToastType, messages: string): Promise<void> {
+    console.log('🥪', type, messages);
     if (!this.toastContainer) {
       return;
     }
@@ -59,10 +60,11 @@ export class TobogganToastElement extends HTMLElement {
 
     const node = document.createElement("output");
     node.setAttribute("role", "status");
-    node.classList.add(type, `pico-background-${colorClass}-600`);
+    node.style.backgroundColor = `var(--pico-color-${colorClass}-600)`;
+    node.style.color = `var(--pico-color-light)`;
     node.innerHTML = `
 <p>${messages}</p>
-<button class="close" title="close">
+<button class="close" title="close" style="color:inherit;">
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" class="icon-close"><path d="M18 6l-12 12"></path><path d="M6 6l12 12"></path></svg>
 </button>
 `;

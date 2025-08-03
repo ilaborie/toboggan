@@ -5,6 +5,9 @@ import { SlideId } from "./slides";
  */
 export type ClientId = string;
 
+export interface CommandHandler {
+    onCommand: (command: Command) => void;
+}
 
 /**
  * Commands that can be sent to the server

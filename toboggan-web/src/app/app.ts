@@ -1,32 +1,33 @@
-
 import { KeyboardModule } from "./keyboard";
 import { TobogganNavigationElement } from "../components/navigation";
 import { TobogganToastElement } from "../components/toast";
-import { Command, SlideId, State, Talk } from "../types";
+import { Command, CommandHandler, State, Talk } from "../types";
 import { AppConfig } from "../config";
-import { renderContent, TobogganSlideElement } from "../components";
+import { TobogganSlideElement } from "../components";
 import { CommunicationCallbacks, CommunicationService, ConnectionStatus, formatConnectionStatus } from "./communication";
 import { SlidesApiService } from "./api";
 
-export class TobogganApp implements CommunicationCallbacks {
-    private readonly elements: PresentationElements;
+export class TobogganApp implements CommunicationCallbacks, CommandHandler {
+    private readonly navigationElement: TobogganNavigationElement;
+    private readonly slideElement: TobogganSlideElement;
+    private readonly toastElement: TobogganToastElement;
+
     private readonly keyboardModule: KeyboardModule;
     private readonly communicationService: CommunicationService;
     private readonly slidesApi: SlidesApiService;
 
     private talk: Talk | null = null;
-    private currentSlide: SlideId | null = null;
+    private state: State | null = null;
 
     constructor(appConfig: AppConfig) {
-        this.elements = {
-            navigationElement: getRequireElement<TobogganNavigationElement>("toboggan-navigation"),
-            slideElement: getRequireElement<TobogganSlideElement>("toboggan-slide"),
-            toastElement: getRequireElement<TobogganToastElement>("toboggan-toast"),
-        };
-        const clientId = crypto.randomUUID();
+        const { clientId, apiBaseUrl, websocket } = appConfig;
+        this.navigationElement = getRequireElement("toboggan-navigation");
+        this.slideElement = getRequireElement("toboggan-slide");
+        this.toastElement = getRequireElement("toboggan-toast");
+
         this.keyboardModule = new KeyboardModule(this);
-        this.slidesApi = new SlidesApiService(appConfig.apiBaseUrl);
-        this.communicationService = new CommunicationService(clientId, appConfig.websocket, this);
+        this.slidesApi = new SlidesApiService(apiBaseUrl);
+        this.communicationService = new CommunicationService(clientId, websocket, this);
 
         this.start();
     }
@@ -37,71 +38,82 @@ export class TobogganApp implements CommunicationCallbacks {
         this.talk = await this.slidesApi.getTalk();
 
         if (this.talk) {
-            this.elements.navigationElement.talk = this.talk;
-            this.elements.navigationElement.slideCount = this.talk.titles.length;
+            this.navigationElement.talk = this.talk;
+            this.navigationElement.slideCount = this.talk.titles.length;
         }
     }
 
-    /**
-     * Handle commands from keyboard and navigation modules
-    */
     public onCommand(command: Command): void {
         this.communicationService.sendCommand(command);
     }
 
     onConnectionStatusChange(status: ConnectionStatus) {
-        this.elements.navigationElement.connectionStatus = status;
-        this.elements.toastElement.toast("info", formatConnectionStatus(status));
+        console.log('📡', { status });
+        this.navigationElement.connectionStatus = status;
 
-        if (status.status === "connected") {
-            this.communicationService.register();
+        const message = formatConnectionStatus(status);
+        switch (status.status) {
+            case "connecting":
+                this.toastElement.toast("info", message);
+                break;
+            case "connected":
+                if (!status.latency) {
+                    this.toastElement.toast("info", message);
+                    this.communicationService.register();
+                }
+                break;
+            case "reconnecting":
+                this.toastElement.toast("warning", message);
+                console.log();
+                break;
+            case "closed":
+                console.log('🚪 Closed');
+                break;
+            case "error":
+                this.onError(status.message);
+                break;
         }
     }
 
     async onStateChange(state: State) {
-        this.elements.navigationElement.state = state.state;
-        this.elements.navigationElement.slideCurrent = state.current;
-        this.elements.navigationElement.duration = state.total_duration;
+        console.log('🗽', { state });
+        this.state = state;
+
+        this.navigationElement.state = state.state;
+        this.navigationElement.slideCurrent = state.current;
+        this.navigationElement.duration = state.total_duration;
 
         if (state.state === 'Done') {
-            this.elements.toastElement.toast('success', '🎉 Done');
+            this.toastElement.toast('success', '🎉 Done');
         }
-
-        this.currentSlide = state.current;
 
         // Load and display slide
         await this.loadCurrentSlide();
     }
 
     onError(message: string) {
+        console.log('🚨', { message });
         console.error("PresentationController error:", message);
-        this.elements.toastElement.toast('error', message);
+        this.toastElement.toast('error', message);
     }
 
     private async loadCurrentSlide(): Promise<void> {
-        if (this.currentSlide === null) return;
+        const currentSlide = this.state?.current;
+        if (typeof currentSlide !== 'number') return;
 
         try {
-            const slide = await this.slidesApi.getSlide(this.currentSlide);
-            this.elements.navigationElement.slideCurrent = (this.currentSlide !== null) ? this.currentSlide + 1 : null;
-            this.elements.slideElement.slide = slide;
+            const slide = await this.slidesApi.getSlide(currentSlide);
+            this.slideElement.slide = slide;
+            this.navigationElement.slideCurrent = currentSlide + 1;
         } catch (error) {
-            this.elements.toastElement.toast("error", `Failed to load slide:${error}`);
+            this.toastElement.toast("error", `Failed to load slide:${error}`);
         }
     }
-    /**
-     * Dispose of the application resources
-     */
+
     public dispose(): void {
         this.keyboardModule.dispose();
         this.communicationService.dispose();
     }
-}
-
-export interface PresentationElements {
-    navigationElement: TobogganNavigationElement;
-    slideElement: TobogganSlideElement;
-    toastElement: TobogganToastElement;
 }
 
 const getRequireElement = <E extends HTMLElement>(selector: string): E => {

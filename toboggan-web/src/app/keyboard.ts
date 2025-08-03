@@ -4,17 +4,14 @@
  */
 
 import { KEYBOARD_SHORTCUTS } from "../utils/constants";
-import type { Command } from "../types";
+import type { CommandHandler } from "../types";
 
-export interface KeyboardHandler {
-  onCommand: (command: Command) => void;
-}
 
 export class KeyboardModule {
-  private readonly handler: KeyboardHandler;
+  private readonly handler: CommandHandler;
   private isActive = false;
 
-  constructor(handler: KeyboardHandler) {
+  constructor(handler: CommandHandler) {
     this.handler = handler;
   }
 

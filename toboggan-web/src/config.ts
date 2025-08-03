@@ -4,10 +4,11 @@
  */
 
 import { WebSocketConfig } from "./app/communication";
-
+import { ClientId } from "./types";
 
 
 export interface AppConfig {
+  readonly clientId: ClientId
   readonly apiBaseUrl: string;
   readonly websocket: WebSocketConfig;
 }
@@ -31,18 +32,18 @@ function getEnvNumber(key: keyof ImportMetaEnv, defaultValue: number): number {
  * Create application configuration from environment variables
  */
 export function createAppConfig(): AppConfig {
-  const wsBaseUrl = getEnvVar("VITE_WS_BASE_URL", "ws://localhost:8080");
+  const clientId = crypto.randomUUID();
   const apiBaseUrl = getEnvVar("VITE_API_BASE_URL", "http://localhost:8080");
 
-  return {
-    apiBaseUrl,
-    websocket: {
-      wsUrl: `${wsBaseUrl}/api/ws`,
-      maxRetries: getEnvNumber("VITE_WS_MAX_RETRIES", 5),
-      initialRetryDelay: getEnvNumber("VITE_WS_INITIAL_RETRY_DELAY", 1000),
-      maxRetryDelay: getEnvNumber("VITE_WS_MAX_RETRY_DELAY", 30000),
-    },
+  const wsBaseUrl = getEnvVar("VITE_WS_BASE_URL", "ws://localhost:8080");
+  const websocket = {
+    wsUrl: `${wsBaseUrl}/api/ws`,
+    maxRetries: getEnvNumber("VITE_WS_MAX_RETRIES", 5),
+    initialRetryDelay: getEnvNumber("VITE_WS_INITIAL_RETRY_DELAY", 1000),
+    maxRetryDelay: getEnvNumber("VITE_WS_MAX_RETRY_DELAY", 30000),
   };
+
+  return { clientId, apiBaseUrl, websocket };
 }
 
 /**

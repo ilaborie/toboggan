@@ -45,6 +45,7 @@ export class TobogganSlideElement extends HTMLElement {
 
     connectedCallback(): void {
         this.slideContainer = document.createElement("div");
+        this.root.appendChild(this.slideContainer);
     }
 
     disconnectedCallback(): void {

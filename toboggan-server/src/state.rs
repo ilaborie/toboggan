@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use dashmap::DashMap;
@@ -13,7 +14,8 @@ use crate::{ApiError, HealthResponse, HealthResponseStatus};
 #[derive(Clone)]
 pub struct TobogganState {
     started_at: Timestamp,
-    talk: Arc<Talk>,
+    talk: Talk,
+    slides: HashMap<SlideId, Slide>,
     slide_order: Vec<SlideId>,
     current_state: Arc<RwLock<State>>,
     clients: Arc<DashMap<ClientId, watch::Sender<Notification>>>,
@@ -29,7 +31,6 @@ impl TobogganState {
     #[must_use]
     pub fn new(talk: Talk, max_clients: usize) -> Self {
         let started = Timestamp::now();
-        let talk = Arc::new(talk);
 
         let slide_data: Vec<_> = talk
             .slides
@@ -50,13 +51,15 @@ impl TobogganState {
                 .join("\n")
         );
 
-        let slide_order: Vec<SlideId> = slide_data.iter().map(|(id, _)| *id).collect();
+        let slide_order = slide_data.iter().map(|(id, _)| *id).collect();
+        let slides = slide_data.into_iter().collect();
         let current_state = State::default(); // Init state
         let current_state = Arc::new(RwLock::new(current_state));
 
         Self {
             started_at: started,
             talk,
+            slides,
             slide_order,
             current_state,
             clients: Arc::new(DashMap::new()),
@@ -86,6 +89,10 @@ impl TobogganState {
 
     pub(crate) fn slides(&self) -> Vec<Slide> {
         self.talk().slides.clone()
+    }
+
+    pub(crate) fn slide_by_id(&self, id: SlideId) -> Option<Slide> {
+        self.slides.get(&id).cloned()
     }
 
     pub(crate) async fn current_state(&self) -> State {

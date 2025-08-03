@@ -1,11 +1,12 @@
 use std::time::Instant;
 
 use axum::Json;
-use axum::extract::State;
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use tracing::{info, warn};
 
-use toboggan_core::{Command, Notification};
+use toboggan_core::{Command, Notification, SlideId};
 
 use crate::{SlidesResponse, TalkResponse, TobogganState};
 
@@ -21,6 +22,13 @@ pub(super) async fn get_slides(State(state): State<TobogganState>) -> impl IntoR
     let result = SlidesResponse { slides };
 
     Json(result)
+}
+
+pub(super) async fn get_slide_by_id(
+    State(state): State<TobogganState>,
+    Path(id): Path<SlideId>,
+) -> impl IntoResponse {
+    state.slide_by_id(id).map(Json).ok_or(StatusCode::NOT_FOUND)
 }
 
 pub(super) async fn post_command(
