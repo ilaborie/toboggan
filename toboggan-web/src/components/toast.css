@@ -1,76 +1,68 @@
-:host {
-    border: thick dotted purple;
-}
-
 .toaster {
-    position: fixed;
-    z-index: 1;
-    inset-block-end: 0;
-    padding-inline-end: 16px;
-    padding-block-end: 16px;
-    right: 0;
-
-    display: grid;
-    gap: .5rem;
-    justify-items: end;
-    justify-content: end;
+  display: grid;
+  gap: 0.5rem;
+  justify-items: end;
+  justify-content: end;
 }
 
 output {
-    --duration: 10s;
-    --travel-distance: 0;
+  --duration: 10s;
+  --travel-distance: 0;
 
-    will-change: transform;
-    animation: fade-in .3s ease, slide-in .3s ease, fade-out .3s ease var(--duration);
-    max-inline-size: min(40ch 50vw);
-    padding: .5rem 1rem;
-    border-radius: .25rem;
-    border: .125rem solid currentColor;
-    display: grid;
-    grid-template-columns: 1fr 1.5rem;
-    gap: 1rem;
+  will-change: transform;
+  animation:
+    fade-in 0.3s ease,
+    slide-in 0.3s ease,
+    fade-out 0.3s ease var(--duration);
+  max-inline-size: min(40ch 50vw);
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  border: 0.125rem solid currentColor;
+  display: grid;
+  grid-template-columns: 1fr 1.5rem;
+  gap: 1rem;
 
-    strong {
-        text-transform: capitalize;
-    }
+  strong {
+    text-transform: capitalize;
+  }
 
-    p {
-        margin: 0;
-    }
+  p {
+    margin: 0;
+  }
 }
 
 button {
-    background: transparent;
-    border: thin solid transparent;
-    border-radius: 4px;
-    --size: 24px;
-    width: var(--size);
-    height: var(--size);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 0;
-    align-self: baseline;
+  background: transparent;
+  border: thin solid transparent;
+  border-radius: 4px;
+  --size: 24px;
+  width: var(--size);
+  height: var(--size);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  align-self: baseline;
 
-    &:focus &:active &:hover {
-        box-shadow: none;
-    }
+  &:focus &:active &:hover {
+    box-shadow: none;
+  }
 }
 
 @keyframes fade-in {
-    from {
-        opacity: 0;
-    }
+  from {
+    opacity: 0;
+  }
 }
 
 @keyframes fade-out {
-    to {
-        opacity: 0;
-    }
+  to {
+    opacity: 0;
+  }
 }
 
 @keyframes slide-in {
-    from {
-        transform: translateY(var(--travel-distance 10px));
-    }
+  from {
+    transform: translateY(var(--travel-distance 10px));
+  }
 }

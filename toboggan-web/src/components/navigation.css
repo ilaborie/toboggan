@@ -1,44 +1,43 @@
 nav {
-    position: relative;
-    border: thick dotted limegreen;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-areas: "title status" "title buttons";
-    grid-gap: 1rem 1px;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "title status" "title buttons";
+  grid-gap: 1rem 1px;
 }
 
 progress {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    transform: translateY(-50%);
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
 }
 
 h1 {
-    grid-area: title;
+  grid-area: title;
 }
 
 .buttons {
-    grid-area: buttons;
+  grid-area: buttons;
 }
 
 .status {
-    grid-area: status;
+  grid-area: status;
 
-    .duration {
-        visibility: hidden;
-    }
+  .duration {
+    visibility: hidden;
+  }
 }
 
 .Running .status {
-    .connection::before {
-        content: '🏃';
-    }
+  .connection::before {
+    content: "🏃";
+  }
 
-    .duration {
-        visibility: visible;
-    }
+  .duration {
+    visibility: visible;
+  }
 }
 
 /* 

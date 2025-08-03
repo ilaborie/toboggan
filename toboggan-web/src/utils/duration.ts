@@ -5,10 +5,9 @@
 
 /// <reference path="../types/intl-duration-format.d.ts" />
 
-import { Duration } from "../types";
+import type { Duration } from "../types";
 
-const LANG = 'FR';
-
+const LANG = "FR";
 
 /**
  * Format duration in seconds to HH:MM:SS format
@@ -49,7 +48,6 @@ export function calculateStartTime(since: string, durationSecs: number): Date {
   const totalDurationMs = durationSecs * 1000;
   return new Date(sinceDate.getTime() - totalDurationMs);
 }
-
 
 export function elapsed(duration: Duration): string {
   let delta = duration.secs;

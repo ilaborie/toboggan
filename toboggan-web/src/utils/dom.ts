@@ -3,7 +3,6 @@
  * Provides type-safe DOM element access
  */
 
-
 /**
  * Escape HTML to prevent XSS attacks
  */
@@ -25,3 +24,14 @@ export function injectStyle(node: Element | ShadowRoot, css?: string) {
     node.appendChild(style);
   }
 }
+
+export const getRequireElement = <E extends HTMLElement>(
+  selector: string,
+  parent: ParentNode = document
+): E => {
+  const result = parent.querySelector(selector);
+  if (!result) {
+    throw new Error(`missing ${selector} element`);
+  }
+  return result as E;
+};

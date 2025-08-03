@@ -1,11 +1,27 @@
 body {
-    display: grid;
-    grid-template-rows: auto 1fr auto;
-    max-height: 100vh;
-    height: 100vh;
-    max-width: 100vw;
-    overflow: hidden;
-    gap: 1rem;
-    padding: 1rem;
-    ;
+  position: relative;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 100vh;
+  height: 100vh;
+  max-width: 100vw;
+  overflow: hidden;
+}
+
+body > * {
+  margin: 1rem;
+}
+
+toboggan-slide {
+  flex: 1 0 auto;
+}
+
+toboggan-toast {
+  position: fixed;
+  z-index: 1;
+  inset-block-end: 0;
+  padding-inline-end: 1rem;
+  padding-block-end: 1rem;
+  right: 0;
 }

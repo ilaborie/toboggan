@@ -3,7 +3,7 @@
  * Handles fetching and caching of slides data
  */
 
-import { Slide, SlideId, SlidesResponse, Talk } from "../types";
+import type { Slide, SlideId, SlidesResponse, Talk } from "../types";
 
 export class SlidesApiService {
   private readonly apiBaseUrl: string;
@@ -22,7 +22,7 @@ export class SlidesApiService {
   }
 
   public async getTalk(): Promise<Talk> {
-    return await this.get('api/talk');
+    return await this.get("api/talk");
   }
 
   public async getSlides(): Promise<Slide[]> {
@@ -33,5 +33,4 @@ export class SlidesApiService {
   public async getSlide(slideId: SlideId): Promise<Slide> {
     return await this.get(`api/slides/${slideId}`);
   }
-
 }

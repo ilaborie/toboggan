@@ -1,3 +1,4 @@
+import { getRequireElement } from "../utils/dom";
 import toastCss from "./toast.css?raw";
 
 /**
@@ -37,26 +38,26 @@ export class TobogganToastElement extends HTMLElement {
   }
 
   public async toast(type: ToastType, messages: string): Promise<void> {
-    console.log('🥪', type, messages);
+    console.log("🥪", type, messages);
     if (!this.toastContainer) {
       return;
     }
 
-    let colorClass = '';
+    let colorClass = "";
     switch (type) {
-      case 'error':
-        colorClass = 'red';
+      case "error":
+        colorClass = "red";
         break;
-      case 'warning':
-        colorClass = 'pumpkin';
+      case "warning":
+        colorClass = "pumpkin";
         break;
-      case 'info':
-        colorClass = 'blue';
+      case "info":
+        colorClass = "blue";
         break;
-      case 'success':
-        colorClass = 'green';
+      case "success":
+        colorClass = "green";
         break;
-    };
+    }
 
     const node = document.createElement("output");
     node.setAttribute("role", "status");
@@ -69,7 +70,7 @@ export class TobogganToastElement extends HTMLElement {
 </button>
 `;
 
-    const btn = node.querySelector("button")!;
+    const btn = getRequireElement("button", node);
     btn.addEventListener("click", () => {
       try {
         this.toastContainer?.removeChild(node);
@@ -86,29 +87,25 @@ export class TobogganToastElement extends HTMLElement {
       const last = this.toastContainer.offsetHeight;
       const invert = last - first;
       this.toastContainer.animate(
-        [
-          { transform: `translateY(${invert}px)` },
-          { transform: "translateY(0)" },
-        ],
+        [{ transform: `translateY(${invert}px)` }, { transform: "translateY(0)" }],
         {
           duration: 150,
           easing: "ease-out",
-        },
+        }
       );
     } else {
       this.toastContainer.appendChild(node);
     }
 
     // wait the animation ends
-    const allFinished = node.getAnimations()
-      .map((animation) => animation.finished);
+    const allFinished = node.getAnimations().map((animation) => animation.finished);
     await Promise.allSettled(allFinished);
 
     // remove the element
     try {
       this.toastContainer.removeChild(node);
-    } catch (e) {
-      // swallow e
+    } catch (_err) {
+      // swallow error
     }
   }
 }

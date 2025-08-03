@@ -3,9 +3,8 @@
  * Handles keyboard shortcuts for presentation navigation
  */
 
-import { KEYBOARD_SHORTCUTS } from "../utils/constants";
 import type { CommandHandler } from "../types";
-
+import { KEYBOARD_SHORTCUTS } from "../utils/constants";
 
 export class KeyboardModule {
   private readonly handler: CommandHandler;

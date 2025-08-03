@@ -5,28 +5,53 @@ import navigationCss from "./navigation.css?raw";
  * Native web component that handles presentation navigation controls
  */
 
+import { type ConnectionStatus, formatConnectionStatus } from "../app/communication";
 import type { Command, Duration, StateState, Talk } from "../types";
 import { COMMANDS } from "../utils/constants";
+import { getRequireElement } from "../utils/dom";
 import { elapsed } from "../utils/duration";
-import { ConnectionStatus, formatConnectionStatus } from "../app/communication";
 import { renderContent } from "./slide";
 
-export interface NavigationState {
-  connectionStatus?: string;
-  slideCounter?: string;
-  duration?: string;
-  presentationTitle?: string;
-}
-
-export type NaviationCommandEvent = CustomEvent<Command>;
+export type NavigationCommandEvent = CustomEvent<Command>;
 
 const BUTTONS = [
-  { id: "first", label: "Go to first slide", title: "First slide", icon: "🏠", command: COMMANDS.FIRST },
-  { id: "prev", label: "Go to previous slide", title: "Previous slide", icon: "⬅️", command: COMMANDS.PREVIOUS },
+  {
+    id: "first",
+    label: "Go to first slide",
+    title: "First slide",
+    icon: "🏠",
+    command: COMMANDS.FIRST,
+  },
+  {
+    id: "prev",
+    label: "Go to previous slide",
+    title: "Previous slide",
+    icon: "⬅️",
+    command: COMMANDS.PREVIOUS,
+  },
   { id: "next", label: "Go to next slide", title: "Next slide", icon: "➡️", command: COMMANDS.NEXT },
-  { id: "last", label: "Go to last slide", title: "Last slide", icon: "🏁", command: COMMANDS.LAST },
+  {
+    id: "last",
+    label: "Go to last slide",
+    title: "Last slide",
+    icon: "🏁",
+    command: COMMANDS.LAST,
+  },
   { id: "pause", label: "Pause presentation", title: "Pause", icon: "⏸️", command: COMMANDS.PAUSE },
-  { id: "resume", label: "Resume presentation", title: "Resume", icon: "▶️", command: COMMANDS.RESUME },
+  {
+    id: "resume",
+    label: "Resume presentation",
+    title: "Resume",
+    icon: "▶️",
+    command: COMMANDS.RESUME,
+  },
+  {
+    id: "blink",
+    label: "Blink",
+    title: "Blink",
+    icon: "🛎️",
+    command: COMMANDS.BLINK,
+  },
 ];
 
 /**
@@ -43,7 +68,7 @@ export class TobogganNavigationElement extends HTMLElement {
   }
   public set state(value: StateState | null) {
     this._state = value;
-    this.navigationElement.className = value ?? 'none';
+    this.navigationElement.className = value ?? "none";
   }
 
   private talkElement!: HTMLElement;
@@ -59,14 +84,14 @@ export class TobogganNavigationElement extends HTMLElement {
   }
 
   private connectionStatusElement!: HTMLElement;
-  private _connectionStatus: ConnectionStatus = { status: 'closed' };
+  private _connectionStatus: ConnectionStatus = { status: "closed" };
   public get connectionStatus(): ConnectionStatus {
     return this._connectionStatus;
   }
   public set connectionStatus(value: ConnectionStatus) {
     this._connectionStatus = value;
     if (this.connectionStatusElement) {
-      this.connectionStatusElement.className = value.status ?? 'none';
+      this.connectionStatusElement.className = value.status ?? "none";
       this.connectionStatusElement.textContent = formatConnectionStatus(value);
     }
   }
@@ -79,7 +104,7 @@ export class TobogganNavigationElement extends HTMLElement {
   public set slideCurrent(value: number | null) {
     this._slideCurrent = value;
     if (this.slideCurrentElement) {
-      this.slideCurrentElement.textContent = value?.toString() ?? '-';
+      this.slideCurrentElement.textContent = value?.toString() ?? "-";
     }
     if (value && this.progressElement) {
       this.progressElement.value = value;
@@ -94,7 +119,7 @@ export class TobogganNavigationElement extends HTMLElement {
   public set slideCount(value: number | null) {
     this._slideCount = value;
     if (this.slideCountElement) {
-      this.slideCountElement.textContent = value?.toString() ?? '-';
+      this.slideCountElement.textContent = value?.toString() ?? "-";
     }
     if (value && this.progressElement) {
       this.progressElement.max = value;
@@ -103,7 +128,7 @@ export class TobogganNavigationElement extends HTMLElement {
 
   private durationElement!: HTMLElement;
   private _duration: Duration | null = null;
-  private interval: number | null = null
+  private interval: number | null = null;
   public get duration(): Duration | null {
     return this._duration;
   }
@@ -121,10 +146,9 @@ export class TobogganNavigationElement extends HTMLElement {
           this._duration.secs += 1;
           this.durationElement.textContent = elapsed(this._duration);
         }
-
       }, 1000);
     } else if (this.durationElement) {
-      this.durationElement.textContent = '';
+      this.durationElement.textContent = "";
     }
   }
 
@@ -141,16 +165,17 @@ export class TobogganNavigationElement extends HTMLElement {
 
   connectedCallback(): void {
     this.navigationElement = document.createElement("nav");
-    this.navigationElement.dataset.theme = 'dark';
+    this.navigationElement.dataset.theme = "dark";
 
-    const buttons = BUTTONS.map(({ id, label, title, icon, command }) =>
-      `<button id="${id}-btn" aria-label="${label}" title="${title}" data-command="${command.command}">${icon}</button>`
-    ).join('\n ');
+    const buttons = BUTTONS.map(
+      ({ id, label, title, icon, command }) =>
+        `<button id="${id}-btn" aria-label="${label}" title="${title}" data-command="${command.command}">${icon}</button>`
+    ).join("\n ");
 
     this.navigationElement.innerHTML = `
 <progress value="0"></progress>
 <h1></h1>
-<div class="buttons>${buttons}</div>
+<div class="buttons">${buttons}</div>
 <div class="status">
   <span class="connection"></span>
   <span class="state"></span>
@@ -158,37 +183,39 @@ export class TobogganNavigationElement extends HTMLElement {
     <span class="slide"></span>
     <span class="count"></span>
   </div>
-  <span class="duration"></duration>
+  <span class="duration"></span>
 </div>
 `;
 
     this.root.appendChild(this.navigationElement);
-    this.talkElement = this.navigationElement.querySelector("h1")!;
-    this.connectionStatusElement = this.navigationElement.querySelector(".connection")!;
-    this.progressElement = this.navigationElement.querySelector("progress")!;
-    this.slideCurrentElement = this.navigationElement.querySelector(".slide")!;
-    this.slideCountElement = this.navigationElement.querySelector(".count")!;
-    this.durationElement = this.navigationElement.querySelector(".duration")!;
+    this.talkElement = getRequireElement("h1", this.navigationElement);
+    this.connectionStatusElement = getRequireElement(".connection", this.navigationElement);
+    this.progressElement = getRequireElement("progress", this.navigationElement);
+    this.slideCurrentElement = getRequireElement(".slide", this.navigationElement);
+    this.slideCountElement = getRequireElement(".count", this.navigationElement);
+    this.durationElement = getRequireElement(".duration", this.navigationElement);
     this.listener = (event) => {
-      const command = (event.target as HTMLElement).getAttribute("data-command");
-      if (command) {
-        console.log('📡 command', command);
-        this.dispatchEvent(new CustomEvent('command', { detail: command }));
+      const commandName = (event.target as HTMLElement).getAttribute("data-command");
+      if (commandName) {
+        const command = BUTTONS.find((b) => b.command.command === commandName)?.command;
+        if (command) {
+          console.log("📡 command", command);
+          this.dispatchEvent(new CustomEvent("command", { detail: command }));
+        }
       }
     };
-    this.navigationElement.addEventListener('click', this.listener);
+    this.navigationElement.addEventListener("click", this.listener);
   }
 
   disconnectedCallback(): void {
     if (this.navigationElement) {
       if (this.listener) {
-        this.navigationElement.removeEventListener('click', this.listener);
+        this.navigationElement.removeEventListener("click", this.listener);
       }
       this.root.removeChild(this.navigationElement);
     }
   }
 }
-
 
 // Register the custom element
 if (!customElements.get("toboggan-navigation")) {
@@ -198,5 +225,9 @@ if (!customElements.get("toboggan-navigation")) {
 declare global {
   interface HTMLElementTagNameMap {
     "toboggan-navigation": TobogganNavigationElement;
+  }
+
+  interface HTMLElementEventMap {
+    command: NavigationCommandEvent;
   }
 }

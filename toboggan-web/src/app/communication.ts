@@ -3,41 +3,45 @@
  * Manages WebSocket connection life cycle, message handling, and latency monitoring
  */
 
+import type { ClientId, Command, Notification, State } from "../types/index";
+import { playChime } from "../utils/audio";
 import { COMMANDS, DEFAULTS } from "../utils/constants";
-import type { ClientId, Command, Notification, State, } from "../types/index";
 
-export interface CommunicationCallbacks {
+export type CommunicationCallbacks = {
   onConnectionStatusChange: (status: ConnectionStatus) => void;
   onStateChange: (state: State) => void;
   onError: (error: string) => void;
-}
+};
 
 export type Connecting = { status: "connecting" };
-export type Connected = { status: "connected", latency?: number };
+export type Connected = { status: "connected" };
+export type Latency = { status: "latency"; latency: number };
 export type Closed = { status: "closed" };
-export type Reconnecting = { status: "reconnecting", attempt: number, maxAttempts: number, delaySeconds: number };
-export type Error = { status: "error", message: string };
+export type Reconnecting = {
+  status: "reconnecting";
+  attempt: number;
+  maxAttempts: number;
+  delaySeconds: number;
+};
+export type Error = { status: "error"; message: string };
 
 /**
  * Connection status types
  */
-export type ConnectionStatus =
-  | Connecting
-  | Connected
-  | Reconnecting
-  | Closed
-  | Error;
+export type ConnectionStatus = Connecting | Latency | Connected | Reconnecting | Closed | Error;
 
 export const formatConnectionStatus = (status: ConnectionStatus): string => {
   switch (status.status) {
     case "connecting":
       return "📡 Connecting...";
     case "connected":
-      return `🛜 Connected ${status.latency ? `${status.latency}ms` : ''}`;
+      return "🛜 Connected";
+    case "latency":
+      return `⏳ Ping latency ${status.latency}ms`;
     case "reconnecting":
       return `⛓️‍💥 Reconnecting in ${status.delaySeconds}s ${status.attempt}/${status.maxAttempts}`;
     case "closed":
-      return '🚪 Closed';
+      return "🚪 Closed";
     case "error":
       return `💥 Error: ${status.message}`;
   }
@@ -46,12 +50,12 @@ export const formatConnectionStatus = (status: ConnectionStatus): string => {
 /**
  * WebSocket configuration
  */
-export interface WebSocketConfig {
+export type WebSocketConfig = {
   readonly wsUrl: string;
   readonly maxRetries: number;
   readonly initialRetryDelay: number;
   readonly maxRetryDelay: number;
-}
+};
 
 export class CommunicationService {
   private ws: WebSocket | null = null;
@@ -62,9 +66,6 @@ export class CommunicationService {
   private retryDelay: number;
   private isDisposed = false;
   private pingInterval: number | null = null;
-  private pendingPings = new Map<number, number>(); // timestamp -> sent time
-  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Used in sendPing method for ping ID generation
-  private pingCounter = 0;
 
   constructor(clientId: ClientId, config: WebSocketConfig, callbacks: CommunicationCallbacks) {
     this.clientId = clientId;
@@ -104,12 +105,11 @@ export class CommunicationService {
     }
 
     try {
+      // console.log("📤 Sending command:", command);
       const message = JSON.stringify(command);
-      console.log("Sending command:", command);
       this.ws.send(message);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      console.error("Failed to send command:", error);
       this.callbacks.onError(`Failed to send command: ${errorMessage}`);
     }
   }
@@ -118,7 +118,7 @@ export class CommunicationService {
    * Register this client with the server
    */
   public register(): void {
-    this.sendCommand({ command: "Register", client: this.clientId, });
+    this.sendCommand({ command: "Register", client: this.clientId });
   }
 
   /**
@@ -143,7 +143,7 @@ export class CommunicationService {
   private handleMessage(event: MessageEvent<string>): void {
     try {
       const notification: Notification = JSON.parse(event.data);
-      console.log("Received notification:", notification);
+      // console.log("📥 Received notification:", notification);
 
       switch (notification.type) {
         case "State":
@@ -155,11 +155,12 @@ export class CommunicationService {
         case "Pong":
           this.handlePong(notification.timestamp);
           break;
+        case "Blink":
+          playChime();
+          break;
       }
-
     } catch (error) {
-      console.error("Failed to parse notification:", error);
-      this.callbacks.onError("Failed to parse server message");
+      this.callbacks.onError(`Failed to parse server message: ${error}`);
     }
   }
 
@@ -174,13 +175,19 @@ export class CommunicationService {
 
   private handleError(): void {
     console.error("WebSocket error occurred");
-    this.callbacks.onConnectionStatusChange({ status: "error", message: "WebSocket error occurred" })
+    this.callbacks.onConnectionStatusChange({
+      status: "error",
+      message: "WebSocket error occurred",
+    });
     this.callbacks.onError("Connection error occurred");
   }
 
   private scheduleReconnect(): void {
     if (this.connectionRetryCount >= this.config.maxRetries) {
-      this.callbacks.onConnectionStatusChange({ status: "error", message: `Max retries reached! (${this.config.maxRetries})` });
+      this.callbacks.onConnectionStatusChange({
+        status: "error",
+        message: `Max retries reached! (${this.config.maxRetries})`,
+      });
       return;
     }
 
@@ -189,7 +196,9 @@ export class CommunicationService {
 
     this.callbacks.onConnectionStatusChange({
       status: "reconnecting",
-      attempt: this.connectionRetryCount, maxAttempts: this.config.maxRetries, delaySeconds
+      attempt: this.connectionRetryCount,
+      maxAttempts: this.config.maxRetries,
+      delaySeconds,
     });
 
     setTimeout(() => {
@@ -223,47 +232,21 @@ export class CommunicationService {
       clearInterval(this.pingInterval);
       this.pingInterval = null;
     }
-    this.pendingPings.clear();
   }
 
   /**
    * Send a ping command to measure latency
    */
   private sendPing(): void {
-    const pingId = ++this.pingCounter;
-    const sentTime = Date.now();
-
-    this.pendingPings.set(pingId, sentTime);
+    console.time("ping-latency");
     this.sendCommand(COMMANDS.PING);
-
-    // Clean up old pings after timeout
-    setTimeout(() => {
-      this.pendingPings.delete(pingId);
-    }, 10_000); // 10 seconds timeout
   }
 
   /**
    * Handle pong response and calculate latency
    */
   private handlePong(_serverTimestamp: string): void {
-    const receivedTime = Date.now();
-
-    // Find the most recent pending ping
-    let latestPing: [number, number] | undefined;
-    for (const [pingId, sentTime] of this.pendingPings.entries()) {
-      if (!latestPing || sentTime > latestPing[1]) {
-        latestPing = [pingId, sentTime];
-      }
-    }
-
-    if (latestPing) {
-      const [pingId, sentTime] = latestPing;
-      const latency = receivedTime - sentTime;
-
-      this.pendingPings.delete(pingId);
-      this.callbacks.onConnectionStatusChange({ status: "connected", latency });
-
-      console.log(`⏳ Ping latency: ${latency}ms`);
-    }
+    console.timeEnd("ping-latency");
+    this.callbacks.onConnectionStatusChange({ status: "latency", latency: 0 });
   }
 }

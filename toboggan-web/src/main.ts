@@ -3,12 +3,11 @@
  * Main entry point that initializes and coordinates all modules
  */
 
-import { createAppConfig } from "./config";
 import { TobogganApp } from "./app";
+import { createAppConfig } from "./config";
 
 import "./components/toast";
 import "./components/navigation";
-import "./components/toast";
 import "./components/slide";
 
 import "./main.css";
