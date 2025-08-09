@@ -22,7 +22,19 @@ export class TobogganApp implements CommunicationCallbacks, CommandHandler {
   private readonly communicationService: CommunicationService;
   private readonly slidesApi: SlidesApiService;
 
-  private talk: Talk | null = null;
+  private _talk: Talk | null = null;
+  public get talk(): Talk | null {
+    return this._talk;
+  }
+  public set talk(value: Talk | null) {
+    this._talk = value;
+
+    if (value) {
+      this.navigationElement.talk = value;
+      this.navigationElement.slideCount = value.titles.length;
+    }
+  }
+
   private state: State | null = null;
 
   constructor(appConfig: AppConfig) {
@@ -38,20 +50,21 @@ export class TobogganApp implements CommunicationCallbacks, CommandHandler {
     this.start();
   }
 
-  private async start() {
+  private start() {
     this.communicationService.connect();
     this.keyboardModule.start();
 
-    this.talk = await this.slidesApi.getTalk();
+    this.navigationElement.addEventListener("command", (cmdEvent) =>
+      this.onCommand(cmdEvent.detail)
+    );
+  }
 
+  private async loadTalk() {
     if (this.talk) {
-      this.navigationElement.addEventListener("command", (cmdEvent) =>
-        this.onCommand(cmdEvent.detail)
-      );
-
-      this.navigationElement.talk = this.talk;
-      this.navigationElement.slideCount = this.talk.titles.length;
+      // Talk already loaded
+      return;
     }
+    this.talk = await this.slidesApi.getTalk();
   }
 
   public onCommand(command: Command): void {
@@ -69,10 +82,8 @@ export class TobogganApp implements CommunicationCallbacks, CommandHandler {
         break;
       case "connected":
         this.toastElement.toast("success", message);
+        this.loadTalk();
         this.communicationService.register();
-        break;
-      case "latency":
-        console.debug(message);
         break;
       case "reconnecting":
         this.toastElement.toast("warning", message);
@@ -103,7 +114,6 @@ export class TobogganApp implements CommunicationCallbacks, CommandHandler {
   }
 
   onError(message: string) {
-    console.error("PresentationController error:", message);
     this.toastElement.toast("error", message);
   }
 

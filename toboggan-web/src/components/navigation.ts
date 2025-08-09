@@ -199,7 +199,7 @@ export class TobogganNavigationElement extends HTMLElement {
       if (commandName) {
         const command = BUTTONS.find((b) => b.command.command === commandName)?.command;
         if (command) {
-          console.log("📡 command", command);
+          // console.log("📡 command", command);
           this.dispatchEvent(new CustomEvent("command", { detail: command }));
         }
       }

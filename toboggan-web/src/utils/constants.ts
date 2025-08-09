@@ -9,14 +9,14 @@ import type { Command } from "../types";
  * Command constants for better performance and consistency
  */
 export const COMMANDS: Record<string, Command> = {
-  FIRST: { command: "First" },
-  PREVIOUS: { command: "Previous" },
-  NEXT: { command: "Next" },
-  LAST: { command: "Last" },
-  PAUSE: { command: "Pause" },
-  RESUME: { command: "Resume" },
-  PING: { command: "Ping" },
-  BLINK: { command: "Blink" },
+  FIRST: { command: "First" } as const satisfies Command,
+  PREVIOUS: { command: "Previous" } as const satisfies Command,
+  NEXT: { command: "Next" } as const satisfies Command,
+  LAST: { command: "Last" } as const satisfies Command,
+  PAUSE: { command: "Pause" } as const satisfies Command,
+  RESUME: { command: "Resume" } as const satisfies Command,
+  PING: { command: "Ping" } as const satisfies Command,
+  BLINK: { command: "Blink" } as const satisfies Command,
 } as const;
 
 /**

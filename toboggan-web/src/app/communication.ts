@@ -15,7 +15,6 @@ export type CommunicationCallbacks = {
 
 export type Connecting = { status: "connecting" };
 export type Connected = { status: "connected" };
-export type Latency = { status: "latency"; latency: number };
 export type Closed = { status: "closed" };
 export type Reconnecting = {
   status: "reconnecting";
@@ -28,7 +27,7 @@ export type Error = { status: "error"; message: string };
 /**
  * Connection status types
  */
-export type ConnectionStatus = Connecting | Latency | Connected | Reconnecting | Closed | Error;
+export type ConnectionStatus = Connecting | Connected | Reconnecting | Closed | Error;
 
 export const formatConnectionStatus = (status: ConnectionStatus): string => {
   switch (status.status) {
@@ -36,8 +35,6 @@ export const formatConnectionStatus = (status: ConnectionStatus): string => {
       return "📡 Connecting...";
     case "connected":
       return "🛜 Connected";
-    case "latency":
-      return `⏳ Ping latency ${status.latency}ms`;
     case "reconnecting":
       return `⛓️‍💥 Reconnecting in ${status.delaySeconds}s ${status.attempt}/${status.maxAttempts}`;
     case "closed":
@@ -165,7 +162,7 @@ export class CommunicationService {
   }
 
   private handleClose(): void {
-    console.log("WebSocket connection closed");
+    // console.debug("WebSocket connection closed");
     this.stopPinging();
     this.callbacks.onConnectionStatusChange({ status: "closed" });
     if (!this.isDisposed) {
@@ -174,7 +171,7 @@ export class CommunicationService {
   }
 
   private handleError(): void {
-    console.error("WebSocket error occurred");
+    // console.error("WebSocket error occurred");
     this.callbacks.onConnectionStatusChange({
       status: "error",
       message: "WebSocket error occurred",
@@ -247,6 +244,5 @@ export class CommunicationService {
    */
   private handlePong(_serverTimestamp: string): void {
     console.timeEnd("ping-latency");
-    this.callbacks.onConnectionStatusChange({ status: "latency", latency: 0 });
   }
 }

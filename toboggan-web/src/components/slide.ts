@@ -1,6 +1,14 @@
 import type { Content, Slide } from "../types";
-import { escapeHtml } from "../utils/dom";
 import slideCss from "./slide.css?raw";
+
+/**
+ * Escape HTML to prevent XSS attacks
+ */
+const escapeHtml = (text: string): string => {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+};
 
 /**
  * Custom element for slide

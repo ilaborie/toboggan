@@ -38,7 +38,7 @@ export class TobogganToastElement extends HTMLElement {
   }
 
   public async toast(type: ToastType, messages: string): Promise<void> {
-    console.log("🥪", type, messages);
+    // console.log("🥪", type, messages);
     if (!this.toastContainer) {
       return;
     }
