@@ -89,11 +89,11 @@ async fn send_initial_state(
         Notification::state(current_state.clone())
     };
 
-    if let Ok(msg) = serde_json::to_string(&initial_notification) {
-        if let Err(err) = ws_sender.send(Message::Text(msg.into())).await {
-            error!(?client_id, ?err, "Failed to send initial state to client");
-            return Err(());
-        }
+    if let Ok(msg) = serde_json::to_string(&initial_notification)
+        && let Err(err) = ws_sender.send(Message::Text(msg.into())).await
+    {
+        error!(?client_id, ?err, "Failed to send initial state to client");
+        return Err(());
     }
 
     Ok(())

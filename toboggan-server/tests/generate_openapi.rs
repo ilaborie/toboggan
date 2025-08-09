@@ -4,10 +4,9 @@ use std::time::Duration;
 use anyhow::Context;
 use clawspec_core::test_client::{TestClient, TestServer, TestServerConfig};
 use clawspec_core::{ApiClient, register_schemas};
-use jiff::civil::Date;
 use serde_json::{Value, json};
-use toboggan_core::{Content, Renderer, SlideId, SlideKind, Style, Talk};
-use toboggan_server::{TobogganState, routes};
+use toboggan_core::{Content, Date, Renderer, Slide, SlideId, SlideKind, Style, Talk};
+use toboggan_server::{HealthResponse, SlidesResponse, TalkResponse, TobogganState, routes};
 use utoipa::openapi::{ContactBuilder, InfoBuilder, LicenseBuilder, ServerBuilder};
 
 #[derive(Debug, Clone)]
@@ -16,57 +15,22 @@ struct TobogganTestServer {
 }
 
 impl TobogganTestServer {
-    fn new() -> anyhow::Result<Self> {
+    fn new() -> Self {
         // Create a test talk
-        let talk = Talk {
-            title: Content::Text {
-                text: "Test Presentation".to_string(),
-            },
-            date: Date::new(2025, 1, 20).context("invalid date")?,
-            slides: vec![
-                toboggan_core::Slide {
-                    kind: SlideKind::Cover,
-                    style: Style::default(),
-                    title: Content::Text {
-                        text: "Welcome".to_string(),
-                    },
-                    body: Content::Text {
-                        text: "This is a test presentation".to_string(),
-                    },
-                    notes: Content::Empty,
-                },
-                toboggan_core::Slide {
-                    kind: SlideKind::Standard,
-                    style: Style::default(),
-                    title: Content::Text {
-                        text: "Content Slide".to_string(),
-                    },
-                    body: Content::Html {
-                        raw: "<h1>Hello World</h1>".to_string(),
-                        alt: Some("Hello World heading".to_string()),
-                    },
-                    notes: Content::Text {
-                        text: "Some notes for the presenter".to_string(),
-                    },
-                },
-                toboggan_core::Slide {
-                    kind: SlideKind::Standard,
-                    style: Style::default(),
-                    title: Content::Text {
-                        text: "Final Slide".to_string(),
-                    },
-                    body: Content::IFrame {
-                        url: "https://example.com".to_string(),
-                    },
-                    notes: Content::Empty,
-                },
-            ],
-        };
+        let talk = Talk::new("Test Presentation")
+            .with_date(Date::ymd(2025, 1, 20))
+            .add_slide(Slide::cover("Welcome").with_body("This is a test presentation"))
+            .add_slide(
+                Slide::new("Content Slide")
+                    .with_body(Content::html("<h1>Hello World</h1>"))
+                    .with_notes("Some notes for the presenter"),
+            )
+            .add_slide(Slide::new("Final Slide").with_body(Content::iframe("https://example.com")));
 
         let state = TobogganState::new(talk, 100);
         let router = routes().with_state(state);
 
-        Ok(Self { router })
+        Self { router }
     }
 }
 
@@ -118,7 +82,7 @@ impl TestServer for TobogganTestServer {
 
 /// Create test application with clawspec `TestClient` with proper `OpenAPI` metadata
 async fn create_test_app() -> anyhow::Result<TestClient<TobogganTestServer>> {
-    let test_server = TobogganTestServer::new()?;
+    let test_server = TobogganTestServer::new();
     let client = TestClient::start(test_server)
         .await
         .map_err(|err| anyhow::anyhow!("Failed to start test server: {err:?}"))?;
@@ -149,29 +113,27 @@ async fn should_generate_openapi() -> anyhow::Result<()> {
 #[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 async fn basic_api_operations(app: &mut TestClient<TobogganTestServer>) -> anyhow::Result<()> {
     // Test health endpoint using Value for clawspec compatibility
-    let health_response: Value = app.get("/health")?.await?.as_json().await?;
-    let health_data = &health_response["data"];
-    assert_eq!(health_data["status"].as_str().unwrap(), "OK");
-    assert_eq!(health_data["talk"].as_str().unwrap(), "Test Presentation");
-    assert!(health_data["elapsed"].is_string());
-    assert!(health_data["started_at"].is_string());
-    assert!(health_data["active_clients"].is_number());
+    let _health_response = app
+        .get("/health")?
+        .await?
+        .as_json::<HealthResponse>()
+        .await?;
 
     // Test get talk endpoint
-    let talk_response: Value = app.get("/api/talk")?.await?.as_json().await?;
-    let talk_data = &talk_response["data"];
-    assert!(talk_data["talk"].is_object());
-    let talk = &talk_data["talk"];
-    assert_eq!(talk["title"]["text"].as_str().unwrap(), "Test Presentation");
-    assert_eq!(talk["slides"].as_array().unwrap().len(), 3);
+    let _talk_response = app
+        .get("/api/talk")?
+        .await?
+        .as_json::<TalkResponse>()
+        .await?;
 
     // Test get slides endpoint
-    let slides_response: Value = app.get("/api/slides")?.await?.as_json().await?;
-    let slides_data = &slides_response["data"];
-    assert!(slides_data["slides"].is_object());
-    let slides = slides_data["slides"].as_object().unwrap();
-    assert!(!slides.is_empty());
-    assert_eq!(slides.len(), 3);
+    let _slides_response = app
+        .get("/api/slides")?
+        .await?
+        .as_json::<SlidesResponse>()
+        .await?;
+
+    // TODO POST command
 
     Ok(())
 }

@@ -1,40 +1,25 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Toboggan Presentation</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.colors.min.css">
 </head>
+
 <body>
-    <header>
-        <nav role="navigation" aria-label="Presentation controls">
-            <h1>Toboggan Presentation</h1>
-            <div class="controls">
-                <button id="first-btn" aria-label="Go to first slide" title="First slide">🏠</button>
-                <button id="prev-btn" aria-label="Go to previous slide" title="Previous slide">⬅️</button>
-                <button id="next-btn" aria-label="Go to next slide" title="Next slide">➡️</button>
-                <button id="last-btn" aria-label="Go to last slide" title="Last slide">🏁</button>
-                <button id="pause-btn" aria-label="Pause presentation" title="Pause">⏸️</button>
-                <button id="resume-btn" aria-label="Resume presentation" title="Resume">▶️</button>
-            </div>
-            <div class="status">
-                <span id="connection-status" aria-live="polite">Connecting...</span>
-                <span id="slide-counter" aria-live="polite">Slide: - / -</span>
-                <span id="duration-display" aria-live="polite">Duration: --:--:--</span>
-            </div>
-        </nav>
-    </header>
-
-    <main>
-        <div id="app" role="main" aria-live="polite" aria-label="Slide content">
-            <p>Loading presentation...</p>
-        </div>
-    </main>
-
-    <footer>
-        <div id="error-display" role="alert" aria-live="assertive" style="display: none;"></div>
-    </footer>
+    <toboggan-navigation></toboggan-navigation>
+    <toboggan-slide></toboggan-slide>
+    <toboggan-footer></toboggan-footer>
+    <toboggan-toast></toboggan-toast>
 
     <script type="module" src="/src/main.ts"></script>
 </body>
+
 </html>

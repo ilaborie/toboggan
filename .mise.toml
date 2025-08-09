@@ -7,8 +7,10 @@ cargo = { binstall = true }
 
 [tools]
 "cargo:bacon" = "latest"
+"cargo:cargo-machete" = "latest"
 "cargo:cargo-nextest" = "0.9"
 "cargo:wasm-pack" = "latest"
 "npm:@anthropic-ai/claude-code" = "latest"
 "npm:rolldown-vite" = "latest"
 "npm:vite" = "latest"
+swiftlint = "latest"

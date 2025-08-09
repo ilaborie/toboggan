@@ -2,9 +2,19 @@
 name = "toboggan-cli"
 version = "0.1.0"
 edition = "2024"
+description = "Command-line interface for creating and converting Toboggan presentation files"
+keywords = ["presentation", "slides", "markdown", "toml", "cli"]
+categories = ["command-line-utilities", "text-processing"]
+repository = "https://github.com/ilaborie/toboggan"
+documentation = "https://docs.rs/toboggan-cli"
+readme = "README.md"
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+
+[[bin]]
+name = "toboggan-cli"
+path = "src/main.rs"
 
 [dependencies]
 toboggan-core = {path = "../toboggan-core", features = ["std"]}
@@ -14,10 +24,8 @@ tracing = {workspace = true}
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 clap = { workspace = true, features = ["env", "derive"] }
 anyhow = {workspace = true}
-serde_json = {workspace = true}
-jiff = {workspace = true}
-derive_more = { workspace = true, features = ["full"] }
 pulldown-cmark = {workspace = true}
+regex = {workspace = true}
 
 [lints]
 workspace = true

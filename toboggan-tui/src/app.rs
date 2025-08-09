@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
-use toboggan_core::{Command, Notification};
+use toboggan_core::{Command, Notification, State};
 use tokio::sync::mpsc;
 use tracing::{debug, info};
 
@@ -123,13 +123,13 @@ impl App {
                         // Toggle play/pause based on current state
                         if let Some(state) = &self.state.presentation_state {
                             match state {
-                                toboggan_core::State::Running { .. } => {
+                                State::Running { .. } => {
                                     self.send_command(Command::Pause);
                                 }
-                                toboggan_core::State::Paused { .. } => {
+                                State::Paused { .. } => {
                                     self.send_command(Command::Resume);
                                 }
-                                toboggan_core::State::Done { .. } => {
+                                State::Init | State::Done { .. } => {
                                     self.send_command(Command::Next);
                                 }
                             }
@@ -174,10 +174,10 @@ impl App {
                 self.state.update_presentation_state(state);
 
                 // Load slide if we don't have it
-                if let Some(slide_id) = &self.state.current_slide {
-                    if !self.state.slides.contains_key(slide_id) {
-                        self.load_slide(*slide_id);
-                    }
+                if let Some(slide_id) = &self.state.current_slide
+                    && !self.state.slides.contains_key(slide_id)
+                {
+                    self.load_slide(*slide_id);
                 }
             }
             Notification::Pong { .. } => {
@@ -186,6 +186,7 @@ impl App {
             Notification::Error { message, .. } => {
                 self.state.error_message = Some(message);
             }
+            Notification::Blink => todo!(),
         }
         Ok(())
     }
@@ -239,12 +240,11 @@ impl App {
         let tx = self.event_tx.clone();
         tokio::spawn(async move {
             loop {
-                if let Ok(event) = event::read() {
-                    if let Event::Key(key) = event {
-                        if tx.send(AppEvent::Key(key)).is_err() {
-                            break;
-                        }
-                    }
+                if let Ok(event) = event::read()
+                    && let Event::Key(key) = event
+                    && tx.send(AppEvent::Key(key)).is_err()
+                {
+                    break;
                 }
             }
         });

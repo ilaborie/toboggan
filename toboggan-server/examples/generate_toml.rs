@@ -1,23 +1,14 @@
 use std::fs;
 
-use jiff::civil::Date;
-use toboggan_core::{Content, Slide, SlideKind, Style, Talk};
+use toboggan_core::{Content, Date, Slide, Talk};
 
 fn main() -> anyhow::Result<()> {
-    let talk = Talk {
-        title: Content::Text {
-            text: "Peut-on RIIR de tout ?".to_string(),
-        },
-        date: Date::new(2025, 11, 13)?,
-        slides: vec![
-            Slide {
-                kind: SlideKind::Cover,
-                body: Content::Empty,
-                ..slide("Peut-on RIIR de tout ?", "")
-            },
-            slide(
-                "Introduction",
-                r#"
+    let talk = Talk::new("Peut-on RIIR de tout ?")
+        .with_date(Date::ymd(2025, 11, 13))
+        .add_slide(Slide::cover("Peut-on RIIR de tout ?"))
+        .add_slide(slide(
+            "Introduction",
+            r#"
 <p>
 <strong>RIIR</strong> : "Have you considered Rewriting It In Rust?"
 </p>
@@ -25,15 +16,11 @@ fn main() -> anyhow::Result<()> {
 Une question qui fait sourire... mais qui cache une réalité : Rust gagne du terrain partout.
 </p>
                 "#,
-            ),
-            Slide {
-                kind: SlideKind::Part,
-                body: Content::Empty,
-                ..slide("1. Les Success Stories du RIIR", "")
-            },
-            slide(
-                "Des réécritures qui ont fait leurs preuves",
-                r"
+        ))
+        .add_slide(Slide::part("1. Les Success Stories du RIIR"))
+        .add_slide(slide(
+            "Des réécritures qui ont fait leurs preuves",
+            r"
 
 - **ripgrep** (`rg`) : grep réécrit en Rust
   - 10x plus rapide que grep classique
@@ -50,9 +37,7 @@ Une question qui fait sourire... mais qui cache une réalité : Rust gagne du te
   - Sécurité mémoire
   - Configuration simple
                 ",
-            ),
-        ],
-    };
+        ));
 
     let toml = toml::to_string_pretty(&talk)?;
     fs::write("./talk.toml", toml)?;
@@ -61,16 +46,5 @@ Une question qui fait sourire... mais qui cache une réalité : Rust gagne du te
 }
 
 fn slide(title: &str, body: &str) -> Slide {
-    Slide {
-        kind: SlideKind::Standard,
-        style: Style::default(),
-        title: Content::Text {
-            text: title.to_string(),
-        },
-        body: Content::Html {
-            raw: body.to_string(),
-            alt: None,
-        },
-        notes: Content::Empty,
-    }
+    Slide::new(title).with_body(Content::html(body))
 }

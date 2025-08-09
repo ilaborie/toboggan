@@ -7,9 +7,16 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "serve": "vite preview --port 8000"
+    "serve": "vite preview --port 8000",
+    "lint": "biome lint src/",
+    "lint:fix": "biome lint --write src/",
+    "format": "biome format src/",
+    "format:fix": "biome format --write src/",
+    "check": "biome check src/",
+    "check:fix": "biome check --write src/"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.1.2",
     "typescript": "~5.8.3",
     "vite": "npm:rolldown-vite@latest"
   }

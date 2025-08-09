@@ -10,6 +10,12 @@ use tracing::{info, instrument, warn};
 mod settings;
 pub use self::settings::*;
 
+mod error;
+pub use self::error::*;
+
+mod domain;
+pub use self::domain::*;
+
 mod state;
 pub use self::state::*;
 

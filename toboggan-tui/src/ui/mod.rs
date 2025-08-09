@@ -199,7 +199,7 @@ fn content_to_string(content: &Content) -> Option<String> {
         Content::Html { raw, alt } => alt.clone().or_else(|| Some(raw.clone())),
         Content::IFrame { url } => Some(format!("IFrame: {url}")),
         Content::Term { .. } => Some("Terminal content (not supported in TUI)".to_string()),
-        Content::HBox { contents, .. } | Content::VBox { contents, .. } => {
+        Content::Grid { contents, .. } => {
             let texts: Vec<String> = contents.iter().filter_map(content_to_string).collect();
             if texts.is_empty() {
                 None

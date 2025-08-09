@@ -531,6 +531,7 @@ impl TobogganAppState {
             } => state.handle_state_notification(new_state),
             Notification::Error { message, .. } => state.show_error(&message),
             Notification::Pong { .. } => console::log!("Received pong"),
+            Notification::Blink => todo!(),
         }
     }
 
@@ -538,6 +539,10 @@ impl TobogganAppState {
         self.presentation_state = Some(state.clone());
 
         match &state {
+            State::Init => {
+                self.current_slide = None;
+                // TODO check if we need to do something else
+            }
             State::Running {
                 current,
                 since,

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE description="Launch the backend in dev mode"
+
+set -eux
+
+bacon run-long -- -p toboggan-server -- riir.toml
+
+

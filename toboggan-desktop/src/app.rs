@@ -169,7 +169,7 @@ impl Application for TobogganApp {
         Command::none()
     }
 
-    fn view(&self) -> Element<Message> {
+    fn view(&'_ self) -> Element<'_, Message> {
         let status_text = match &self.connection_status {
             ConnectionStatus::Disconnected => "Disconnected",
             ConnectionStatus::Connecting => "Connecting...",
@@ -256,7 +256,7 @@ impl TobogganApp {
         match notification {
             Notification::State { state, .. } => {
                 self.presentation_state = Some(state.clone());
-                self.current_slide = Some(state.current());
+                self.current_slide = state.current();
                 info!("Received state update: {:?}", state);
             }
             Notification::Pong { .. } => {
@@ -265,18 +265,17 @@ impl TobogganApp {
             Notification::Error { message, .. } => {
                 self.error_message = Some(message);
             }
+            Notification::Blink => todo!(),
         }
     }
 
     fn send_command(&self, command: &TobogganCommand) -> Command<Message> {
-        if let Some(client) = &self.websocket_client {
-            if let Err(send_error) = client.send_command(command.clone()) {
-                error!("Failed to send command: {}", send_error);
-                let error_message = format!("Failed to send command: {send_error}");
-                return Command::perform(async {}, move |()| {
-                    Message::WebSocketError(error_message)
-                });
-            }
+        if let Some(client) = &self.websocket_client
+            && let Err(send_error) = client.send_command(command.clone())
+        {
+            error!("Failed to send command: {}", send_error);
+            let error_message = format!("Failed to send command: {send_error}");
+            return Command::perform(async {}, move |()| Message::WebSocketError(error_message));
         }
         info!("Sending command: {:?}", command);
         Command::none()

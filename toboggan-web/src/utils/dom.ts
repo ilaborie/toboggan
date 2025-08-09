@@ -3,38 +3,67 @@
  * Provides type-safe DOM element access
  */
 
-import type { RequiredElement } from '../types.js';
+import type { Content } from "../types";
 
-/**
- * Get a required DOM element by ID
- * Throws an error if the element is not found
- */
-export function getRequiredElement<T extends Element>(id: string): RequiredElement<T> {
-  const element = document.getElementById(id) as T | null;
-  if (!element) {
-    throw new Error(`Required element with id '${id}' not found`);
+// export function injectStyle(node: Element | ShadowRoot, css?: string) {
+//   node.innerHTML += `
+//   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.cyan.min.css">
+//   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.colors.min.css">
+// `;
+
+//   if (css) {
+//     const style = document.createElement("style");
+//     style.textContent = css;
+//     node.appendChild(style);
+//   }
+// }
+
+export const getRequireElement = <E extends HTMLElement>(
+  selector: string,
+  parent: ParentNode = document
+): E => {
+  const result = parent.querySelector(selector);
+  if (!result) {
+    throw new Error(`missing ${selector} element`);
   }
-  return element as RequiredElement<T>;
-}
+  return result as E;
+};
 
 /**
  * Escape HTML to prevent XSS attacks
  */
-export function escapeHtml(text: string): string {
-  const div = document.createElement('div');
+const escapeHtml = (text: string): string => {
+  const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;
-}
+};
 
 /**
- * Show an error message in the UI
+ * Render content based on its type
  */
-export function showError(errorDisplay: HTMLElement, message: string, duration: number = 5000): void {
-  errorDisplay.textContent = message;
-  errorDisplay.style.display = 'block';
-  
-  // Auto-hide error after specified duration
-  setTimeout(() => {
-    errorDisplay.style.display = 'none';
-  }, duration);
-}
+export const renderContent = (content: Content, wrapper: string = "div"): string => {
+  if (!content) return "";
+
+  switch (content.type) {
+    case "Text":
+      return `<${wrapper}>${escapeHtml(content.text)}</${wrapper}>`;
+
+    case "Html":
+      // Note: In a production app, you'd want to sanitize this HTML
+      return `<${wrapper}>${content.raw}</${wrapper}>`;
+
+    case "Md":
+      // Simple markdown rendering - just display as text for now
+      // In a full implementation, you'd use a markdown parser
+      return `<${wrapper}><pre>${escapeHtml(content.content)}</pre></${wrapper}>`;
+
+    case "IFrame":
+      return `<${wrapper}><iframe src="${escapeHtml(content.url)}" title="${content.alt || "Embedded content"}"></iframe></${wrapper}>`;
+
+    case "Empty":
+      return "";
+
+    default:
+      return `<${wrapper}>Unsupported content type: ${(content as { type: string }).type}</${wrapper}>`;
+  }
+};

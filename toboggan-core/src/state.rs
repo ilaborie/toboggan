@@ -1,15 +1,13 @@
-use core::time::Duration;
-
-use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
-use crate::SlideId;
+use crate::{Duration, SlideId, Timestamp};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-// #[serde(tag = "state")]
+#[serde(tag = "state")]
 pub enum State {
+    Init,
     Paused {
-        current: SlideId,
+        current: Option<SlideId>,
         total_duration: Duration,
     },
     Running {
@@ -25,30 +23,30 @@ pub enum State {
 
 impl State {
     #[must_use]
-    pub fn current(&self) -> SlideId {
+    pub fn current(&self) -> Option<SlideId> {
         match self {
-            Self::Paused { current, .. }
-            | Self::Running { current, .. }
-            | Self::Done { current, .. } => *current,
+            Self::Init => None,
+            Self::Paused { current, .. } => *current,
+            Self::Running { current, .. } | Self::Done { current, .. } => Some(*current),
         }
     }
 
     #[cfg(feature = "std")]
     #[must_use]
     pub fn is_first_slide(&self, slide_order: &[SlideId]) -> bool {
-        slide_order.first() == Some(&self.current())
+        slide_order.first() == self.current().as_ref()
     }
 
     #[cfg(feature = "std")]
     #[must_use]
     pub fn is_last_slide(&self, slide_order: &[SlideId]) -> bool {
-        slide_order.last() == Some(&self.current())
+        slide_order.last() == self.current().as_ref()
     }
 
     #[cfg(feature = "std")]
     #[must_use]
     pub fn next(&self, slide_order: &[SlideId]) -> Option<SlideId> {
-        let current = self.current();
+        let current = self.current()?;
         slide_order
             .iter()
             .position(|&id| id == current)
@@ -58,7 +56,7 @@ impl State {
     #[cfg(feature = "std")]
     #[must_use]
     pub fn previous(&self, slide_order: &[SlideId]) -> Option<SlideId> {
-        let current = self.current();
+        let current = self.current()?;
         slide_order
             .iter()
             .position(|&id| id == current)
@@ -73,35 +71,48 @@ impl State {
 
     #[cfg(feature = "std")]
     pub fn auto_resume(&mut self) {
-        let total_duration = self.calculate_total_duration();
-        *self = Self::Running {
-            since: Timestamp::now(),
-            current: self.current(),
+        if let Self::Paused {
+            current: Some(slide_id),
             total_duration,
-        };
+        } = self
+        {
+            *self = Self::Running {
+                since: Timestamp::now(),
+                current: *slide_id,
+                total_duration: *total_duration,
+            };
+        }
     }
 
     #[cfg(feature = "std")]
     pub fn update_slide(&mut self, slide_id: SlideId) {
         let total_duration = self.calculate_total_duration();
         match self {
-            Self::Running { .. } => {
+            Self::Init => {
+                // When navigating from Init state, go to Running
                 *self = Self::Running {
                     since: Timestamp::now(),
+                    current: slide_id,
+                    total_duration: Duration::default(),
+                };
+            }
+            Self::Running { since, .. } => {
+                *self = Self::Running {
+                    since: *since,
                     current: slide_id,
                     total_duration,
                 };
             }
             Self::Paused { .. } => {
                 *self = Self::Paused {
-                    current: slide_id,
+                    current: Some(slide_id),
                     total_duration,
                 };
             }
             Self::Done { .. } => {
                 // When navigating from Done state, go back to Paused
                 *self = Self::Paused {
-                    current: slide_id,
+                    current: Some(slide_id),
                     total_duration,
                 };
             }
@@ -112,6 +123,7 @@ impl State {
     #[must_use]
     pub fn calculate_total_duration(&self) -> Duration {
         match self {
+            Self::Init => Duration::default(),
             Self::Paused { total_duration, .. } | Self::Done { total_duration, .. } => {
                 *total_duration
             }
@@ -119,13 +131,14 @@ impl State {
                 since,
                 total_duration,
                 ..
-            } => {
-                let signed_duration = Timestamp::now().duration_since(*since);
-                let current_duration =
-                    TryInto::<Duration>::try_into(signed_duration).unwrap_or(Duration::ZERO);
-                *total_duration + current_duration
-            }
+            } => *total_duration + since.elapsed(),
         }
+    }
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self::Init
     }
 }
 
@@ -138,26 +151,29 @@ mod tests {
 
     #[test]
     fn test_current() {
+        let state = State::default();
+        assert_eq!(state.current(), None);
+
         let slide1 = SlideId::next();
 
         let state = State::Paused {
-            current: slide1,
+            current: Some(slide1),
             total_duration: Duration::from_secs(0),
         };
-        assert_eq!(state.current(), slide1);
+        assert_eq!(state.current(), Some(slide1));
 
         let state = State::Running {
             since: Timestamp::now(),
             current: slide1,
             total_duration: Duration::from_secs(0),
         };
-        assert_eq!(state.current(), slide1);
+        assert_eq!(state.current(), Some(slide1));
 
         let state = State::Done {
             current: slide1,
             total_duration: Duration::from_secs(0),
         };
-        assert_eq!(state.current(), slide1);
+        assert_eq!(state.current(), Some(slide1));
     }
 
     #[test]
@@ -169,7 +185,7 @@ mod tests {
 
         // Test with first slide
         let state = State::Paused {
-            current: slide1,
+            current: Some(slide1),
             total_duration: Duration::from_secs(0),
         };
         assert!(state.is_first_slide(&slide_order));
@@ -199,7 +215,7 @@ mod tests {
         let empty_order: Vec<SlideId> = vec![];
 
         let state = State::Paused {
-            current: slide1,
+            current: Some(slide1),
             total_duration: Duration::from_secs(0),
         };
         assert!(!state.is_first_slide(&empty_order));
@@ -212,7 +228,7 @@ mod tests {
         let slide_order = vec![slide1];
 
         let state = State::Paused {
-            current: slide1,
+            current: Some(slide1),
             total_duration: Duration::from_secs(0),
         };
         assert!(state.is_first_slide(&slide_order));
@@ -228,7 +244,7 @@ mod tests {
 
         // Test next from first slide
         let state = State::Paused {
-            current: slide1,
+            current: Some(slide1),
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.next(&slide_order), Some(slide2));
@@ -258,7 +274,7 @@ mod tests {
 
         // Test previous from first slide
         let state = State::Paused {
-            current: slide1,
+            current: Some(slide1),
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.previous(&slide_order), None);
@@ -285,7 +301,7 @@ mod tests {
         let empty_order: Vec<SlideId> = vec![];
 
         let state = State::Paused {
-            current: slide1,
+            current: Some(slide1),
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.next(&empty_order), None);
@@ -298,10 +314,35 @@ mod tests {
         let slide_order = vec![slide1];
 
         let state = State::Paused {
-            current: slide1,
+            current: Some(slide1),
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.next(&slide_order), None);
         assert_eq!(state.previous(&slide_order), None);
+    }
+
+    #[test]
+    fn test_state_serialization_format() {
+        let slide_id = SlideId::next();
+
+        let paused_state = State::Paused {
+            current: Some(slide_id),
+            total_duration: Duration::from_secs(10),
+        };
+
+        let running_state = State::Running {
+            since: Timestamp::now(),
+            current: slide_id,
+            total_duration: Duration::from_secs(5),
+        };
+
+        // Test that the states are constructed correctly with internally tagged serde format
+        assert_eq!(paused_state.current(), Some(slide_id));
+
+        assert_eq!(running_state.current(), Some(slide_id));
+
+        // Verify the states have the expected variants
+        assert!(matches!(paused_state, State::Paused { .. }));
+        assert!(matches!(running_state, State::Running { .. }));
     }
 }

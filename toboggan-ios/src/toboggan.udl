@@ -1,0 +1,85 @@
+namespace toboggan {
+    [Throws=TobogganError]
+    TobogganClient create_client(ClientConfig config);
+};
+
+[Error]
+enum TobogganError {
+    "ConnectionError",
+    "ParseError",  
+    "ConfigError",
+    "UnknownError",
+};
+
+dictionary ClientConfig {
+    string websocket_url;
+    u32 max_retries;
+    u64 retry_delay_ms;
+};
+
+dictionary Slide {
+    SlideId id;
+    string title;
+    string body;
+    SlideKind kind;
+    SlideStyle style;
+    string? notes;
+};
+
+[Custom]
+typedef string SlideId;
+
+enum SlideKind {
+    "Cover",
+    "Part", 
+    "Standard",
+};
+
+enum SlideStyle {
+    "Default",
+    "Center",
+    "Code",
+};
+
+enum Command {
+    "Next",
+    "Previous",
+    "First",
+    "Last",
+    "Play",
+    "Pause",
+    "Resume",
+};
+
+dictionary TalkInfo {
+    string title;
+    string? date;
+    sequence<Slide> slides;
+};
+
+[Enum]
+interface State {
+    Running(SlideId current, u64 total_duration_ms);
+    Paused(SlideId current, u64 total_duration_ms);
+    Done(SlideId current, u64 total_duration_ms);
+};
+
+
+interface TobogganClient {
+    constructor(ClientConfig config);
+    
+    [Async, Throws=TobogganError]
+    void connect();
+    
+    [Async, Throws=TobogganError] 
+    void disconnect();
+    
+    [Throws=TobogganError]
+    void send_command(Command command);
+    
+    State? get_current_state();
+    Slide? get_slide(SlideId slide_id);
+    TalkInfo? get_talk_info();
+    
+    boolean is_connected();
+};
