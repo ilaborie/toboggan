@@ -5,10 +5,9 @@ use anyhow::Context;
 use clawspec_core::test_client::{TestClient, TestServer, TestServerConfig};
 use clawspec_core::{ApiClient, register_schemas};
 use serde_json::{Value, json};
-use utoipa::openapi::{ContactBuilder, InfoBuilder, LicenseBuilder, ServerBuilder};
-
 use toboggan_core::{Content, Date, Renderer, Slide, SlideId, SlideKind, Style, Talk};
 use toboggan_server::{HealthResponse, SlidesResponse, TalkResponse, TobogganState, routes};
+use utoipa::openapi::{ContactBuilder, InfoBuilder, LicenseBuilder, ServerBuilder};
 
 #[derive(Debug, Clone)]
 struct TobogganTestServer {

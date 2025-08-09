@@ -6,14 +6,13 @@
 #![allow(clippy::too_many_lines)]
 
 use futures::{SinkExt, StreamExt};
-use tokio::net::TcpListener;
-use tokio_tungstenite::connect_async;
-use tokio_tungstenite::tungstenite::protocol::Message as TungsteniteMessage;
-
 use toboggan_core::{
     ClientId, Command, Date, Duration, Notification, Renderer, Slide, State, Talk,
 };
 use toboggan_server::{TobogganState, routes_with_cors};
+use tokio::net::TcpListener;
+use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::protocol::Message as TungsteniteMessage;
 
 // Global test counter to ensure unique SlideId ranges per test
 static GLOBAL_TEST_COUNTER: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
@@ -222,14 +221,14 @@ async fn wait_for_recent_notification(
                             );
 
                             // Check if this notification is newer than the threshold
-                            if let Some(after) = after_timestamp {
-                                if *timestamp < after {
-                                    println!(
-                                        "[{}] Ignoring old notification with timestamp {:?} (before {:?})",
-                                        client_name, timestamp, after
-                                    );
-                                    continue;
-                                }
+                            if let Some(after) = after_timestamp
+                                && *timestamp < after
+                            {
+                                println!(
+                                    "[{}] Ignoring old notification with timestamp {:?} (before {:?})",
+                                    client_name, timestamp, after
+                                );
+                                continue;
                             }
 
                             return Ok(notification);

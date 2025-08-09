@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
-
 use toboggan_core::{Duration, Timestamp};
+use utoipa::ToSchema;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HealthResponse {

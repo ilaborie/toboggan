@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-
 use toboggan_core::Slide;
 use utoipa::ToSchema;
 

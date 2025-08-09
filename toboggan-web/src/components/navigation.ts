@@ -8,9 +8,8 @@ import navigationCss from "./navigation.css?raw";
 import { type ConnectionStatus, formatConnectionStatus } from "../app/communication";
 import type { Command, Duration, StateState, Talk } from "../types";
 import { COMMANDS } from "../utils/constants";
-import { getRequireElement } from "../utils/dom";
+import { getRequireElement, renderContent } from "../utils/dom";
 import { elapsed } from "../utils/duration";
-import { renderContent } from "./slide";
 
 export type NavigationCommandEvent = CustomEvent<Command>;
 

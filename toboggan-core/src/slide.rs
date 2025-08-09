@@ -4,6 +4,7 @@
 //! individual slides within a presentation. Slides have different kinds
 //! (Cover, Part, Standard) and support styling, content, and speaker notes.
 
+#[cfg(feature = "utoipa")]
 use alloc::format;
 #[cfg(feature = "alloc")]
 use alloc::string::String;

@@ -174,10 +174,10 @@ impl App {
                 self.state.update_presentation_state(state);
 
                 // Load slide if we don't have it
-                if let Some(slide_id) = &self.state.current_slide {
-                    if !self.state.slides.contains_key(slide_id) {
-                        self.load_slide(*slide_id);
-                    }
+                if let Some(slide_id) = &self.state.current_slide
+                    && !self.state.slides.contains_key(slide_id)
+                {
+                    self.load_slide(*slide_id);
                 }
             }
             Notification::Pong { .. } => {
@@ -240,12 +240,11 @@ impl App {
         let tx = self.event_tx.clone();
         tokio::spawn(async move {
             loop {
-                if let Ok(event) = event::read() {
-                    if let Event::Key(key) = event {
-                        if tx.send(AppEvent::Key(key)).is_err() {
-                            break;
-                        }
-                    }
+                if let Ok(event) = event::read()
+                    && let Event::Key(key) = event
+                    && tx.send(AppEvent::Key(key)).is_err()
+                {
+                    break;
                 }
             }
         });

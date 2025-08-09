@@ -70,6 +70,7 @@
 //! ├── title.md              # Presentation title (optional)
 //! ├── date.txt              # Presentation date (optional)
 //! ├── _cover.md             # Cover slide
+//! ├── _footer.md            # Footer content
 //! ├── 01-intro/             # Section folder
 //! │   ├── _part.md          # Section slide
 //! │   ├── 01-overview.md    # Content slides
@@ -87,6 +88,7 @@
 //! - **`date.txt`**: Presentation date in YYYY-MM-DD format (fallback to today)
 //! - **`_cover.md`**: Cover slide (created first)
 //! - **`_part.md`**: Section divider slide content
+//! - **`_footer.md`**: Presentation footer (markdown content)
 //!
 //! #### Processing Rules
 //!
@@ -382,7 +384,10 @@ fn parse_folder_talk(
         .or_else(|| find_date_in_folder(input_dir))
         .unwrap_or_else(Date::today);
 
-    let mut talk = Talk::new(title).with_date(date);
+    // Look for footer in folder
+    let footer = find_footer_in_folder(input_dir).unwrap_or_default();
+
+    let mut talk = Talk::new(title).with_date(date).with_footer(footer);
 
     // First pass: look for cover slide
     for entry in &entries {
@@ -410,6 +415,7 @@ fn parse_folder_talk(
             || filename_str == "title.txt"
             || filename_str == "date.txt"
             || filename_str == "_cover.md"
+            || filename_str == "_footer.md"
         {
             continue;
         }
@@ -441,16 +447,16 @@ fn find_title_in_folder(folder: &Path) -> Option<Content> {
     let title_md = folder.join("title.md");
     let title_txt = folder.join("title.txt");
 
-    if title_md.exists() {
-        if let Ok(content) = fs::read_to_string(&title_md) {
-            return Some(Content::from(content.trim()));
-        }
+    if title_md.exists()
+        && let Ok(content) = fs::read_to_string(&title_md)
+    {
+        return Some(Content::from(content.trim()));
     }
 
-    if title_txt.exists() {
-        if let Ok(content) = fs::read_to_string(&title_txt) {
-            return Some(Content::from(content.trim()));
-        }
+    if title_txt.exists()
+        && let Ok(content) = fs::read_to_string(&title_txt)
+    {
+        return Some(Content::from(content.trim()));
     }
 
     None
@@ -459,26 +465,55 @@ fn find_title_in_folder(folder: &Path) -> Option<Content> {
 /// Find date in folder (date.txt file or today)
 fn find_date_in_folder(folder: &Path) -> Option<Date> {
     let date_file = folder.join("date.txt");
-    if date_file.exists() {
-        if let Ok(date_str) = fs::read_to_string(&date_file) {
-            // Try to parse different date formats
-            let date_str = date_str.trim();
+    if date_file.exists()
+        && let Ok(date_str) = fs::read_to_string(&date_file)
+    {
+        // Try to parse different date formats
+        let date_str = date_str.trim();
 
-            // Try YYYY-MM-DD format
-            if let Some(caps) = regex::Regex::new(r"^(\d{4})-(\d{1,2})-(\d{1,2})$")
-                .ok()?
-                .captures(date_str)
-            {
-                if let (Ok(year), Ok(month), Ok(day)) = (
-                    caps[1].parse::<i16>(),
-                    caps[2].parse::<i8>(),
-                    caps[3].parse::<i8>(),
-                ) {
-                    return Date::new(year, month, day).ok();
-                }
-            }
+        // Try YYYY-MM-DD format
+        if let Some(caps) = regex::Regex::new(r"^(\d{4})-(\d{1,2})-(\d{1,2})$")
+            .ok()?
+            .captures(date_str)
+            && let (Ok(year), Ok(month), Ok(day)) = (
+                caps[1].parse::<i16>(),
+                caps[2].parse::<i8>(),
+                caps[3].parse::<i8>(),
+            )
+        {
+            return Date::new(year, month, day).ok();
         }
     }
+    None
+}
+
+/// Find footer in folder (_footer.md file)
+fn find_footer_in_folder(folder: &Path) -> Option<Content> {
+    use pulldown_cmark::{Options, Parser, html};
+
+    let footer_file = folder.join("_footer.md");
+
+    if footer_file.exists()
+        && let Ok(content) = fs::read_to_string(&footer_file)
+    {
+        let content = content.trim();
+        if content.is_empty() {
+            return None;
+        }
+
+        // Parse markdown content to HTML
+        let options = Options::all();
+        let parser = Parser::new_ext(content, options);
+
+        let mut html = String::new();
+        html::push_html(&mut html, parser);
+
+        return Some(Content::Html {
+            raw: html.trim().to_string(),
+            alt: Some(content.to_string()),
+        });
+    }
+
     None
 }
 

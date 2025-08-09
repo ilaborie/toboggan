@@ -8,6 +8,7 @@ import { createAppConfig } from "./config";
 
 import "./components/toast";
 import "./components/navigation";
+import "./components/footer";
 import "./components/slide";
 
 import "./main.css";

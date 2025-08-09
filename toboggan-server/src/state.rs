@@ -2,12 +2,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use dashmap::DashMap;
-use tokio::sync::{RwLock, watch};
-use tracing::{info, warn};
-
 use toboggan_core::{
     ClientId, Command, Duration, Notification, Slide, SlideId, State, Talk, Timestamp,
 };
+use tokio::sync::{RwLock, watch};
+use tracing::{info, warn};
 
 use crate::{ApiError, HealthResponse, HealthResponseStatus};
 
@@ -208,14 +207,14 @@ impl TobogganState {
             }
             _ => {
                 // Normal behavior for Running/Done states - reset timestamp when going to first
-                if !state.is_first_slide(&self.slide_order) {
-                    if let Some(&first_slide) = self.slide_order.first() {
-                        *state = State::Running {
-                            since: Timestamp::now(),
-                            current: first_slide,
-                            total_duration: Duration::default(),
-                        };
-                    }
+                if !state.is_first_slide(&self.slide_order)
+                    && let Some(&first_slide) = self.slide_order.first()
+                {
+                    *state = State::Running {
+                        since: Timestamp::now(),
+                        current: first_slide,
+                        total_duration: Duration::default(),
+                    };
                 }
             }
         }
@@ -252,10 +251,10 @@ impl TobogganState {
             }
             _ => {
                 // Normal behavior for Running/Done states
-                if !state.is_last_slide(&self.slide_order) {
-                    if let Some(&last_slide) = self.slide_order.last() {
-                        state.update_slide(last_slide);
-                    }
+                if !state.is_last_slide(&self.slide_order)
+                    && let Some(&last_slide) = self.slide_order.last()
+                {
+                    state.update_slide(last_slide);
                 }
             }
         }

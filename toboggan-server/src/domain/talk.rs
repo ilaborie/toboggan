@@ -10,6 +10,9 @@ pub struct TalkResponse {
     /// The date of the presentation.
     date: Date,
 
+    /// The footer of the presentation.
+    footer: Content,
+
     /// The slides titles
     titles: Vec<String>,
 }
@@ -19,6 +22,7 @@ impl From<Talk> for TalkResponse {
         let Talk {
             title,
             date,
+            footer,
             slides,
         } = value;
         let titles = slides.iter().map(|it| it.title.to_string()).collect();
@@ -26,6 +30,7 @@ impl From<Talk> for TalkResponse {
         Self {
             title,
             date,
+            footer,
             titles,
         }
     }

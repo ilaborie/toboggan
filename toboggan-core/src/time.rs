@@ -118,9 +118,8 @@ impl Display for Date {
 mod openapi {
     use std::borrow::Cow;
 
-    use utoipa::openapi::KnownFormat;
     use utoipa::openapi::schema::Schema;
-    use utoipa::openapi::{ObjectBuilder, RefOr, SchemaFormat, Type};
+    use utoipa::openapi::{KnownFormat, ObjectBuilder, RefOr, SchemaFormat, Type};
     use utoipa::{PartialSchema, ToSchema};
 
     use super::{Date, Duration, Timestamp};

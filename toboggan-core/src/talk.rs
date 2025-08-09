@@ -33,6 +33,10 @@ pub struct Talk {
     /// The date of the presentation.
     pub date: Date,
 
+    /// The footer
+    #[serde(default)]
+    pub footer: Content,
+
     /// The slides that make up the presentation.
     pub slides: Vec<Slide>,
 }
@@ -55,10 +59,12 @@ impl Talk {
         let title = title.into();
         let date = Date::today();
         let slides = Vec::new();
+        let footer = Content::default();
 
         Self {
             title,
             date,
+            footer,
             slides,
         }
     }
@@ -76,6 +82,22 @@ impl Talk {
     #[must_use]
     pub fn with_date(mut self, date: Date) -> Self {
         self.date = date;
+        self
+    }
+
+    /// Sets the footer of the presentation.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use toboggan_core::Talk;
+    ///
+    /// let talk = Talk::new("Conference Talk")
+    ///     .with_footer("© 2025 My Company");
+    /// ```
+    #[must_use]
+    pub fn with_footer(mut self, footer: impl Into<Content>) -> Self {
+        self.footer = footer.into();
         self
     }
 

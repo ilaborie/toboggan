@@ -5,6 +5,7 @@ import type { Duration, Timestamp } from "./times";
 export type Talk = {
   title: Content;
   date: string;
+  footer: Content;
   titles: string[];
 };
 

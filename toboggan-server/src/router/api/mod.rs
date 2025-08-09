@@ -4,9 +4,8 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use tracing::{info, warn};
-
 use toboggan_core::{Command, Notification, SlideId};
+use tracing::{info, warn};
 
 use crate::{SlidesResponse, TalkResponse, TobogganState};
 

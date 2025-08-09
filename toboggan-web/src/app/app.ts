@@ -1,8 +1,9 @@
-import type { TobogganSlideElement } from "../components";
+import type { TobogganFooterElement, TobogganSlideElement } from "../components";
 import type { TobogganNavigationElement } from "../components/navigation";
 import type { TobogganToastElement } from "../components/toast";
 import type { AppConfig } from "../config";
 import type { Command, CommandHandler, State, Talk } from "../types";
+import { playTada } from "../utils/audio";
 import { getRequireElement } from "../utils/dom";
 import { SlidesApiService } from "./api";
 import {
@@ -16,6 +17,7 @@ import { KeyboardModule } from "./keyboard";
 export class TobogganApp implements CommunicationCallbacks, CommandHandler {
   private readonly navigationElement: TobogganNavigationElement;
   private readonly slideElement: TobogganSlideElement;
+  private readonly footerElement: TobogganFooterElement;
   private readonly toastElement: TobogganToastElement;
 
   private readonly keyboardModule: KeyboardModule;
@@ -32,6 +34,7 @@ export class TobogganApp implements CommunicationCallbacks, CommandHandler {
     if (value) {
       this.navigationElement.talk = value;
       this.navigationElement.slideCount = value.titles.length;
+      this.footerElement.footer = value.footer;
     }
   }
 
@@ -41,6 +44,7 @@ export class TobogganApp implements CommunicationCallbacks, CommandHandler {
     const { clientId, apiBaseUrl, websocket } = appConfig;
     this.navigationElement = getRequireElement("toboggan-navigation");
     this.slideElement = getRequireElement("toboggan-slide");
+    this.footerElement = getRequireElement("toboggan-footer");
     this.toastElement = getRequireElement("toboggan-toast");
 
     this.keyboardModule = new KeyboardModule(this);
@@ -107,6 +111,7 @@ export class TobogganApp implements CommunicationCallbacks, CommandHandler {
 
     if (state.state === "Done") {
       this.toastElement.toast("success", "🎉 Done");
+      playTada();
     }
 
     // Load and display slide

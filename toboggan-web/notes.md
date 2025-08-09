@@ -132,8 +132,15 @@ https://junkdog.github.io/beamterm/
 ### UI
 https://webdev.bryanhogan.com/start/ways-to-build/
 https://shoelace.style/
-
 https://ui.shadcn.com/docs/installation
+
+### Go To
+
+Use the picker to choose the slide to go
+
+### Help
+
+Display a dialog with all keyboard shortcut, (F1 to trigger)
 
 ### Logger
 
