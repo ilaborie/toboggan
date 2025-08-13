@@ -1,0 +1,84 @@
+[[language]]
+name = "html"
+formatter = { command = "npx", args = [
+  "@biomejs/biome",
+  "format",
+  "--stdin-file-path",
+  "file.html",
+] }
+auto-format = true
+
+[[language]]
+name = "typescript"
+formatter = { command = "npx", args = [
+  "@biomejs/biome",
+  "format",
+  "--stdin-file-path",
+  "file.ts",
+] }
+auto-format = true
+language-servers = ["typescript-language-server"]
+
+[language-server.typescript-language-server]
+command = "typescript-language-server"
+args = ["--stdio"]
+config.hostInfo = "helix"
+config.typescript.inlayHints.includeInlayParameterNameHints = "all"
+config.typescript.inlayHints.includeInlayParameterNameHintsWhenArgumentMatchesName = true
+config.typescript.inlayHints.includeInlayFunctionParameterTypeHints = true
+config.typescript.inlayHints.includeInlayVariableTypeHints = true
+config.typescript.inlayHints.includeInlayVariableTypeHintsWhenTypeMatchesName = true
+config.typescript.inlayHints.includeInlayPropertyDeclarationTypeHints = true
+config.typescript.inlayHints.includeInlayFunctionLikeReturnTypeHints = true
+config.typescript.inlayHints.includeInlayEnumMemberValueHints = true
+
+[[language]]
+name = "tsx"
+formatter = { command = "npx", args = [
+  "@biomejs/biome",
+  "format",
+  "--stdin-file-path",
+  "file.tsx",
+] }
+auto-format = true
+language-servers = ["typescript-language-server"]
+
+[[language]]
+name = "javascript"
+formatter = { command = "npx", args = [
+  "@biomejs/biome",
+  "format",
+  "--stdin-file-path",
+  "file.js",
+] }
+auto-format = true
+
+[[language]]
+name = "jsx"
+formatter = { command = "npx", args = [
+  "@biomejs/biome",
+  "format",
+  "--stdin-file-path",
+  "file.jsx",
+] }
+auto-format = true
+
+[[language]]
+name = "css"
+formatter = { command = "npx", args = [
+  "@biomejs/biome",
+  "format",
+  "--stdin-file-path",
+  "file.css",
+] }
+auto-format = true
+
+[[language]]
+name = "json"
+formatter = { command = "npx", args = [
+  "@biomejs/biome",
+  "format",
+  "--stdin-file-path",
+  "file.json",
+] }
+auto-format = true

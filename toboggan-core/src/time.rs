@@ -42,6 +42,15 @@ impl From<Duration> for core::time::Duration {
     }
 }
 
+impl Display for Duration {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> fmt::Result {
+        let secs = self.0.as_secs();
+        let mins = secs / 60;
+        let secs = secs - (60 * mins);
+        write!(fmt, "{mins:02}:{secs:02}")
+    }
+}
+
 /// Wrapper around `jiff::Timestamp` with additional utility methods.
 ///
 /// This type provides a convenient wrapper for timestamp operations

@@ -10,7 +10,7 @@ authors.workspace = true
 default = ["std"]
 std = ["alloc", "jiff/std", "serde/std", "once_cell/std", "pulldown-cmark"]
 alloc = ["jiff/alloc", "serde/alloc", "getrandom", "once_cell/critical-section"]
-js = ["jiff/js", "getrandom/js"]
+js = ["jiff/js", "getrandom/js", "uuid/js"]
 openapi = ["utoipa"]
 test-utils = []
 
