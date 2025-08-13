@@ -82,11 +82,3 @@ unnecessary_safety_doc = "warn"
 unwrap_used = "warn"
 
 module_name_repetitions = "allow"
-
-# WASM size optimizations
-[profile.release]
-opt-level = "z"   # Optimize for size even more aggressively
-lto = "fat"       # More aggressive LTO
-codegen-units = 1 # Single codegen unit for better optimization
-panic = "abort"   # Smaller panic handling
-strip = true      # Strip symbols for smaller size

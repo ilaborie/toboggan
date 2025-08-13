@@ -19,5 +19,8 @@
     "@biomejs/biome": "^2.1.2",
     "typescript": "~5.8.3",
     "vite": "npm:rolldown-vite@latest"
+  },
+  "dependencies": {
+    "@playwright/test": "^1.54.2"
   }
 }

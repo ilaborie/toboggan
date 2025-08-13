@@ -3,6 +3,9 @@
 //! This module provides the [`Talk`] struct for representing complete
 //! presentations with metadata and slides.
 
+#[cfg(feature = "openapi")]
+use alloc::format;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use serde::{Deserialize, Serialize};
@@ -120,5 +123,40 @@ impl Talk {
     pub fn add_slide(mut self, slide: Slide) -> Self {
         self.slides.push(slide);
         self
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct TalkResponse {
+    /// The title of the presentation.
+    pub title: Content,
+
+    /// The date of the presentation.
+    pub date: Date,
+
+    /// The footer of the presentation.
+    pub footer: Content,
+
+    /// The slides titles
+    pub titles: Vec<String>,
+}
+
+impl From<Talk> for TalkResponse {
+    fn from(value: Talk) -> Self {
+        let Talk {
+            title,
+            date,
+            footer,
+            slides,
+        } = value;
+        let titles = slides.iter().map(|it| it.title.to_string()).collect();
+
+        Self {
+            title,
+            date,
+            footer,
+            titles,
+        }
     }
 }

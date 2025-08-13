@@ -4,6 +4,7 @@
 //! rich content within slides. Content can be text, HTML, embedded iframes,
 //! terminal sessions (std only), or layout containers.
 
+#[cfg(feature = "openapi")]
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;

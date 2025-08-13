@@ -4,10 +4,10 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use toboggan_core::{Command, Notification, SlideId};
+use toboggan_core::{Command, Notification, SlideId, TalkResponse};
 use tracing::{info, warn};
 
-use crate::{SlidesResponse, TalkResponse, TobogganState};
+use crate::{SlidesResponse, TobogganState};
 
 pub(super) async fn get_talk(State(state): State<TobogganState>) -> impl IntoResponse {
     let talk = state.talk().clone();

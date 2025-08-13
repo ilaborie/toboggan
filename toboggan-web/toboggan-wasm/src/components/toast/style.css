@@ -1,0 +1,151 @@
+.toaster {
+  display: grid;
+  justify-items: end;
+  justify-content: end;
+}
+
+output {
+  --duration: var(--toast-duration);
+  --travel-distance: 0;
+
+  margin-bottom: var(--spacing-sm);
+  will-change: transform;
+  animation:
+    fade-in var(--animation-fast) ease,
+    slide-in var(--animation-fast) ease,
+      fade-out var(--animation-fast) ease var(--duration);
+  max-inline-size: min(40ch 50vw);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-sm);
+    border: 0.125rem solid var(--color-border-transparent);
+  display: grid;
+  grid-template-columns: 1fr 1.5rem;
+  gap: var(--spacing-md);
+  align-items: center;
+
+  strong {
+    text-transform: capitalize;
+  }
+
+  p {
+    margin: 0;
+    display: flex;
+    align-items: center;
+  }
+}
+
+output {
+  color: var(--color-light);
+
+  &.error {
+    background-color: var(--color-error);
+  }
+
+  &.warning {
+    background-color: var(--color-warning);
+  }
+
+  &.info {
+    background-color: var(--color-info);
+  }
+
+  &.success {
+    background-color: var(--color-success);
+  }
+}
+
+button {
+  background: transparent;
+  border: thin solid transparent;
+  border-radius: var(--radius-sm);
+  --size: var(--icon-size-md);
+  width: var(--size);
+  height: var(--size);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  align-self: baseline;
+
+  &:focus &:active &:hover {
+    box-shadow: none;
+  }
+}
+
+/* Close button icon via CSS - X character */
+button.close::before {
+  content: "×";
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+/* Toast type indicators via CSS pseudo-elements - Lucide icons */
+output.error p::before {
+  content: "";
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  display: inline-block;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  margin-right: var(--spacing-sm);
+  flex-shrink: 0;
+  background-image: var(--icon-error);
+}
+
+output.warning p::before {
+  content: "";
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  display: inline-block;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  margin-right: var(--spacing-sm);
+  flex-shrink: 0;
+  background-image: var(--icon-warning);
+}
+
+output.info p::before {
+  content: "";
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  display: inline-block;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  margin-right: var(--spacing-sm);
+  flex-shrink: 0;
+  background-image: var(--icon-info);
+}
+
+output.success p::before {
+  content: "";
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  display: inline-block;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  margin-right: var(--spacing-sm);
+  flex-shrink: 0;
+  background-image: var(--icon-success);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateY(var(--travel-distance 10px));
+  }
+}

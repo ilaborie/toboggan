@@ -134,6 +134,13 @@ https://webdev.bryanhogan.com/start/ways-to-build/
 https://shoelace.style/
 https://ui.shadcn.com/docs/installation
 
+colors: <https://picocss.com/docs/colors>
+icons: <https://icon-sets.iconify.design/>
+
+### Better toast
+
+See <https://github.com/emilkowalski/sonner>
+
 ### Go To
 
 Use the picker to choose the slide to go

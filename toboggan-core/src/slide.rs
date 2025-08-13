@@ -227,3 +227,11 @@ pub struct Style(Vec<String>);
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Style;
+
+#[cfg(feature = "alloc")]
+impl Display for Style {
+    fn fmt(&self, fmt: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let classes = self.0.join(" ");
+        write!(fmt, "{classes}")
+    }
+}

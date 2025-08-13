@@ -1,0 +1,30 @@
+:host {
+  display: block;
+  font-family: var(--font-family-primary);
+  background-color: rgb(150, 232, 169);
+}
+
+footer {
+  padding: var(--spacing-md);
+  text-align: center;
+  font-size: var(--font-size-sm);
+}
+
+footer p {
+  margin: var(--spacing-sm) 0;
+}
+
+footer p:first-child {
+  margin-top: 0;
+}
+
+footer p:last-child {
+  margin-bottom: 0;
+}
+
+/* Default content when footer is empty */
+footer:empty::before {
+  content: "Toboggan Presentation System";
+  font-style: normal;
+  color: inherit;
+}
