@@ -91,7 +91,7 @@ async fn connect_and_register_client(
     };
     let register_msg = serde_json::to_string(&register_cmd)?;
     ws_sender
-        .send(TungsteniteMessage::Text(register_msg))
+        .send(TungsteniteMessage::text(register_msg))
         .await?;
 
     println!(
@@ -139,7 +139,7 @@ async fn send_command_and_get_response(
 ) -> Result<Notification, Box<dyn std::error::Error + Send + Sync>> {
     // Send command
     let cmd_msg = serde_json::to_string(&command)?;
-    ws_sender.send(TungsteniteMessage::Text(cmd_msg)).await?;
+    ws_sender.send(TungsteniteMessage::text(cmd_msg)).await?;
     println!("[{}] Sent command: {:?}", client_name, command);
 
     // Wait for response, filtering out pong messages
@@ -308,7 +308,7 @@ async fn coordinated_command_execution(
     // Send command from client1
     let cmd_msg = serde_json::to_string(&command)?;
     client1_sender
-        .send(TungsteniteMessage::Text(cmd_msg))
+        .send(TungsteniteMessage::text(cmd_msg))
         .await?;
     println!("[{}] Sent command: {:?}", client1_name, command);
 

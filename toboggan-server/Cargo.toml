@@ -28,7 +28,7 @@ utoipa = { workspace = true }
 toboggan-core = { path = "../toboggan-core", features = ["openapi", "test-utils"] }
 clawspec-core = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-tokio-tungstenite = "0.21"
+tokio-tungstenite = { workspace = true }
 
 [[test]]
 name = "multi_client_sync"

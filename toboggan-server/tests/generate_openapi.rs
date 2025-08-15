@@ -6,9 +6,9 @@ use clawspec_core::test_client::{TestClient, TestServer, TestServerConfig};
 use clawspec_core::{ApiClient, register_schemas};
 use serde_json::{Value, json};
 use toboggan_core::{
-    Content, Date, Renderer, Slide, SlideId, SlideKind, Style, Talk, TalkResponse,
+    Content, Date, Renderer, Slide, SlideId, SlideKind, SlidesResponse, Style, Talk, TalkResponse,
 };
-use toboggan_server::{HealthResponse, SlidesResponse, TobogganState, routes};
+use toboggan_server::{HealthResponse, TobogganState, routes};
 use utoipa::openapi::{ContactBuilder, InfoBuilder, LicenseBuilder, ServerBuilder};
 
 #[derive(Debug, Clone)]

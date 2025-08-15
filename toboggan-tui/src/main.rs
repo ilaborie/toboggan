@@ -1,7 +1,7 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
-use toboggan_tui::app::App;
-use toboggan_tui::config::Config;
+use toboggan_tui::{App, build_config};
+use tracing_subscriber::prelude::*;
 
 #[derive(Parser)]
 #[command(name = "toboggan-tui")]
@@ -18,18 +18,22 @@ struct Cli {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Setup tracing
-    tracing_subscriber::fmt::init();
+    // Setup tui-logger
+    tracing_subscriber::registry()
+        .with(tui_logger::TuiTracingSubscriberLayer)
+        .init();
+    tui_logger::init_logger(tui_logger::LevelFilter::Debug).context("init tui_logger")?;
 
-    // Create config
-    let config = Config {
-        websocket_url: cli.websocket_url,
-        api_url: cli.api_url,
-        max_retries: 5,
-        retry_delay_ms: 1000,
-    };
+    // Create config using toboggan-client shared config
+    let config = build_config(Some(cli.websocket_url), Some(cli.api_url));
 
     // Run the app
-    let mut app = App::new(config)?;
-    app.run().await
+    let terminal = ratatui::init();
+    let result = App::new(terminal, &config)
+        .await
+        .context("create app")
+        .and_then(|mut app| app.run());
+    ratatui::restore();
+
+    result
 }
