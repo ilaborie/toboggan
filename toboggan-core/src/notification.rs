@@ -1,12 +1,15 @@
+use alloc::format;
 use alloc::string::String;
+#[cfg(feature = "openapi")]
+use alloc::vec::Vec;
 use core::fmt::Debug;
-use std::format;
 
 use serde::{Deserialize, Serialize};
 
 use crate::{State, Timestamp};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(tag = "type")]
 pub enum Notification {
     State {

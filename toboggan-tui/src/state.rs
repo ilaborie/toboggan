@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::ops::ControlFlow;
 
-use ratatui::widgets::ListState;
 use toboggan_client::ConnectionStatus;
 use toboggan_core::{Notification, Slide, SlideId, State, TalkResponse};
 use tracing::{debug, info};
@@ -22,7 +21,6 @@ pub struct AppState {
     // pub(crate) config: Config,
     pub(crate) connection_status: ConnectionStatus,
     pub(crate) current_slide: Option<SlideId>,
-    pub(crate) list_state: ListState, // TODO remove
 
     pub(crate) talk: TalkResponse,
     pub(crate) slides: HashMap<SlideId, Slide>,
@@ -43,7 +41,6 @@ impl AppState {
         Self {
             connection_status: ConnectionStatus::Closed,
             current_slide: None,
-            list_state: ListState::default(),
             talk,
             slides,
             ids,

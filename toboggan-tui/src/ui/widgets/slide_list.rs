@@ -1,6 +1,6 @@
 use ratatui::prelude::*;
 use ratatui::symbols::border;
-use ratatui::widgets::{Block, List, ListItem};
+use ratatui::widgets::{Block, List, ListItem, ListState};
 
 use crate::state::AppState;
 use crate::ui::styles;
@@ -13,29 +13,26 @@ impl StatefulWidget for &SlideList {
 
     #[allow(clippy::cast_possible_truncation)]
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+        let selected = state
+            .current_slide
+            .and_then(|id| state.ids.iter().position(|slide_id| id == *slide_id));
+
         // Create list items for each slide
         let items: Vec<ListItem> = state
             .talk
             .titles
             .iter()
             .enumerate()
-            .map(|(index, text)| {
-                build_list_item(
-                    state.current_slide == Some((index as u8).into()),
-                    index + 1,
-                    text,
-                )
-            })
+            .map(|(index, text)| build_list_item(Some(index) == selected, index + 1, text))
             .collect();
 
         let block = Block::bordered()
             .title(Line::from(" Slides "))
             .border_set(border::THICK);
 
-        let list = List::new(items)
-            .block(block)
-            .highlight_style(styles::list::LIST_HIGHLIGHT_STYLE);
-        StatefulWidget::render(list, area, buf, &mut state.list_state);
+        let mut list_state = ListState::default().with_selected(selected);
+        let list = List::new(items).block(block);
+        StatefulWidget::render(list, area, buf, &mut list_state);
     }
 }
 

@@ -15,13 +15,7 @@ impl StatefulWidget for &CurrentSlide {
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let Some(slide) = state.current_slide() else {
-            let title = Line::from(Span::styled(
-                " <no slide active> ",
-                styles::ui::NO_CONTENT_STYLE,
-            ));
-            let block = Block::bordered().title(title).border_set(border::DOUBLE);
-            let content = vec![];
-            Paragraph::new(content).block(block).render(area, buf);
+            super::render_no_content(area, buf, "no slide active", border::DOUBLE);
             return;
         };
 
@@ -43,7 +37,7 @@ impl StatefulWidget for &CurrentSlide {
             .border_set(border::DOUBLE);
 
         let content_text = slide.body.to_string();
-        let content = content_text.lines().map(Line::from).collect::<Vec<_>>();
+        let content = super::format_content_lines(&content_text);
         Paragraph::new(content)
             .block(block)
             .wrap(Wrap { trim: true })

@@ -80,8 +80,8 @@ impl AppAction {
     pub(crate) fn details(self) -> ActionDetails {
         match self {
             Self::First => ActionDetails::new(vec!["Home"], "Go to first slide"),
-            Self::Previous => ActionDetails::new(vec!["Left", "Up", "Space"], "Go to next slide"),
-            Self::Next => ActionDetails::new(vec!["Right", "Down"], "Go to previous slide"),
+            Self::Previous => ActionDetails::new(vec!["Left", "Up"], "Go to previous slide"),
+            Self::Next => ActionDetails::new(vec!["Right", "Down", "Space"], "Go to next slide"),
             Self::Last => ActionDetails::new(vec!["End"], "Go to last slide"),
             Self::Pause => ActionDetails::new(vec!["p", "P"], "Pause"),
             Self::Goto(_) => ActionDetails::new(vec!["1..n"], "Go to slide n"),

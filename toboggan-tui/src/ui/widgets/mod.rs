@@ -1,8 +1,5 @@
 use ratatui::prelude::*;
 
-mod top_bar;
-
-pub use self::top_bar::NavBar;
 use crate::events::AppAction;
 use crate::ui::styles;
 
@@ -25,7 +22,30 @@ mod speaker_notes;
 pub use self::speaker_notes::SpeakerNotes;
 
 mod help_panel;
+use ratatui::symbols::border;
+use ratatui::widgets::{Block, Paragraph};
+
 pub use self::help_panel::HelpPanel;
+
+/// Helper function to render "no content" message
+pub(crate) fn render_no_content(
+    area: Rect,
+    buf: &mut Buffer,
+    message: &str,
+    border_set: border::Set,
+) {
+    let title = Line::from(Span::styled(
+        format!(" <{message}> "),
+        styles::ui::NO_CONTENT_STYLE,
+    ));
+    let block = Block::bordered().title(title).border_set(border_set);
+    Paragraph::new(vec![]).block(block).render(area, buf);
+}
+
+/// Helper function to convert content text to lines
+pub(crate) fn format_content_lines(content: &str) -> Vec<Line<'_>> {
+    content.lines().map(Line::from).collect()
+}
 
 fn line_from_actions(actions: &[AppAction]) -> Line<'_> {
     if actions.is_empty() {

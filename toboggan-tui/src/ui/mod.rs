@@ -7,7 +7,7 @@ use tui_logger::TuiLoggerWidget;
 use crate::state::{AppDialog, AppState};
 use crate::ui::styles::layout;
 use crate::ui::widgets::{
-    CurrentSlide, HelpPanel, NavBar, NextSlidePreview, SlideList, SpeakerNotes,
+    CurrentSlide, HelpPanel, NextSlidePreview, ProgressBar, SlideList, SpeakerNotes, TitleBar,
 };
 
 pub mod styles;
@@ -15,7 +15,8 @@ pub mod widgets;
 
 #[derive(Default)]
 pub struct PresenterComponents {
-    top_bar: NavBar,
+    title_bar: TitleBar,
+    progress_bar: ProgressBar,
     slide_list: SlideList,
     current_slide: CurrentSlide,
     next_slide_preview: NextSlidePreview,
@@ -48,23 +49,32 @@ impl StatefulWidget for &PresenterComponents {
             ]);
         let [slides_area, current_area, next_area] = content_layout.areas(content_area);
 
-        // Topbar
-        self.top_bar.render(top_area, buf, state);
+        // Topbar - split into title and progress areas
+        let top_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Min(layout::CONTROL_TITLE_MIN_WIDTH),
+                Constraint::Length(layout::CONTROL_PROGRESS_WIDTH),
+            ]);
+        let [title_area, progress_area] = top_layout.areas(top_area);
+
+        (&self.title_bar).render(title_area, buf, state);
+        (&self.progress_bar).render(progress_area, buf, state);
 
         // Main content area - 3 columns
-        self.slide_list.render(slides_area, buf, state);
-        self.current_slide.render(current_area, buf, state);
-        self.next_slide_preview.render(next_area, buf, state);
+        (&self.slide_list).render(slides_area, buf, state);
+        (&self.current_slide).render(current_area, buf, state);
+        (&self.next_slide_preview).render(next_area, buf, state);
 
         // Notes
-        self.speaker_notes.render(notes_area, buf, state);
+        (&self.speaker_notes).render(notes_area, buf, state);
 
         // Dialogs
         match &state.dialog {
             AppDialog::Help => {
-                let area = popup_area(area, 50, 20);
+                let area = popup_area(area, 52, 22);
                 Clear.render(area, buf);
-                self.help_panel.render(area, buf);
+                (&self.help_panel).render(area, buf);
             }
             AppDialog::Log => {
                 // let area = popup_area(area, 80, 40);

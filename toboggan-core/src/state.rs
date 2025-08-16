@@ -1,8 +1,12 @@
+#[cfg(feature = "openapi")]
+use alloc::{format, string::String, vec::Vec};
+
 use serde::{Deserialize, Serialize};
 
 use crate::{Duration, SlideId, Timestamp};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(tag = "state")]
 pub enum State {
     Init,

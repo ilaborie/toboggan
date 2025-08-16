@@ -64,7 +64,7 @@ fn build_lines<'a>(title: &'a str, actions: &'a [AppAction]) -> Vec<Line<'a>> {
             spans.push(Span::styled(key, styles::action::KEY));
         }
 
-        spans.push(Span::raw(" ".repeat(20 - keys_len)));
+        spans.push(Span::raw(" ".repeat(24 - keys_len)));
         spans.push(Span::raw(" · "));
         spans.push(Span::styled(description, styles::action::DESCRIPTION));
 

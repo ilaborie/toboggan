@@ -9,7 +9,7 @@ use crate::ui::styles;
 #[derive(Debug, Default)]
 pub struct ProgressBar {}
 
-impl StatefulWidget for ProgressBar {
+impl StatefulWidget for &ProgressBar {
     type State = AppState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {

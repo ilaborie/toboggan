@@ -11,7 +11,7 @@ use crate::ui::widgets::line_from_actions;
 #[derive(Debug, Default)]
 pub struct TitleBar {}
 
-impl StatefulWidget for TitleBar {
+impl StatefulWidget for &TitleBar {
     type State = AppState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {

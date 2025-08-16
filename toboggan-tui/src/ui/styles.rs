@@ -77,9 +77,6 @@ pub mod list {
         .add_modifier(Modifier::BOLD);
 
     pub const NORMAL_SLIDE_STYLE: Style = Style::new().fg(colors::WHITE);
-
-    pub const LIST_HIGHLIGHT_STYLE: Style =
-        Style::new().bg(colors::BLUE).add_modifier(Modifier::BOLD);
 }
 
 /// General UI styles
@@ -97,8 +94,6 @@ pub mod layout {
     // Control bar layout
     pub const CONTROL_BAR_HEIGHT: u16 = 3;
     pub const SPEAKER_NOTES_HEIGHT: u16 = 16;
-    // pub const LOG_PANEL_HEIGHT: u16 = 8;
-
     // Control bar horizontal layout
     pub const CONTROL_TITLE_MIN_WIDTH: u16 = 20;
     pub const CONTROL_PROGRESS_WIDTH: u16 = 30;
@@ -112,5 +107,4 @@ pub mod layout {
     pub const TOP_BAR: Constraint = Constraint::Length(CONTROL_BAR_HEIGHT);
     pub const MAIN_CONTENT: Constraint = Constraint::Min(8);
     pub const SPEAKER_NOTES: Constraint = Constraint::Length(SPEAKER_NOTES_HEIGHT);
-    // pub const LOG_PANEL: Constraint = Constraint::Length(LOG_PANEL_HEIGHT);
 }

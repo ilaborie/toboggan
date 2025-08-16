@@ -33,7 +33,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Value'
+                $ref: '#/components/schemas/Notification'
   /api/slides:
     get:
       tags:
@@ -47,7 +47,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Value'
+                $ref: '#/components/schemas/SlidesResponse'
   /api/talk:
     get:
       tags:
@@ -61,7 +61,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Value'
+                $ref: '#/components/schemas/TalkResponse'
   /api/ws:
     get:
       tags:
@@ -83,9 +83,78 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Value'
+                $ref: '#/components/schemas/HealthResponse'
 components:
   schemas:
+    HealthResponse:
+      type: object
+      required:
+      - status
+      - started_at
+      - elapsed
+      - talk
+      - active_clients
+      properties:
+        active_clients:
+          type: integer
+          minimum: 0
+        elapsed:
+          $ref: '#/components/schemas/Duration'
+        started_at:
+          $ref: '#/components/schemas/Timestamp'
+        status:
+          $ref: '#/components/schemas/HealthResponseStatus'
+        talk:
+          type: string
+    Notification:
+      oneOf:
+      - type: object
+        required:
+        - timestamp
+        - state
+        - type
+        properties:
+          state:
+            $ref: '#/components/schemas/State'
+          timestamp:
+            $ref: '#/components/schemas/Timestamp'
+          type:
+            type: string
+            enum:
+            - State
+      - type: object
+        required:
+        - timestamp
+        - message
+        - type
+        properties:
+          message:
+            type: string
+          timestamp:
+            $ref: '#/components/schemas/Timestamp'
+          type:
+            type: string
+            enum:
+            - Error
+      - type: object
+        required:
+        - timestamp
+        - type
+        properties:
+          timestamp:
+            $ref: '#/components/schemas/Timestamp'
+          type:
+            type: string
+            enum:
+            - Pong
+      - type: object
+        required:
+        - type
+        properties:
+          type:
+            type: string
+            enum:
+            - Blink
     Renderer:
       type: string
       enum:
@@ -104,6 +173,15 @@ components:
       - Cover
       - Part
       - Standard
+    SlidesResponse:
+      type: object
+      required:
+      - slides
+      properties:
+        slides:
+          type: array
+          items:
+            $ref: '#/components/schemas/Slide'
     Style:
       type: array
       items:
@@ -113,6 +191,28 @@ components:
 
         Contains a list of CSS class names that can be applied to customize
         the appearance of individual slides.
+    TalkResponse:
+      type: object
+      required:
+      - title
+      - date
+      - footer
+      - titles
+      properties:
+        date:
+          $ref: '#/components/schemas/Date'
+          description: The date of the presentation.
+        footer:
+          $ref: '#/components/schemas/Content'
+          description: The footer of the presentation.
+        title:
+          $ref: '#/components/schemas/Content'
+          description: The title of the presentation.
+        titles:
+          type: array
+          items:
+            type: string
+          description: The slides titles
     Value: {}
 tags:
 - name: command
