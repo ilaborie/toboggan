@@ -235,3 +235,10 @@ impl Display for Style {
         write!(fmt, "{classes}")
     }
 }
+
+#[cfg(feature = "alloc")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct SlidesResponse {
+    pub slides: Vec<Slide>,
+}

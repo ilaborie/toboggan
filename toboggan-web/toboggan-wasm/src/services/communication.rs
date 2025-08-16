@@ -192,7 +192,7 @@ impl CommunicationService {
         let tx_msg_clone = self.tx_msg.clone();
         let config = self.config.clone();
         let client_id = self.client_id;
-        let state_clone: Rc<RefCell<ConnectionState>> = self.state.clone();
+        let state_clone= Rc::clone(&self.state);
         let tx_cmd = self.tx_cmd.clone();
         let rx_cmd = Rc::clone(&self.rx_cmd);
 
@@ -288,6 +288,7 @@ fn reconnect_with_channel(
 
     // Handle messages (simplified version for reconnection)
     spawn_local(async move {
+        // TODO replace by handle incomming messages
         use futures::StreamExt;
         loop {
             // Safe in single-threaded WASM: no other tasks can access the RefCell during await
@@ -348,6 +349,7 @@ fn schedule_reconnect_async(
             },
         );
 
+        // TODO weird
         // Use callback-based timeout as recommended by gloo docs
         let timeout = Timeout::new(retry_delay, move || {
             info!("Auto-reconnect timeout triggered - attempting reconnection");

@@ -1,211 +1,114 @@
-use ratatui::Frame;
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, Paragraph};
-use toboggan_core::{Content, Slide};
+use ratatui::layout::Flex;
+use ratatui::prelude::*;
+use ratatui::symbols::border;
+use ratatui::widgets::{Block, Clear, Paragraph, Wrap};
+use tui_logger::TuiLoggerWidget;
 
-use crate::state::{AppState, ConnectionStatus};
+use crate::state::{AppDialog, AppState};
+use crate::ui::styles::layout;
+use crate::ui::widgets::{
+    CurrentSlide, HelpPanel, NextSlidePreview, ProgressBar, SlideList, SpeakerNotes, TitleBar,
+};
 
-pub fn render_ui(f: &mut Frame, state: &AppState) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1), // Status bar
-            Constraint::Min(0),    // Main content
-            Constraint::Length(3), // Control panel
-        ])
-        .split(f.area());
+pub mod styles;
+pub mod widgets;
 
-    render_status_bar(f, chunks[0], state);
-    render_main_content(f, chunks[1], state);
-    render_control_panel(f, chunks[2]);
-
-    if state.show_help {
-        render_help_overlay(f);
-    }
-
-    if let Some(error) = &state.error_message {
-        render_error_popup(f, error);
-    }
+#[derive(Default)]
+pub struct PresenterComponents {
+    title_bar: TitleBar,
+    progress_bar: ProgressBar,
+    slide_list: SlideList,
+    current_slide: CurrentSlide,
+    next_slide_preview: NextSlidePreview,
+    speaker_notes: SpeakerNotes,
+    help_panel: HelpPanel,
 }
 
-fn render_status_bar(f: &mut Frame, area: Rect, state: &AppState) {
-    let status_color = match &state.connection_status {
-        ConnectionStatus::Connected => Color::Green,
-        ConnectionStatus::Connecting => Color::Yellow,
-        ConnectionStatus::Disconnected => Color::Red,
-        ConnectionStatus::Error(_) => Color::Red,
-    };
+impl PresenterComponents {}
 
-    let status_text = match &state.connection_status {
-        ConnectionStatus::Connected => "Connected",
-        ConnectionStatus::Connecting => "Connecting...",
-        ConnectionStatus::Disconnected => "Disconnected",
-        ConnectionStatus::Error(msg) => msg,
-    };
+impl StatefulWidget for &PresenterComponents {
+    type State = AppState;
 
-    let slide_info = if let Some(slide_id) = &state.current_slide {
-        format!(" | Slide: {slide_id:?}")
-    } else {
-        " | No slide".to_string()
-    };
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+        let main_layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                layout::TOP_BAR,
+                layout::MAIN_CONTENT,
+                layout::SPEAKER_NOTES,
+                // layout::LOG_PANEL,     // Log panel
+            ]);
+        let [top_area, content_area, notes_area] = main_layout.areas(area);
 
-    let content = Line::from(vec![
-        Span::styled("Status: ", Style::default()),
-        Span::styled(status_text, Style::default().fg(status_color)),
-        Span::raw(slide_info),
-    ]);
+        let content_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(layout::SLIDE_LIST_PERCENTAGE),
+                Constraint::Percentage(layout::CURRENT_SLIDE_PERCENTAGE),
+                Constraint::Percentage(layout::NEXT_SLIDE_PERCENTAGE),
+            ]);
+        let [slides_area, current_area, next_area] = content_layout.areas(content_area);
 
-    let paragraph = Paragraph::new(content).style(Style::default().bg(Color::DarkGray));
-    f.render_widget(paragraph, area);
-}
+        // Topbar - split into title and progress areas
+        let top_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Min(layout::CONTROL_TITLE_MIN_WIDTH),
+                Constraint::Length(layout::CONTROL_PROGRESS_WIDTH),
+            ]);
+        let [title_area, progress_area] = top_layout.areas(top_area);
 
-fn render_main_content(f: &mut Frame, area: Rect, state: &AppState) {
-    let block = Block::default()
-        .title("Slide Content")
-        .borders(Borders::ALL);
+        (&self.title_bar).render(title_area, buf, state);
+        (&self.progress_bar).render(progress_area, buf, state);
 
-    if let Some(slide_id) = &state.current_slide {
-        if let Some(slide) = state.slides.get(slide_id) {
-            render_slide_content(f, area, slide);
-        } else {
-            let loading = Paragraph::new("Loading slide...")
-                .block(block)
-                .style(Style::default().fg(Color::Yellow));
-            f.render_widget(loading, area);
-        }
-    } else {
-        let waiting = Paragraph::new("Waiting for presentation...")
-            .block(block)
-            .style(Style::default().fg(Color::Gray));
-        f.render_widget(waiting, area);
-    }
-}
+        // Main content area - 3 columns
+        (&self.slide_list).render(slides_area, buf, state);
+        (&self.current_slide).render(current_area, buf, state);
+        (&self.next_slide_preview).render(next_area, buf, state);
 
-fn render_slide_content(f: &mut Frame, area: Rect, slide: &Slide) {
-    let title = content_to_string(&slide.title).unwrap_or_else(|| "Untitled".to_string());
+        // Notes
+        (&self.speaker_notes).render(notes_area, buf, state);
 
-    let body = content_to_string(&slide.body).unwrap_or_else(|| "No content".to_string());
-
-    let content = format!("{}\n\n{}", title, body);
-
-    let block = Block::default()
-        .title(format!("Slide ({:?})", slide.kind))
-        .borders(Borders::ALL);
-
-    let paragraph = Paragraph::new(content)
-        .block(block)
-        .wrap(ratatui::widgets::Wrap { trim: true });
-
-    f.render_widget(paragraph, area);
-}
-
-fn render_control_panel(f: &mut Frame, area: Rect) {
-    let block = Block::default().title("Controls").borders(Borders::ALL);
-
-    let controls = vec![
-        Line::from("F:First  P:Previous  N:Next  L:Last  Space:Play/Pause"),
-        Line::from("H:Help  R:Reconnect  C:Clear Error  Q:Quit"),
-    ];
-
-    let paragraph = Paragraph::new(controls)
-        .block(block)
-        .style(Style::default().fg(Color::Cyan));
-
-    f.render_widget(paragraph, area);
-}
-
-fn render_help_overlay(f: &mut Frame) {
-    let area = centered_rect(60, 70, f.area());
-    f.render_widget(Clear, area);
-
-    let help_text = vec![
-        Line::from("Keyboard Shortcuts"),
-        Line::from(""),
-        Line::from("Navigation:"),
-        Line::from("  F / Home     - First slide"),
-        Line::from("  P / ←        - Previous slide"),
-        Line::from("  N / → / Space - Next slide"),
-        Line::from("  L / End      - Last slide"),
-        Line::from(""),
-        Line::from("Presentation:"),
-        Line::from("  Space        - Play/Pause toggle"),
-        Line::from(""),
-        Line::from("Application:"),
-        Line::from("  H / ?        - Toggle help panel"),
-        Line::from("  R            - Reconnect WebSocket"),
-        Line::from("  C            - Clear error message"),
-        Line::from("  Q / Ctrl+C   - Quit application"),
-        Line::from(""),
-        Line::from("Press H or ? to close this help"),
-    ];
-
-    let block = Block::default()
-        .title("Help")
-        .borders(Borders::ALL)
-        .style(Style::default().bg(Color::Black));
-
-    let paragraph = Paragraph::new(help_text)
-        .block(block)
-        .style(Style::default().fg(Color::White));
-
-    f.render_widget(paragraph, area);
-}
-
-fn render_error_popup(f: &mut Frame, error: &str) {
-    let area = centered_rect(50, 20, f.area());
-    f.render_widget(Clear, area);
-
-    let block = Block::default()
-        .title("Error")
-        .borders(Borders::ALL)
-        .style(Style::default().bg(Color::Red).fg(Color::White));
-
-    let paragraph = Paragraph::new(format!("{error}\n\nPress C to clear"))
-        .block(block)
-        .wrap(ratatui::widgets::Wrap { trim: true });
-
-    f.render_widget(paragraph, area);
-}
-
-fn centered_rect(percent_x: u16, percent_y: u16, rect: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(rect);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])
-        .get(1)
-        .copied()
-        .unwrap_or(popup_layout[1])
-}
-
-fn content_to_string(content: &Content) -> Option<String> {
-    match content {
-        Content::Empty => None,
-        Content::Text { text } => Some(text.clone()),
-        Content::Html { raw, alt } => alt.clone().or_else(|| Some(raw.clone())),
-        Content::IFrame { url } => Some(format!("IFrame: {url}")),
-        Content::Term { .. } => Some("Terminal content (not supported in TUI)".to_string()),
-        Content::Grid { contents, .. } => {
-            let texts: Vec<String> = contents.iter().filter_map(content_to_string).collect();
-            if texts.is_empty() {
-                None
-            } else {
-                Some(texts.join(" "))
+        // Dialogs
+        match &state.dialog {
+            AppDialog::Help => {
+                let area = popup_area(area, 52, 22);
+                Clear.render(area, buf);
+                (&self.help_panel).render(area, buf);
             }
+            AppDialog::Log => {
+                // let area = popup_area(area, 80, 40);
+                Clear.render(area, buf);
+                let block = Block::bordered().title(" Logs").border_set(border::ROUNDED);
+                TuiLoggerWidget::default()
+                    .block(block)
+                    .style_debug(styles::log::DEBUG)
+                    .style_info(styles::log::INFO)
+                    .style_warn(styles::log::WARN)
+                    .style_error(styles::log::ERROR)
+                    .render(area, buf);
+            }
+            AppDialog::Error(error) => {
+                let area = popup_area(area, 60, 8);
+                Clear.render(area, buf);
+                let block = Block::bordered()
+                    .title(" 🚨 Error ")
+                    .border_set(border::ROUNDED);
+                let content = Line::from(Span::styled(error, styles::colors::RED));
+                Paragraph::new(content)
+                    .block(block)
+                    .wrap(Wrap { trim: true })
+                    .render(area, buf);
+            }
+            AppDialog::None => {}
         }
     }
+}
+
+fn popup_area(area: Rect, x: u16, y: u16) -> Rect {
+    let vertical = Layout::vertical([Constraint::Length(y)]).flex(Flex::Center);
+    let horizontal = Layout::horizontal([Constraint::Length(x)]).flex(Flex::Center);
+    let [area] = vertical.areas(area);
+    let [area] = horizontal.areas(area);
+    area
 }

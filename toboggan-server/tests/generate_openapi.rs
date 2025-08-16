@@ -6,9 +6,10 @@ use clawspec_core::test_client::{TestClient, TestServer, TestServerConfig};
 use clawspec_core::{ApiClient, register_schemas};
 use serde_json::{Value, json};
 use toboggan_core::{
-    Content, Date, Renderer, Slide, SlideId, SlideKind, Style, Talk, TalkResponse,
+    Content, Date, Notification, Renderer, Slide, SlideId, SlideKind, SlidesResponse, Style, Talk,
+    TalkResponse,
 };
-use toboggan_server::{HealthResponse, SlidesResponse, TobogganState, routes};
+use toboggan_server::{HealthResponse, TobogganState, routes};
 use utoipa::openapi::{ContactBuilder, InfoBuilder, LicenseBuilder, ServerBuilder};
 
 #[derive(Debug, Clone)]
@@ -101,7 +102,6 @@ async fn should_generate_openapi() -> anyhow::Result<()> {
     // Test all endpoints to generate comprehensive OpenAPI spec
     basic_api_operations(&mut app).await?;
     test_command_operations(&mut app).await?;
-    test_error_cases(&mut app).await?;
     demonstrate_websocket_endpoint(&mut app).await?;
 
     // Generate and save OpenAPI specification
@@ -146,34 +146,24 @@ async fn test_command_operations(app: &mut TestClient<TobogganTestServer>) -> an
     let ping_command = json!({
         "command": "Ping"
     });
-    let ping_response: Value = app
+    let _ping_response = app
         .post("/api/command")?
         .json(&ping_command)?
         .await?
-        .as_json()
+        .as_json::<Notification>()
         .await?;
-
-    let ping_data = &ping_response["data"];
-    assert_eq!(ping_data["type"].as_str().unwrap(), "Pong");
-    assert!(ping_data["timestamp"].is_string());
-
     // Test register command
     let register_command = json!({
         "command": "Register",
         "client": "550e8400-e29b-41d4-a716-446655440000",
         "renderer": "Html"
     });
-    let register_response: Value = app
+    let _register_response = app
         .post("/api/command")?
         .json(&register_command)?
         .await?
-        .as_json()
+        .as_json::<Notification>()
         .await?;
-
-    let register_data = &register_response["data"];
-    assert_eq!(register_data["type"].as_str().unwrap(), "State");
-    assert!(register_data["timestamp"].is_string());
-    assert!(register_data["state"].is_object());
 
     // Test navigation commands
     let commands = vec![
@@ -186,49 +176,12 @@ async fn test_command_operations(app: &mut TestClient<TobogganTestServer>) -> an
     ];
 
     for command in commands {
-        let response: Value = app
+        let _response = app
             .post("/api/command")?
             .json(&command)?
             .await?
-            .as_json()
+            .as_json::<Notification>()
             .await?;
-
-        // Most commands return State notification
-        let response_data = &response["data"];
-        let response_type = response_data["type"].as_str().unwrap();
-        assert!(response_type == "State" || response_type == "Error");
-        assert!(response_data["timestamp"].is_string());
-    }
-
-    Ok(())
-}
-
-#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
-async fn test_error_cases(app: &mut TestClient<TobogganTestServer>) -> anyhow::Result<()> {
-    // Test malformed command - we expect this to fail during deserialization
-    let malformed_command = json!({
-        "command": "InvalidCommand"
-    });
-    // This should fail with a client error during JSON serialization
-    let _error = app.post("/api/command")?.json(&malformed_command);
-    // Since it's a client-side error, we can't check the server response
-
-    // Test GoTo command with invalid slide ID
-    let slides_response: Value = app.get("/api/slides")?.await?.as_json().await?;
-    let slides_data = &slides_response["data"];
-    let slides = slides_data["slides"].as_object().unwrap();
-
-    if let Some(first_slide_id) = slides.keys().next() {
-        // Create an invalid slide ID by modifying the first one
-        let mut invalid_id = first_slide_id.clone();
-        invalid_id.push_str("_invalid");
-
-        let goto_command = json!({
-            "command": "GoTo",
-            "0": invalid_id
-        });
-        // This should fail due to invalid slide ID format
-        let _error = app.post("/api/command")?.json(&goto_command);
     }
 
     Ok(())
@@ -237,11 +190,7 @@ async fn test_error_cases(app: &mut TestClient<TobogganTestServer>) -> anyhow::R
 async fn demonstrate_websocket_endpoint(
     app: &mut TestClient<TobogganTestServer>,
 ) -> anyhow::Result<()> {
-    // Test WebSocket endpoint exists (but skip upgrade testing)
-    // Note: WebSocket upgrades require proper client implementation
-    // For now we just verify the endpoint exists by making a simple GET request
     let _response = app.get("/api/ws")?.await?;
-    // The endpoint exists and responds, that's enough for OpenAPI generation
 
     Ok(())
 }
@@ -284,13 +233,12 @@ mod command_variants {
                 .await?;
 
             // All valid commands should return proper Notification responses
-            let response_data = &response["data"];
-            let response_type = response_data["type"].as_str().unwrap();
+            let response_type = response["type"].as_str().unwrap();
             assert!(
                 response_type == "State" || response_type == "Pong" || response_type == "Error",
                 "Unexpected response type: {response_type}"
             );
-            assert!(response_data["timestamp"].is_string());
+            assert!(response["timestamp"].is_string());
         }
 
         Ok(())

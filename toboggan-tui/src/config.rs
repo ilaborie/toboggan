@@ -1,18 +1,21 @@
-#[derive(Debug, Clone)]
-pub struct Config {
-    pub websocket_url: String,
-    pub api_url: String,
-    pub max_retries: u32,
-    pub retry_delay_ms: u64,
-}
+//! Configuration for the TUI application using toboggan-client.
+//!
+//! Re-exports the shared configuration types from toboggan-client.
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            websocket_url: "ws://localhost:8080/api/ws".to_string(),
-            api_url: "http://localhost:8080".to_string(),
-            max_retries: 5,
-            retry_delay_ms: 1000,
-        }
+pub use toboggan_client::TobogganConfig as Config;
+
+/// Create config from command line arguments, using toboggan-client defaults
+#[must_use]
+pub fn build_config(websocket_url: Option<String>, api_url: Option<String>) -> Config {
+    let mut config = Config::default();
+
+    if let Some(ws_url) = websocket_url {
+        config.websocket.websocket_url = ws_url;
     }
+
+    if let Some(api_url) = api_url {
+        config.api_url = api_url;
+    }
+
+    config
 }

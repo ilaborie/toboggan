@@ -5,6 +5,7 @@ type = "Text"
 text = "Peut-on RIIR de tout ?"
 
 [[slides]]
+id = 0
 kind = "Cover"
 style = []
 
@@ -19,6 +20,7 @@ type = "Text"
 text = "Rewriting It In Rust - De la startup aux multinationales"
 
 [[slides]]
+id = 1
 kind = "Part"
 style = []
 
@@ -39,6 +41,7 @@ Une question qui fait sourire… mais qui cache une réalité : Rust gagne du te
 type = "Empty"
 
 [[slides]]
+id = 2
 kind = "Part"
 style = []
 
@@ -109,6 +112,7 @@ alt = """
 type = "Empty"
 
 [[slides]]
+id = 3
 kind = "Part"
 style = []
 
@@ -179,6 +183,7 @@ Rust ne se limite pas aux applications terminal :
 type = "Empty"
 
 [[slides]]
+id = 4
 kind = "Part"
 style = []
 
@@ -300,6 +305,7 @@ impl UserService {
 type = "Empty"
 
 [[slides]]
+id = 5
 kind = "Part"
 style = []
 
@@ -358,6 +364,7 @@ alt = """
 type = "Empty"
 
 [[slides]]
+id = 6
 kind = "Part"
 style = []
 
@@ -412,6 +419,7 @@ Peut-être que la réponse n’est plus si farfelue…"""
 type = "Empty"
 
 [[slides]]
+id = 7
 kind = "Part"
 style = []
 

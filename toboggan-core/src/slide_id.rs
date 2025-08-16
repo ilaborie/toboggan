@@ -17,7 +17,18 @@ static ID_SEQ: AtomicU8 = AtomicU8::new(0);
 static RESET_MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash, Serialize, Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Default,
+    Hash,
+    Serialize,
+    Deserialize,
+    derive_more::From,
 )]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SlideId(u8);
