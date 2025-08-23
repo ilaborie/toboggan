@@ -6,9 +6,7 @@
 #![allow(clippy::too_many_lines)]
 
 use futures::{SinkExt, StreamExt};
-use toboggan_core::{
-    ClientId, Command, Date, Notification, Renderer, Slide, Talk,
-};
+use toboggan_core::{ClientId, Command, Date, Notification, Renderer, Slide, Talk};
 use toboggan_server::{TobogganState, routes_with_cors};
 use tokio::net::TcpListener;
 use tokio_tungstenite::connect_async;
