@@ -1,44 +1,36 @@
-namespace toboggan {
-    [Throws=TobogganError]
-    TobogganClient create_client(ClientConfig config);
-};
-
-[Error]
-enum TobogganError {
-    "ConnectionError",
-    "ParseError",  
-    "ConfigError",
-    "UnknownError",
-};
+namespace toboggan {};
 
 dictionary ClientConfig {
-    string websocket_url;
+    string url;
     u32 max_retries;
-    u64 retry_delay_ms;
+    duration retry_delay;
 };
 
-dictionary Slide {
-    SlideId id;
-    string title;
-    string body;
-    SlideKind kind;
-    SlideStyle style;
-    string? notes;
-};
-
-[Custom]
-typedef string SlideId;
 
 enum SlideKind {
     "Cover",
-    "Part", 
+    "Part",
     "Standard",
 };
 
-enum SlideStyle {
-    "Default",
-    "Center",
-    "Code",
+dictionary Slide {
+    string id;
+    string title;
+    SlideKind kind;
+};
+
+dictionary Talk {
+    string title;
+    string date;
+    sequence<string> slides;
+};
+
+enum ConnectionStatus {
+    "Connecting",
+    "Connected",
+    "Closed",
+    "Reconnecting",
+    "Error",
 };
 
 enum Command {
@@ -46,40 +38,36 @@ enum Command {
     "Previous",
     "First",
     "Last",
-    "Play",
-    "Pause",
     "Resume",
-};
-
-dictionary TalkInfo {
-    string title;
-    string? date;
-    sequence<Slide> slides;
+    "Pause",
+    "Blink",
 };
 
 [Enum]
 interface State {
-    Running(SlideId current, u64 total_duration_ms);
-    Paused(SlideId current, u64 total_duration_ms);
-    Done(SlideId current, u64 total_duration_ms);
+    Init(string next);
+    Running(string? previous, string current, string? next, duration total_duration);
+    Paused(string? previous, string current, string? next, duration total_duration);
+    Done(string? previous, string current, duration total_duration);
 };
 
+[Trait, WithForeign]
+interface ClientNotificationHandler {
+    void on_state_change(State state);
+    void on_connection_status_change(ConnectionStatus status);
+    void on_error(string error);
+};
 
 interface TobogganClient {
-    constructor(ClientConfig config);
-    
-    [Async, Throws=TobogganError]
+    constructor(ClientConfig config, ClientNotificationHandler handler);
+
     void connect();
-    
-    [Async, Throws=TobogganError] 
-    void disconnect();
-    
-    [Throws=TobogganError]
+
     void send_command(Command command);
-    
-    State? get_current_state();
-    Slide? get_slide(SlideId slide_id);
-    TalkInfo? get_talk_info();
-    
+
+    State? get_state();
+    Slide? get_slide(string slide_id);
+    Talk? get_talk();
+
     boolean is_connected();
 };

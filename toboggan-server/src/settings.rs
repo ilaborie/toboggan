@@ -60,13 +60,8 @@ impl Settings {
         Duration::from_secs(self.cleanup_interval_secs)
     }
 
-    /// Validates the settings configuration
-    ///
     /// # Errors
-    /// Returns an error if any setting is invalid:
-    /// - `max_clients` is 0
-    /// - `heartbeat_interval_secs` is 0
-    /// - talk file doesn't exist or isn't a .toml file
+    /// Returns error if configuration is invalid
     pub fn validate(&self) -> Result<(), String> {
         if self.max_clients == 0 {
             return Err("max_clients must be greater than 0".to_string());

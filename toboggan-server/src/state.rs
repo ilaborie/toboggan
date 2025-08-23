@@ -22,11 +22,8 @@ pub struct TobogganState {
 }
 
 impl TobogganState {
-    /// Creates a new `TobogganState` from a talk.
-    ///
     /// # Panics
-    ///
-    /// Panics if the talk has no slides.
+    /// Panics if talk has no slides
     #[must_use]
     pub fn new(talk: Talk, max_clients: usize) -> Self {
         let started = Timestamp::now();
@@ -108,15 +105,12 @@ impl TobogganState {
         &self,
         client_id: ClientId,
     ) -> Result<watch::Receiver<Notification>, ApiError> {
-        // Clean up disconnected clients first
         self.cleanup_disconnected_clients();
 
-        // Check client limit
         if self.clients.len() >= self.max_clients {
             return Err(ApiError::TooManyClients);
         }
 
-        // Get the current state to send to the new client
         let current_state = self.current_state.read().await;
         let initial_notification = Notification::state(current_state.clone());
 
@@ -188,7 +182,6 @@ impl TobogganState {
     fn command_first(&self, state: &mut State) -> Notification {
         match state {
             State::Init => {
-                // In Init state, go to first slide and start running
                 *state = State::Running {
                     since: Timestamp::now(),
                     current: self.slide_order.first().copied().expect("a first slide"),
@@ -196,7 +189,6 @@ impl TobogganState {
                 };
             }
             State::Paused { .. } => {
-                // In Paused state, go to first slide and start running with reset timestamp
                 if let Some(&first_slide) = self.slide_order.first() {
                     *state = State::Running {
                         since: Timestamp::now(),
@@ -206,7 +198,6 @@ impl TobogganState {
                 }
             }
             _ => {
-                // Normal behavior for Running/Done states - reset timestamp when going to first
                 if !state.is_first_slide(&self.slide_order)
                     && let Some(&first_slide) = self.slide_order.first()
                 {
@@ -224,7 +215,6 @@ impl TobogganState {
     fn command_last(&self, state: &mut State) -> Notification {
         match state {
             State::Init => {
-                // In Init state, go to first slide and start running (last command from init goes to first)
                 if let Some(&first_slide) = self.slide_order.first() {
                     *state = State::Running {
                         since: Timestamp::now(),
@@ -234,13 +224,10 @@ impl TobogganState {
                 }
             }
             State::Paused { .. } => {
-                // In Paused state, navigate and start running (unless already on last slide)
                 if let Some(&last_slide) = self.slide_order.last() {
                     if state.is_last_slide(&self.slide_order) {
-                        // Stay paused if already on last slide (no movement)
                         state.update_slide(last_slide);
                     } else {
-                        // Go to last slide and start running
                         *state = State::Running {
                             since: Timestamp::now(),
                             current: last_slide,
@@ -250,7 +237,6 @@ impl TobogganState {
                 }
             }
             _ => {
-                // Normal behavior for Running/Done states
                 if !state.is_last_slide(&self.slide_order)
                     && let Some(&last_slide) = self.slide_order.last()
                 {
@@ -265,7 +251,6 @@ impl TobogganState {
         if self.slide_order.contains(&slide_id) {
             match state {
                 State::Init => {
-                    // In Init state, go to specified slide and start running
                     *state = State::Running {
                         since: Timestamp::now(),
                         current: slide_id,
@@ -273,14 +258,11 @@ impl TobogganState {
                     };
                 }
                 State::Paused { .. } => {
-                    // In Paused state, navigate and start running (unless going to last slide)
                     if state.is_last_slide(&self.slide_order)
                         && Some(&slide_id) == self.slide_order.last()
                     {
-                        // Stay paused if going to last slide and already on last slide
                         state.update_slide(slide_id);
                     } else {
-                        // Go to specified slide and start running
                         *state = State::Running {
                             since: Timestamp::now(),
                             current: slide_id,
@@ -289,7 +271,6 @@ impl TobogganState {
                     }
                 }
                 _ => {
-                    // Normal behavior for Running/Done states
                     state.update_slide(slide_id);
                 }
             }
@@ -302,7 +283,6 @@ impl TobogganState {
     fn command_next(&self, state: &mut State) -> Notification {
         match state {
             State::Init => {
-                // In Init state, go to first slide and start running
                 if let Some(&first_slide) = self.slide_order.first() {
                     *state = State::Running {
                         since: Timestamp::now(),
@@ -314,25 +294,19 @@ impl TobogganState {
                 }
             }
             State::Paused { .. } => {
-                // In Paused state, navigate and start running
                 if let Some(next_slide) = state.next(&self.slide_order) {
-                    // Always start running when we can navigate
                     *state = State::Running {
                         since: Timestamp::now(),
                         current: next_slide,
                         total_duration: state.calculate_total_duration(),
                     };
                 }
-                // If no next slide available (already on last slide), stay paused
-                // No state change needed
             }
             _ => {
-                // Normal behavior for Running/Done states
                 if let Some(current) = state.current() {
                     if let Some(next_slide) = state.next(&self.slide_order) {
                         state.update_slide(next_slide);
                     } else if state.is_last_slide(&self.slide_order) {
-                        // We're at the last slide, mark as done
                         let total_duration = state.calculate_total_duration();
                         *state = State::Done {
                             current,
@@ -356,7 +330,6 @@ impl TobogganState {
     fn command_previous(&self, state: &mut State) -> Notification {
         match state {
             State::Init => {
-                // In Init state, go to first slide and start running
                 if let Some(&first_slide) = self.slide_order.first() {
                     *state = State::Running {
                         since: Timestamp::now(),
@@ -366,7 +339,6 @@ impl TobogganState {
                 }
             }
             State::Paused { .. } => {
-                // In Paused state, navigate and start running
                 if let Some(prev_slide) = state.previous(&self.slide_order) {
                     *state = State::Running {
                         since: Timestamp::now(),
@@ -376,7 +348,6 @@ impl TobogganState {
                 }
             }
             _ => {
-                // Normal behavior for Running/Done states
                 if let Some(prev_slide) = state.previous(&self.slide_order) {
                     state.update_slide(prev_slide);
                 }
@@ -386,7 +357,6 @@ impl TobogganState {
     }
 
     fn command_pause(state: &mut State) -> Notification {
-        // Skip if already paused or done
         if let State::Running { current, .. } = *state {
             let total_duration = state.calculate_total_duration();
             *state = State::Paused {
@@ -398,7 +368,6 @@ impl TobogganState {
     }
 
     fn command_resume(state: &mut State) -> Notification {
-        // Skip if already running or done
         if matches!(*state, State::Paused { .. }) {
             state.auto_resume();
         }
@@ -406,7 +375,6 @@ impl TobogganState {
     }
 
     fn command_blink() -> Notification {
-        // Blink command creates a blink notification without changing state
         Notification::blink()
     }
 
@@ -414,16 +382,10 @@ impl TobogganState {
         let start_time = std::time::Instant::now();
         let mut state = self.current_state.write().await;
 
-        // Process command and create notification atomically
+        #[allow(clippy::match_same_arms)]
         let notification = match command {
-            Command::Register { .. } => {
-                // Registration is handled separately via WebSocket
-                Notification::state(state.clone())
-            }
-            Command::Unregister { .. } => {
-                // Unregistration is handled separately via WebSocket
-                Notification::state(state.clone())
-            }
+            Command::Register { .. } => Notification::state(state.clone()),
+            Command::Unregister { .. } => Notification::state(state.clone()),
             Command::First => self.command_first(&mut state),
             Command::Last => self.command_last(&mut state),
             Command::GoTo(slide_id) => self.command_goto(&mut state, *slide_id),
@@ -435,10 +397,7 @@ impl TobogganState {
             Command::Ping => Notification::pong(),
         };
 
-        // Broadcast the notification while still holding the write lock to ensure atomicity
         self.broadcast_notification(&notification);
-
-        // Drop the write lock explicitly after broadcasting
         drop(state);
 
         tracing::debug!(

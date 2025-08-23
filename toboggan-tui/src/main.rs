@@ -29,10 +29,12 @@ async fn main() -> Result<()> {
 
     // Run the app
     let terminal = ratatui::init();
-    let result = App::new(terminal, &config)
-        .await
-        .context("create app")
-        .and_then(|mut app| app.run());
+    let result = {
+        App::new(terminal, &config)
+            .await
+            .context("create app")
+            .and_then(|mut app| app.run())
+    };
     ratatui::restore();
 
     result

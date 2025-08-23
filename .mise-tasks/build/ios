@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+#MISE description="Build iOS application with Rust core and Swift bindings and configure Xcode project"
+
+set -eu
+
+ Build for iOS targets
+echo "🔨 Building Rust library for iOS targets..."
+
+# Add iOS targets if not already installed
+rustup target add aarch64-apple-ios
+rustup target add x86_64-apple-ios
+rustup target add aarch64-apple-ios-sim
+
+echo "📱 Building for iOS device (aarch64-apple-ios)..."
+cargo build -p toboggan-ios --release --target aarch64-apple-ios
+
+# Build for iOS simulator (x86_64 and arm64)
+echo "🖥️ Building for iOS Simulator (x86_64-apple-ios)..."
+cargo build -p toboggan-ios --release --target x86_64-apple-ios
+
+echo "🖥️ Building for iOS Simulator (aarch64-apple-ios-sim)..."
+cargo build -p toboggan-ios --release --target aarch64-apple-ios-sim
+
+echo "🛠️ Building the uniffi-bindgen helper..."
+cargo build -p toboggan-ios --release --bin uniffi-bindgen
+
+
+echo "🍎 Now you can build in XCode the iOS application"

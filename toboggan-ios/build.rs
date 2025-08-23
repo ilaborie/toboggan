@@ -1,4 +1,4 @@
-// For procedural macros, we don't need any special build logic
+#[allow(clippy::unwrap_used)]
 fn main() {
-    // No-op
+    uniffi::generate_scaffolding("src/toboggan.udl").unwrap();
 }

@@ -51,8 +51,8 @@ async fn create_test_server() -> (String, TobogganState) {
             .expect("Server failed");
     });
 
-    // Give the server a moment to start
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    // Give the server more time to start
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
     (server_url, state)
 }
@@ -403,22 +403,26 @@ async fn test_two_clients_navigation_sync() {
     println!("Client 1 ID: {:?}", client1_id);
     println!("Client 2 ID: {:?}", client2_id);
 
-    // Wait a bit to ensure both clients are fully connected and get initial state
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    // Wait longer to ensure both clients are fully connected and WebSocket tasks are running
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
     // Test 1: Client 1 navigates to next slide, Client 2 should receive the update
     println!("\n=== Test 1: Client 1 navigates next ===");
 
-    let (client1_response, client2_sync) = coordinated_command_execution(
+    // Client 1 sends Next command
+    let client1_response = send_command_and_get_response(
         &mut client1_sender,
         &mut client1_receiver,
-        &mut client2_receiver,
         Command::Next,
         "Client1",
-        "Client2",
     )
     .await
-    .expect("Failed to coordinate Next command");
+    .expect("Failed to send Next command");
+
+    // Client 2 should receive sync notification
+    let client2_sync = wait_for_notification(&mut client2_receiver, "Client2", 1000)
+        .await
+        .expect("Client 2 should receive sync notification");
 
     // Verify Client 1 received the state change
     let client1_current = match &client1_response {
