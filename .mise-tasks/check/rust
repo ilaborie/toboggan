@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+#MISE description="Run Rust-specific checks: format, lint, and test"
+
+set -eu
+
+echo "🦀 Running Rust checks..."
+
+# Check formatting
+echo "📐 Checking Rust formatting..."
+cargo +nightly fmt --all --check
+
+# Check no lint warning
+echo "🔍 Running Rust clippy..."
+cargo clippy --all-targets --all-features -- -D warnings
+
+# Run tests
+echo "🧪 Running Rust unit tests..."
+cargo nextest run
+
+# Run doc tests
+echo "📚 Running Rust doctests..."
+cargo test --doc
+
+echo "✅ All Rust checks passed!"

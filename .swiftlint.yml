@@ -2,15 +2,18 @@
 
 # File patterns to include
 included:
-  - toboggan-ios
+  - TobogganApp/TobogganApp
+  - TobogganApp/TobogganAppTests
+  - TobogganApp/TobogganAppUITests
 
 # File patterns to exclude
 excluded:
-  - toboggan-ios/target
-  - toboggan-ios/.build
-  - toboggan-ios/build
-  - toboggan-ios/TobogganApp.xcodeproj
-  - toboggan-ios/TobogganApp.xcworkspace
+  - TobogganApp/TobogganApp.xcodeproj
+  - TobogganApp/TobogganApp.xcworkspace
+  - TobogganApp/TobogganApp/toboggan.swift  # Auto-generated UniFFI bindings
+  - target
+  - .build
+  - build
 
 # Rules to disable
 disabled_rules:

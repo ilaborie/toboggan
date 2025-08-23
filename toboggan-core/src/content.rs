@@ -253,17 +253,13 @@ impl Content {
     /// use toboggan_core::Content;
     ///
     /// let content = Content::term("/home/user/project");
-    /// let content2 = Content::term(String::from("./demo"));
+    /// let content2 = Content::term("./demo");
     /// ```
     ///
-    /// ```rust,no_run
-    /// # #[cfg(feature = "std")]
-    /// # {
+    /// ```rust
     /// use toboggan_core::Content;
-    /// use std::path::Path;
     ///
-    /// let content3 = Content::term(Path::new("./demo"));
-    /// # }
+    /// let content3 = Content::term("./demo");
     /// ```
     pub fn term(cwd: impl Into<WorkingDirectory>) -> Self {
         let cwd = cwd.into();

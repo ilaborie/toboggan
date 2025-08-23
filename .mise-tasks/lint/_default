@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+#MISE description="Run linting for all platforms: Rust, web, and iOS"
+
+set -eu
+
+echo "🚀 Running comprehensive linting for all platforms..."
+
+# Run Rust linting
+echo "==================== RUST LINTING ==================="
+mise lint:rust
+
+# Run web linting  
+echo "==================== WEB LINTING ===================="
+mise lint:web
+
+# Run iOS linting
+echo "==================== iOS LINTING ===================="
+mise lint:ios
+
+echo ""
+echo "🎉 All platform linting completed successfully!"
+echo "✅ Rust: clippy checks"
+echo "✅ Web: Biome linting"
+echo "✅ iOS: SwiftLint analysis"
+echo ""
+echo "All linting checks passed! 🔍"

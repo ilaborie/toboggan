@@ -10,7 +10,6 @@ import SwiftUI
 struct TopBarView: View {
     @EnvironmentObject var viewModel: PresentationViewModel
     
-    
     var body: some View {
         VStack(spacing: 12) {
             // Presentation title

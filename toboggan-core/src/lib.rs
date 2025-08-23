@@ -51,10 +51,10 @@
 //! ### Creating a Basic Talk
 //!
 //! ```rust
-//! use toboggan_core::{Talk, Slide, Content, date_utils};
+//! use toboggan_core::{Talk, Slide, Content, Date};
 //!
 //! let talk = Talk::new("My Presentation")
-//!     .with_date(date_utils::ymd(2025, 1, 26))
+//!     .with_date(Date::ymd(2025, 1, 26))
 //!     .add_slide(
 //!         Slide::cover("Welcome")
 //!             .with_body("Welcome to my presentation")
@@ -85,8 +85,7 @@
 //! ### Presentation State Management
 //!
 //! ```rust
-//! use toboggan_core::{State, SlideId, Command};
-//! use std::time::Duration;
+//! use toboggan_core::{State, SlideId, Command, Duration};
 //!
 //! let slide1 = SlideId::next();
 //! let mut state = State::Paused {

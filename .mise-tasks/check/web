@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+#MISE description="Run web-specific checks with Biome"
+
+set -eu
+
+echo "🌐 Running web checks..."
+
+# Check toboggan-web with Biome
+echo "🔧 Checking toboggan-web with Biome..."
+cd toboggan-web && npm run check && cd ..
+
+echo "✅ All web checks passed!"
