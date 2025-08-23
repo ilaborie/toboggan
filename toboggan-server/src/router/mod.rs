@@ -25,7 +25,7 @@ pub fn routes_with_cors(allowed_origins: Option<&[String]>) -> Router<TobogganSt
             Router::new()
                 .route("/talk", get(api::get_talk))
                 .route("/slides", get(api::get_slides))
-                .route("/slides/{id}", get(api::get_slide_by_id))
+                .route("/slides/{index}", get(api::get_slide_by_index))
                 .route("/command", post(api::post_command))
                 .route("/ws", get(ws::websocket_handler)),
         )

@@ -56,7 +56,7 @@ impl StatefulWidget for &ProgressBar {
         #[allow(clippy::cast_precision_loss)]
         LineGauge::default()
             .line_set(symbols::line::THICK)
-            .ratio(f64::from(current) / count as f64)
+            .ratio(current as f64 / count as f64)
             .filled_style(styles::colors::BLUE)
             .unfilled_style(styles::colors::BLACK)
             .block(block)

@@ -4,7 +4,7 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use toboggan_core::{Command, Notification, SlideId, SlidesResponse, TalkResponse};
+use toboggan_core::{Command, Notification, SlidesResponse, TalkResponse};
 use tracing::{info, warn};
 
 use crate::TobogganState;
@@ -23,11 +23,14 @@ pub(super) async fn get_slides(State(state): State<TobogganState>) -> impl IntoR
     Json(result)
 }
 
-pub(super) async fn get_slide_by_id(
+pub(super) async fn get_slide_by_index(
     State(state): State<TobogganState>,
-    Path(id): Path<SlideId>,
+    Path(index): Path<usize>,
 ) -> impl IntoResponse {
-    state.slide_by_id(id).map(Json).ok_or(StatusCode::NOT_FOUND)
+    state
+        .slide_by_index(index)
+        .map(Json)
+        .ok_or(StatusCode::NOT_FOUND)
 }
 
 pub(super) async fn post_command(

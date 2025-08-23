@@ -1,6 +1,6 @@
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use toboggan_core::{Command, Notification, Slide, SlideId, SlidesResponse, TalkResponse};
+use toboggan_core::{Command, Notification, Slide, SlidesResponse, TalkResponse};
 
 #[derive(Debug, derive_more::Error, derive_more::From, derive_more::Display)]
 pub enum TobogganApiError {
@@ -69,13 +69,13 @@ impl TobogganApi {
         self.get("/api/slides").await
     }
 
-    /// Fetches a specific slide by ID from the server.
+    /// Fetches a specific slide by index from the server.
     ///
     /// # Errors
     ///
     /// Returns `TobogganApiError` if the HTTP request fails or the response cannot be deserialized.
-    pub async fn slide(&self, slide_id: SlideId) -> Result<Slide, TobogganApiError> {
-        let path = format!("/api/slides/{slide_id}");
+    pub async fn slide(&self, slide_index: usize) -> Result<Slide, TobogganApiError> {
+        let path = format!("/api/slides/{slide_index}");
         self.get(&path).await
     }
 

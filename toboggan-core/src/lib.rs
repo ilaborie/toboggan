@@ -17,7 +17,6 @@
 //! - **[`State`]**: Presentation state management (Paused, Running, Done)
 //! - **[`Command`]**: Actions that can be performed on presentations
 //! - **[`Notification`]**: Events broadcast to connected clients
-//! - **[`SlideId`]**: Unique identifiers for slides
 //! - **[`Timestamp`]** and **[`Date`]**: Time handling type aliases for jiff types
 //!
 //! ## Feature Flags
@@ -44,7 +43,7 @@
 //!
 //! ### Optional Features
 //! - **`openapi`**: Enables `OpenAPI` schema generation via `utoipa`
-//! - **`test-utils`**: Provides testing utilities like `SlideId::reset_sequence()`
+//! - **`test-utils`**: Provides testing utilities
 //!
 //! ## Usage Examples
 //!
@@ -85,17 +84,16 @@
 //! ### Presentation State Management
 //!
 //! ```rust
-//! use toboggan_core::{State, SlideId, Command, Duration};
+//! use toboggan_core::{State, Command, Duration};
 //!
-//! let slide1 = SlideId::next();
 //! let mut state = State::Paused {
-//!     current: Some(slide1),
+//!     current: Some(0),  // First slide
 //!     total_duration: Duration::ZERO,
 //! };
 //!
 //! // Resume presentation
 //! state.auto_resume();
-//! // Now state is State::Running { since: Timestamp::now(), current: slide1, total_duration: Duration::ZERO }
+//! // Now state is State::Running { since: Timestamp::now(), current: 0, total_duration: Duration::ZERO }
 //! ```
 //!
 //! ## Multi-platform Support
@@ -153,9 +151,6 @@ extern crate alloc;
 
 mod time;
 pub use self::time::*;
-
-mod slide_id;
-pub use self::slide_id::*;
 
 mod content;
 pub use self::content::*;

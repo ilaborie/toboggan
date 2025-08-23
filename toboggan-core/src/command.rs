@@ -6,8 +6,6 @@ use getrandom;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::SlideId;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct ClientId(Uuid);
 
@@ -50,7 +48,7 @@ pub enum Command {
     // Move fast
     First,
     Last,
-    GoTo(SlideId),
+    GoTo(usize),
     // Navigation
     Next,
     Previous,

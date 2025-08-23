@@ -14,7 +14,7 @@ use core::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Content, SlideId};
+use crate::Content;
 
 /// A single slide within a presentation.
 ///
@@ -43,9 +43,6 @@ use crate::{Content, SlideId};
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(default)]
 pub struct Slide {
-    /// The slide id
-    pub id: SlideId,
-
     /// The kind of slide (Cover, Part, or Standard).
     pub kind: SlideKind,
 

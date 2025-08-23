@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -10,7 +9,7 @@ use toboggan_core::{ClientId, Command as CoreCommand};
 use tokio::runtime::Runtime;
 use tokio::sync::{Mutex, mpsc};
 
-use super::{ClientNotificationHandler, Command, Id, Slide, State, Talk};
+use super::{ClientNotificationHandler, Command, Slide, State, Talk};
 
 /// The toboggan client
 #[derive(Debug, Clone, uniffi::Record)]
@@ -29,7 +28,7 @@ pub struct ClientConfig {
 pub struct TobogganClient {
     talk: Arc<Mutex<Option<Talk>>>,
     state: Arc<Mutex<Option<State>>>,
-    slides: Arc<Mutex<HashMap<Id, Slide>>>,
+    slides: Arc<Mutex<Vec<Slide>>>,
     is_connected: Arc<AtomicBool>,
 
     handler: Arc<dyn ClientNotificationHandler>,
@@ -45,7 +44,7 @@ pub struct TobogganClient {
 impl TobogganClient {
     async fn read_incoming_messages(
         handler: Arc<dyn ClientNotificationHandler>,
-        ids: Vec<Id>,
+        total_slides: usize,
         shared_state: Arc<Mutex<Option<State>>>,
         is_connected: Arc<AtomicBool>,
         rx: &mut mpsc::UnboundedReceiver<CommunicationMessage>,
@@ -59,7 +58,7 @@ impl TobogganClient {
                     handler.on_connection_status_change(status.into());
                 }
                 CommunicationMessage::StateChange { state: new_state } => {
-                    let state_value = State::new(&ids, &new_state);
+                    let state_value = State::new(total_slides, &new_state);
                     {
                         let mut state_guard = shared_state.lock().await;
                         *state_guard = Some(state_value.clone());
@@ -143,16 +142,14 @@ impl TobogganClient {
                 }
 
                 // Loading slides
-                let ids = {
+                let total_slides = {
                     let slides = api.slides().await.expect("find a talk").slides;
                     println!("🦀  count slides: {}", slides.len());
-                    let mut ids = Vec::with_capacity(slides.len());
                     let mut sld = shared_slides.lock().await;
                     for slide in slides {
-                        ids.push(slide.id.to_string());
-                        sld.insert(slide.id.to_string(), slide.into());
+                        sld.push(slide.into());
                     }
-                    ids
+                    sld.len()
                 };
 
                 // Connect to WebSocket
@@ -167,7 +164,7 @@ impl TobogganClient {
                     let mut rx = rx_msg.lock().await;
                     Self::read_incoming_messages(
                         handler,
-                        ids,
+                        total_slides,
                         state_for_messages,
                         is_connected_for_messages,
                         &mut rx,
@@ -199,11 +196,11 @@ impl TobogganClient {
     }
 
     #[must_use]
-    pub fn get_slide(&self, slide_id: &Id) -> Option<Slide> {
+    pub fn get_slide(&self, index: u32) -> Option<Slide> {
         let slides = Arc::clone(&self.slides);
         self.runtime.block_on(async move {
             let st = slides.lock().await;
-            st.get(slide_id).cloned()
+            st.get(index as usize).cloned()
         })
     }
 

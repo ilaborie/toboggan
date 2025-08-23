@@ -13,9 +13,7 @@ impl StatefulWidget for &SlideList {
 
     #[allow(clippy::cast_possible_truncation)]
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let selected = state
-            .current_slide
-            .and_then(|id| state.ids.iter().position(|slide_id| id == *slide_id));
+        let selected = state.current_slide;
 
         // Create list items for each slide
         let items: Vec<ListItem> = state
@@ -23,7 +21,7 @@ impl StatefulWidget for &SlideList {
             .titles
             .iter()
             .enumerate()
-            .map(|(index, text)| build_list_item(Some(index) == selected, index + 1, text))
+            .map(|(index, text)| build_list_item(selected == Some(index), index + 1, text))
             .collect();
 
         let block = Block::bordered()

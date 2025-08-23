@@ -1,7 +1,7 @@
 use gloo::net::{Error, http::Request};
 use serde::de::DeserializeOwned;
 
-use toboggan_core::{Slide, SlideId, TalkResponse};
+use toboggan_core::{Slide, TalkResponse};
 
 /// Client for interacting with the Toboggan API
 #[derive(Debug, Clone)]
@@ -37,8 +37,8 @@ impl TobogganApi {
     //     self.get("api/slides").await
     // }
 
-    /// Fetches a specific slide by ID
-    pub async fn get_slide(&self, id: SlideId) -> Result<Slide, Error> {
-        self.get(&format!("api/slides/{id}")).await
+    /// Fetches a specific slide by index
+    pub async fn get_slide(&self, index: usize) -> Result<Slide, Error> {
+        self.get(&format!("api/slides/{index}")).await
     }
 }

@@ -1,10 +1,9 @@
 use futures::channel::mpsc::UnboundedSender;
 use gloo::{events::EventListener, timers::callback::Interval};
-use js_sys::parse_float;
 use wasm_bindgen::prelude::*;
 use web_sys::{Element, HtmlButtonElement, HtmlElement, HtmlProgressElement, ShadowRoot};
 
-use toboggan_core::{Command, Duration, SlideId, State, TalkResponse};
+use toboggan_core::{Command, Duration, State, TalkResponse};
 
 use crate::{
     ConnectionStatus, StateClassMapper, components::WasmElement, create_and_append_element,
@@ -36,7 +35,7 @@ pub struct TobogganNavigationElement {
     state: Option<State>,
     talk: Option<TalkResponse>,
     connection_status: Option<ConnectionStatus>,
-    slide_current: Option<SlideId>,
+    slide_current: Option<usize>,
     slide_count: Option<usize>,
     duration: Option<Duration>,
     current_duration: Option<Duration>,
@@ -143,7 +142,7 @@ impl TobogganNavigationElement {
         }
     }
 
-    pub fn set_slide_current(&mut self, slide_current: Option<SlideId>) {
+    pub fn set_slide_current(&mut self, slide_current: Option<usize>) {
         self.slide_current = slide_current;
         self.render_slide_info();
         self.update_progress_bar();
@@ -161,10 +160,7 @@ impl TobogganNavigationElement {
         let slide_info_el = unwrap_or_return!(&self.slide_info_el);
 
         // Use data attributes for CSS-based formatting
-        if let Some(current) = self
-            .slide_current
-            .and_then(|id| id.to_string().parse::<u8>().ok())
-        {
+        if let Some(current) = self.slide_current {
             let current_display = current + 1; // Convert to 1-based display
             dom_try!(
                 slide_info_el.set_attribute("data-current", &current_display.to_string()),
@@ -205,9 +201,10 @@ impl TobogganNavigationElement {
         progress_el.set_max(max_value);
 
         // Set current value
+        #[allow(clippy::cast_precision_loss)]
         let value = self
             .slide_current
-            .map_or(0.0, |id| parse_float(&id.to_string()));
+            .map_or(0.0, |index| index as f64);
         progress_el.set_value(value);
     }
 

@@ -162,56 +162,59 @@ class PresentationViewModel: ObservableObject {
             currentState = state
             
             switch state {
-            case .`init`(let next):
+            case .`init`(let totalSlides):
                 // In init state, we don't have a current slide yet
-                updatePresentationState(currentSlideId: nil, nextSlideId: next)
+                self.totalSlides = Int(totalSlides)
+                updatePresentationState(currentSlideIndex: nil)
             case let .running(previous, current, next, totalDuration):
                 updatePresentationState(
-                    currentSlideId: current, isPlaying: true,
+                    currentSlideIndex: Int(current),
+                    isPlaying: true,
                     duration: totalDuration,
-                    previousSlideId: previous,
-                    nextSlideId: next
+                    previousSlideIndex: previous.map(Int.init),
+                    nextSlideIndex: next.map(Int.init)
                 )
             case let .paused(previous, current, next, totalDuration):
                 updatePresentationState(
-                    currentSlideId: current, duration: totalDuration,
-                    previousSlideId: previous,
-                    nextSlideId: next
+                    currentSlideIndex: Int(current),
+                    duration: totalDuration,
+                    previousSlideIndex: previous.map(Int.init),
+                    nextSlideIndex: next.map(Int.init)
                 )
             case let .done(previous, current, totalDuration):
                 updatePresentationState(
-                    currentSlideId: current,
+                    currentSlideIndex: Int(current),
                     duration: totalDuration,
-                    previousSlideId: previous
+                    previousSlideIndex: previous.map(Int.init)
                 )
             }
         }
     }
     
     private func updatePresentationState(
-        currentSlideId: String?,
+        currentSlideIndex: Int?,
         isPlaying: Bool = false,
         duration: TimeInterval = 0,
-        previousSlideId: String? = nil,
-        nextSlideId: String? = nil
+        previousSlideIndex: Int? = nil,
+        nextSlideIndex: Int? = nil
     ) {
         self.isPlaying = isPlaying
         self.duration = duration
-        self.canGoPrevious = (previousSlideId != nil)
-        self.canGoNext = (nextSlideId != nil)
+        self.canGoPrevious = (previousSlideIndex != nil)
+        self.canGoNext = (nextSlideIndex != nil)
         
         // Update current slide (if we have one)
-        if let currentId = currentSlideId {
-            updateSlideFromState(slideId: currentId)
+        if let currentIdx = currentSlideIndex {
+            updateSlideFromState(slideIndex: currentIdx)
         } else {
             // In init state - no current slide yet
             currentSlide = nil
-            currentSlideIndex = nil
+            self.currentSlideIndex = nil
         }
         
         // Update next slide title by fetching it on demand
-        if let nextId = nextSlideId,
-           let nextSlide = tobogganClient.getSlide(slideId: nextId) {
+        if let nextIdx = nextSlideIndex,
+           let nextSlide = tobogganClient.getSlide(index: UInt32(nextIdx)) {
             nextSlideTitle = nextSlide.title
         } else {
             nextSlideTitle = "<End of presentation>"
@@ -243,7 +246,7 @@ class PresentationViewModel: ObservableObject {
         }
     }
     
-    private func updateSlideFromState(slideId: String) {
+    private func updateSlideFromState(slideIndex: Int) {
         // Check if talk info has been loaded
         if !talkLoaded {
             pendingStateUpdate = currentState
@@ -251,47 +254,15 @@ class PresentationViewModel: ObservableObject {
         }
         
         // Fetch the slide on demand using tobogganClient
-        if let slide = tobogganClient.getSlide(slideId: slideId) {
+        if let slide = tobogganClient.getSlide(index: UInt32(slideIndex)) {
             currentSlide = slide
             
-            // Extract slide index from the current state if available
-            updateSlideIndexFromState()
+            // Set the slide index directly
+            self.currentSlideIndex = slideIndex
         } else {
             Task { @MainActor in
-                handleError("Could not fetch slide with ID '\(slideId)'")
+                handleError("Could not fetch slide with index '\(slideIndex)'")
             }
-        }
-    }
-    
-    private func updateSlideIndexFromState() {
-        // Calculate slide index based on navigation state
-        // Since we can navigate with previous/next, we can track position
-        guard let state = currentState else { return }
-        
-        switch state {
-        case .`init`:
-            // In init state, no current slide yet
-            currentSlideIndex = nil
-        case let .running(previous, _, next, _),
-             let .paused(previous, _, next, _):
-            // In the middle of presentation
-            if previous == nil {
-                // First slide
-                currentSlideIndex = 0
-            } else if next == nil {
-                // Last slide
-                currentSlideIndex = max(0, totalSlides - 1)
-            } else {
-                // Middle slides - maintain current index if we have one
-                // The index will be updated by navigation commands
-                if currentSlideIndex == nil {
-                    // If we don't have an index yet, assume we're somewhere in the middle
-                    currentSlideIndex = 1 // Default to second slide if we can't determine exact position
-                }
-            }
-        case .done:
-            // At the end
-            currentSlideIndex = max(0, totalSlides - 1)
         }
     }
     
