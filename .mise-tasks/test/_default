@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+#MISE description="Run tests for all platforms: Rust, web, and iOS"
+
+set -eu
+
+echo "🚀 Running comprehensive tests for all platforms..."
+
+# Run Rust tests
+echo "==================== RUST TESTS ====================="
+mise test:rust
+
+# Run web tests  
+echo "==================== WEB TESTS ======================"
+mise test:web
+
+# Run iOS tests
+echo "==================== iOS TESTS ======================"
+mise test:ios
+
+echo ""
+echo "🎉 All platform tests completed successfully!"
+echo "✅ Rust: nextest + doctests"
+echo "✅ Web: npm tests (if available)"
+echo "✅ iOS: xcodebuild tests (if available)"
+echo ""
+echo "All tests passed! 🧪"

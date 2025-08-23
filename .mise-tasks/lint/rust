@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+#MISE description="Run Rust clippy linting with strict warnings as errors"
+
+set -eu
+
+echo "🔍 Running Rust linting..."
+
+# Rust linting with clippy
+echo "🦀 Running clippy with strict warnings as errors..."
+cargo clippy --all-targets --all-features -- -D warnings
+
+echo "✅ All Rust linting checks passed!"

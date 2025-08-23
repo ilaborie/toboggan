@@ -9,8 +9,8 @@ import Testing
 @testable import TobogganApp
 
 struct TobogganAppTests {
-
-    @Test func testUniffiInitialization() async {
+    @Test
+    func testUniffiInitialization() async {
         // Test that UniFFI initialization works without checksum mismatch
         let config = ClientConfig(
             url: "http://localhost:8080",
@@ -26,18 +26,17 @@ struct TobogganAppTests {
         #expect(client.isConnected() == false) // Should be false initially
     }
 
-    @Test func testCommandEnum() async {
+    @Test
+    func testCommandEnum() async {
         // Test that Command enum values work correctly
         let commands: [Command] = [.next, .previous, .first, .last, .pause, .resume, .blink]
         
         // Should not crash when accessing enum values
         #expect(commands.count == 8)
     }
-
 }
 
 final class TestNotificationHandler: ClientNotificationHandler, @unchecked Sendable {
-    
     init() {
         print("🔔 iOS: NotificationHandler initialized")
     }

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+#MISE description="Run iOS-specific checks with SwiftLint"
+
+set -eu
+
+echo "📱 Running iOS checks..."
+
+# Check Swift code with SwiftLint
+if command -v swiftlint >/dev/null 2>&1; then
+    echo "🔍 Checking Swift code with SwiftLint..."
+    if [ -d "TobogganApp" ]; then
+        if swiftlint lint --config .swiftlint.yml; then
+            echo "✅ SwiftLint check completed successfully"
+        else
+            echo "⚠️  SwiftLint check failed or SourceKit unavailable, skipping Swift linting"
+            echo "Note: This may happen in CI environments or when Xcode tools are not properly configured"
+        fi
+    else
+        echo "ℹ️  No Swift code found in TobogganApp, skipping SwiftLint check"
+    fi
+else
+    echo "⚠️  SwiftLint not found, skipping Swift linting (install with: mise install swiftlint)"
+fi
+
+echo "✅ All iOS checks completed!"

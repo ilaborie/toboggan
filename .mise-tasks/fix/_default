@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+#MISE description="Auto-fix code for all platforms: Rust, web, and iOS"
+
+set -eu
+
+echo "🚀 Running comprehensive auto-fixes for all platforms..."
+
+# Run Rust fixes
+echo "==================== RUST FIXES ====================="
+mise fix:rust
+
+# Run web fixes  
+echo "==================== WEB FIXES ======================"
+mise fix:web
+
+# Run iOS fixes
+echo "==================== iOS FIXES ======================"
+mise fix:ios
+
+echo ""
+echo "🎉 All platform auto-fixes completed successfully!"
+echo "✅ Rust: formatting, clippy fixes"
+echo "✅ Web: Biome auto-fixes"
+echo "✅ iOS: SwiftLint auto-fixes"
+echo ""
+echo "Code has been auto-fixed! 🛠️"

@@ -58,7 +58,7 @@ final class NotificationHandler: ClientNotificationHandler, @unchecked Sendable 
 }
 
 // Shared configuration for TobogganClient
-struct TobogganConfig {
+enum TobogganConfig {
     static let shared = ClientConfig(
         url: "http://127.0.0.1:8080",
         maxRetries: 3,
@@ -72,7 +72,7 @@ class PresentationViewModel: ObservableObject {
     @Published var nextSlideTitle = "Next Title"
     @Published var isPlaying = false
     @Published var connectionStatus: ConnectionStatus = .closed
-    @Published var currentSlideIndex: Int? = nil
+    @Published var currentSlideIndex: Int?
     @Published var totalSlides: Int = 0
     @Published var currentSlide: Slide?
     @Published var duration: TimeInterval = 0
@@ -111,7 +111,6 @@ class PresentationViewModel: ObservableObject {
     // MARK: - TobogganCore Integration
     
     private func connectAndFetchTalk() {
-        
         // Connect and fetch talk info on background thread
         DispatchQueue.global(qos: .background).async { [weak self] in
             guard let self = self else { return }
@@ -129,9 +128,7 @@ class PresentationViewModel: ObservableObject {
     }
     
     private func fetchTalkInfoDirect(client: TobogganClient) {
-        
         if let talk = client.getTalk() {
-            
             // Note: talk.slides contains slide IDs (which happen to be titles in current implementation)
             // We don't store them - we'll fetch slides on demand using client.getSlide()
             
@@ -161,7 +158,6 @@ class PresentationViewModel: ObservableObject {
     // MARK: - Notification Handlers
     
     func handleStateChange(_ state: State) {
-        
         Task { @MainActor in
             currentState = state
             
@@ -169,25 +165,23 @@ class PresentationViewModel: ObservableObject {
             case .`init`(let next):
                 // In init state, we don't have a current slide yet
                 updatePresentationState(currentSlideId: nil, nextSlideId: next)
-            case .running(let previous, let current, let next, let totalDuration):
+            case let .running(previous, current, next, totalDuration):
                 updatePresentationState(
-                    isPlaying: true,
+                    currentSlideId: current, isPlaying: true,
                     duration: totalDuration,
-                    currentSlideId: current,
                     previousSlideId: previous,
                     nextSlideId: next
                 )
-            case .paused(let previous, let current, let next, let totalDuration):
+            case let .paused(previous, current, next, totalDuration):
                 updatePresentationState(
-                    duration: totalDuration,
-                    currentSlideId: current,
+                    currentSlideId: current, duration: totalDuration,
                     previousSlideId: previous,
                     nextSlideId: next
                 )
-            case .done(let previous, let current, let totalDuration):
+            case let .done(previous, current, totalDuration):
                 updatePresentationState(
-                    duration: totalDuration,
                     currentSlideId: current,
+                    duration: totalDuration,
                     previousSlideId: previous
                 )
             }
@@ -195,9 +189,9 @@ class PresentationViewModel: ObservableObject {
     }
     
     private func updatePresentationState(
+        currentSlideId: String?,
         isPlaying: Bool = false,
         duration: TimeInterval = 0,
-        currentSlideId: String?,
         previousSlideId: String? = nil,
         nextSlideId: String? = nil
     ) {
@@ -225,7 +219,6 @@ class PresentationViewModel: ObservableObject {
     }
     
     func handleConnectionStatusChange(_ status: ConnectionStatus) {
-        
         Task { @MainActor in
             switch status {
             case .connecting:
@@ -251,7 +244,6 @@ class PresentationViewModel: ObservableObject {
     }
     
     private func updateSlideFromState(slideId: String) {
-        
         // Check if talk info has been loaded
         if !talkLoaded {
             pendingStateUpdate = currentState
@@ -277,11 +269,11 @@ class PresentationViewModel: ObservableObject {
         guard let state = currentState else { return }
         
         switch state {
-        case .`init`(_):
+        case .`init`:
             // In init state, no current slide yet
             currentSlideIndex = nil
-        case .running(let previous, _, let next, _),
-             .paused(let previous, _, let next, _):
+        case let .running(previous, _, next, _),
+             let .paused(previous, _, next, _):
             // In the middle of presentation
             if previous == nil {
                 // First slide
@@ -297,12 +289,11 @@ class PresentationViewModel: ObservableObject {
                     currentSlideIndex = 1 // Default to second slide if we can't determine exact position
                 }
             }
-        case .done(_, _, _):
+        case .done:
             // At the end
             currentSlideIndex = max(0, totalSlides - 1)
         }
     }
-    
     
     // MARK: - Actions
     

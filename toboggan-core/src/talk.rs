@@ -21,10 +21,10 @@ use crate::{Content, Date, Slide};
 /// # Examples
 ///
 /// ```rust
-/// use toboggan_core::{Talk, Slide, date_utils};
+/// use toboggan_core::{Talk, Slide, Date};
 ///
 /// let talk = Talk::new("Rust Programming")
-///     .with_date(date_utils::ymd(2025, 1, 26))
+///     .with_date(Date::ymd(2025, 1, 26))
 ///     .add_slide(Slide::cover("Introduction"))
 ///     .add_slide(Slide::new("Getting Started"));
 /// ```
@@ -77,10 +77,10 @@ impl Talk {
     /// # Examples
     ///
     /// ```rust
-    /// use toboggan_core::{Talk, date_utils};
+    /// use toboggan_core::{Talk, Date};
     ///
     /// let talk = Talk::new("Conference Talk")
-    ///     .with_date(date_utils::ymd(2025, 3, 15));
+    ///     .with_date(Date::ymd(2025, 3, 15));
     /// ```
     #[must_use]
     pub fn with_date(mut self, date: Date) -> Self {

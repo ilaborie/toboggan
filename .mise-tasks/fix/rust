@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+#MISE description="Auto-format Rust code and apply clippy suggested fixes"
+
+set -eu
+
+echo "🔧 Running Rust auto-fixes..."
+
+# Format code
+echo "📐 Auto-formatting Rust code..."
+cargo +nightly fmt
+
+# Apply clippy suggestions
+echo "🛠️  Applying clippy auto-fixes..."
+cargo fix --allow-dirty --allow-staged
+
+echo "✅ All Rust auto-fixes applied!"

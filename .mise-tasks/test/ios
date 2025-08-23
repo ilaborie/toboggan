@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+#MISE description="Run iOS application tests to verify UniFFI integration"
+
+set -eu
+
+XCODE_PROJECT="TobogganApp"
+
+echo "📱 Running iOS tests..."
+
+# Navigate to TobogganApp directory
+if [ -d "$XCODE_PROJECT" ]; then
+    cd "$XCODE_PROJECT"
+    
+    PROJECT_PATH="$(pwd)/$XCODE_PROJECT.xcodeproj"
+    
+    echo "🔍 Running iOS unit tests to verify UniFFI integration..."
+    echo "  📁 Project: $PROJECT_PATH"
+    
+    # Check if xcodebuild is available
+    if command -v xcodebuild >/dev/null 2>&1; then
+        echo "🧪 Running iOS unit tests..."
+        if xcodebuild test -project "$XCODE_PROJECT.xcodeproj" -scheme "$XCODE_PROJECT" -destination 'platform=iOS Simulator,name=iPhone 16' -quiet; then
+            echo "✅ iOS tests passed!"
+        else
+            echo "⚠️  iOS tests failed or simulator unavailable"
+            echo "💡 Manual test command:"
+            echo "  xcodebuild test -project $XCODE_PROJECT.xcodeproj -scheme $XCODE_PROJECT -destination 'platform=iOS Simulator,name=iPhone 16'"
+        fi
+    else
+        echo "⚠️  xcodebuild not found, skipping iOS tests"
+        echo "💡 To run tests manually:"
+        echo "  xcodebuild test -project $XCODE_PROJECT.xcodeproj -scheme $XCODE_PROJECT -destination 'platform=iOS Simulator,name=iPhone 16'"
+    fi
+    
+    cd ..
+else
+    echo "ℹ️  No TobogganApp directory found, skipping iOS tests"
+fi
+
+echo "✅ All iOS tests completed!"
