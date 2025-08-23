@@ -266,38 +266,6 @@ class PresentationViewModel: ObservableObject {
         }
     }
     
-    private func updateSlideIndexFromState() {
-        // Calculate slide index based on navigation state
-        // Since we can navigate with previous/next, we can track position
-        guard let state = currentState else { return }
-        
-        switch state {
-        case .`init`:
-            // In init state, no current slide yet
-            currentSlideIndex = nil
-        case let .running(previous, _, next, _),
-             let .paused(previous, _, next, _):
-            // In the middle of presentation
-            if previous == nil {
-                // First slide
-                currentSlideIndex = 0
-            } else if next == nil {
-                // Last slide
-                currentSlideIndex = max(0, totalSlides - 1)
-            } else {
-                // Middle slides - maintain current index if we have one
-                // The index will be updated by navigation commands
-                if currentSlideIndex == nil {
-                    // If we don't have an index yet, assume we're somewhere in the middle
-                    currentSlideIndex = 1 // Default to second slide if we can't determine exact position
-                }
-            }
-        case .done:
-            // At the end
-            currentSlideIndex = max(0, totalSlides - 1)
-        }
-    }
-    
     // MARK: - Actions
     
     func nextSlide() {
