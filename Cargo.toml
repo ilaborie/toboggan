@@ -1,6 +1,12 @@
 [workspace]
-members = ["toboggan-*"]
-exclude = ["toboggan-web", "toboggan-wasm"]
+members = [
+  "toboggan-core",
+  "toboggan-server",
+  "toboggan-cli",
+  "toboggan-client",
+  "toboggan-tui",
+  "toboggan-ios",
+]
 resolver = "2"
 
 [workspace.package]

@@ -43,7 +43,6 @@ pub async fn launch(settings: Settings) -> anyhow::Result<()> {
 
     let state = TobogganState::new(talk, max_clients);
 
-    // Start the client cleanup task
     let cleanup_state = state.clone();
     let cleanup_interval = settings.cleanup_interval();
     tokio::spawn(async move {
@@ -52,10 +51,8 @@ pub async fn launch(settings: Settings) -> anyhow::Result<()> {
     });
 
     let router = routes_with_cors(settings.allowed_origins.as_deref()).with_state(state);
-
     let shutdown_signal = setup_shutdown_signal(settings.shutdown_timeout());
 
-    // Start the server with graceful shutdown
     axum::serve(listener, router.into_make_service())
         .with_graceful_shutdown(shutdown_signal)
         .await
@@ -105,7 +102,6 @@ async fn setup_shutdown_signal(timeout: Duration) {
         }
     }
 
-    // Give some time for cleanup
     info!(
         "Waiting up to {} seconds for graceful shutdown",
         timeout.as_secs()

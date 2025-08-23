@@ -9,7 +9,6 @@ use tracing::{error, info, warn};
 
 use crate::TobogganState;
 
-/// WebSocket handler for real-time Command/Notification communication
 pub async fn websocket_handler(
     ws: WebSocketUpgrade,
     State(state): State<TobogganState>,
@@ -17,12 +16,10 @@ pub async fn websocket_handler(
     ws.on_upgrade(move |socket| handle_websocket(socket, state))
 }
 
-/// Handle individual WebSocket connections
 async fn handle_websocket(socket: WebSocket, state: TobogganState) {
     let client_id = ClientId::new();
     info!(?client_id, "New WebSocket connection established");
 
-    // Register the client and get a notification receiver
     let notification_rx = match state.register_client(client_id).await {
         Ok(rx) => rx,
         Err(err) => {
@@ -33,19 +30,14 @@ async fn handle_websocket(socket: WebSocket, state: TobogganState) {
 
     let (mut ws_sender, ws_receiver) = socket.split();
 
-    // Send initial state to the client
     if let Err(()) = send_initial_state(&mut ws_sender, &state, client_id).await {
         return;
     }
 
-    // Use mpsc channel to send notifications to the WebSocket sender
     let (notification_tx, notification_rx_internal) =
         tokio::sync::mpsc::unbounded_channel::<Notification>();
-
-    // Clone the sender for the error handling
     let error_notification_tx = notification_tx.clone();
 
-    // Spawn the main tasks including heartbeat
     let watcher_task =
         spawn_notification_watcher_task(notification_rx, notification_tx.clone(), client_id);
     let sender_task =
@@ -54,7 +46,6 @@ async fn handle_websocket(socket: WebSocket, state: TobogganState) {
         spawn_message_receiver_task(ws_receiver, state.clone(), error_notification_tx, client_id);
     let heartbeat_task = spawn_heartbeat_task(notification_tx, client_id, Duration::from_secs(30));
 
-    // Wait for any task to finish
     tokio::select! {
         _ = watcher_task => {
             info!(?client_id, "Watcher task completed");
@@ -70,7 +61,6 @@ async fn handle_websocket(socket: WebSocket, state: TobogganState) {
         }
     }
 
-    // Unregister the client when the connection is closed
     state.unregister_client(client_id);
     info!(
         ?client_id,
@@ -78,7 +68,6 @@ async fn handle_websocket(socket: WebSocket, state: TobogganState) {
     );
 }
 
-/// Send initial state to the newly connected client
 async fn send_initial_state(
     ws_sender: &mut futures::stream::SplitSink<WebSocket, Message>,
     state: &TobogganState,
@@ -99,7 +88,6 @@ async fn send_initial_state(
     Ok(())
 }
 
-/// Spawn task to watch for state notifications and forward them to the WebSocket sender
 fn spawn_notification_watcher_task(
     mut notification_rx: tokio::sync::watch::Receiver<Notification>,
     notification_tx: tokio::sync::mpsc::UnboundedSender<Notification>,
@@ -120,7 +108,6 @@ fn spawn_notification_watcher_task(
     })
 }
 
-/// Spawn task to send notifications through the WebSocket connection
 fn spawn_notification_sender_task(
     mut notification_rx_internal: tokio::sync::mpsc::UnboundedReceiver<Notification>,
     mut ws_sender: futures::stream::SplitSink<WebSocket, Message>,
@@ -148,7 +135,6 @@ fn spawn_notification_sender_task(
     })
 }
 
-/// Spawn task to handle incoming WebSocket messages (commands)
 fn spawn_message_receiver_task(
     mut ws_receiver: futures::stream::SplitStream<WebSocket>,
     state: TobogganState,
@@ -165,7 +151,6 @@ fn spawn_message_receiver_task(
                         Ok(command) => {
                             info!(?client_id, ?command, "Processing command");
 
-                            // Handle special register/unregister commands
                             match &command {
                                 Command::Register { client, .. } => {
                                     info!(?client_id, registered_client = ?client, "Client registration via WebSocket");
@@ -183,7 +168,6 @@ fn spawn_message_receiver_task(
                                 _ => {}
                             }
 
-                            // Process the command
                             let _notification = state.handle_command(&command).await;
                         }
                         Err(err) => {
@@ -226,7 +210,6 @@ fn spawn_message_receiver_task(
     })
 }
 
-/// Spawn heartbeat task to send periodic ping notifications
 fn spawn_heartbeat_task(
     notification_tx: tokio::sync::mpsc::UnboundedSender<Notification>,
     client_id: ClientId,
