@@ -1,18 +1,18 @@
-use toboggan_core::{Duration, SlideId, State, Timestamp};
+use toboggan_core::{Duration, State, Timestamp};
 
 #[test]
 #[allow(clippy::unwrap_used, clippy::print_stdout)] // Acceptable in test code
 fn test_state_serialization_format() {
-    let slide_id = SlideId::next();
+    let slide_index = 1; // Use slide index instead of SlideId
 
     let paused_state = State::Paused {
-        current: Some(slide_id),
+        current: Some(slide_index),
         total_duration: Duration::from_secs(10),
     };
 
     let running_state = State::Running {
         since: Timestamp::now(),
-        current: slide_id,
+        current: slide_index,
         total_duration: Duration::from_secs(5),
     };
 
@@ -31,7 +31,7 @@ fn test_state_serialization_format() {
             current,
             total_duration,
         } => {
-            assert_eq!(current, Some(slide_id));
+            assert_eq!(current, Some(slide_index));
             assert_eq!(total_duration, Duration::from_secs(10));
         }
         _ => panic!("Expected Paused state"),
@@ -43,7 +43,7 @@ fn test_state_serialization_format() {
             total_duration,
             ..
         } => {
-            assert_eq!(current, slide_id);
+            assert_eq!(current, slide_index);
             assert_eq!(total_duration, Duration::from_secs(5));
         }
         _ => panic!("Expected Running state"),

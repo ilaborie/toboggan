@@ -14,7 +14,6 @@ enum SlideKind {
 };
 
 dictionary Slide {
-    string id;
     string title;
     SlideKind kind;
 };
@@ -46,9 +45,9 @@ enum Command {
 [Enum]
 interface State {
     Init(string next);
-    Running(string? previous, string current, string? next, duration total_duration);
-    Paused(string? previous, string current, string? next, duration total_duration);
-    Done(string? previous, string current, duration total_duration);
+    Running(u32? previous, u32 current, u32? next, duration total_duration);
+    Paused(u32? previous, u32 current, u32? next, duration total_duration);
+    Done(u32? previous, u32 current, duration total_duration);
 };
 
 [Trait, WithForeign]
@@ -66,7 +65,7 @@ interface TobogganClient {
     void send_command(Command command);
 
     State? get_state();
-    Slide? get_slide(string slide_id);
+    Slide? get_slide(u32 slide_id);
     Talk? get_talk();
 
     boolean is_connected();

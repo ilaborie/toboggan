@@ -6,7 +6,7 @@ use clawspec_core::test_client::{TestClient, TestServer, TestServerConfig};
 use clawspec_core::{ApiClient, register_schemas};
 use serde_json::{Value, json};
 use toboggan_core::{
-    Content, Date, Notification, Renderer, Slide, SlideId, SlideKind, SlidesResponse, Style, Talk,
+    Content, Date, Notification, Renderer, Slide, SlideKind, SlidesResponse, Style, Talk,
     TalkResponse,
 };
 use toboggan_server::{HealthResponse, TobogganState, routes};
@@ -97,7 +97,7 @@ async fn should_generate_openapi() -> anyhow::Result<()> {
     let mut app = create_test_app().await?;
 
     // Register basic schemas that have ToSchema implemented
-    register_schemas!(app, Renderer, SlideId, SlideKind, Style).await;
+    register_schemas!(app, Renderer, SlideKind, Style).await;
 
     // Test all endpoints to generate comprehensive OpenAPI spec
     basic_api_operations(&mut app).await?;

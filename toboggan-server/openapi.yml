@@ -162,10 +162,6 @@ components:
       - Thumbnail
       - Html
       - Raw
-    SlideId:
-      type: integer
-      format: int32
-      minimum: 0
     SlideKind:
       type: string
       description: The kind of slide, which affects its styling and role in the presentation.

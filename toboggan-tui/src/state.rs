@@ -1,8 +1,7 @@
-use std::collections::HashMap;
 use std::ops::ControlFlow;
 
 use toboggan_client::ConnectionStatus;
-use toboggan_core::{Notification, Slide, SlideId, State, TalkResponse};
+use toboggan_core::{Notification, Slide, State, TalkResponse};
 use tracing::{debug, info};
 
 use crate::connection_handler::ConnectionHandler;
@@ -20,11 +19,10 @@ pub enum AppDialog {
 pub struct AppState {
     // pub(crate) config: Config,
     pub(crate) connection_status: ConnectionStatus,
-    pub(crate) current_slide: Option<SlideId>,
+    pub(crate) current_slide: Option<usize>,
 
     pub(crate) talk: TalkResponse,
-    pub(crate) slides: HashMap<SlideId, Slide>,
-    pub(crate) ids: Vec<SlideId>,
+    pub(crate) slides: Vec<Slide>,
 
     pub(crate) presentation_state: State,
 
@@ -35,15 +33,11 @@ pub struct AppState {
 impl AppState {
     #[must_use]
     pub fn new(talk: TalkResponse, slides: Vec<Slide>) -> Self {
-        let ids = slides.iter().map(|slide| slide.id).collect();
-        let slides = slides.into_iter().map(|slide| (slide.id, slide)).collect();
-
         Self {
             connection_status: ConnectionStatus::Closed,
             current_slide: None,
             talk,
             slides,
-            ids,
             presentation_state: State::Init,
             dialog: AppDialog::None,
             terminal_size: (80, 24),
@@ -54,10 +48,8 @@ impl AppState {
         matches!(self.connection_status, ConnectionStatus::Connected)
     }
 
-    pub(crate) fn current(&self) -> u8 {
-        self.current_slide
-            .and_then(|id| id.to_string().parse::<u8>().ok())
-            .unwrap_or_default()
+    pub(crate) fn current(&self) -> usize {
+        self.current_slide.unwrap_or_default()
     }
 
     pub(crate) fn count(&self) -> usize {
@@ -65,23 +57,25 @@ impl AppState {
     }
 
     pub(crate) fn is_first_slide(&self) -> bool {
-        self.current_slide == self.ids.first().copied()
+        self.current_slide == Some(0)
     }
 
     pub(crate) fn is_last_slide(&self) -> bool {
-        self.current_slide == self.ids.last().copied()
+        if let Some(current) = self.current_slide {
+            current == self.slides.len().saturating_sub(1)
+        } else {
+            false
+        }
     }
 
     pub(crate) fn current_slide(&self) -> Option<&Slide> {
-        let current_id = self.current_slide?;
-        self.slides.get(&current_id)
+        let current_index = self.current_slide?;
+        self.slides.get(current_index)
     }
 
     pub(crate) fn next_slide(&self) -> Option<&Slide> {
-        let current_id = self.current_slide?;
-        let pos = self.ids.iter().position(|it| current_id == *it)?;
-        let next = self.ids.get(pos + 1)?;
-        self.slides.get(next)
+        let current_index = self.current_slide?;
+        self.slides.get(current_index + 1)
     }
 
     // Event handling methods

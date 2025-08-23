@@ -2,8 +2,6 @@ use std::time::Duration;
 
 use toboggan_core::{Command as CoreCommand, State as CoreState, TalkResponse};
 
-use crate::Id;
-
 /// A talk
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct Talk {
@@ -32,52 +30,49 @@ impl From<TalkResponse> for Talk {
 #[derive(Debug, Clone, uniffi::Enum)]
 pub enum State {
     Init {
-        next: Id,
+        total_slides: u32,
     },
     Running {
-        previous: Option<Id>,
-        current: Id,
-        next: Option<Id>,
+        previous: Option<u32>,
+        current: u32,
+        next: Option<u32>,
         total_duration: Duration,
     },
     Paused {
-        previous: Option<Id>,
-        current: Id,
-        next: Option<Id>,
+        previous: Option<u32>,
+        current: u32,
+        next: Option<u32>,
         total_duration: Duration,
     },
     Done {
-        previous: Option<Id>,
-        current: Id,
+        previous: Option<u32>,
+        current: u32,
         total_duration: Duration,
     },
 }
 
 impl State {
-    pub(crate) fn new(ids: &[Id], value: &CoreState) -> Self {
-        assert!(!ids.is_empty());
+    pub(crate) fn new(total_slides: usize, value: &CoreState) -> Self {
+        assert!(total_slides > 0, "total_slides must be greater than 0");
+        #[allow(clippy::cast_possible_truncation)]
+        // UniFFI requires u32, truncation unlikely for slide counts
+        let total_slides_u32 = total_slides as u32;
+
         match *value {
-            CoreState::Init => {
-                let next = ids.first().cloned().expect("ids not empty");
-                Self::Init { next }
-            }
+            CoreState::Init => Self::Init {
+                total_slides: total_slides_u32,
+            },
             CoreState::Paused {
                 current,
                 total_duration,
             } => {
-                let current = current.expect("should have a current id").to_string();
-                let index = ids
-                    .iter()
-                    .position(|it| it == &current)
-                    .expect("should have the current id");
+                #[allow(clippy::cast_possible_truncation)]
+                // UniFFI requires u32, slide indices are typically small
+                let current_index = current.expect("should have a current index") as u32;
                 Self::Paused {
-                    previous: if index > 0 {
-                        ids.get(index - 1).cloned()
-                    } else {
-                        None
-                    },
-                    current,
-                    next: ids.get(index + 1).cloned(),
+                    previous: (current_index > 0).then(|| current_index - 1),
+                    current: current_index,
+                    next: ((current_index as usize) < total_slides - 1).then(|| current_index + 1),
                     total_duration: total_duration.into(),
                 }
             }
@@ -86,19 +81,13 @@ impl State {
                 total_duration,
                 ..
             } => {
-                let current = current.to_string();
-                let index = ids
-                    .iter()
-                    .position(|it| it == &current)
-                    .expect("should have the current id");
+                #[allow(clippy::cast_possible_truncation)]
+                // UniFFI requires u32, slide indices are typically small
+                let current_index = current as u32;
                 Self::Running {
-                    previous: if index > 0 {
-                        ids.get(index - 1).cloned()
-                    } else {
-                        None
-                    },
-                    current,
-                    next: ids.get(index + 1).cloned(),
+                    previous: (current_index > 0).then(|| current_index - 1),
+                    current: current_index,
+                    next: ((current_index as usize) < total_slides - 1).then(|| current_index + 1),
                     total_duration: total_duration.into(),
                 }
             }
@@ -106,18 +95,12 @@ impl State {
                 current,
                 total_duration,
             } => {
-                let current = current.to_string();
-                let index = ids
-                    .iter()
-                    .position(|it| it == &current)
-                    .expect("should have the current id");
+                #[allow(clippy::cast_possible_truncation)]
+                // UniFFI requires u32, slide indices are typically small
+                let current_index = current as u32;
                 Self::Done {
-                    previous: if index > 0 {
-                        ids.get(index - 1).cloned()
-                    } else {
-                        None
-                    },
-                    current,
+                    previous: (current_index > 0).then(|| current_index - 1),
+                    current: current_index,
                     total_duration: total_duration.into(),
                 }
             }

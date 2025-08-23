@@ -3,7 +3,7 @@
 mod tests {
 
     use toboggan_core::{
-        ClientId, Command, Date, Duration, Notification, Renderer, Slide, SlideId, State, Talk,
+        ClientId, Command, Date, Duration, Notification, Renderer, Slide, State, Talk,
     };
 
     use crate::TobogganState;
@@ -72,7 +72,7 @@ mod tests {
                 state: inner_state, ..
             } => match inner_state {
                 State::Running { current, .. } => {
-                    assert_eq!(current, *state.slide_order.first().unwrap());
+                    assert_eq!(current, 0); // First slide index
                 }
                 _ => panic!("Expected Running state"),
             },
@@ -92,8 +92,8 @@ mod tests {
                 state: inner_state, ..
             } => match inner_state {
                 State::Running { current, .. } => {
-                    // From Init state, Last command should go to first slide
-                    assert_eq!(current, *state.slide_order.first().unwrap());
+                    // From Init state, Last command should go to last slide (index 2 for 3 slides)
+                    assert_eq!(current, 2); // Last slide index (3 slides = indices 0,1,2)
                 }
                 _ => panic!("Expected Running state"),
             },
@@ -105,7 +105,7 @@ mod tests {
     async fn test_goto_valid_slide() {
         let talk = create_test_talk();
         let state = TobogganState::new(talk, 100);
-        let target_slide = *state.slide_order.get(1).unwrap();
+        let target_slide = 1; // Index 1 (second slide)
 
         let notification = state.handle_command(&Command::GoTo(target_slide)).await;
 
@@ -114,7 +114,6 @@ mod tests {
                 state: inner_state, ..
             } => match inner_state {
                 State::Running { current, .. } => {
-                    // From Init state, GoTo command should go to first slide
                     assert_eq!(current, target_slide);
                 }
                 _ => panic!("Expected Running state"),
@@ -127,13 +126,13 @@ mod tests {
     async fn test_goto_invalid_slide() {
         let talk = create_test_talk();
         let state = TobogganState::new(talk, 100);
-        let invalid_slide = SlideId::next();
+        let invalid_slide = 999; // Index out of bounds
 
         let notification = state.handle_command(&Command::GoTo(invalid_slide)).await;
 
         match notification {
             Notification::Error { message, .. } => {
-                assert!(message.contains("not found"));
+                assert!(message.contains("not found") || message.contains("out of bounds"));
             }
             _ => panic!("Expected Error notification"),
         }
@@ -152,7 +151,7 @@ mod tests {
             } => match inner_state {
                 State::Running { current, .. } => {
                     // From Init state, Next command should go to first slide
-                    assert_eq!(current, *state.slide_order.first().unwrap());
+                    assert_eq!(current, 0); // First slide index
                 }
                 _ => panic!("Expected Running state"),
             },
@@ -204,7 +203,7 @@ mod tests {
                 state: inner_state, ..
             } => match inner_state {
                 State::Running { current, .. } => {
-                    assert_eq!(current, *state.slide_order.first().unwrap());
+                    assert_eq!(current, 0); // First slide index
                 }
                 _ => panic!("Expected Running state"),
             },
@@ -216,7 +215,6 @@ mod tests {
     async fn test_previous_at_first_slide() {
         let talk = create_test_talk();
         let state = TobogganState::new(talk, 100);
-        let first_slide = *state.slide_order.first().unwrap();
 
         // From Init state, Previous command should go to first slide
         let notification = state.handle_command(&Command::Previous).await;
@@ -226,7 +224,7 @@ mod tests {
                 state: inner_state, ..
             } => match inner_state {
                 State::Running { current, .. } => {
-                    assert_eq!(current, first_slide);
+                    assert_eq!(current, 0); // First slide index
                 }
                 _ => panic!("Expected Running state"),
             },
@@ -385,7 +383,7 @@ mod tests {
                 state: inner_state, ..
             } => match inner_state {
                 State::Running { current, .. } => {
-                    assert_eq!(current, *state.slide_order.first().unwrap());
+                    assert_eq!(current, 0); // First slide index
                 }
                 _ => panic!("Expected Running state in notification, got: {inner_state:?}"),
             },
@@ -423,7 +421,7 @@ mod tests {
             } => match inner_state {
                 State::Running { current, .. } => {
                     // Should be on third (last) slide
-                    assert_eq!(current, *state.slide_order.get(2).unwrap());
+                    assert_eq!(current, 2); // Index 2 (third slide)
                 }
                 _ => panic!("Expected Running state, got: {inner_state:?}"),
             },

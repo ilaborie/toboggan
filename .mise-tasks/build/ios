@@ -3,7 +3,7 @@
 
 set -eu
 
- Build for iOS targets
+# Build for iOS targets
 echo "🔨 Building Rust library for iOS targets..."
 
 # Add iOS targets if not already installed

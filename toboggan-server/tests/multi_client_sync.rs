@@ -12,7 +12,7 @@ use tokio::net::TcpListener;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::protocol::Message as TungsteniteMessage;
 
-// Global test counter to ensure unique SlideId ranges per test
+// Global test counter to ensure unique test isolation
 static GLOBAL_TEST_COUNTER: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
 
 /// Creates a test talk with multiple slides for navigation testing
@@ -31,7 +31,7 @@ fn create_test_talk() -> Talk {
 
 /// Helper to create a test server with the given talk
 async fn create_test_server() -> (String, TobogganState) {
-    // Note: SlideId sequence is managed by the calling test for better isolation
+    // Note: Test isolation is managed by the calling test
     let talk = create_test_talk();
     let state = TobogganState::new(talk, 100);
 
@@ -248,10 +248,8 @@ async fn wait_for_recent_notification(
 
 #[tokio::test]
 async fn test_client_disconnect_and_reconnect_sync() {
-    // Use a unique SlideId starting point for this test to avoid interference
-    let test_id = GLOBAL_TEST_COUNTER.fetch_add(100, std::sync::atomic::Ordering::SeqCst);
-    let current_seq = 50 + test_id;
-    toboggan_core::SlideId::reset_sequence_to(current_seq);
+    // Use a unique test ID to ensure isolation
+    let _test_id = GLOBAL_TEST_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
     // Create test server
     let (server_url, _state) = create_test_server().await;

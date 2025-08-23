@@ -72,3 +72,5 @@ device_logs/
 **/tobogganFFI.modulemap
 **/libtoboggan_ios_core.a
 **/*.xcframework
+
+idea.md

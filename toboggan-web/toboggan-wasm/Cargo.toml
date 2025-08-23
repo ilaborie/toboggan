@@ -11,6 +11,9 @@ repository = "https://github.com/ilaborie/toboggan"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[workspace]
+# This empty workspace table prevents the package from inheriting workspace settings
+
 
 [dependencies]
 toboggan-core = { path = "../../toboggan-core", features = ["alloc", "js"] }
