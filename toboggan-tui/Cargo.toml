@@ -13,12 +13,10 @@ toboggan-client = {path = "../toboggan-client"}
 ratatui = "0.29"
 crossterm = "0.28.1"
 tokio = { workspace = true, features = ["full"] }
-tokio-tungstenite = "0.27.0"
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["env", "derive"] }
 futures = { workspace = true }
-reqwest = { version = "0.12", features = ["json"] }
 tracing= { workspace = true }
 tracing-subscriber= { workspace = true }
 tui-logger = { version = "0.17.3", features = ["tracing-support"]}

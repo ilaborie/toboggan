@@ -23,9 +23,7 @@ path = "./uniffi-bindgen-swift.rs"
 
 [dependencies]
 toboggan-core = { path = "../toboggan-core", features = ["std"] }
-toboggan-client = { path = "../toboggan-client", default-features = false, features = [
-    "async",
-] }
+toboggan-client = { path = "../toboggan-client" }
 
 uniffi = { version = "0.29.4", features = ["cli"] }
 derive_more = { version = "2.0.1", features = ["error", "display", "from"] }
