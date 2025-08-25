@@ -107,7 +107,11 @@ mod tests {
         let state = TobogganState::new(talk, 100);
         let target_slide = 1; // Index 1 (second slide)
 
-        let notification = state.handle_command(&Command::GoTo(target_slide)).await;
+        let notification = state
+            .handle_command(&Command::GoTo {
+                slide: target_slide,
+            })
+            .await;
 
         match notification {
             Notification::State {
@@ -128,7 +132,11 @@ mod tests {
         let state = TobogganState::new(talk, 100);
         let invalid_slide = 999; // Index out of bounds
 
-        let notification = state.handle_command(&Command::GoTo(invalid_slide)).await;
+        let notification = state
+            .handle_command(&Command::GoTo {
+                slide: invalid_slide,
+            })
+            .await;
 
         match notification {
             Notification::Error { message, .. } => {

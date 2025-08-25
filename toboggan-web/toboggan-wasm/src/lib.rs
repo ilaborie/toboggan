@@ -1,6 +1,4 @@
-use gloo::console::debug;
-use gloo::console::info;
-
+use gloo::console::{debug, info};
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlElement;
 

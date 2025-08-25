@@ -1,5 +1,6 @@
 use std::fmt::Display;
 use std::time::Duration;
+
 use toboggan_core::State;
 
 mod api;

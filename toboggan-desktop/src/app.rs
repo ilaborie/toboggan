@@ -1,283 +1,375 @@
-use std::collections::HashMap;
+use std::sync::OnceLock;
 
-use iced::widget::{button, column, container, row, text};
-use iced::{Application, Command, Element, Length, Theme, keyboard};
-use toboggan_core::{ClientId, Command as TobogganCommand, Slide, SlideId, State, Talk};
-use tracing::{error, info};
+use iced::{Element, Subscription, Task, Theme, keyboard};
+use toboggan_client::{
+    CommunicationMessage, ConnectionStatus, TobogganApi, TobogganApiError, WebSocketClient,
+};
+use toboggan_core::{
+    ClientId, Command as TobogganCommand, Renderer, SlidesResponse, Talk, TalkResponse,
+};
+use tokio::sync::{broadcast, mpsc};
+use tracing::{debug, error, info};
 
-use crate::config::Config;
-use crate::messages::Message;
-use crate::services::slide_client::SlideClient;
-use crate::services::websocket::WebSocketClient;
-use crate::ui::slide_view::render_slide;
+use crate::message::Message;
+use crate::state::AppState;
+use crate::{build_config, views};
 
-#[derive(Debug, Clone)]
-pub enum ConnectionStatus {
-    Disconnected,
-    Connecting,
-    Connected,
-    Error(String),
-}
+// Global channel for forwarding WebSocket messages to Iced
+static MESSAGE_CHANNEL: OnceLock<broadcast::Sender<CommunicationMessage>> = OnceLock::new();
 
-pub struct TobogganApp {
-    config: Config,
-    connection_status: ConnectionStatus,
-    current_slide: Option<SlideId>,
-    slides: HashMap<SlideId, Slide>,
-    presentation_state: Option<State>,
-    talk: Option<Talk>,
-    error_message: Option<String>,
-    client_id: ClientId,
+pub struct App {
+    state: AppState,
     websocket_client: Option<WebSocketClient>,
-    slide_client: SlideClient,
+    cmd_sender: Option<mpsc::UnboundedSender<TobogganCommand>>,
+    api: TobogganApi,
+    client_id: ClientId,
 }
 
-impl Application for TobogganApp {
-    type Message = Message;
-    type Theme = Theme;
-    type Executor = iced::executor::Default;
-    type Flags = Config;
+impl App {
+    /// Creates a new app instance.
+    ///
+    /// # Panics
+    /// Panics if the message channel has already been initialized.
+    pub fn new() -> (Self, Task<Message>) {
+        let config = build_config(None, None);
+        let api_client = TobogganApi::new(&config.api_url);
+        let client_id = config.client_id;
 
-    fn new(config: Config) -> (Self, Command<Message>) {
-        let client_id = ClientId::new();
-        let slide_client = SlideClient::new(&config.websocket_url);
+        // Initialize the global message channel for WebSocket message forwarding
+        let (tx, _) = broadcast::channel(1000);
+        assert!(
+            MESSAGE_CHANNEL.set(tx).is_ok(),
+            "Failed to initialize message channel - already initialized"
+        );
 
         let app = Self {
-            config,
-            connection_status: ConnectionStatus::Disconnected,
-            current_slide: None,
-            slides: HashMap::new(),
-            presentation_state: None,
-            talk: None,
-            error_message: None,
-            client_id,
+            state: AppState::default(),
             websocket_client: None,
-            slide_client,
+            cmd_sender: None,
+            api: api_client.clone(),
+            client_id,
         };
 
+        // Load talk and slides immediately, then connect
+        let api_for_loading = api_client.clone();
         (
             app,
-            Command::perform(async {}, |()| Message::ConnectToServer),
+            Task::batch([
+                Task::perform(
+                    async move {
+                        let talk = api_for_loading.talk().await?;
+                        let slides = api_for_loading.slides().await?;
+                        Ok::<_, TobogganApiError>((talk, slides))
+                    },
+                    |result| match result {
+                        Ok((talk, slides)) => Message::TalkAndSlidesLoaded(talk, slides),
+                        Err(err) => Message::LoadError(err.to_string()),
+                    },
+                ),
+                Task::perform(async {}, |()| Message::Connect),
+            ]),
         )
     }
 
-    fn title(&self) -> String {
-        if let Some(talk) = &self.talk {
-            format!("Toboggan - {}", talk.title)
-        } else {
-            "Toboggan Desktop Client".to_string()
-        }
-    }
-
-    fn update(&mut self, message: Message) -> Command<Message> {
+    pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::WebSocketConnected => {
-                self.connection_status = ConnectionStatus::Connected;
-                self.error_message = None;
-                info!("Connected to WebSocket");
-                // Fetch slides after connection
-                let slide_client = self.slide_client.clone();
-                return Command::perform(
-                    async move {
-                        match slide_client.fetch_slides().await {
-                            Ok(slides) => Message::SlidesLoaded(slides),
-                            Err(fetch_error) => Message::WebSocketError(format!(
-                                "Failed to fetch slides: {fetch_error}"
-                            )),
-                        }
-                    },
-                    |msg| msg,
-                );
-            }
-            Message::WebSocketDisconnected => {
-                self.connection_status = ConnectionStatus::Disconnected;
-                info!("Disconnected from WebSocket");
-            }
-            Message::WebSocketError(error) => {
-                self.connection_status = ConnectionStatus::Error(error.clone());
-                self.error_message = Some(error);
-                error!("WebSocket error");
-            }
-            Message::NotificationReceived(notification) => {
-                self.handle_notification(notification);
-            }
-            Message::FirstSlide => {
-                return self.send_command(&TobogganCommand::First);
-            }
-            Message::PreviousSlide => {
-                return self.send_command(&TobogganCommand::Previous);
-            }
-            Message::NextSlide => {
-                return self.send_command(&TobogganCommand::Next);
-            }
-            Message::LastSlide => {
-                return self.send_command(&TobogganCommand::Last);
-            }
-            Message::PlayPresentation => {
-                return self.send_command(&TobogganCommand::Resume);
-            }
-            Message::PausePresentation => {
-                return self.send_command(&TobogganCommand::Pause);
-            }
-            Message::GoToSlide(slide_id) => {
-                return self.send_command(&TobogganCommand::GoTo(slide_id));
-            }
-            Message::ConnectToServer => {
-                self.connection_status = ConnectionStatus::Connecting;
-                let url = self.config.websocket_url.clone();
-                let client_id = self.client_id;
+            Message::Connect => self.handle_connect(),
 
-                return Command::perform(
-                    async move {
-                        let mut client = WebSocketClient::new(client_id);
-                        match client.connect(&url).await {
-                            Ok(_receiver) => Ok(()),
-                            Err(connect_error) => Err(connect_error.to_string()),
-                        }
-                    },
-                    |result| match result {
-                        Ok(()) => Message::WebSocketConnected,
-                        Err(error_msg) => Message::WebSocketError(error_msg),
-                    },
-                );
+            Message::Disconnect => self.handle_disconnect(),
+
+            Message::TalkLoaded(talk_response) => self.handle_talk_loaded(&talk_response),
+
+            Message::TalkAndSlidesLoaded(talk_response, slides_response) => {
+                self.handle_talk_and_slides_loaded(&talk_response, &slides_response)
             }
-            Message::Tick | Message::WindowResized => {
-                // Handle periodic updates and window resize
+
+            Message::Communication(message) => self.handle_websocket_message(message),
+
+            Message::SlideLoaded(id, slide) => {
+                debug!("Slide loaded: {}", id);
+                if let Some(existing_slide) = self.state.slides.get_mut(id) {
+                    *existing_slide = slide;
+                } else {
+                    // Extend the Vec if needed
+                    self.state.slides.resize(id + 1, slide.clone());
+                    if let Some(target_slide) = self.state.slides.get_mut(id) {
+                        *target_slide = slide;
+                    }
+                }
+                Task::none()
             }
-            Message::SlidesLoaded(slides) => {
-                self.slides = slides;
-                info!("Loaded {} slides", self.slides.len());
-                // Also fetch the talk metadata
-                let slide_client = self.slide_client.clone();
-                return Command::perform(
-                    async move {
-                        match slide_client.fetch_talk().await {
-                            Ok(talk) => Message::TalkLoaded(talk),
-                            Err(talk_error) => Message::WebSocketError(format!(
-                                "Failed to fetch talk: {talk_error}"
-                            )),
-                        }
-                    },
-                    |msg| msg,
-                );
+
+            Message::LoadError(error) => {
+                error!("Load error: {}", error);
+                self.state.error_message = Some(error);
+                Task::none()
             }
-            Message::TalkLoaded(talk) => {
-                self.talk = Some(talk);
-                info!("Talk loaded");
+
+            Message::SendCommand(command) => self.send_command(command),
+
+            Message::ToggleHelp => {
+                self.state.show_help = !self.state.show_help;
+                Task::none()
             }
+
+            Message::ToggleSidebar => {
+                self.state.show_sidebar = !self.state.show_sidebar;
+                Task::none()
+            }
+
+            Message::ToggleFullscreen => {
+                self.state.fullscreen = !self.state.fullscreen;
+                Task::none()
+            }
+
+            Message::KeyPressed(key, modifiers) => self.handle_keyboard(key, modifiers),
+
+            Message::WindowResized(_, _) | Message::Tick => Task::none(),
         }
-        Command::none()
     }
 
-    fn view(&'_ self) -> Element<'_, Message> {
-        let status_text = match &self.connection_status {
-            ConnectionStatus::Disconnected => "Disconnected",
-            ConnectionStatus::Connecting => "Connecting...",
-            ConnectionStatus::Connected => "Connected",
-            ConnectionStatus::Error(err) => &format!("Error: {err}"),
-        };
-
-        let status_bar = row![
-            text(status_text),
-            text(format!("URL: {}", self.config.websocket_url)),
-        ]
-        .spacing(20);
-
-        let controls = row![
-            button("First").on_press(Message::FirstSlide),
-            button("Previous").on_press(Message::PreviousSlide),
-            button("Next").on_press(Message::NextSlide),
-            button("Last").on_press(Message::LastSlide),
-            button("Play").on_press(Message::PlayPresentation),
-            button("Pause").on_press(Message::PausePresentation),
-        ]
-        .spacing(10);
-
-        let slide_content: Element<Message> = if let Some(slide_id) = &self.current_slide {
-            if let Some(slide) = self.slides.get(slide_id) {
-                container(render_slide(slide))
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .into()
-            } else {
-                container(text("Loading slide..."))
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .center_x()
-                    .center_y()
-                    .into()
-            }
-        } else {
-            container(text("No slide selected"))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center_x()
-                .center_y()
-                .into()
-        };
-
-        let content = column![status_bar, slide_content, controls,]
-            .spacing(20)
-            .padding(20);
-
-        container(content)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+    #[must_use]
+    pub fn view(&self) -> Element<'_, Message> {
+        views::main_view(&self.state)
     }
 
-    fn theme(&self) -> Theme {
-        Theme::Dark
+    #[must_use]
+    pub fn theme(&self) -> Theme {
+        Theme::default()
     }
 
-    fn subscription(&self) -> iced::Subscription<Message> {
-        keyboard::on_key_press(|key, modifiers| match (key.as_ref(), modifiers) {
-            (keyboard::Key::Named(keyboard::key::Named::ArrowRight), _) => Some(Message::NextSlide),
-            (keyboard::Key::Named(keyboard::key::Named::ArrowLeft), _) => {
-                Some(Message::PreviousSlide)
-            }
-            (keyboard::Key::Named(keyboard::key::Named::Home), _) => Some(Message::FirstSlide),
-            (keyboard::Key::Named(keyboard::key::Named::End), _) => Some(Message::LastSlide),
-            (keyboard::Key::Named(keyboard::key::Named::Space), _) => {
-                Some(Message::PlayPresentation)
-            }
-            (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
-                Some(Message::PausePresentation)
-            }
-            _ => None,
-        })
+    pub fn subscription(&self) -> Subscription<Message> {
+        let keyboard_subscription = iced::keyboard::on_key_press(|key, modifiers| {
+            Some(Message::KeyPressed(key, modifiers))
+        });
+
+        let tick_subscription =
+            iced::time::every(std::time::Duration::from_secs(1)).map(|_| Message::Tick);
+
+        let websocket_subscription = websocket_message_subscription();
+
+        Subscription::batch(vec![
+            keyboard_subscription,
+            tick_subscription,
+            websocket_subscription,
+        ])
     }
 }
 
-impl TobogganApp {
-    fn handle_notification(&mut self, notification: toboggan_core::Notification) {
-        use toboggan_core::Notification;
+impl App {
+    fn handle_connect(&mut self) -> Task<Message> {
+        info!("Connecting to server...");
+        let config = build_config(None, None);
+        let (tx_cmd, rx_cmd) = mpsc::unbounded_channel();
+        let (mut ws_client, mut rx_msg) =
+            WebSocketClient::new(tx_cmd.clone(), rx_cmd, self.client_id, config.websocket);
 
-        match notification {
-            Notification::State { state, .. } => {
-                self.presentation_state = Some(state.clone());
-                self.current_slide = state.current();
-                info!("Received state update: {:?}", state);
+        self.cmd_sender = Some(tx_cmd.clone());
+
+        // Send register command
+        let _ = tx_cmd.send(TobogganCommand::Register {
+            client: self.client_id,
+            renderer: Renderer::Raw,
+        });
+
+        // Start WebSocket connection and message forwarding in background
+        tokio::spawn(async move {
+            // Start connection
+            ws_client.connect().await;
+
+            // Forward all WebSocket messages to Iced via broadcast channel
+            while let Some(msg) = rx_msg.recv().await {
+                info!("Received WebSocket message: {:?}", msg);
+
+                // Forward the message to the global broadcast channel
+                if let Some(sender) = MESSAGE_CHANNEL.get()
+                    && let Err(send_error) = sender.send(msg)
+                {
+                    error!("Failed to forward WebSocket message: {}", send_error);
+                }
             }
-            Notification::Pong { .. } => {
-                // Heartbeat response
+        });
+
+        Task::none()
+    }
+
+    fn handle_disconnect(&mut self) -> Task<Message> {
+        info!("Disconnecting from server...");
+        self.websocket_client = None;
+        self.cmd_sender = None;
+        self.state.connection_status = ConnectionStatus::Closed;
+
+        // Auto-reconnect after disconnect
+        Task::perform(
+            async { tokio::time::sleep(tokio::time::Duration::from_millis(100)).await },
+            |()| Message::Connect,
+        )
+    }
+
+    fn handle_talk_loaded(&mut self, talk_response: &TalkResponse) -> Task<Message> {
+        info!("Talk loaded: {}", talk_response.title);
+        // For now, create a simplified talk from the response
+        let talk = Talk {
+            title: talk_response.title.clone(),
+            date: talk_response.date,
+            footer: talk_response.footer.clone(),
+            slides: vec![], // We'll load slides separately
+        };
+        self.state.talk = Some(talk);
+        Task::none()
+    }
+
+    fn handle_talk_and_slides_loaded(
+        &mut self,
+        talk_response: &TalkResponse,
+        slides_response: &SlidesResponse,
+    ) -> Task<Message> {
+        info!(
+            "Talk and slides loaded: {} ({} slides)",
+            talk_response.title,
+            slides_response.slides.len()
+        );
+        // Create talk with actual slides
+        let talk = Talk {
+            title: talk_response.title.clone(),
+            date: talk_response.date,
+            footer: talk_response.footer.clone(),
+            slides: slides_response.slides.clone(),
+        };
+        self.state.talk = Some(talk);
+
+        // Store all slides in the Vec
+        self.state.slides.clone_from(&slides_response.slides);
+
+        Task::none()
+    }
+
+    fn handle_websocket_message(&mut self, message: CommunicationMessage) -> Task<Message> {
+        match message {
+            CommunicationMessage::ConnectionStatusChange { status } => {
+                self.state.connection_status = status.clone();
+                info!("Connection status changed: {:?}", status);
+
+                // Load talk data when connection is established (formerly in handle_connection_status_change)
+                if matches!(status, ConnectionStatus::Connected) {
+                    let api = self.api.clone();
+                    Task::perform(async move { api.talk().await }, |result| match result {
+                        Ok(talk) => Message::TalkLoaded(talk),
+                        Err(load_error) => Message::LoadError(load_error.to_string()),
+                    })
+                } else {
+                    Task::none()
+                }
             }
-            Notification::Error { message, .. } => {
-                self.error_message = Some(message);
+            CommunicationMessage::StateChange { state } => {
+                debug!("State change received: {:?}", state);
+                self.state.presentation_state = Some(state.clone());
+                if let Some(slide_idx) = state.current() {
+                    self.state.current_slide_index = Some(slide_idx);
+
+                    // Ensure slides are loaded from talk data
+                    if let Some(talk) = &self.state.talk
+                        && self.state.slides.is_empty()
+                        && !talk.slides.is_empty()
+                    {
+                        self.state.slides = talk.slides.clone();
+                    }
+                }
+                Task::none()
             }
-            Notification::Blink => todo!(),
+            CommunicationMessage::Error { error } => {
+                error!("WebSocket error: {}", error);
+                self.state.error_message = Some(error.clone());
+                Task::none()
+            }
         }
     }
 
-    fn send_command(&self, command: &TobogganCommand) -> Command<Message> {
-        if let Some(client) = &self.websocket_client
-            && let Err(send_error) = client.send_command(command.clone())
+    fn send_command(&mut self, command: TobogganCommand) -> Task<Message> {
+        if let Some(sender) = &self.cmd_sender
+            && let Err(send_error) = sender.send(command)
         {
             error!("Failed to send command: {}", send_error);
-            let error_message = format!("Failed to send command: {send_error}");
-            return Command::perform(async {}, move |()| Message::WebSocketError(error_message));
         }
-        info!("Sending command: {:?}", command);
-        Command::none()
+        Task::none()
     }
+
+    fn handle_keyboard(
+        &mut self,
+        key: keyboard::Key,
+        modifiers: keyboard::Modifiers,
+    ) -> Task<Message> {
+        match key {
+            keyboard::Key::Named(
+                keyboard::key::Named::ArrowRight | keyboard::key::Named::Space,
+            ) if !self.state.show_help => self.send_command(TobogganCommand::Next),
+            keyboard::Key::Named(keyboard::key::Named::ArrowLeft) if !self.state.show_help => {
+                self.send_command(TobogganCommand::Previous)
+            }
+            keyboard::Key::Named(keyboard::key::Named::Home) if !self.state.show_help => {
+                self.send_command(TobogganCommand::First)
+            }
+            keyboard::Key::Named(keyboard::key::Named::End) if !self.state.show_help => {
+                self.send_command(TobogganCommand::Last)
+            }
+            keyboard::Key::Character(character) if character == "h" || character == "?" => {
+                self.state.show_help = !self.state.show_help;
+                Task::none()
+            }
+            keyboard::Key::Character(character) if character == "s" && !self.state.show_help => {
+                self.state.show_sidebar = !self.state.show_sidebar;
+                Task::none()
+            }
+            keyboard::Key::Character(character)
+                if (character == "p" || character == "P") && !self.state.show_help =>
+            {
+                self.send_command(TobogganCommand::Pause)
+            }
+            keyboard::Key::Character(character)
+                if (character == "r" || character == "R") && !self.state.show_help =>
+            {
+                self.send_command(TobogganCommand::Resume)
+            }
+            keyboard::Key::Character(character)
+                if (character == "b" || character == "B") && !self.state.show_help =>
+            {
+                self.send_command(TobogganCommand::Blink)
+            }
+            keyboard::Key::Named(keyboard::key::Named::F11) => {
+                self.state.fullscreen = !self.state.fullscreen;
+                Task::none()
+            }
+            keyboard::Key::Named(keyboard::key::Named::Escape) if self.state.show_help => {
+                self.state.show_help = false;
+                Task::none()
+            }
+            keyboard::Key::Named(keyboard::key::Named::Escape)
+                if self.state.error_message.is_some() =>
+            {
+                self.state.error_message = None;
+                Task::none()
+            }
+            keyboard::Key::Character(character) if character == "q" && modifiers.command() => {
+                iced::window::close(iced::window::Id::unique())
+            }
+            _ => Task::none(),
+        }
+    }
+}
+
+// Create a subscription for WebSocket messages
+fn websocket_message_subscription() -> Subscription<Message> {
+    Subscription::run(|| {
+        async_stream::stream! {
+            if let Some(channel) = MESSAGE_CHANNEL.get() {
+                let mut rx = channel.subscribe();
+
+                loop {
+                    if let Ok(message) = rx.recv().await {
+                        yield Message::Communication(message);
+                    }
+                }
+            }
+        }
+    })
 }

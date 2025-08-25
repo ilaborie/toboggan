@@ -1,4 +1,5 @@
-use std::{cell::Cell, rc::Rc};
+use std::cell::Cell;
+use std::rc::Rc;
 
 /// RAII timer that automatically starts console.time on creation and console.timeEnd on drop
 pub struct Timer {
@@ -18,7 +19,7 @@ impl Timer {
             Some(Self { label, is_active })
         }
     }
-    
+
     /// Try to end a timer if it's currently active
     pub fn try_end(is_active: &Rc<Cell<bool>>, label: &'static str) {
         if is_active.get() {

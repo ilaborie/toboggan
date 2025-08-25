@@ -1,48 +1,28 @@
-use anyhow::Result;
-use clap::Parser;
-use iced::{Application, Settings, Size};
-use tracing::info;
-
-mod app;
-mod config;
-mod messages;
-mod services;
-mod ui;
-
-use app::TobogganApp;
-use config::Config;
-
-#[derive(Parser)]
-#[command(name = "toboggan-desktop")]
-#[command(about = "Toboggan Desktop Presentation Client")]
-struct Args {
-    #[arg(short, long, help = "WebSocket server URL")]
-    url: Option<String>,
-
-    #[arg(short, long, help = "Configuration file path")]
-    config: Option<String>,
-}
+use anyhow::{Context, Result};
+use iced::Settings;
+use toboggan_desktop::App;
 
 fn main() -> Result<()> {
+    // Setup logging
     tracing_subscriber::fmt::init();
 
-    let args = Args::parse();
+    // Setup Lucide icons font
+    let lucide_font = lucide_icons::lucide_font_bytes();
 
-    let config = Config::load(args.config.as_deref(), args.url)?;
-    info!("Starting Toboggan Desktop with config: {:?}", config);
-
-    let settings = Settings {
-        window: iced::window::Settings {
-            size: Size::new(1024.0, 768.0),
-            position: iced::window::Position::Centered,
+    // Run the application
+    iced::application("Toboggan Desktop", App::update, App::view)
+        .settings(Settings::default())
+        .window(iced::window::Settings {
+            size: iced::Size::new(1280.0, 720.0),
+            resizable: true,
+            decorations: true,
             ..Default::default()
-        },
-        ..Default::default()
-    };
+        })
+        .font(lucide_font)
+        .subscription(App::subscription)
+        .theme(App::theme)
+        .run_with(App::new)
+        .context("Running application")?;
 
-    TobogganApp::run(Settings {
-        flags: config,
-        ..settings
-    })
-    .map_err(|error| anyhow::anyhow!("Application error: {}", error))
+    Ok(())
 }

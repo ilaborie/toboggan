@@ -1,12 +1,9 @@
 use std::collections::HashMap;
 
 use futures::channel::mpsc::UnboundedSender;
-
-use gloo::{
-    console::{debug, error, info, warn},
-    events::EventListener,
-    utils::window,
-};
+use gloo::console::{debug, error, info, warn};
+use gloo::events::EventListener;
+use gloo::utils::window;
 use toboggan_core::Command;
 use wasm_bindgen::JsCast;
 use web_sys::{Event, KeyboardEvent};

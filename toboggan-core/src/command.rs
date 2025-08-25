@@ -48,7 +48,9 @@ pub enum Command {
     // Move fast
     First,
     Last,
-    GoTo(usize),
+    GoTo {
+        slide: usize,
+    },
     // Navigation
     Next,
     Previous,

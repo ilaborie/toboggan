@@ -1,13 +1,13 @@
-use std::{cell::RefCell, mem, rc::Rc};
+use std::cell::RefCell;
+use std::mem;
+use std::rc::Rc;
 
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
-
 use gloo::console::error;
+use toboggan_core::{Command, Renderer, State};
 use wasm_bindgen::UnwrapThrowExt;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlElement;
-
-use toboggan_core::{Command, Renderer, State};
 
 use crate::{
     AppConfig, CommunicationMessage, CommunicationService, ConnectionStatus, KeyboardService,

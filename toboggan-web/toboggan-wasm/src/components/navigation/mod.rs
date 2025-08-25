@@ -1,14 +1,15 @@
 use futures::channel::mpsc::UnboundedSender;
-use gloo::{events::EventListener, timers::callback::Interval};
+use gloo::events::EventListener;
+use gloo::timers::callback::Interval;
+use toboggan_core::{Command, Duration, State, TalkResponse};
 use wasm_bindgen::prelude::*;
 use web_sys::{Element, HtmlButtonElement, HtmlElement, HtmlProgressElement, ShadowRoot};
 
-use toboggan_core::{Command, Duration, State, TalkResponse};
-
+use crate::components::WasmElement;
 use crate::{
-    ConnectionStatus, StateClassMapper, components::WasmElement, create_and_append_element,
-    create_button, create_shadow_root_with_style, dom_try, dom_try_or_return, format_duration,
-    render_content, unwrap_or_return,
+    ConnectionStatus, StateClassMapper, create_and_append_element, create_button,
+    create_shadow_root_with_style, dom_try, dom_try_or_return, format_duration, render_content,
+    unwrap_or_return,
 };
 
 #[derive(Debug, Default)]
@@ -202,9 +203,7 @@ impl TobogganNavigationElement {
 
         // Set current value
         #[allow(clippy::cast_precision_loss)]
-        let value = self
-            .slide_current
-            .map_or(0.0, |index| index as f64);
+        let value = self.slide_current.map_or(0.0, |index| index as f64);
         progress_el.set_value(value);
     }
 

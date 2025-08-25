@@ -1,11 +1,11 @@
 [package]
 name = "toboggan-ios"
 version = "0.1.0"
-edition = "2024"
-rust-version = "1.88"
-license = "MIT OR Apache-2.0"
-authors = ["Igor Laborie <ilaborie@gmail.com>"]
-repository = "https://github.com/ilaborie/toboggan"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
 
 
 [lib]
@@ -26,8 +26,6 @@ toboggan-core = { path = "../toboggan-core", features = ["std"] }
 toboggan-client = { path = "../toboggan-client" }
 
 uniffi = { version = "0.29.4", features = ["cli"] }
-derive_more = { version = "2.0.1", features = ["error", "display", "from"] }
-tracing = "0.1.41"
 tokio = { version = "1.0", features = [
     "rt",
     "rt-multi-thread",
@@ -37,7 +35,6 @@ tokio = { version = "1.0", features = [
 ] }
 
 [dev-dependencies]
-tracing-subscriber = { version = "0.3.19", features = ["fmt"] }
 
 [build-dependencies]
 uniffi = { version = "0.29.4", features = ["build"] }

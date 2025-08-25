@@ -1,5 +1,6 @@
-use crate::{ConnectionStatus, StateClassMapper};
 use toboggan_core::State;
+
+use crate::{ConnectionStatus, StateClassMapper};
 
 /// Maps State enum to CSS class names
 impl StateClassMapper<State> for State {

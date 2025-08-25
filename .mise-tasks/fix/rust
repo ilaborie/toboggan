@@ -8,9 +8,15 @@ echo "🔧 Running Rust auto-fixes..."
 # Format code
 echo "📐 Auto-formatting Rust code..."
 cargo +nightly fmt
+pushd ./toboggan-web/toboggan-wasm
+cargo +nightly fmt
+popd
 
 # Apply clippy suggestions
 echo "🛠️  Applying clippy auto-fixes..."
 cargo fix --allow-dirty --allow-staged
+pushd ./toboggan-web/toboggan-wasm
+cargo fix --allow-dirty --allow-staged
+popd
 
 echo "✅ All Rust auto-fixes applied!"

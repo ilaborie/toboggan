@@ -67,13 +67,9 @@ console_error_panic_hook = "0.1.7"
 
 # Add test dependencies
 [dev-dependencies]
-wasm-bindgen-test = "0.3.43"
 
 [lints.rust]
 missing_docs = "allow"
-
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
-
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

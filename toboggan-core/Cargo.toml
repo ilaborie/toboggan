@@ -8,8 +8,8 @@ authors.workspace = true
 
 [features]
 default = ["std"]
-std = ["alloc", "jiff/std", "serde/std", "once_cell/std", "pulldown-cmark"]
-alloc = ["jiff/alloc", "serde/alloc", "getrandom", "once_cell/critical-section"]
+std = ["alloc", "jiff/std", "serde/std", "pulldown-cmark"]
+alloc = ["jiff/alloc", "serde/alloc", "getrandom"]
 js = ["jiff/js", "getrandom/js", "uuid/js"]
 openapi = ["utoipa"]
 test-utils = []
@@ -18,7 +18,6 @@ test-utils = []
 jiff = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 uuid = { workspace = true, features = ["serde", "v4"] }
-once_cell = { workspace = true }
 getrandom = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 pulldown-cmark = { workspace = true, optional = true }
