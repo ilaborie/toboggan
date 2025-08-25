@@ -1,14 +1,10 @@
+use toboggan_core::Content;
 use web_sys::{Element, HtmlElement, ShadowRoot};
 
-use toboggan_core::Content;
-
+use crate::components::WasmElement;
 use crate::{
-    components::WasmElement, 
-    render_content, 
-    create_shadow_root_with_style, 
-    create_and_append_element,
+    create_and_append_element, create_shadow_root_with_style, dom_try_or_return, render_content,
     unwrap_or_return,
-    dom_try_or_return
 };
 
 #[derive(Debug, Default)]

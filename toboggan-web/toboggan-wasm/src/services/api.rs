@@ -1,6 +1,6 @@
-use gloo::net::{Error, http::Request};
+use gloo::net::Error;
+use gloo::net::http::Request;
 use serde::de::DeserializeOwned;
-
 use toboggan_core::{Slide, TalkResponse};
 
 /// Client for interacting with the Toboggan API

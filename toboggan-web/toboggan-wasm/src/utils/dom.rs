@@ -1,7 +1,6 @@
 use gloo::utils::document;
-use wasm_bindgen::prelude::*;
-
 use toboggan_core::Content;
+use wasm_bindgen::prelude::*;
 use web_sys::HtmlElement;
 
 fn escape_html(html: &str) -> String {

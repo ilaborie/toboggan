@@ -1,16 +1,16 @@
-use std::{cell::RefCell, fmt::Display};
+use std::cell::RefCell;
+use std::fmt::Display;
 
-use gloo::{events::EventListener, timers::callback::Timeout, utils::document};
+use gloo::events::EventListener;
+use gloo::timers::callback::Timeout;
+use gloo::utils::document;
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlElement, ShadowRoot};
 
+use crate::components::WasmElement;
 use crate::{
-    components::WasmElement, 
-    create_shadow_root_with_style,
-    create_and_append_element,
+    create_and_append_element, create_shadow_root_with_style, dom_try, dom_try_or_return,
     unwrap_or_return,
-    dom_try_or_return,
-    dom_try
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -62,14 +62,13 @@ impl TobogganToastElement {
         let container = unwrap_or_return!(&self.container);
 
         let node = dom_try_or_return!(
-            document().create_element("output").map(|el| el.dyn_into::<HtmlElement>().unwrap_throw()),
+            document()
+                .create_element("output")
+                .map(|el| el.dyn_into::<HtmlElement>().unwrap_throw()),
             "create toast element"
         );
-        
-        dom_try!(
-            node.set_attribute("role", "status"),
-            "set role attribute"
-        );
+
+        dom_try!(node.set_attribute("role", "status"), "set role attribute");
         node.set_class_name(&toast_type.to_string());
 
         let inner = format!(

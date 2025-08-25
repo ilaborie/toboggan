@@ -103,7 +103,7 @@ impl AppAction {
             Self::Pause => Command::Pause,
             Self::Resume => Command::Resume,
             Self::Blink => Command::Blink,
-            Self::Goto(id) => Command::GoTo(id.into()),
+            Self::Goto(id) => Command::GoTo { slide: id.into() },
             Self::ShowLog | Self::Close | Self::Quit | Self::Help => {
                 return None;
             }

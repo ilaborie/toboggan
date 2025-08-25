@@ -378,7 +378,7 @@ impl TobogganState {
             Command::Unregister { .. } => Notification::state(state.clone()),
             Command::First => self.command_first(&mut state),
             Command::Last => self.command_last(&mut state),
-            Command::GoTo(slide_index) => self.command_goto(&mut state, *slide_index),
+            Command::GoTo { slide } => self.command_goto(&mut state, *slide),
             Command::Next => self.command_next(&mut state),
             Command::Previous => self.command_previous(&mut state),
             Command::Pause => Self::command_pause(&mut state),

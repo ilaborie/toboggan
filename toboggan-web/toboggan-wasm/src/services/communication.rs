@@ -1,35 +1,28 @@
-use std::{
-    cell::{Cell, RefCell},
-    mem,
-    rc::Rc,
-    time::Duration,
-};
+use std::cell::{Cell, RefCell};
+use std::mem;
+use std::rc::Rc;
+use std::time::Duration;
 
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
-
 // WARNING: This module runs in WASM browser context.
 // NEVER use std::sync blocking operations (like mpsc::Receiver::recv())
 // in async functions as they WILL FREEZE the browser!
 //
 // Use Rc<RefCell<>> instead of Arc<Mutex<>> in single-threaded WASM context.
 use futures::{SinkExt, StreamExt};
-use gloo::{
-    console::{debug, error, info, warn},
-    net::websocket::{Message, futures::WebSocket},
-    timers::callback::{Interval, Timeout},
-};
+use gloo::console::{debug, error, info, warn};
+use gloo::net::websocket::Message;
+use gloo::net::websocket::futures::WebSocket;
+use gloo::timers::callback::{Interval, Timeout};
 use js_sys::JSON;
+use toboggan_core::{ClientId, Command, Notification, Renderer};
 use wasm_bindgen::UnwrapThrowExt;
 use wasm_bindgen_futures::spawn_local;
 
-use toboggan_core::{ClientId, Command, Notification, Renderer};
-
-use crate::{
-    config::WebSocketConfig,
-    play_chime,
-    services::{CommunicationMessage, ConnectionStatus},
-    utils::Timer,
-};
+use crate::config::WebSocketConfig;
+use crate::play_chime;
+use crate::services::{CommunicationMessage, ConnectionStatus};
+use crate::utils::Timer;
 
 const PING_INTERVAL_MS: u32 = 60 * 1_000; // 1 minute
 const PING_LABEL: &str = "ping-latency";
@@ -192,7 +185,7 @@ impl CommunicationService {
         let tx_msg_clone = self.tx_msg.clone();
         let config = self.config.clone();
         let client_id = self.client_id;
-        let state_clone= Rc::clone(&self.state);
+        let state_clone = Rc::clone(&self.state);
         let tx_cmd = self.tx_cmd.clone();
         let rx_cmd = Rc::clone(&self.rx_cmd);
 
