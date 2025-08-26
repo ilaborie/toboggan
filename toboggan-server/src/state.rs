@@ -70,8 +70,8 @@ impl TobogganState {
         &self.talk
     }
 
-    pub(crate) fn slides(&self) -> Vec<Slide> {
-        self.talk().slides.clone()
+    pub(crate) fn slides(&self) -> &[Slide] {
+        &self.talk.slides
     }
 
     pub(crate) fn slide_by_index(&self, index: usize) -> Option<Slide> {
@@ -169,6 +169,27 @@ impl TobogganState {
         }
     }
 
+    fn transition_to_running(state: &mut State, slide_index: usize) {
+        let total_duration = match state {
+            State::Init => Duration::ZERO,
+            _ => state.calculate_total_duration(),
+        };
+
+        *state = State::Running {
+            since: Timestamp::now(),
+            current: slide_index,
+            total_duration,
+        };
+    }
+
+    fn transition_to_running_reset_duration(state: &mut State, slide_index: usize) {
+        *state = State::Running {
+            since: Timestamp::now(),
+            current: slide_index,
+            total_duration: Duration::ZERO,
+        };
+    }
+
     fn command_first(&self, state: &mut State) -> Notification {
         let total_slides = self.total_slides();
         if total_slides == 0 {
@@ -177,19 +198,11 @@ impl TobogganState {
 
         match state {
             State::Init | State::Paused { .. } => {
-                *state = State::Running {
-                    since: Timestamp::now(),
-                    current: 0, // First slide index
-                    total_duration: Duration::default(),
-                };
+                Self::transition_to_running_reset_duration(state, 0);
             }
             _ => {
                 if !state.is_first_slide(total_slides) {
-                    *state = State::Running {
-                        since: Timestamp::now(),
-                        current: 0, // First slide index
-                        total_duration: Duration::default(),
-                    };
+                    Self::transition_to_running_reset_duration(state, 0);
                 }
             }
         }
@@ -206,21 +219,13 @@ impl TobogganState {
 
         match state {
             State::Init => {
-                *state = State::Running {
-                    since: Timestamp::now(),
-                    current: last_index,
-                    total_duration: Duration::ZERO,
-                };
+                Self::transition_to_running(state, last_index);
             }
             State::Paused { .. } => {
                 if state.is_last_slide(total_slides) {
                     state.update_slide(last_index);
                 } else {
-                    *state = State::Running {
-                        since: Timestamp::now(),
-                        current: last_index,
-                        total_duration: state.calculate_total_duration(),
-                    };
+                    Self::transition_to_running(state, last_index);
                 }
             }
             _ => {
@@ -242,21 +247,13 @@ impl TobogganState {
 
         match state {
             State::Init => {
-                *state = State::Running {
-                    since: Timestamp::now(),
-                    current: slide_index,
-                    total_duration: Duration::ZERO,
-                };
+                Self::transition_to_running(state, slide_index);
             }
             State::Paused { .. } => {
                 if state.is_last_slide(total_slides) && slide_index == total_slides - 1 {
                     state.update_slide(slide_index);
                 } else {
-                    *state = State::Running {
-                        since: Timestamp::now(),
-                        current: slide_index,
-                        total_duration: state.calculate_total_duration(),
-                    };
+                    Self::transition_to_running(state, slide_index);
                 }
             }
             _ => {
@@ -275,19 +272,11 @@ impl TobogganState {
 
         match state {
             State::Init => {
-                *state = State::Running {
-                    since: Timestamp::now(),
-                    current: 0, // First slide index
-                    total_duration: Duration::ZERO,
-                };
+                Self::transition_to_running(state, 0);
             }
             State::Paused { .. } => {
                 if let Some(next_slide) = state.next(total_slides) {
-                    *state = State::Running {
-                        since: Timestamp::now(),
-                        current: next_slide,
-                        total_duration: state.calculate_total_duration(),
-                    };
+                    Self::transition_to_running(state, next_slide);
                 }
             }
             _ => {
@@ -303,11 +292,7 @@ impl TobogganState {
                     }
                 } else {
                     // No current slide, start from the beginning
-                    *state = State::Running {
-                        since: Timestamp::now(),
-                        current: 0,
-                        total_duration: Duration::ZERO,
-                    }
+                    Self::transition_to_running(state, 0);
                 }
             }
         }
@@ -322,19 +307,11 @@ impl TobogganState {
 
         match state {
             State::Init => {
-                *state = State::Running {
-                    since: Timestamp::now(),
-                    current: 0, // First slide index
-                    total_duration: Duration::ZERO,
-                };
+                Self::transition_to_running(state, 0);
             }
             State::Paused { .. } => {
                 if let Some(prev_slide) = state.previous(total_slides) {
-                    *state = State::Running {
-                        since: Timestamp::now(),
-                        current: prev_slide,
-                        total_duration: state.calculate_total_duration(),
-                    };
+                    Self::transition_to_running(state, prev_slide);
                 }
             }
             _ => {

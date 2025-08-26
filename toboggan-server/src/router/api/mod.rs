@@ -17,7 +17,7 @@ pub(super) async fn get_talk(State(state): State<TobogganState>) -> impl IntoRes
 }
 
 pub(super) async fn get_slides(State(state): State<TobogganState>) -> impl IntoResponse {
-    let slides = state.slides();
+    let slides = state.slides().to_vec();
     let result = SlidesResponse { slides };
 
     Json(result)

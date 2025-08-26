@@ -352,22 +352,23 @@ pub fn parse_date_string(date_str: &str) -> anyhow::Result<Date> {
     }
 }
 
-/// Parse folder-based talk structure
-fn parse_folder_talk(
-    input_dir: &Path,
-    title_override: Option<Content>,
-    date_override: Option<Date>,
-) -> anyhow::Result<Talk> {
+fn scan_directory_structure(input_dir: &Path) -> anyhow::Result<Vec<std::fs::DirEntry>> {
     debug!("Scanning folder structure in {}", input_dir.display());
 
-    // Read all entries and sort them
     let mut entries: Vec<_> = fs::read_dir(input_dir)
         .with_context(|| format!("reading directory {}", input_dir.display()))?
         .collect::<Result<Vec<_>, _>>()?;
 
     // Sort by filename for consistent ordering
     entries.sort_by_key(std::fs::DirEntry::file_name);
+    Ok(entries)
+}
 
+fn extract_talk_metadata(
+    input_dir: &Path,
+    title_override: Option<Content>,
+    date_override: Option<Date>,
+) -> (Content, Date, Content) {
     // Use title override from CLI, fallback to title file, then folder name
     let title = title_override
         .or_else(|| find_title_in_folder(input_dir))
@@ -387,10 +388,20 @@ fn parse_folder_talk(
     // Look for footer in folder
     let footer = find_footer_in_folder(input_dir).unwrap_or_default();
 
-    let mut talk = Talk::new(title).with_date(date).with_footer(footer);
+    (title, date, footer)
+}
 
-    // First pass: look for cover slide
-    for entry in &entries {
+fn should_skip_entry(filename_str: &str) -> bool {
+    filename_str.starts_with('.')
+        || filename_str == "title.md"
+        || filename_str == "title.txt"
+        || filename_str == "date.txt"
+        || filename_str == "_cover.md"
+        || filename_str == "_footer.md"
+}
+
+fn process_cover_slide(entries: &[std::fs::DirEntry], talk: &mut Talk) -> anyhow::Result<()> {
+    for entry in entries {
         let path = entry.path();
         let filename = entry.file_name();
         let filename_str = filename.to_string_lossy();
@@ -398,25 +409,23 @@ fn parse_folder_talk(
         if filename_str == "_cover.md" && path.is_file() {
             debug!("Processing cover slide: {}", path.display());
             let cover_slide = create_slide_from_file(&path)?;
-            talk = talk.add_slide(cover_slide);
+            *talk = talk.clone().add_slide(cover_slide);
             break;
         }
     }
+    Ok(())
+}
 
-    // Second pass: process other entries in order
+fn process_directory_entries(
+    entries: Vec<std::fs::DirEntry>,
+    talk: &mut Talk,
+) -> anyhow::Result<()> {
     for entry in entries {
         let path = entry.path();
         let filename = entry.file_name();
         let filename_str = filename.to_string_lossy();
 
-        // Skip hidden files, special files, and cover slide (already processed)
-        if filename_str.starts_with('.')
-            || filename_str == "title.md"
-            || filename_str == "title.txt"
-            || filename_str == "date.txt"
-            || filename_str == "_cover.md"
-            || filename_str == "_footer.md"
-        {
+        if should_skip_entry(&filename_str) {
             continue;
         }
 
@@ -424,20 +433,36 @@ fn parse_folder_talk(
             // Folder becomes a Part slide
             debug!("Processing folder as part: {}", path.display());
             let part_slide = create_part_slide_from_folder(&path)?;
-            talk = talk.add_slide(part_slide);
+            *talk = talk.clone().add_slide(part_slide);
 
             // Process contents of the folder
             let folder_slides = parse_folder_contents(&path)?;
             for slide in folder_slides {
-                talk = talk.add_slide(slide);
+                *talk = talk.clone().add_slide(slide);
             }
         } else if is_slide_file(&path) {
             // File becomes a slide (but not _cover.md)
             debug!("Processing file as slide: {}", path.display());
             let slide = create_slide_from_file(&path)?;
-            talk = talk.add_slide(slide);
+            *talk = talk.clone().add_slide(slide);
         }
     }
+    Ok(())
+}
+
+/// Parse folder-based talk structure
+fn parse_folder_talk(
+    input_dir: &Path,
+    title_override: Option<Content>,
+    date_override: Option<Date>,
+) -> anyhow::Result<Talk> {
+    let entries = scan_directory_structure(input_dir)?;
+    let (title, date, footer) = extract_talk_metadata(input_dir, title_override, date_override);
+
+    let mut talk = Talk::new(title).with_date(date).with_footer(footer);
+
+    process_cover_slide(&entries, &mut talk)?;
+    process_directory_entries(entries, &mut talk)?;
 
     Ok(talk)
 }
@@ -471,17 +496,9 @@ fn find_date_in_folder(folder: &Path) -> Option<Date> {
         // Try to parse different date formats
         let date_str = date_str.trim();
 
-        // Try YYYY-MM-DD format
-        if let Some(caps) = regex::Regex::new(r"^(\d{4})-(\d{1,2})-(\d{1,2})$")
-            .ok()?
-            .captures(date_str)
-            && let (Ok(year), Ok(month), Ok(day)) = (
-                caps[1].parse::<i16>(),
-                caps[2].parse::<i8>(),
-                caps[3].parse::<i8>(),
-            )
-        {
-            return Date::new(year, month, day).ok();
+        // Use the existing parse_date_string function
+        if let Ok(date) = parse_date_string(date_str) {
+            return Some(date);
         }
     }
     None
@@ -895,93 +912,132 @@ fn events_to_content(events: &[Event]) -> Content {
     }
 }
 
+struct SlideParser {
+    title_events: Vec<Event<'static>>,
+    body_events: Vec<Event<'static>>,
+    notes_events: Vec<Event<'static>>,
+    in_title: bool,
+    in_notes: bool,
+    slide_kind: SlideKind,
+}
+
+impl SlideParser {
+    fn new() -> Self {
+        Self {
+            title_events: Vec::new(),
+            body_events: Vec::new(),
+            notes_events: Vec::new(),
+            in_title: false,
+            in_notes: false,
+            slide_kind: SlideKind::Standard,
+        }
+    }
+
+    fn handle_heading_start(&mut self, level: HeadingLevel, classes: &[pulldown_cmark::CowStr]) {
+        match level {
+            HeadingLevel::H2 => {
+                self.in_title = true;
+                self.slide_kind = SlideKind::Part;
+            }
+            HeadingLevel::H3 => {
+                self.in_title = true;
+            }
+            HeadingLevel::H4 | HeadingLevel::H5 | HeadingLevel::H6 => {
+                if classes.iter().any(|class| class.as_ref() == "notes") {
+                    self.in_notes = true;
+                }
+            }
+            HeadingLevel::H1 => {}
+        }
+    }
+
+    fn handle_heading_end(&mut self, level: HeadingLevel) {
+        if matches!(level, HeadingLevel::H2 | HeadingLevel::H3) {
+            self.in_title = false;
+        } else if matches!(
+            level,
+            HeadingLevel::H4 | HeadingLevel::H5 | HeadingLevel::H6
+        ) && self.in_notes
+        {
+            self.in_notes = false;
+        }
+    }
+
+    fn handle_blockquote_start(&mut self) {
+        self.in_notes = true;
+    }
+
+    fn handle_blockquote_end(&mut self) {
+        self.in_notes = false;
+    }
+
+    fn add_event(&mut self, event: Event) {
+        if self.in_title {
+            self.title_events.push(event.into_static());
+        } else if self.in_notes {
+            self.notes_events.push(event.into_static());
+        } else {
+            self.body_events.push(event.into_static());
+        }
+    }
+
+    fn build_slide(self) -> Slide {
+        let title = if self.title_events.is_empty() {
+            Content::Empty
+        } else {
+            events_to_content(&self.title_events)
+        };
+
+        let body = if self.body_events.is_empty() {
+            Content::Empty
+        } else {
+            events_to_markdown_content(&self.body_events)
+        };
+
+        let notes = if self.notes_events.is_empty() {
+            Content::Empty
+        } else {
+            events_to_content(&self.notes_events)
+        };
+
+        let slide = match self.slide_kind {
+            SlideKind::Cover => Slide::cover(title),
+            SlideKind::Part => Slide::part(title),
+            SlideKind::Standard => Slide::new(title),
+        };
+
+        slide.with_body(body).with_notes(notes)
+    }
+}
+
 fn events_to_slide(events: &[Event]) -> Slide {
-    let mut title_events = Vec::new();
-    let mut body_events = Vec::new();
-    let mut notes_events = Vec::new();
-    let mut in_title = false;
-    let mut in_notes = false;
-    let mut slide_kind = SlideKind::Standard;
+    let mut parser = SlideParser::new();
 
     for event in events {
         match event {
-            Event::Start(Tag::Heading { level, classes, .. }) => match level {
-                HeadingLevel::H2 => {
-                    in_title = true;
-                    slide_kind = SlideKind::Part;
-                    continue;
-                }
-                HeadingLevel::H3 => {
-                    in_title = true;
-                    continue;
-                }
-                HeadingLevel::H4 | HeadingLevel::H5 | HeadingLevel::H6 => {
-                    if classes.iter().any(|class| class.as_ref() == "notes") {
-                        in_notes = true;
-                        continue;
-                    }
-                }
-                HeadingLevel::H1 => {}
-            },
-            Event::End(TagEnd::Heading(level)) => {
-                if matches!(level, HeadingLevel::H2 | HeadingLevel::H3) {
-                    in_title = false;
-                    continue;
-                } else if matches!(
-                    level,
-                    HeadingLevel::H4 | HeadingLevel::H5 | HeadingLevel::H6
-                ) && in_notes
-                {
-                    in_notes = false;
-                    continue;
-                }
+            Event::Start(Tag::Heading { level, classes, .. }) => {
+                parser.handle_heading_start(*level, classes);
+                continue;
             }
-            // Fallback to blockquote for notes (for compatibility)
+            Event::End(TagEnd::Heading(level)) => {
+                parser.handle_heading_end(*level);
+                continue;
+            }
             Event::Start(Tag::BlockQuote(_)) => {
-                in_notes = true;
+                parser.handle_blockquote_start();
                 continue;
             }
             Event::End(TagEnd::BlockQuote(_)) => {
-                in_notes = false;
+                parser.handle_blockquote_end();
                 continue;
             }
             _ => {}
         }
 
-        if in_title {
-            title_events.push(event.clone());
-        } else if in_notes {
-            notes_events.push(event.clone());
-        } else {
-            body_events.push(event.clone());
-        }
+        parser.add_event(event.clone());
     }
 
-    let title = if title_events.is_empty() {
-        Content::Empty
-    } else {
-        events_to_content(&title_events)
-    };
-
-    let body = if body_events.is_empty() {
-        Content::Empty
-    } else {
-        events_to_markdown_content(&body_events)
-    };
-
-    let notes = if notes_events.is_empty() {
-        Content::Empty
-    } else {
-        events_to_content(&notes_events)
-    };
-
-    let slide = match slide_kind {
-        SlideKind::Cover => Slide::cover(title),
-        SlideKind::Part => Slide::part(title),
-        SlideKind::Standard => Slide::new(title),
-    };
-
-    slide.with_body(body).with_notes(notes)
+    parser.build_slide()
 }
 
 fn events_to_markdown_content(events: &[Event]) -> Content {
@@ -1002,89 +1058,143 @@ fn events_to_markdown_content(events: &[Event]) -> Content {
     }
 }
 
+struct MarkdownBuilder {
+    markdown: String,
+    list_depth: usize,
+    in_code_block: bool,
+}
+
+impl MarkdownBuilder {
+    fn new() -> Self {
+        Self {
+            markdown: String::new(),
+            list_depth: 0,
+            in_code_block: false,
+        }
+    }
+
+    fn ensure_newline(&mut self) {
+        if !self.markdown.is_empty() && !self.markdown.ends_with('\n') {
+            self.markdown.push('\n');
+        }
+    }
+
+    fn handle_paragraph_start(&mut self) {
+        self.ensure_newline();
+    }
+
+    fn handle_paragraph_end(&mut self) {
+        self.markdown.push('\n');
+    }
+
+    fn handle_heading_start(&mut self, level: pulldown_cmark::HeadingLevel) {
+        self.ensure_newline();
+        match level {
+            pulldown_cmark::HeadingLevel::H1 => self.markdown.push('#'),
+            pulldown_cmark::HeadingLevel::H2 => self.markdown.push_str("##"),
+            pulldown_cmark::HeadingLevel::H3 => self.markdown.push_str("###"),
+            pulldown_cmark::HeadingLevel::H4 => self.markdown.push_str("####"),
+            pulldown_cmark::HeadingLevel::H5 => self.markdown.push_str("#####"),
+            pulldown_cmark::HeadingLevel::H6 => self.markdown.push_str("######"),
+        }
+        self.markdown.push(' ');
+    }
+
+    fn handle_list_start(&mut self) {
+        self.list_depth += 1;
+        self.ensure_newline();
+    }
+
+    fn handle_list_end(&mut self) {
+        self.list_depth = self.list_depth.saturating_sub(1);
+    }
+
+    fn handle_item_start(&mut self) {
+        for _ in 0..(self.list_depth - 1) {
+            self.markdown.push_str("  ");
+        }
+        self.markdown.push_str("- ");
+    }
+
+    fn handle_code_block_start(&mut self) {
+        self.ensure_newline();
+        self.markdown.push_str("```\n");
+        self.in_code_block = true;
+    }
+
+    fn handle_code_block_end(&mut self) {
+        if !self.markdown.ends_with('\n') {
+            self.markdown.push('\n');
+        }
+        self.markdown.push_str("```\n");
+        self.in_code_block = false;
+    }
+
+    fn handle_text(&mut self, text: &str) {
+        self.markdown.push_str(text);
+    }
+
+    fn handle_code(&mut self, code: &str) {
+        if self.in_code_block {
+            self.markdown.push_str(code);
+        } else {
+            self.markdown.push('`');
+            self.markdown.push_str(code);
+            self.markdown.push('`');
+        }
+    }
+
+    fn handle_formatting(&mut self, tag: &str) {
+        self.markdown.push_str(tag);
+    }
+
+    fn handle_break(&mut self, is_hard: bool) {
+        if is_hard {
+            self.markdown.push('\n');
+        } else {
+            self.markdown.push(' ');
+        }
+    }
+
+    fn handle_rule(&mut self) {
+        self.ensure_newline();
+        self.markdown.push_str("---\n");
+    }
+
+    fn finish(self) -> String {
+        self.markdown.trim().to_string()
+    }
+}
+
 fn events_to_markdown_text(events: &[Event]) -> String {
-    let mut markdown = String::new();
-    let mut list_depth: usize = 0;
-    let mut in_code_block = false;
+    let mut builder = MarkdownBuilder::new();
 
     for event in events {
         match event {
-            Event::Start(Tag::Paragraph) => {
-                if !markdown.is_empty() && !markdown.ends_with('\n') {
-                    markdown.push('\n');
-                }
-            }
+            Event::Start(Tag::Paragraph) => builder.handle_paragraph_start(),
             Event::End(TagEnd::Paragraph | TagEnd::Heading(_) | TagEnd::Item) => {
-                markdown.push('\n');
+                builder.handle_paragraph_end();
             }
-            Event::Start(Tag::Heading { level, .. }) => {
-                if !markdown.is_empty() && !markdown.ends_with('\n') {
-                    markdown.push('\n');
-                }
-                match level {
-                    pulldown_cmark::HeadingLevel::H1 => markdown.push('#'),
-                    pulldown_cmark::HeadingLevel::H2 => markdown.push_str("##"),
-                    pulldown_cmark::HeadingLevel::H3 => markdown.push_str("###"),
-                    pulldown_cmark::HeadingLevel::H4 => markdown.push_str("####"),
-                    pulldown_cmark::HeadingLevel::H5 => markdown.push_str("#####"),
-                    pulldown_cmark::HeadingLevel::H6 => markdown.push_str("######"),
-                }
-                markdown.push(' ');
+            Event::Start(Tag::Heading { level, .. }) => builder.handle_heading_start(*level),
+            Event::Start(Tag::List(_)) => builder.handle_list_start(),
+            Event::End(TagEnd::List(_)) => builder.handle_list_end(),
+            Event::Start(Tag::Item) => builder.handle_item_start(),
+            Event::Start(Tag::CodeBlock(_)) => builder.handle_code_block_start(),
+            Event::End(TagEnd::CodeBlock) => builder.handle_code_block_end(),
+            Event::Text(text) => builder.handle_text(text),
+            Event::Code(code) => builder.handle_code(code),
+            Event::Start(Tag::Strong) | Event::End(TagEnd::Strong) => {
+                builder.handle_formatting("**");
             }
-            Event::Start(Tag::List(_)) => {
-                list_depth += 1;
-                if !markdown.is_empty() && !markdown.ends_with('\n') {
-                    markdown.push('\n');
-                }
+            Event::Start(Tag::Emphasis) | Event::End(TagEnd::Emphasis) => {
+                builder.handle_formatting("*");
             }
-            Event::End(TagEnd::List(_)) => {
-                list_depth = list_depth.saturating_sub(1);
-            }
-            Event::Start(Tag::Item) => {
-                for _ in 0..(list_depth - 1) {
-                    markdown.push_str("  ");
-                }
-                markdown.push_str("- ");
-            }
-            Event::Start(Tag::CodeBlock(_)) => {
-                if !markdown.is_empty() && !markdown.ends_with('\n') {
-                    markdown.push('\n');
-                }
-                markdown.push_str("```\n");
-                in_code_block = true;
-            }
-            Event::End(TagEnd::CodeBlock) => {
-                if !markdown.ends_with('\n') {
-                    markdown.push('\n');
-                }
-                markdown.push_str("```\n");
-                in_code_block = false;
-            }
-            Event::Text(text) => {
-                markdown.push_str(text);
-            }
-            Event::Code(code) => {
-                if in_code_block {
-                    markdown.push_str(code);
-                } else {
-                    markdown.push('`');
-                    markdown.push_str(code);
-                    markdown.push('`');
-                }
-            }
-            Event::Start(Tag::Strong) | Event::End(TagEnd::Strong) => markdown.push_str("**"),
-            Event::Start(Tag::Emphasis) | Event::End(TagEnd::Emphasis) => markdown.push('*'),
-            Event::SoftBreak => markdown.push(' '),
-            Event::HardBreak => markdown.push('\n'),
-            Event::Rule => {
-                if !markdown.is_empty() && !markdown.ends_with('\n') {
-                    markdown.push('\n');
-                }
-                markdown.push_str("---\n");
-            }
+            Event::SoftBreak => builder.handle_break(false),
+            Event::HardBreak => builder.handle_break(true),
+            Event::Rule => builder.handle_rule(),
             _ => {}
         }
     }
 
-    markdown.trim().to_string()
+    builder.finish()
 }

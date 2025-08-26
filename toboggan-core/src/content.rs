@@ -25,12 +25,10 @@ use crate::Style;
 pub struct WorkingDirectory(String);
 
 impl WorkingDirectory {
-    /// Creates a new working directory from a path-like input.
     pub fn new(path: impl Into<Self>) -> Self {
         path.into()
     }
 
-    /// Returns the path as a string slice.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -115,16 +113,6 @@ pub enum Content {
 }
 
 impl Content {
-    /// Creates plain text content.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use toboggan_core::Content;
-    ///
-    /// let content = Content::text("Hello, world!");
-    /// let content2 = Content::text(String::from("Dynamic text"));
-    /// ```
     pub fn text(text: impl Into<String>) -> Self {
         let text = text.into();
         Self::Text { text }
@@ -256,11 +244,6 @@ impl Content {
     /// let content2 = Content::term("./demo");
     /// ```
     ///
-    /// ```rust
-    /// use toboggan_core::Content;
-    ///
-    /// let content3 = Content::term("./demo");
-    /// ```
     pub fn term(cwd: impl Into<WorkingDirectory>) -> Self {
         let cwd = cwd.into();
         Self::Term { cwd }

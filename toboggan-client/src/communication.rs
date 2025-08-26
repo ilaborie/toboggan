@@ -59,6 +59,7 @@ impl Default for ConnectionState {
 }
 
 const PING_PERIOD: Duration = Duration::from_secs(10);
+const RECONNECT_DELAY: Duration = Duration::from_secs(5);
 
 pub struct WebSocketClient {
     client_id: ClientId,
@@ -69,6 +70,18 @@ pub struct WebSocketClient {
     state: Arc<Mutex<ConnectionState>>,
     ping_task: Option<JoinHandle<()>>,
     last_ping: Arc<Mutex<Option<Instant>>>,
+}
+
+fn create_reconnecting_status(
+    attempt: usize,
+    max_attempt: usize,
+    delay: Duration,
+) -> ConnectionStatus {
+    ConnectionStatus::Reconnecting {
+        attempt,
+        max_attempt,
+        delay,
+    }
 }
 
 impl WebSocketClient {
@@ -185,17 +198,14 @@ impl WebSocketClient {
             }
 
             state.retry_count += 1;
-            // Fixed 5-second delay for reconnection
-            let fixed_delay = Duration::from_secs(5);
-
-            (state.retry_count, fixed_delay, self.config.max_retries)
+            (state.retry_count, RECONNECT_DELAY, self.config.max_retries)
         };
 
-        self.send_status_change(ConnectionStatus::Reconnecting {
-            attempt: retry_count,
-            max_attempt: max_retries,
-            delay: retry_delay,
-        });
+        self.send_status_change(create_reconnecting_status(
+            retry_count,
+            max_retries,
+            retry_delay,
+        ));
 
         // Schedule reconnection with current delay
         let tx_msg_clone = self.tx_msg.clone();
@@ -373,17 +383,11 @@ async fn handle_incoming_messages(
         }
 
         state_ref.retry_count += 1;
-        let fixed_delay = Duration::from_secs(5);
-
-        (state_ref.retry_count, fixed_delay, true)
+        (state_ref.retry_count, RECONNECT_DELAY, true)
     };
 
     if should_reconnect {
-        let status = ConnectionStatus::Reconnecting {
-            attempt: retry_count,
-            max_attempt: config.max_retries,
-            delay: retry_delay,
-        };
+        let status = create_reconnecting_status(retry_count, config.max_retries, retry_delay);
         debug!(%status, "🗿connection status");
         let _ = tx_msg.send(CommunicationMessage::ConnectionStatusChange { status });
     }
