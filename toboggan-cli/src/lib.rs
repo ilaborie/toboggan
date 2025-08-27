@@ -206,7 +206,9 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 
 use anyhow::{Context, bail};
-use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+// pulldown-cmark completely replaced with comrak
+use comrak::nodes::{AstNode, NodeValue};
+use comrak::{Arena, ComrakOptions, markdown_to_html, parse_document};
 use toboggan_core::{Content, Date, Slide, SlideKind, Talk};
 use tracing::{debug, info};
 
@@ -270,7 +272,7 @@ pub fn launch(settings: Settings) -> anyhow::Result<()> {
         info!("Processing markdown file from {}", input.display());
         let content =
             fs::read_to_string(&input).with_context(|| format!("reading {}", input.display()))?;
-        parse_content(&content, title_override, date_override).context("parse content")?
+        parse_content(&content, title_override, date_override)
     };
 
     let toml = toml::to_string_pretty(&talk).context("to TOML")?;
@@ -506,8 +508,6 @@ fn find_date_in_folder(folder: &Path) -> Option<Date> {
 
 /// Find footer in folder (_footer.md file)
 fn find_footer_in_folder(folder: &Path) -> Option<Content> {
-    use pulldown_cmark::{Options, Parser, html};
-
     let footer_file = folder.join("_footer.md");
 
     if footer_file.exists()
@@ -518,17 +518,8 @@ fn find_footer_in_folder(folder: &Path) -> Option<Content> {
             return None;
         }
 
-        // Parse markdown content to HTML
-        let options = Options::all();
-        let parser = Parser::new_ext(content, options);
-
-        let mut html = String::new();
-        html::push_html(&mut html, parser);
-
-        return Some(Content::Html {
-            raw: html.trim().to_string(),
-            alt: Some(content.to_string()),
-        });
+        // Use comrak to convert markdown to HTML
+        return Some(markdown_to_html_content(content));
     }
 
     None
@@ -644,557 +635,282 @@ fn create_html_slide(content: &str, slide_kind: SlideKind, filename: &str) -> Sl
 
 /// Parse markdown content into a slide
 fn parse_markdown_to_slide(content: &str, default_kind: SlideKind) -> Slide {
-    let mut state = SlideParseState::new(default_kind);
-    let options = Options::all();
-
-    let parser = Parser::new_ext(content, options);
-    for event in parser {
-        state.consume(&event);
-    }
-
-    state.finish()
+    // Use the comrak-based implementation
+    parse_slide_from_markdown_comrak(content, default_kind)
 }
 
-fn parse_content(
-    text: &str,
+fn parse_content(text: &str, title_override: Option<Content>, date_override: Option<Date>) -> Talk {
+    // Use comrak-based flat file parsing
+    parse_flat_markdown_comrak(text, title_override, date_override)
+}
+
+/// Parse flat markdown file using comrak
+fn parse_flat_markdown_comrak(
+    content: &str,
     title_override: Option<Content>,
     date_override: Option<Date>,
-) -> anyhow::Result<Talk> {
-    let mut state = TalkParseState::default();
-    let options = Options::all();
+) -> Talk {
+    let arena = Arena::new();
+    let options = ComrakOptions::default();
+    let root = parse_document(&arena, content, &options);
 
-    let parser = Parser::new_ext(text, options);
-    for event in parser {
-        state
-            .consume(&event)
-            .with_context(|| format!("processing {event:?}"))?;
-    }
+    let mut slides = Vec::new();
+    let mut title_content = None;
+    let mut current_slide_content = String::new();
+    let mut found_title = false;
+    let mut in_slide = false;
 
-    let mut talk = state.finish().context("finish parsing")?;
-
-    // Apply title override if provided
-    if let Some(title) = title_override {
-        talk.title = title;
-    }
-
-    // Apply date override if provided
-    if let Some(date) = date_override {
-        talk.date = date;
-    }
-
-    Ok(talk)
-}
-
-/// State machine for parsing individual slide markdown
-#[derive(Debug, Clone)]
-struct SlideParseState<'i> {
-    slide_kind: SlideKind,
-    title_events: Vec<Event<'i>>,
-    body_events: Vec<Event<'i>>,
-    notes_events: Vec<Event<'i>>,
-    in_title: bool,
-    in_notes: bool,
-}
-
-impl<'i> SlideParseState<'i> {
-    fn new(slide_kind: SlideKind) -> Self {
-        Self {
-            slide_kind,
-            title_events: Vec::new(),
-            body_events: Vec::new(),
-            notes_events: Vec::new(),
-            in_title: false,
-            in_notes: false,
+    // First pass: find title (first H1)
+    for node in root.children() {
+        if let NodeValue::Heading(ref heading) = node.data.borrow().value
+            && heading.level == 1
+            && !found_title
+        {
+            title_content = Some(extract_node_text(node));
+            found_title = true;
+            break;
         }
     }
 
-    fn consume(&mut self, event: &Event<'i>) {
-        match event {
-            Event::Start(Tag::Heading { level, classes, .. }) => match level {
-                HeadingLevel::H1 | HeadingLevel::H2 | HeadingLevel::H3 => {
-                    self.in_title = true;
-                    return;
+    // Second pass: process slides
+    for node in root.children() {
+        match &node.data.borrow().value {
+            NodeValue::Heading(heading) => {
+                if heading.level == 1 && found_title {
+                    // Skip the title heading
+                    continue;
                 }
-                HeadingLevel::H4 | HeadingLevel::H5 | HeadingLevel::H6 => {
-                    if classes.iter().any(|class| class.as_ref() == "notes") {
-                        self.in_notes = true;
-                        return;
-                    }
-                }
-            },
-            Event::End(TagEnd::Heading(level)) => {
-                if matches!(
-                    level,
-                    HeadingLevel::H1 | HeadingLevel::H2 | HeadingLevel::H3
-                ) {
-                    self.in_title = false;
-                    return;
-                } else if matches!(
-                    level,
-                    HeadingLevel::H4 | HeadingLevel::H5 | HeadingLevel::H6
-                ) && self.in_notes
-                {
-                    self.in_notes = false;
-                    return;
-                }
-            }
-            // Fallback to blockquote for notes (for compatibility)
-            Event::Start(Tag::BlockQuote(_)) => {
-                self.in_notes = true;
-                return;
-            }
-            Event::End(TagEnd::BlockQuote(_)) => {
-                self.in_notes = false;
-                return;
-            }
-            _ => {}
-        }
-
-        if self.in_title {
-            self.title_events.push(event.clone());
-        } else if self.in_notes {
-            self.notes_events.push(event.clone());
-        } else {
-            self.body_events.push(event.clone());
-        }
-    }
-
-    fn finish(self) -> Slide {
-        let title = if self.title_events.is_empty() {
-            Content::Empty
-        } else {
-            events_to_content(&self.title_events)
-        };
-
-        let body = if self.body_events.is_empty() {
-            Content::Empty
-        } else {
-            events_to_markdown_content(&self.body_events)
-        };
-
-        let notes = if self.notes_events.is_empty() {
-            Content::Empty
-        } else {
-            events_to_content(&self.notes_events)
-        };
-
-        let slide = match self.slide_kind {
-            SlideKind::Cover => Slide::cover(title),
-            SlideKind::Part => Slide::part(title),
-            SlideKind::Standard => Slide::new(title),
-        };
-
-        slide.with_body(body).with_notes(notes)
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-enum TalkParseState<'i> {
-    #[default]
-    Init,
-
-    Title {
-        current: Vec<Event<'i>>,
-    },
-
-    Slide {
-        talk: Talk,
-        current: Vec<Event<'i>>,
-        is_first_slide: bool,
-    },
-}
-
-impl<'i> TalkParseState<'i> {
-    fn consume(&mut self, event: &Event<'i>) -> anyhow::Result<()> {
-        match self {
-            Self::Init => {
-                if let Event::Start(Tag::Heading { level, .. }) = event
-                    && level == &HeadingLevel::H1
-                {
-                    *self = Self::Title { current: vec![] };
-                } else {
-                    bail!("expected a heading level 1, got {event:?}");
-                }
-            }
-            Self::Title { current } => {
-                if let Event::End(TagEnd::Heading(level)) = event
-                    && level == &HeadingLevel::H1
-                {
-                    let title = events_to_content(current);
-                    let talk = Talk::new(title);
-                    *self = Self::Slide {
-                        talk,
-                        current: vec![],
-                        is_first_slide: true,
-                    };
-                } else {
-                    current.push(event.clone());
-                }
-            }
-            Self::Slide {
-                talk,
-                current,
-                is_first_slide,
-            } => {
-                if let Event::Rule = event {
-                    if !current.is_empty() {
-                        let slide = events_to_slide(current);
-                        let slide = if *is_first_slide {
-                            // Convert to cover slide by extracting components
-                            let Slide {
-                                title, body, notes, ..
-                            } = slide;
-                            Slide::cover(title).with_body(body).with_notes(notes)
+                if heading.level >= 2 {
+                    // Start new slide
+                    if in_slide && !current_slide_content.trim().is_empty() {
+                        let slide_kind = if heading.level == 2 {
+                            SlideKind::Part
                         } else {
-                            slide
+                            SlideKind::Standard
                         };
-                        if *is_first_slide {
-                            *is_first_slide = false;
-                        }
-                        talk.slides.push(slide);
-                        current.clear();
+                        let slide =
+                            parse_slide_from_markdown_comrak(&current_slide_content, slide_kind);
+                        slides.push(slide);
+                        current_slide_content.clear();
                     }
-                } else {
-                    current.push(event.clone());
+                    in_slide = true;
+                }
+                current_slide_content.push_str(&node_to_commonmark(node));
+            }
+            NodeValue::ThematicBreak => {
+                // End current slide on horizontal rule
+                if in_slide && !current_slide_content.trim().is_empty() {
+                    let slide = parse_slide_from_markdown_comrak(
+                        &current_slide_content,
+                        SlideKind::Standard,
+                    );
+                    slides.push(slide);
+                    current_slide_content.clear();
+                    in_slide = false;
+                }
+            }
+            _ => {
+                if in_slide {
+                    current_slide_content.push_str(&node_to_commonmark(node));
                 }
             }
         }
-
-        Ok(())
     }
 
-    fn finish(self) -> anyhow::Result<Talk> {
-        match self {
-            Self::Slide {
-                mut talk,
-                current,
-                is_first_slide,
-            } => {
-                if !current.is_empty() {
-                    let slide = events_to_slide(&current);
-                    let slide = if is_first_slide {
-                        // Convert to cover slide by extracting components
-                        let Slide {
-                            title, body, notes, ..
-                        } = slide;
-                        Slide::cover(title).with_body(body).with_notes(notes)
-                    } else {
-                        slide
-                    };
-                    talk.slides.push(slide);
-                }
-                Ok(talk)
-            }
-            _ => bail!("invalid state: expected to be in Slide state at finish"),
-        }
+    // Handle last slide
+    if in_slide && !current_slide_content.trim().is_empty() {
+        let slide = parse_slide_from_markdown_comrak(&current_slide_content, SlideKind::Standard);
+        slides.push(slide);
     }
+
+    // Convert first slide to cover slide if it exists
+    if let Some(first_slide) = slides.get_mut(0)
+        && matches!(first_slide.kind, SlideKind::Standard)
+    {
+        *first_slide = Slide::cover(first_slide.title.clone())
+            .with_body(first_slide.body.clone())
+            .with_notes(first_slide.notes.clone());
+    }
+
+    let title = title_override
+        .or_else(|| title_content.map(Content::text))
+        .unwrap_or_else(|| Content::text("Untitled"));
+
+    let mut talk = Talk::new(title);
+    if let Some(date) = date_override {
+        talk = talk.with_date(date);
+    }
+
+    for slide in slides {
+        talk = talk.add_slide(slide);
+    }
+
+    talk
 }
 
-fn events_to_content(events: &[Event]) -> Content {
+// ===== COMRAK CONVERSION FUNCTIONS =====
+
+/// Extract text content from an AST node (recursive)
+fn extract_node_text<'a>(node: &'a AstNode<'a>) -> String {
     let mut text = String::new();
 
-    for event in events {
-        match event {
-            Event::Text(text_content) => text.push_str(text_content),
-            Event::Code(code_content) => {
-                text.push('`');
-                text.push_str(code_content);
-                text.push('`');
+    match &node.data.borrow().value {
+        NodeValue::Text(content) => {
+            text.push_str(content);
+        }
+        NodeValue::Code(code) => {
+            text.push_str(&code.literal);
+        }
+        NodeValue::SoftBreak => {
+            text.push(' ');
+        }
+        NodeValue::LineBreak => {
+            text.push('\n');
+        }
+        _ => {
+            // Recursively extract text from children
+            for child in node.children() {
+                text.push_str(&extract_node_text(child));
             }
-            Event::SoftBreak => text.push(' '),
-            Event::HardBreak => text.push('\n'),
-            _ => {}
         }
     }
 
-    Content::Text {
-        text: text.trim().to_string(),
+    text
+}
+
+/// Convert markdown to HTML content using comrak
+fn markdown_to_html_content(markdown: &str) -> Content {
+    if markdown.trim().is_empty() {
+        return Content::Empty;
+    }
+
+    let options = ComrakOptions::default();
+    let html = markdown_to_html(markdown, &options);
+
+    Content::Html {
+        raw: html.trim().to_string(),
+        alt: if markdown.is_empty() {
+            None
+        } else {
+            Some(markdown.to_string())
+        },
     }
 }
 
-struct SlideParser {
-    title_events: Vec<Event<'static>>,
-    body_events: Vec<Event<'static>>,
-    notes_events: Vec<Event<'static>>,
-    in_title: bool,
-    in_notes: bool,
-    slide_kind: SlideKind,
-}
+/// Parse slide content from markdown using comrak
+fn parse_slide_from_markdown_comrak(content: &str, default_kind: SlideKind) -> Slide {
+    let arena = Arena::new();
+    let options = ComrakOptions::default();
+    let root = parse_document(&arena, content, &options);
 
-impl SlideParser {
-    fn new() -> Self {
-        Self {
-            title_events: Vec::new(),
-            body_events: Vec::new(),
-            notes_events: Vec::new(),
-            in_title: false,
-            in_notes: false,
-            slide_kind: SlideKind::Standard,
-        }
-    }
+    let mut title = None;
+    let mut body_content = String::new();
+    let mut notes_content = String::new();
+    let mut in_notes = false;
+    let mut found_title = false;
 
-    fn handle_heading_start(&mut self, level: HeadingLevel, classes: &[pulldown_cmark::CowStr]) {
-        match level {
-            HeadingLevel::H2 => {
-                self.in_title = true;
-                self.slide_kind = SlideKind::Part;
-            }
-            HeadingLevel::H3 => {
-                self.in_title = true;
-            }
-            HeadingLevel::H4 | HeadingLevel::H5 | HeadingLevel::H6 => {
-                if classes.iter().any(|class| class.as_ref() == "notes") {
-                    self.in_notes = true;
+    for node in root.children() {
+        match &node.data.borrow().value {
+            NodeValue::Heading(heading) => {
+                if !found_title && heading.level <= 3 {
+                    title = Some(extract_node_text(node));
+                    found_title = true;
+                } else if heading.level >= 4 {
+                    // Check if this is a notes heading
+                    let heading_text = extract_node_text(node);
+                    if heading_text.to_lowercase().contains("note") {
+                        in_notes = true;
+                        continue;
+                    }
+                }
+
+                if !in_notes {
+                    body_content.push_str(&node_to_commonmark(node));
                 }
             }
-            HeadingLevel::H1 => {}
+            NodeValue::BlockQuote => {
+                // Treat blockquotes as notes (legacy support)
+                notes_content.push_str(&extract_blockquote_text(node));
+            }
+            _ => {
+                if in_notes {
+                    notes_content.push_str(&node_to_commonmark(node));
+                } else {
+                    body_content.push_str(&node_to_commonmark(node));
+                }
+            }
         }
     }
 
-    fn handle_heading_end(&mut self, level: HeadingLevel) {
-        if matches!(level, HeadingLevel::H2 | HeadingLevel::H3) {
-            self.in_title = false;
-        } else if matches!(
-            level,
-            HeadingLevel::H4 | HeadingLevel::H5 | HeadingLevel::H6
-        ) && self.in_notes
-        {
-            self.in_notes = false;
-        }
-    }
-
-    fn handle_blockquote_start(&mut self) {
-        self.in_notes = true;
-    }
-
-    fn handle_blockquote_end(&mut self) {
-        self.in_notes = false;
-    }
-
-    fn add_event(&mut self, event: Event) {
-        if self.in_title {
-            self.title_events.push(event.into_static());
-        } else if self.in_notes {
-            self.notes_events.push(event.into_static());
-        } else {
-            self.body_events.push(event.into_static());
-        }
-    }
-
-    fn build_slide(self) -> Slide {
-        let title = if self.title_events.is_empty() {
-            Content::Empty
-        } else {
-            events_to_content(&self.title_events)
-        };
-
-        let body = if self.body_events.is_empty() {
-            Content::Empty
-        } else {
-            events_to_markdown_content(&self.body_events)
-        };
-
-        let notes = if self.notes_events.is_empty() {
-            Content::Empty
-        } else {
-            events_to_content(&self.notes_events)
-        };
-
-        let slide = match self.slide_kind {
-            SlideKind::Cover => Slide::cover(title),
-            SlideKind::Part => Slide::part(title),
-            SlideKind::Standard => Slide::new(title),
-        };
-
-        slide.with_body(body).with_notes(notes)
-    }
-}
-
-fn events_to_slide(events: &[Event]) -> Slide {
-    let mut parser = SlideParser::new();
-
-    for event in events {
-        match event {
-            Event::Start(Tag::Heading { level, classes, .. }) => {
-                parser.handle_heading_start(*level, classes);
-                continue;
-            }
-            Event::End(TagEnd::Heading(level)) => {
-                parser.handle_heading_end(*level);
-                continue;
-            }
-            Event::Start(Tag::BlockQuote(_)) => {
-                parser.handle_blockquote_start();
-                continue;
-            }
-            Event::End(TagEnd::BlockQuote(_)) => {
-                parser.handle_blockquote_end();
-                continue;
-            }
-            _ => {}
-        }
-
-        parser.add_event(event.clone());
-    }
-
-    parser.build_slide()
-}
-
-fn events_to_markdown_content(events: &[Event]) -> Content {
-    use pulldown_cmark::html;
-
-    let mut html = String::new();
-    html::push_html(&mut html, events.iter().cloned());
-
-    let alt = events_to_markdown_text(events);
-
-    if html.trim().is_empty() {
+    let slide_title = title.map_or(Content::text(""), Content::text);
+    let slide_body = if body_content.trim().is_empty() {
         Content::Empty
     } else {
-        Content::Html {
-            raw: html.trim().to_string(),
-            alt: if alt.is_empty() { None } else { Some(alt) },
+        markdown_to_html_content(&body_content)
+    };
+    let slide_notes = if notes_content.trim().is_empty() {
+        None
+    } else {
+        Some(Content::text(notes_content.trim()))
+    };
+
+    let slide = match default_kind {
+        SlideKind::Cover => Slide::cover(slide_title),
+        SlideKind::Part => Slide::part(slide_title),
+        SlideKind::Standard => Slide::new(slide_title),
+    };
+
+    let slide = slide.with_body(slide_body);
+    if let Some(notes) = slide_notes {
+        slide.with_notes(notes)
+    } else {
+        slide
+    }
+}
+
+/// Convert AST node to `CommonMark` markdown (simplified version)
+fn node_to_commonmark<'a>(node: &'a AstNode<'a>) -> String {
+    // For now, just extract the text and add basic markdown formatting
+    // This is a simplified version - full node conversion is complex
+    match &node.data.borrow().value {
+        NodeValue::Heading(heading) => {
+            let prefix = "#".repeat(heading.level as usize);
+            let text = extract_node_text(node);
+            format!("{} {}\n\n", prefix, text.trim())
+        }
+        NodeValue::Paragraph => {
+            let text = extract_node_text(node);
+            format!("{}\n\n", text.trim())
+        }
+        NodeValue::BlockQuote => {
+            let text = extract_node_text(node);
+            text.lines()
+                .map(|line| format!("> {line}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+                + "\n\n"
+        }
+        _ => {
+            let text = extract_node_text(node);
+            if text.trim().is_empty() {
+                String::new()
+            } else {
+                format!("{}\n\n", text.trim())
+            }
         }
     }
 }
 
-struct MarkdownBuilder {
-    markdown: String,
-    list_depth: usize,
-    in_code_block: bool,
-}
+/// Extract text from blockquote nodes
+fn extract_blockquote_text<'a>(node: &'a AstNode<'a>) -> String {
+    let mut text = String::new();
 
-impl MarkdownBuilder {
-    fn new() -> Self {
-        Self {
-            markdown: String::new(),
-            list_depth: 0,
-            in_code_block: false,
+    if let NodeValue::BlockQuote = &node.data.borrow().value {
+        for child in node.children() {
+            text.push_str(&extract_node_text(child));
+            text.push('\n');
         }
     }
 
-    fn ensure_newline(&mut self) {
-        if !self.markdown.is_empty() && !self.markdown.ends_with('\n') {
-            self.markdown.push('\n');
-        }
-    }
-
-    fn handle_paragraph_start(&mut self) {
-        self.ensure_newline();
-    }
-
-    fn handle_paragraph_end(&mut self) {
-        self.markdown.push('\n');
-    }
-
-    fn handle_heading_start(&mut self, level: pulldown_cmark::HeadingLevel) {
-        self.ensure_newline();
-        match level {
-            pulldown_cmark::HeadingLevel::H1 => self.markdown.push('#'),
-            pulldown_cmark::HeadingLevel::H2 => self.markdown.push_str("##"),
-            pulldown_cmark::HeadingLevel::H3 => self.markdown.push_str("###"),
-            pulldown_cmark::HeadingLevel::H4 => self.markdown.push_str("####"),
-            pulldown_cmark::HeadingLevel::H5 => self.markdown.push_str("#####"),
-            pulldown_cmark::HeadingLevel::H6 => self.markdown.push_str("######"),
-        }
-        self.markdown.push(' ');
-    }
-
-    fn handle_list_start(&mut self) {
-        self.list_depth += 1;
-        self.ensure_newline();
-    }
-
-    fn handle_list_end(&mut self) {
-        self.list_depth = self.list_depth.saturating_sub(1);
-    }
-
-    fn handle_item_start(&mut self) {
-        for _ in 0..(self.list_depth - 1) {
-            self.markdown.push_str("  ");
-        }
-        self.markdown.push_str("- ");
-    }
-
-    fn handle_code_block_start(&mut self) {
-        self.ensure_newline();
-        self.markdown.push_str("```\n");
-        self.in_code_block = true;
-    }
-
-    fn handle_code_block_end(&mut self) {
-        if !self.markdown.ends_with('\n') {
-            self.markdown.push('\n');
-        }
-        self.markdown.push_str("```\n");
-        self.in_code_block = false;
-    }
-
-    fn handle_text(&mut self, text: &str) {
-        self.markdown.push_str(text);
-    }
-
-    fn handle_code(&mut self, code: &str) {
-        if self.in_code_block {
-            self.markdown.push_str(code);
-        } else {
-            self.markdown.push('`');
-            self.markdown.push_str(code);
-            self.markdown.push('`');
-        }
-    }
-
-    fn handle_formatting(&mut self, tag: &str) {
-        self.markdown.push_str(tag);
-    }
-
-    fn handle_break(&mut self, is_hard: bool) {
-        if is_hard {
-            self.markdown.push('\n');
-        } else {
-            self.markdown.push(' ');
-        }
-    }
-
-    fn handle_rule(&mut self) {
-        self.ensure_newline();
-        self.markdown.push_str("---\n");
-    }
-
-    fn finish(self) -> String {
-        self.markdown.trim().to_string()
-    }
-}
-
-fn events_to_markdown_text(events: &[Event]) -> String {
-    let mut builder = MarkdownBuilder::new();
-
-    for event in events {
-        match event {
-            Event::Start(Tag::Paragraph) => builder.handle_paragraph_start(),
-            Event::End(TagEnd::Paragraph | TagEnd::Heading(_) | TagEnd::Item) => {
-                builder.handle_paragraph_end();
-            }
-            Event::Start(Tag::Heading { level, .. }) => builder.handle_heading_start(*level),
-            Event::Start(Tag::List(_)) => builder.handle_list_start(),
-            Event::End(TagEnd::List(_)) => builder.handle_list_end(),
-            Event::Start(Tag::Item) => builder.handle_item_start(),
-            Event::Start(Tag::CodeBlock(_)) => builder.handle_code_block_start(),
-            Event::End(TagEnd::CodeBlock) => builder.handle_code_block_end(),
-            Event::Text(text) => builder.handle_text(text),
-            Event::Code(code) => builder.handle_code(code),
-            Event::Start(Tag::Strong) | Event::End(TagEnd::Strong) => {
-                builder.handle_formatting("**");
-            }
-            Event::Start(Tag::Emphasis) | Event::End(TagEnd::Emphasis) => {
-                builder.handle_formatting("*");
-            }
-            Event::SoftBreak => builder.handle_break(false),
-            Event::HardBreak => builder.handle_break(true),
-            Event::Rule => builder.handle_rule(),
-            _ => {}
-        }
-    }
-
-    builder.finish()
+    text.trim().to_string()
 }
