@@ -1,7 +1,7 @@
 use toboggan_client::ConnectionStatus;
 // Re-export toboggan-client types
 pub use toboggan_client::{CommunicationMessage, WebSocketClient};
-use toboggan_core::{Command, Timestamp};
+use toboggan_core::{ClientConfig, Command, Timestamp};
 use tokio::sync::mpsc;
 use tracing::{error, info};
 
@@ -31,8 +31,8 @@ impl ConnectionHandler {
         let (command_tx, command_rx) = mpsc::unbounded_channel();
         self.command_tx = Some(command_tx.clone());
 
-        let client_id = self.config.client_id;
-        let websocket_config = self.config.websocket.clone();
+        let client_id = *self.config.client_id();
+        let websocket_config = self.config.websocket();
 
         let (mut ws_client, mut message_rx) =
             WebSocketClient::new(command_tx.clone(), command_rx, client_id, websocket_config);

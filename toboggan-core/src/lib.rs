@@ -152,6 +152,9 @@ extern crate alloc;
 mod time;
 pub use self::time::*;
 
+mod config;
+pub use self::config::*;
+
 mod content;
 pub use self::content::*;
 

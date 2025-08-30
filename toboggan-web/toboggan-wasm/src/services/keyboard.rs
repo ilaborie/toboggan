@@ -81,7 +81,7 @@ fn handle_keydown(event: &Event, tx: &UnboundedSender<Command>, mapping: &Keyboa
     };
 
     let key = keyboard_event.key();
-    debug!("⌨️ Key pressed:", &key);
+    // debug!("⌨️ Key pressed:", &key);
 
     // Check if we have a mapping for this key
     let Some(cmd) = mapping.get(&key) else {

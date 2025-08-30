@@ -26,6 +26,8 @@ h1 {
   margin: 0;
   font-size: var(--font-size-heading);
   font-weight: var(--font-weight-semibold);
+  display: flex;
+  align-items: center;
 }
 
 .buttons {

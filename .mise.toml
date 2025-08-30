@@ -1,6 +1,8 @@
 [env]
 RUST_LOG = "info"
 
+TOBOGGAN_HOST = "0.0.0.0"
+
 [settings]
 experimental = true
 cargo = { binstall = true }

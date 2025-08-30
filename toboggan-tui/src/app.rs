@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use crossterm::event::{self, Event};
 use ratatui::prelude::*;
 use toboggan_client::TobogganApi;
+use toboggan_core::ClientConfig;
 use tokio::sync::mpsc;
 use tracing::{debug, info};
 
@@ -36,7 +37,7 @@ impl App {
     ///
     /// Returns an error if terminal setup fails.
     pub async fn new(terminal: TerminalType, config: &Config) -> Result<Self> {
-        let api = TobogganApi::new(&config.api_url);
+        let api = TobogganApi::new(config.api_url());
         let talk = api.talk().await.context("fetching talk")?;
         let slides = api.slides().await.context("fetching slides")?;
         let (event_tx, event_rx) = mpsc::unbounded_channel();

@@ -24,6 +24,7 @@ jiff = { version = "0.2.15", default-features = false }
 serde = { version = "1.0.219", default-features = false }
 uuid = { version = "1.18.0", default-features = false }
 getrandom = { version = "0.2.15", default-features = false }
+humantime = "2.1.0"
 
 # Server dependencies
 axum = "0.8.4"
@@ -48,7 +49,6 @@ clawspec-core = "0.2.0"
 
 # Other dependencies
 slug = "0.1.6"
-pulldown-cmark = "0.13.0"
 comrak = "0.32.0"
 
 # Desktop dependencies

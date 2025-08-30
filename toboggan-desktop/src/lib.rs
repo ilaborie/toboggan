@@ -1,7 +1,5 @@
-use std::time::Duration;
-
-use toboggan_client::{TobogganConfig, TobogganWebsocketConfig};
-use toboggan_core::ClientId;
+use toboggan_client::TobogganConfig;
+use toboggan_core::ClientConfig;
 
 mod app;
 pub use app::App;
@@ -15,15 +13,13 @@ mod widgets;
 
 #[must_use]
 pub fn build_config(websocket_url: Option<String>, api_url: Option<String>) -> TobogganConfig {
-    TobogganConfig {
-        client_id: ClientId::new(),
-        api_url: api_url.unwrap_or_else(|| "http://localhost:8080".to_string()),
-        websocket: TobogganWebsocketConfig {
-            websocket_url: websocket_url
-                .unwrap_or_else(|| "ws://localhost:8080/api/ws".to_string()),
-            max_retries: 5,
-            retry_delay: Duration::from_secs(1),
-            max_retry_delay: Duration::from_secs(30),
-        },
+    let mut config = TobogganConfig::default();
+
+    if let Some(ws_url) = websocket_url {
+        config = TobogganConfig::new(api_url.as_deref().unwrap_or(config.api_url()), ws_url);
+    } else if let Some(api_url) = api_url {
+        config = TobogganConfig::new(api_url, config.websocket_url().to_string());
     }
+
+    config
 }

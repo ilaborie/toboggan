@@ -8,8 +8,7 @@ use web_sys::{Element, HtmlButtonElement, HtmlElement, HtmlProgressElement, Shad
 use crate::components::WasmElement;
 use crate::{
     ConnectionStatus, StateClassMapper, create_and_append_element, create_button,
-    create_shadow_root_with_style, dom_try, dom_try_or_return, format_duration, render_content,
-    unwrap_or_return,
+    create_shadow_root_with_style, dom_try, dom_try_or_return, format_duration, unwrap_or_return,
 };
 
 #[derive(Debug, Default)]
@@ -20,7 +19,7 @@ pub struct TobogganNavigationElement {
     container: Option<Element>,
 
     progress_el: Option<HtmlProgressElement>,
-    talk_el: Option<Element>,
+    title_el: Option<Element>,
     connection_status_el: Option<Element>,
     slide_info_el: Option<Element>,
     duration_el: Option<Element>,
@@ -99,10 +98,9 @@ impl TobogganNavigationElement {
     }
 
     fn render_talk(&mut self) {
-        let talk_el = unwrap_or_return!(&self.talk_el);
+        let talk_el = unwrap_or_return!(&self.title_el);
         if let Some(talk) = &self.talk {
-            let content = render_content(&talk.title, Some("h1"));
-            talk_el.set_inner_html(&content);
+            talk_el.set_text_content(Some(&talk.title));
         }
     }
 
@@ -377,7 +375,7 @@ impl WasmElement for TobogganNavigationElement {
         self.parent = Some(host.clone());
         self.container = Some(nav_el);
         self.progress_el = Some(progress_el);
-        self.talk_el = Some(title_el);
+        self.title_el = Some(title_el);
         self.connection_status_el = Some(connection_el);
         self.slide_info_el = Some(slide_info_el);
         self.duration_el = Some(duration_el);
