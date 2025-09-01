@@ -1,0 +1,14 @@
+[env]
+
+WIFI_SSID = "xxx"
+WIFI_PASSWORD = "xxx"
+
+# GET WITH `ipconfig getifaddr en1`
+TOBOGGAN_HOST = ""
+TOBOGGAN_PORT = 8080
+
+[tools]
+"cargo:ldproxy" = "latest"
+"cargo:espflash" = "latest"
+"cargo:espup" = "latest"
+"cargo:esp-generate" = "latest"
