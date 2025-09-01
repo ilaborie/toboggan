@@ -159,7 +159,6 @@ components:
       type: string
       enum:
       - Title
-      - Thumbnail
       - Html
       - Raw
     SlideKind:

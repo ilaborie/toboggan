@@ -5,7 +5,8 @@ use toboggan_client::{
     CommunicationMessage, ConnectionStatus, TobogganApi, TobogganApiError, WebSocketClient,
 };
 use toboggan_core::{
-    ClientId, Command as TobogganCommand, Renderer, SlidesResponse, Talk, TalkResponse,
+    ClientConfig, ClientId, Command as TobogganCommand, Content, Renderer, SlidesResponse, Talk,
+    TalkResponse,
 };
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error, info};
@@ -32,8 +33,8 @@ impl App {
     /// Panics if the message channel has already been initialized.
     pub fn new() -> (Self, Task<Message>) {
         let config = build_config(None, None);
-        let api_client = TobogganApi::new(&config.api_url);
-        let client_id = config.client_id;
+        let api_client = TobogganApi::new(config.api_url());
+        let client_id = *config.client_id();
 
         // Initialize the global message channel for WebSocket message forwarding
         let (tx, _) = broadcast::channel(1000);
@@ -162,7 +163,7 @@ impl App {
         let config = build_config(None, None);
         let (tx_cmd, rx_cmd) = mpsc::unbounded_channel();
         let (mut ws_client, mut rx_msg) =
-            WebSocketClient::new(tx_cmd.clone(), rx_cmd, self.client_id, config.websocket);
+            WebSocketClient::new(tx_cmd.clone(), rx_cmd, self.client_id, config.websocket());
 
         self.cmd_sender = Some(tx_cmd.clone());
 
@@ -210,9 +211,13 @@ impl App {
         info!("Talk loaded: {}", talk_response.title);
         // For now, create a simplified talk from the response
         let talk = Talk {
-            title: talk_response.title.clone(),
+            title: Content::Text {
+                text: talk_response.title.clone(),
+            },
             date: talk_response.date,
-            footer: talk_response.footer.clone(),
+            footer: Content::Text {
+                text: talk_response.footer.clone(),
+            },
             slides: vec![], // We'll load slides separately
         };
         self.state.talk = Some(talk);
@@ -231,9 +236,13 @@ impl App {
         );
         // Create talk with actual slides
         let talk = Talk {
-            title: talk_response.title.clone(),
+            title: Content::Text {
+                text: talk_response.title.clone(),
+            },
             date: talk_response.date,
-            footer: talk_response.footer.clone(),
+            footer: Content::Text {
+                text: talk_response.footer.clone(),
+            },
             slides: slides_response.slides.clone(),
         };
         self.state.talk = Some(talk);

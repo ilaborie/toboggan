@@ -70,8 +70,8 @@ impl TobogganState {
         &self.talk
     }
 
-    pub(crate) fn slides(&self) -> Vec<Slide> {
-        self.talk().slides.clone()
+    pub(crate) fn slides(&self) -> &[Slide] {
+        &self.talk.slides
     }
 
     pub(crate) fn slide_by_index(&self, index: usize) -> Option<Slide> {
@@ -98,12 +98,11 @@ impl TobogganState {
     ) -> Result<watch::Receiver<Notification>, ApiError> {
         self.cleanup_disconnected_clients();
 
-        if self.clients.len() >= self.max_clients {
+        if !self.has_capacity() {
             return Err(ApiError::TooManyClients);
         }
 
-        let current_state = self.current_state.read().await;
-        let initial_notification = Notification::state(current_state.clone());
+        let initial_notification = self.create_initial_notification().await;
 
         let (tx, rx) = watch::channel(initial_notification);
 
@@ -156,17 +155,25 @@ impl TobogganState {
         );
     }
 
-    fn broadcast_notification(&self, notification: &Notification) {
-        for client_entry in self.clients.iter() {
-            let client_id = client_entry.key();
-            let sender = client_entry.value();
-            if sender.send(notification.clone()).is_err() {
-                tracing::warn!(
-                    ?client_id,
-                    "Failed to send notification to client, client may have disconnected"
-                );
-            }
-        }
+    fn transition_to_running(state: &mut State, slide_index: usize) {
+        let total_duration = match state {
+            State::Init => Duration::ZERO,
+            _ => state.calculate_total_duration(),
+        };
+
+        *state = State::Running {
+            since: Timestamp::now(),
+            current: slide_index,
+            total_duration,
+        };
+    }
+
+    fn transition_to_running_reset_duration(state: &mut State, slide_index: usize) {
+        *state = State::Running {
+            since: Timestamp::now(),
+            current: slide_index,
+            total_duration: Duration::ZERO,
+        };
     }
 
     fn command_first(&self, state: &mut State) -> Notification {
@@ -175,24 +182,13 @@ impl TobogganState {
             return Notification::error("No slides available".to_string());
         }
 
-        match state {
-            State::Init | State::Paused { .. } => {
-                *state = State::Running {
-                    since: Timestamp::now(),
-                    current: 0, // First slide index
-                    total_duration: Duration::default(),
-                };
-            }
-            _ => {
-                if !state.is_first_slide(total_slides) {
-                    *state = State::Running {
-                        since: Timestamp::now(),
-                        current: 0, // First slide index
-                        total_duration: Duration::default(),
-                    };
-                }
-            }
+        let should_transition = matches!(state, State::Init | State::Paused { .. })
+            || !state.is_first_slide(total_slides);
+
+        if should_transition {
+            Self::transition_to_running_reset_duration(state, 0);
         }
+
         Notification::state(state.clone())
     }
 
@@ -203,32 +199,7 @@ impl TobogganState {
         }
 
         let last_index = total_slides - 1;
-
-        match state {
-            State::Init => {
-                *state = State::Running {
-                    since: Timestamp::now(),
-                    current: last_index,
-                    total_duration: Duration::ZERO,
-                };
-            }
-            State::Paused { .. } => {
-                if state.is_last_slide(total_slides) {
-                    state.update_slide(last_index);
-                } else {
-                    *state = State::Running {
-                        since: Timestamp::now(),
-                        current: last_index,
-                        total_duration: state.calculate_total_duration(),
-                    };
-                }
-            }
-            _ => {
-                if !state.is_last_slide(total_slides) {
-                    state.update_slide(last_index);
-                }
-            }
-        }
+        Self::navigate_to_slide(state, last_index, total_slides);
         Notification::state(state.clone())
     }
 
@@ -240,29 +211,7 @@ impl TobogganState {
             ));
         }
 
-        match state {
-            State::Init => {
-                *state = State::Running {
-                    since: Timestamp::now(),
-                    current: slide_index,
-                    total_duration: Duration::ZERO,
-                };
-            }
-            State::Paused { .. } => {
-                if state.is_last_slide(total_slides) && slide_index == total_slides - 1 {
-                    state.update_slide(slide_index);
-                } else {
-                    *state = State::Running {
-                        since: Timestamp::now(),
-                        current: slide_index,
-                        total_duration: state.calculate_total_duration(),
-                    };
-                }
-            }
-            _ => {
-                state.update_slide(slide_index);
-            }
-        }
+        Self::navigate_to_slide(state, slide_index, total_slides);
         Notification::state(state.clone())
     }
 
@@ -274,43 +223,15 @@ impl TobogganState {
         }
 
         match state {
-            State::Init => {
-                *state = State::Running {
-                    since: Timestamp::now(),
-                    current: 0, // First slide index
-                    total_duration: Duration::ZERO,
-                };
-            }
+            State::Init => Self::transition_to_running(state, 0),
             State::Paused { .. } => {
                 if let Some(next_slide) = state.next(total_slides) {
-                    *state = State::Running {
-                        since: Timestamp::now(),
-                        current: next_slide,
-                        total_duration: state.calculate_total_duration(),
-                    };
+                    Self::transition_to_running(state, next_slide);
                 }
             }
-            _ => {
-                if let Some(current) = state.current() {
-                    if let Some(next_slide) = state.next(total_slides) {
-                        state.update_slide(next_slide);
-                    } else if state.is_last_slide(total_slides) {
-                        let total_duration = state.calculate_total_duration();
-                        *state = State::Done {
-                            current,
-                            total_duration,
-                        };
-                    }
-                } else {
-                    // No current slide, start from the beginning
-                    *state = State::Running {
-                        since: Timestamp::now(),
-                        current: 0,
-                        total_duration: Duration::ZERO,
-                    }
-                }
-            }
+            _ => Self::handle_next_in_running_state(state, total_slides),
         }
+
         Notification::state(state.clone())
     }
 
@@ -321,20 +242,10 @@ impl TobogganState {
         }
 
         match state {
-            State::Init => {
-                *state = State::Running {
-                    since: Timestamp::now(),
-                    current: 0, // First slide index
-                    total_duration: Duration::ZERO,
-                };
-            }
+            State::Init => Self::transition_to_running(state, 0),
             State::Paused { .. } => {
                 if let Some(prev_slide) = state.previous(total_slides) {
-                    *state = State::Running {
-                        since: Timestamp::now(),
-                        current: prev_slide,
-                        total_duration: state.calculate_total_duration(),
-                    };
+                    Self::transition_to_running(state, prev_slide);
                 }
             }
             _ => {
@@ -343,6 +254,7 @@ impl TobogganState {
                 }
             }
         }
+
         Notification::state(state.clone())
     }
 
@@ -387,7 +299,7 @@ impl TobogganState {
             Command::Ping => Notification::pong(),
         };
 
-        self.broadcast_notification(&notification);
+        self.notify_all_clients(&notification);
         drop(state);
 
         tracing::debug!(
@@ -398,6 +310,70 @@ impl TobogganState {
         );
 
         notification
+    }
+
+    // Helper methods to reduce complexity and improve single responsibility
+
+    /// Navigate to a specific slide using state-appropriate logic
+    fn navigate_to_slide(state: &mut State, target_slide: usize, total_slides: usize) {
+        match state {
+            State::Init => {
+                Self::transition_to_running(state, target_slide);
+            }
+            State::Paused { .. } => {
+                if state.is_last_slide(total_slides) && target_slide == total_slides - 1 {
+                    state.update_slide(target_slide);
+                } else {
+                    Self::transition_to_running(state, target_slide);
+                }
+            }
+            _ => {
+                state.update_slide(target_slide);
+            }
+        }
+    }
+
+    /// Handle next command when in running state
+    fn handle_next_in_running_state(state: &mut State, total_slides: usize) {
+        if let Some(current) = state.current() {
+            if let Some(next_slide) = state.next(total_slides) {
+                state.update_slide(next_slide);
+            } else if state.is_last_slide(total_slides) {
+                let total_duration = state.calculate_total_duration();
+                *state = State::Done {
+                    current,
+                    total_duration,
+                };
+            }
+        } else {
+            // No current slide, start from the beginning
+            Self::transition_to_running(state, 0);
+        }
+    }
+
+    /// Check if we can accept more clients
+    fn has_capacity(&self) -> bool {
+        self.clients.len() < self.max_clients
+    }
+
+    /// Create initial notification for new clients
+    async fn create_initial_notification(&self) -> Notification {
+        let current_state = self.current_state.read().await;
+        Notification::state(current_state.clone())
+    }
+
+    /// Send notification to all connected clients
+    fn notify_all_clients(&self, notification: &Notification) {
+        for client_entry in self.clients.iter() {
+            let client_id = client_entry.key();
+            let sender = client_entry.value();
+            if sender.send(notification.clone()).is_err() {
+                tracing::warn!(
+                    ?client_id,
+                    "Failed to send notification to client, client may have disconnected"
+                );
+            }
+        }
     }
 }
 

@@ -9,6 +9,8 @@ use tracing::{error, info, warn};
 
 use crate::TobogganState;
 
+const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
+
 pub async fn websocket_handler(
     ws: WebSocketUpgrade,
     State(state): State<TobogganState>,
@@ -44,7 +46,7 @@ async fn handle_websocket(socket: WebSocket, state: TobogganState) {
         spawn_notification_sender_task(notification_rx_internal, ws_sender, client_id);
     let receiver_task =
         spawn_message_receiver_task(ws_receiver, state.clone(), error_notification_tx, client_id);
-    let heartbeat_task = spawn_heartbeat_task(notification_tx, client_id, Duration::from_secs(30));
+    let heartbeat_task = spawn_heartbeat_task(notification_tx, client_id, HEARTBEAT_INTERVAL);
 
     tokio::select! {
         _ = watcher_task => {

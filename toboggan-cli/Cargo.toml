@@ -24,7 +24,7 @@ tracing = {workspace = true}
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 clap = { workspace = true, features = ["env", "derive"] }
 anyhow = {workspace = true}
-pulldown-cmark = {workspace = true}
+comrak = {workspace = true}
 regex = {workspace = true}
 
 [lints]

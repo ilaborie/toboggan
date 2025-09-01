@@ -11,43 +11,10 @@ use alloc::vec::Vec;
 use core::fmt::Display;
 #[cfg(feature = "std")]
 use std::path::{Path, PathBuf};
-use std::string::ToString;
 
 use serde::{Deserialize, Serialize};
 
 use crate::Style;
-
-/// Working directory path for terminal content.
-///
-/// A simple wrapper around `PathBuf` for std environments and `String` for `no_std` environments.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub struct WorkingDirectory(String);
-
-impl WorkingDirectory {
-    /// Creates a new working directory from a path-like input.
-    pub fn new(path: impl Into<Self>) -> Self {
-        path.into()
-    }
-
-    /// Returns the path as a string slice.
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl Display for WorkingDirectory {
-    fn fmt(&self, fmt: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(fmt, "{}", self.as_str())
-    }
-}
-
-impl From<&str> for WorkingDirectory {
-    fn from(path: &str) -> Self {
-        Self(path.to_string())
-    }
-}
 
 /// Rich content that can be displayed in a slide.
 ///
@@ -108,23 +75,11 @@ pub enum Content {
     /// in the specified working directory. Useful for live coding
     /// demonstrations and command-line tutorials.
     ///
-    /// Available in both `std` and `no_std` environments:
-    /// - `std`: Uses proper path handling with `PathBuf`
-    /// - `no_std`: Uses string-based path storage
-    Term { cwd: WorkingDirectory },
+    /// The `cwd` field specifies the working directory path as a string.
+    Term { cwd: String },
 }
 
 impl Content {
-    /// Creates plain text content.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use toboggan_core::Content;
-    ///
-    /// let content = Content::text("Hello, world!");
-    /// let content2 = Content::text(String::from("Dynamic text"));
-    /// ```
     pub fn text(text: impl Into<String>) -> Self {
         let text = text.into();
         Self::Text { text }
@@ -256,12 +211,7 @@ impl Content {
     /// let content2 = Content::term("./demo");
     /// ```
     ///
-    /// ```rust
-    /// use toboggan_core::Content;
-    ///
-    /// let content3 = Content::term("./demo");
-    /// ```
-    pub fn term(cwd: impl Into<WorkingDirectory>) -> Self {
+    pub fn term(cwd: impl Into<String>) -> Self {
         let cwd = cwd.into();
         Self::Term { cwd }
     }
@@ -366,7 +316,7 @@ impl Display for Content {
 #[cfg(feature = "std")]
 impl From<&Path> for Content {
     fn from(path: &Path) -> Self {
-        use pulldown_cmark::{Options, Parser, html};
+        use comrak::{ComrakOptions, markdown_to_html};
 
         // Read the file content, panic if it fails
         let content = std::fs::read_to_string(path)
@@ -385,11 +335,8 @@ impl From<&Path> for Content {
             }
             "md" | "markdown" => {
                 // For Markdown files, convert to HTML and use original markdown as alt text
-                let options = Options::all();
-                let parser = Parser::new_ext(&content, options);
-
-                let mut html_output = String::new();
-                html::push_html(&mut html_output, parser);
+                let options = ComrakOptions::default();
+                let html_output = markdown_to_html(&content, &options);
 
                 Self::Html {
                     raw: html_output,

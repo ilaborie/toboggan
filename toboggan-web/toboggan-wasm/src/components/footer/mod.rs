@@ -1,10 +1,8 @@
-use toboggan_core::Content;
 use web_sys::{Element, HtmlElement, ShadowRoot};
 
 use crate::components::WasmElement;
 use crate::{
-    create_and_append_element, create_shadow_root_with_style, dom_try_or_return, render_content,
-    unwrap_or_return,
+    create_and_append_element, create_shadow_root_with_style, dom_try_or_return, unwrap_or_return,
 };
 
 #[derive(Debug, Default)]
@@ -12,11 +10,11 @@ pub struct TobogganFooterElement {
     parent: Option<HtmlElement>,
     root: Option<ShadowRoot>,
     container: Option<Element>,
-    content: Option<Content>,
+    content: Option<String>,
 }
 
 impl TobogganFooterElement {
-    pub fn set_content(&mut self, content: Option<Content>) {
+    pub fn set_content(&mut self, content: Option<String>) {
         self.content = content;
         self.render_content();
     }
@@ -26,8 +24,7 @@ impl TobogganFooterElement {
 
         // Set content or leave empty (CSS will handle default content via ::before)
         if let Some(content) = &self.content {
-            let html = render_content(content, None);
-            container.set_inner_html(&html);
+            container.set_text_content(Some(content));
         } else {
             container.set_inner_html("");
         }

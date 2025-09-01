@@ -130,13 +130,13 @@ impl Talk {
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TalkResponse {
     /// The title of the presentation.
-    pub title: Content,
+    pub title: String,
 
     /// The date of the presentation.
     pub date: Date,
 
     /// The footer of the presentation.
-    pub footer: Content,
+    pub footer: String,
 
     /// The slides titles
     pub titles: Vec<String>,
@@ -150,6 +150,8 @@ impl From<Talk> for TalkResponse {
             footer,
             slides,
         } = value;
+        let title = title.to_string();
+        let footer = footer.to_string();
         let titles = slides.iter().map(|it| it.title.to_string()).collect();
 
         Self {

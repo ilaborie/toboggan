@@ -59,13 +59,11 @@ impl Display for Duration {
 pub struct Timestamp(pub jiff::Timestamp);
 
 impl Timestamp {
-    /// Get the current timestamp
     #[must_use]
     pub fn now() -> Self {
         Self(jiff::Timestamp::now())
     }
 
-    /// Get elapsed duration since this timestamp
     #[must_use]
     pub fn elapsed(&self) -> Duration {
         let signed_duration = jiff::Timestamp::now().duration_since(self.0);
@@ -98,7 +96,6 @@ impl Date {
         jiff::civil::Date::new(year, month, day).map(Self)
     }
 
-    /// Get today's date
     #[must_use]
     pub fn today() -> Self {
         let now = jiff::Zoned::now();

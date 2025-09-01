@@ -7,7 +7,7 @@ pub enum AppEvent {
     Key(KeyEvent),
     Tick,
 
-    // TODO use CommunicationMessage
+    // Could refactor to use toboggan_client::CommunicationMessage for consistency
     NotificationReceived(Notification),
     ConnectionStatus(ConnectionStatus),
     Error(String),

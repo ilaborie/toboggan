@@ -68,7 +68,6 @@ pub enum Command {
 pub enum Renderer {
     #[default]
     Title,
-    Thumbnail,
     Html,
     Raw,
 }

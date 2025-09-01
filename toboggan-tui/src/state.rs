@@ -144,7 +144,8 @@ impl AppState {
                 self.presentation_state = state;
             }
             Notification::Pong { .. } | Notification::Blink => {
-                // TODO
+                // Pong: heartbeat response, no UI action needed
+                // Blink: visual effect not implemented in TUI
             }
             Notification::Error { message, .. } => {
                 self.dialog = AppDialog::Error(message);

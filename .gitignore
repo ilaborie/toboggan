@@ -74,3 +74,4 @@ device_logs/
 **/*.xcframework
 
 idea.md
+*.local.*

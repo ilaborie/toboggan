@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use toboggan_client::{TobogganApi, TobogganConfig, WebSocketClient};
-use toboggan_core::Command;
+use toboggan_core::{ClientConfig, Command};
 use tokio::sync::mpsc;
 use tracing::info;
 
@@ -10,13 +10,12 @@ use tracing::info;
 async fn main() {
     tracing_subscriber::fmt().pretty().init();
 
-    let TobogganConfig {
-        client_id,
-        api_url,
-        websocket,
-    } = TobogganConfig::default();
+    let config = TobogganConfig::default();
+    let client_id = *config.client_id();
+    let api_url = config.api_url();
+    let websocket = config.websocket();
 
-    let api = TobogganApi::new(&api_url);
+    let api = TobogganApi::new(api_url);
 
     let (tx, rx) = mpsc::unbounded_channel();
     let (mut com, mut rx_msg) = WebSocketClient::new(tx.clone(), rx, client_id, websocket);
