@@ -7,11 +7,7 @@ pub use self::components::*;
 mod dom;
 pub use self::dom::*;
 
-mod duration;
-
 pub mod errors;
-
-pub mod icons;
 
 mod render;
 pub use self::render::*;

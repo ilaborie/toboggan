@@ -1,17 +1,30 @@
 use std::time::Instant;
 
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
+use serde::{Deserialize, Serialize};
 use toboggan_core::{Command, Notification, SlidesResponse, TalkResponse};
 use tracing::{info, warn};
 
 use crate::TobogganState;
 
-pub(super) async fn get_talk(State(state): State<TobogganState>) -> impl IntoResponse {
+#[derive(Debug, Serialize, Deserialize)]
+pub(super) struct TalkParam {
+    #[serde(default)]
+    footer: bool,
+}
+
+pub(super) async fn get_talk(
+    State(state): State<TobogganState>,
+    Query(param): Query<TalkParam>,
+) -> impl IntoResponse {
     let talk = state.talk().clone();
-    let result = TalkResponse::from(talk);
+    let mut result = TalkResponse::from(talk);
+    if !param.footer {
+        result.footer.take();
+    }
 
     Json(result)
 }

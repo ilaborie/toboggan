@@ -9,6 +9,7 @@ pub(crate) use self::services::{
 };
 
 mod app;
+pub(crate) use crate::app::Action;
 
 mod components;
 use crate::app::App;
@@ -20,6 +21,7 @@ pub(crate) use crate::components::{
 mod config;
 pub use crate::config::*;
 
+#[macro_use]
 mod utils;
 pub use crate::utils::*;
 

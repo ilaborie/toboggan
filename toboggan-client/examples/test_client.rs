@@ -11,7 +11,7 @@ async fn main() {
     tracing_subscriber::fmt().pretty().init();
 
     let config = TobogganConfig::default();
-    let client_id = *config.client_id();
+    let client_id = config.client_id();
     let api_url = config.api_url();
     let websocket = config.websocket();
 

@@ -2,38 +2,22 @@ use std::time::Duration;
 
 use toboggan_core::{BaseClientConfig, ClientConfig, ClientId, RetryConfig};
 
-/// Toboggan client configuration
 #[derive(Debug, Clone, Default)]
 pub struct TobogganConfig {
     base: BaseClientConfig,
 }
 
 impl TobogganConfig {
-    /// Create a new configuration with custom URLs
-    pub fn new(api_url: impl Into<String>, websocket_url: impl Into<String>) -> Self {
+    #[must_use]
+    pub fn new(host: &str, port: u16) -> Self {
         Self {
-            base: BaseClientConfig::new(api_url, websocket_url),
+            base: BaseClientConfig::new(host, port),
         }
     }
 
-    /// Create configuration from a base URL
-    pub fn from_base_url(base_url: impl AsRef<str>) -> Self {
-        Self {
-            base: BaseClientConfig::from_base_url(base_url),
-        }
-    }
-
-    /// Set the retry configuration
     #[must_use]
     pub fn with_retry(mut self, retry: RetryConfig) -> Self {
         self.base = self.base.with_retry(retry);
-        self
-    }
-
-    /// Set the client ID
-    #[must_use]
-    pub fn with_client_id(mut self, client_id: ClientId) -> Self {
-        self.base = self.base.with_client_id(client_id);
         self
     }
 
@@ -45,7 +29,7 @@ impl TobogganConfig {
 }
 
 impl ClientConfig for TobogganConfig {
-    fn client_id(&self) -> &ClientId {
+    fn client_id(&self) -> ClientId {
         self.base.client_id()
     }
 
@@ -78,8 +62,8 @@ impl From<&BaseClientConfig> for TobogganWebsocketConfig {
         Self {
             websocket_url: config.websocket_url.clone(),
             max_retries: config.retry.max_retries,
-            retry_delay: Duration::from_millis(config.retry.initial_retry_delay_ms()),
-            max_retry_delay: Duration::from_millis(config.retry.max_retry_delay_ms()),
+            retry_delay: config.retry.initial_retry_delay().into(),
+            max_retry_delay: config.retry.max_retry_delay().into(),
         }
     }
 }

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::bail;
 use dashmap::DashMap;
 use toboggan_core::{ClientId, Command, Duration, Notification, Slide, State, Talk, Timestamp};
 use tokio::sync::{RwLock, watch};
@@ -17,37 +18,33 @@ pub struct TobogganState {
 }
 
 impl TobogganState {
-    /// # Panics
-    /// Panics if talk has no slides
-    #[must_use]
-    pub fn new(talk: Talk, max_clients: usize) -> Self {
+    pub fn new(talk: Talk, max_clients: usize) -> anyhow::Result<Self> {
         let started = Timestamp::now();
 
-        assert!(
-            !talk.slides.is_empty(),
-            "Empty talk, need at least one slide, got {talk:#?}"
-        );
+        if talk.slides.is_empty() {
+            bail!("Empty talk, need at least one slide, got {talk:#?}");
+        }
 
         info!(
             "\n=== Slides ===\n{}",
             talk.slides
                 .iter()
                 .enumerate()
-                .map(|(index, slide)| format!("[{index}]: {slide}"))
+                .map(|(index, slide)| format!("[{index:02}] {slide}"))
                 .collect::<Vec<_>>()
                 .join("\n")
         );
 
-        let current_state = State::default(); // Init state
+        let current_state = State::default();
         let current_state = Arc::new(RwLock::new(current_state));
 
-        Self {
+        Ok(Self {
             started_at: started,
             talk,
             current_state,
             clients: Arc::new(DashMap::new()),
             max_clients,
-        }
+        })
     }
 
     pub(crate) fn health(&self) -> HealthResponse {
@@ -155,24 +152,20 @@ impl TobogganState {
         );
     }
 
-    fn transition_to_running(state: &mut State, slide_index: usize) {
-        let total_duration = match state {
-            State::Init => Duration::ZERO,
-            _ => state.calculate_total_duration(),
+    fn transition_to_running(state: &mut State, slide_index: usize, reset_duration: bool) {
+        let total_duration = if reset_duration {
+            Duration::ZERO
+        } else {
+            match state {
+                State::Init => Duration::ZERO,
+                _ => state.calculate_total_duration(),
+            }
         };
 
         *state = State::Running {
             since: Timestamp::now(),
             current: slide_index,
             total_duration,
-        };
-    }
-
-    fn transition_to_running_reset_duration(state: &mut State, slide_index: usize) {
-        *state = State::Running {
-            since: Timestamp::now(),
-            current: slide_index,
-            total_duration: Duration::ZERO,
         };
     }
 
@@ -186,7 +179,7 @@ impl TobogganState {
             || !state.is_first_slide(total_slides);
 
         if should_transition {
-            Self::transition_to_running_reset_duration(state, 0);
+            Self::transition_to_running(state, 0, true);
         }
 
         Notification::state(state.clone())
@@ -223,10 +216,10 @@ impl TobogganState {
         }
 
         match state {
-            State::Init => Self::transition_to_running(state, 0),
+            State::Init => Self::transition_to_running(state, 0, false),
             State::Paused { .. } => {
                 if let Some(next_slide) = state.next(total_slides) {
-                    Self::transition_to_running(state, next_slide);
+                    Self::transition_to_running(state, next_slide, false);
                 }
             }
             _ => Self::handle_next_in_running_state(state, total_slides),
@@ -242,10 +235,10 @@ impl TobogganState {
         }
 
         match state {
-            State::Init => Self::transition_to_running(state, 0),
+            State::Init => Self::transition_to_running(state, 0, false),
             State::Paused { .. } => {
                 if let Some(prev_slide) = state.previous(total_slides) {
-                    Self::transition_to_running(state, prev_slide);
+                    Self::transition_to_running(state, prev_slide, false);
                 }
             }
             _ => {
@@ -277,7 +270,7 @@ impl TobogganState {
     }
 
     fn command_blink() -> Notification {
-        Notification::blink()
+        Notification::BLINK
     }
 
     pub async fn handle_command(&self, command: &Command) -> Notification {
@@ -296,7 +289,7 @@ impl TobogganState {
             Command::Pause => Self::command_pause(&mut state),
             Command::Resume => Self::command_resume(&mut state),
             Command::Blink => Self::command_blink(),
-            Command::Ping => Notification::pong(),
+            Command::Ping => Notification::PONG,
         };
 
         self.notify_all_clients(&notification);
@@ -312,19 +305,16 @@ impl TobogganState {
         notification
     }
 
-    // Helper methods to reduce complexity and improve single responsibility
-
-    /// Navigate to a specific slide using state-appropriate logic
     fn navigate_to_slide(state: &mut State, target_slide: usize, total_slides: usize) {
         match state {
             State::Init => {
-                Self::transition_to_running(state, target_slide);
+                Self::transition_to_running(state, target_slide, false);
             }
             State::Paused { .. } => {
                 if state.is_last_slide(total_slides) && target_slide == total_slides - 1 {
                     state.update_slide(target_slide);
                 } else {
-                    Self::transition_to_running(state, target_slide);
+                    Self::transition_to_running(state, target_slide, false);
                 }
             }
             _ => {
@@ -333,7 +323,6 @@ impl TobogganState {
         }
     }
 
-    /// Handle next command when in running state
     fn handle_next_in_running_state(state: &mut State, total_slides: usize) {
         if let Some(current) = state.current() {
             if let Some(next_slide) = state.next(total_slides) {
@@ -346,23 +335,19 @@ impl TobogganState {
                 };
             }
         } else {
-            // No current slide, start from the beginning
-            Self::transition_to_running(state, 0);
+            Self::transition_to_running(state, 0, false);
         }
     }
 
-    /// Check if we can accept more clients
     fn has_capacity(&self) -> bool {
         self.clients.len() < self.max_clients
     }
 
-    /// Create initial notification for new clients
     async fn create_initial_notification(&self) -> Notification {
         let current_state = self.current_state.read().await;
         Notification::state(current_state.clone())
     }
 
-    /// Send notification to all connected clients
     fn notify_all_clients(&self, notification: &Notification) {
         for client_entry in self.clients.iter() {
             let client_id = client_entry.key();

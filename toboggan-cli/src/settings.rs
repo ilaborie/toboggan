@@ -1,37 +1,35 @@
-//! Configuration and command-line argument parsing.
-//!
-//! This module defines the CLI interface and settings structure for the Toboggan CLI.
-
 use std::path::PathBuf;
 
+use toboggan_core::Date;
+
+use crate::parse_date_string;
+
+/// Output format for the generated presentation
+#[derive(Debug, Clone, clap::ValueEnum)]
+pub enum OutputFormat {
+    /// TOML format (default)
+    Toml,
+    /// JSON format
+    Json,
+    /// YAML format
+    Yaml,
+    /// CBOR binary format (compact, standardized)
+    Cbor,
+    /// `MessagePack` binary format (ultra-compact)
+    #[value(name = "msgpack")]
+    MessagePack,
+    /// Bincode binary format (Rust-native, fastest)
+    Bincode,
+}
+
 /// Command-line settings for the Toboggan CLI.
-///
-/// This structure defines all the command-line arguments and options that can be
-/// passed to the CLI. It uses `clap` for parsing and validation.
-///
-/// # Examples
-///
-/// ```no_run
-/// use clap::Parser;
-/// use toboggan_cli::Settings;
-///
-/// // Parse from command line arguments
-/// let settings = Settings::parse();
-///
-/// // Create manually for testing
-/// let settings = Settings {
-///     output: None,
-///     title: Some("Test Talk".to_string()),
-///     date: Some("2024-12-31".to_string()),
-///     input: "slides.md".into(),
-/// };
-/// ```
 #[derive(Debug, clap::Parser)]
 #[command(
     name = "toboggan-cli",
-    about = "Convert Markdown files and folders to Toboggan presentation TOML",
-    long_about = "A command-line tool for creating Toboggan presentation configurations from Markdown files or structured folder hierarchies."
+    about = "Convert Markdown folders to Toboggan presentation TOML",
+    long_about = "A command-line tool for creating Toboggan presentation configurations from structured folder hierarchies containing Markdown and HTML files."
 )]
+#[allow(clippy::struct_excessive_bools)]
 pub struct Settings {
     /// Output file path for the generated TOML.
     ///
@@ -42,42 +40,121 @@ pub struct Settings {
 
     /// Override the presentation title.
     ///
-    /// This takes precedence over title.md, title.txt files, or folder names.
+    /// This takes precedence over front matter title in _cover.md or folder names.
     /// Useful for batch processing or dynamic title generation.
-    #[clap(short, long, help = "Title override (takes precedence over files)")]
+    #[clap(
+        short,
+        long,
+        help = "Title override (takes precedence over frontmatter)"
+    )]
     pub title: Option<String>,
 
     /// Override the presentation date.
     ///
-    /// Must be in YYYY-MM-DD format. Takes precedence over date.txt files.
-    /// If not specified, falls back to date.txt or today's date.
+    /// Must be in YYYY-MM-DD format. Takes precedence over front matter date in _cover.md.
+    /// If not specified, falls back to front matter date or today's date.
     #[clap(
         short,
         long,
         help = "Date override in YYYY-MM-DD format",
-        value_parser = validate_date_format
+        value_parser = parse_date_string
     )]
-    pub date: Option<String>,
+    pub date: Option<Date>,
 
-    /// The input file or folder to process.
+    /// Syntax highlighting theme for code blocks.
     ///
-    /// Can be either:
-    /// - A single Markdown file with slide separators
-    /// - A folder containing structured presentation content
-    #[clap(help = "Input file or folder to process")]
-    pub input: PathBuf,
+    /// Available themes: `base16-ocean.dark`, `base16-ocean.light`, `base16-mocha.dark`,
+    /// `base16-eighties.dark`, `InspiredGitHub`, `Solarized (dark)`, `Solarized (light)`,
+    /// `Monokai`, `Monokai Extended`, `Monokai Extended Light`, `Monokai Extended Bright`,
+    /// and many more from the syntect library.
+    ///
+    /// Use `--list-themes` to see all available themes.
+    #[clap(
+        long,
+        default_value = "base16-ocean.light",
+        help = "Syntax highlighting theme (default: base16-ocean.light)"
+    )]
+    pub theme: String,
+
+    /// List all available syntax highlighting themes and exit.
+    #[clap(long, help = "List all available syntax highlighting themes and exit")]
+    pub list_themes: bool,
+
+    /// Output format for the generated presentation.
+    #[clap(
+        short = 'f',
+        long,
+        help = "Output format: text (toml, json, yaml) or binary (cbor, msgpack, bincode). Auto-detected from output file extension if not specified."
+    )]
+    pub format: Option<OutputFormat>,
+
+    /// Disable automatic numbering of parts and slides.
+    ///
+    /// By default, parts are numbered (1., 2., etc.) and slides within parts
+    /// are numbered (1.1, 1.2, etc.). This flag disables that behavior.
+    #[clap(long, help = "Disable automatic numbering of parts and slides")]
+    pub no_counter: bool,
+
+    /// Disable presentation statistics display.
+    ///
+    /// By default, comprehensive statistics are shown including word count,
+    /// duration estimates, and part breakdown. This flag disables that output.
+    #[clap(long, help = "Disable presentation statistics display")]
+    pub no_stats: bool,
+
+    /// Set speaking rate in words per minute for duration estimates.
+    ///
+    /// Used to calculate presentation duration. Typical rates:
+    /// - Slow: 110 WPM
+    /// - Normal: 150 WPM (default)
+    /// - Fast: 170 WPM
+    #[clap(
+        long,
+        default_value = "150",
+        help = "Speaking rate in words per minute (default: 150)"
+    )]
+    pub wpm: u16,
+
+    /// Exclude speaker notes from duration calculations.
+    ///
+    /// By default, words in speaker notes are counted toward total duration.
+    /// This flag excludes notes from duration calculations.
+    #[clap(long, help = "Exclude speaker notes from duration calculations")]
+    pub exclude_notes_from_duration: bool,
+
+    /// The input folder to process.
+    ///
+    /// Must be a folder containing structured presentation content.
+    /// The folder should contain markdown (.md) and/or HTML (.html) files.
+    #[clap(help = "Input folder to process")]
+    pub input: Option<PathBuf>,
 }
 
-/// Validate date format for clap argument parsing.
-fn validate_date_format(date_str: &str) -> Result<String, String> {
-    use regex::Regex;
+impl Settings {
+    /// Determine the output format, auto-detecting from file extension if not specified
+    #[must_use]
+    pub fn resolve_format(&self) -> OutputFormat {
+        // If format is explicitly specified, use it
+        if let Some(format) = &self.format {
+            return format.clone();
+        }
 
-    let regex = Regex::new(r"^\d{4}-\d{1,2}-\d{1,2}$")
-        .map_err(|error| format!("Internal regex error: {error}"))?;
+        // Try to auto-detect from output file extension
+        if let Some(output_path) = &self.output
+            && let Some(extension) = output_path.extension().and_then(|ext| ext.to_str())
+        {
+            match extension.to_lowercase().as_str() {
+                "toml" => return OutputFormat::Toml,
+                "json" => return OutputFormat::Json,
+                "yaml" | "yml" => return OutputFormat::Yaml,
+                "cbor" => return OutputFormat::Cbor,
+                "msgpack" => return OutputFormat::MessagePack,
+                "bin" | "bincode" => return OutputFormat::Bincode,
+                _ => {} // Fall through to default
+            }
+        }
 
-    if regex.is_match(date_str) {
-        Ok(date_str.to_string())
-    } else {
-        Err("Date must be in YYYY-MM-DD format (e.g., 2024-12-31)".to_string())
+        // Default to TOML if no format specified and can't auto-detect
+        OutputFormat::Toml
     }
 }

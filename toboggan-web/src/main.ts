@@ -6,6 +6,7 @@ import tobogganWasm, {
 
 import "./reset.css";
 import "./main.css";
+import "./state.css";
 
 // Initialize the application when the DOM is loaded
 document.addEventListener("DOMContentLoaded", async () => {

@@ -6,8 +6,7 @@ use clawspec_core::test_client::{TestClient, TestServer, TestServerConfig};
 use clawspec_core::{ApiClient, register_schemas};
 use serde_json::{Value, json};
 use toboggan_core::{
-    Content, Date, Notification, Renderer, Slide, SlideKind, SlidesResponse, Style, Talk,
-    TalkResponse,
+    Content, Date, Notification, Slide, SlideKind, SlidesResponse, Style, Talk, TalkResponse,
 };
 use toboggan_server::{HealthResponse, TobogganState, routes};
 use utoipa::openapi::{ContactBuilder, InfoBuilder, LicenseBuilder, ServerBuilder};
@@ -18,6 +17,7 @@ struct TobogganTestServer {
 }
 
 impl TobogganTestServer {
+    #[allow(clippy::unwrap_used)]
     fn new() -> Self {
         // Create a test talk
         let talk = Talk::new("Test Presentation")
@@ -27,11 +27,10 @@ impl TobogganTestServer {
                 Slide::new("Content Slide")
                     .with_body(Content::html("<h1>Hello World</h1>"))
                     .with_notes("Some notes for the presenter"),
-            )
-            .add_slide(Slide::new("Final Slide").with_body(Content::iframe("https://example.com")));
+            );
 
-        let state = TobogganState::new(talk, 100);
-        let router = routes().with_state(state);
+        let state = TobogganState::new(talk, 100).unwrap();
+        let router = routes(None).with_state(state);
 
         Self { router }
     }
@@ -97,7 +96,7 @@ async fn should_generate_openapi() -> anyhow::Result<()> {
     let mut app = create_test_app().await?;
 
     // Register basic schemas that have ToSchema implemented
-    register_schemas!(app, Renderer, SlideKind, Style).await;
+    register_schemas!(app, SlideKind, Style).await;
 
     // Test all endpoints to generate comprehensive OpenAPI spec
     basic_api_operations(&mut app).await?;
@@ -134,8 +133,6 @@ async fn basic_api_operations(app: &mut TestClient<TobogganTestServer>) -> anyho
         .await?
         .as_json::<SlidesResponse>()
         .await?;
-
-    // TODO POST command
 
     Ok(())
 }
@@ -238,7 +235,28 @@ mod command_variants {
                 response_type == "State" || response_type == "Pong" || response_type == "Error",
                 "Unexpected response type: {response_type}"
             );
-            assert!(response["timestamp"].is_string());
+
+            // Check that the response has the expected structure for each type
+            match response_type {
+                "State" => {
+                    // State notifications should have a state field
+                    assert!(
+                        response["state"].is_object(),
+                        "State notification should have state field"
+                    );
+                }
+                "Error" => {
+                    // Error notifications should have a message field
+                    assert!(
+                        response["message"].is_string(),
+                        "Error notification should have message field"
+                    );
+                }
+                "Pong" => {
+                    // Pong notifications have no additional fields
+                }
+                _ => panic!("Unexpected response type: {response_type}"),
+            }
         }
 
         Ok(())

@@ -1,8 +1,3 @@
-#[cfg(feature = "openapi")]
-use alloc::{string::String, vec::Vec};
-
-#[cfg(all(not(feature = "std"), feature = "getrandom"))]
-use getrandom;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -10,25 +5,19 @@ use uuid::Uuid;
 pub struct ClientId(Uuid);
 
 impl ClientId {
-    #[cfg(any(feature = "std", feature = "getrandom"))]
+    #[cfg(any(feature = "std", feature = "js"))]
     #[allow(clippy::new_without_default)]
     #[must_use]
     pub fn new() -> Self {
         #[cfg(feature = "std")]
         {
-            // Use v4 UUID (random) when std is available
             Self(Uuid::new_v4())
         }
-        #[cfg(not(feature = "std"))]
+        #[cfg(all(not(feature = "std"), feature = "js"))]
         {
-            #[cfg(feature = "getrandom")]
-            {
-                // In no_std environments, generate a v4 UUID using provided random bytes
-                // This requires getrandom to be available (with js feature for WASM)
-                let mut bytes = [0u8; 16];
-                getrandom::getrandom(&mut bytes).expect("Failed to generate random bytes for UUID");
-                Self(Uuid::from_bytes(bytes))
-            }
+            let mut bytes = [0u8; 16];
+            getrandom::getrandom(&mut bytes).expect("Failed to generate random bytes for UUID");
+            Self(Uuid::from_bytes(bytes))
         }
     }
 }
@@ -36,38 +25,18 @@ impl ClientId {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "command")]
 pub enum Command {
-    // General
-    Register {
-        client: ClientId,
-        #[serde(default)]
-        renderer: Renderer,
-    },
-    Unregister {
-        client: ClientId,
-    },
-    // Move fast
+    Register { client: ClientId },
+    Unregister { client: ClientId },
+    Ping,
+    // Navigation
     First,
     Last,
-    GoTo {
-        slide: usize,
-    },
-    // Navigation
+    GoTo { slide: usize },
     Next,
     Previous,
-    // Pause/Resume
+    // Status
     Pause,
     Resume,
-    // Effects
+    // Effect
     Blink,
-    // Ping
-    Ping,
-}
-
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub enum Renderer {
-    #[default]
-    Title,
-    Html,
-    Raw,
 }

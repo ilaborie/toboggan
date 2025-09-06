@@ -9,10 +9,6 @@ pub const FONT_SIZE_TITLE: u16 = 18;
 // Legacy colors - prefer theme.extended_palette() colors when possible
 pub const COLOR_MUTED: Color = Color::from_rgb(0.6, 0.6, 0.6);
 
-// Terminal colors
-pub const COLOR_TERMINAL: Color = Color::from_rgb(0.2, 0.6, 0.2);
-pub const COLOR_IFRAME: Color = Color::from_rgb(0.2, 0.4, 0.8);
-
 // Spacing
 pub const SPACING_SMALL: u16 = 4;
 pub const SPACING_MEDIUM: u16 = 8;

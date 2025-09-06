@@ -1,22 +1,21 @@
-use toboggan_client::ConnectionStatus;
 // Re-export toboggan-client types
 pub use toboggan_client::{CommunicationMessage, WebSocketClient};
-use toboggan_core::{ClientConfig, Command, Timestamp};
+use toboggan_client::{ConnectionStatus, TobogganConfig};
+use toboggan_core::{ClientConfig, Command, Notification};
 use tokio::sync::mpsc;
 use tracing::{error, info};
 
-use crate::config::Config;
 use crate::events::AppEvent;
 
 pub struct ConnectionHandler {
-    config: Config,
+    config: TobogganConfig,
     event_tx: mpsc::UnboundedSender<AppEvent>,
     command_tx: Option<mpsc::UnboundedSender<Command>>,
 }
 
 impl ConnectionHandler {
     #[must_use]
-    pub fn new(config: Config, event_tx: mpsc::UnboundedSender<AppEvent>) -> Self {
+    pub fn new(config: TobogganConfig, event_tx: mpsc::UnboundedSender<AppEvent>) -> Self {
         Self {
             config,
             event_tx,
@@ -31,7 +30,7 @@ impl ConnectionHandler {
         let (command_tx, command_rx) = mpsc::unbounded_channel();
         self.command_tx = Some(command_tx.clone());
 
-        let client_id = *self.config.client_id();
+        let client_id = self.config.client_id();
         let websocket_config = self.config.websocket();
 
         let (mut ws_client, mut message_rx) =
@@ -55,10 +54,7 @@ impl ConnectionHandler {
                     }
                     CommunicationMessage::StateChange { state } => {
                         let _ = event_tx_clone.send(AppEvent::NotificationReceived(
-                            toboggan_core::Notification::State {
-                                timestamp: Timestamp::now(),
-                                state,
-                            },
+                            Notification::State { state },
                         ));
                     }
                     CommunicationMessage::Error { error } => {

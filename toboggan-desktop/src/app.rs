@@ -2,23 +2,24 @@ use std::sync::OnceLock;
 
 use iced::{Element, Subscription, Task, Theme, keyboard};
 use toboggan_client::{
-    CommunicationMessage, ConnectionStatus, TobogganApi, TobogganApiError, WebSocketClient,
+    CommunicationMessage, ConnectionStatus, TobogganApi, TobogganApiError, TobogganConfig,
+    WebSocketClient,
 };
 use toboggan_core::{
-    ClientConfig, ClientId, Command as TobogganCommand, Content, Renderer, SlidesResponse, Talk,
-    TalkResponse,
+    ClientConfig, ClientId, Command as TobogganCommand, SlidesResponse, Talk, TalkResponse,
 };
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error, info};
 
 use crate::message::Message;
 use crate::state::AppState;
-use crate::{build_config, views};
+use crate::views;
 
 // Global channel for forwarding WebSocket messages to Iced
 static MESSAGE_CHANNEL: OnceLock<broadcast::Sender<CommunicationMessage>> = OnceLock::new();
 
 pub struct App {
+    config: TobogganConfig,
     state: AppState,
     websocket_client: Option<WebSocketClient>,
     cmd_sender: Option<mpsc::UnboundedSender<TobogganCommand>>,
@@ -31,10 +32,9 @@ impl App {
     ///
     /// # Panics
     /// Panics if the message channel has already been initialized.
-    pub fn new() -> (Self, Task<Message>) {
-        let config = build_config(None, None);
+    pub fn new(config: TobogganConfig) -> (Self, Task<Message>) {
         let api_client = TobogganApi::new(config.api_url());
-        let client_id = *config.client_id();
+        let client_id = config.client_id();
 
         // Initialize the global message channel for WebSocket message forwarding
         let (tx, _) = broadcast::channel(1000);
@@ -44,6 +44,7 @@ impl App {
         );
 
         let app = Self {
+            config,
             state: AppState::default(),
             websocket_client: None,
             cmd_sender: None,
@@ -160,17 +161,19 @@ impl App {
 impl App {
     fn handle_connect(&mut self) -> Task<Message> {
         info!("Connecting to server...");
-        let config = build_config(None, None);
         let (tx_cmd, rx_cmd) = mpsc::unbounded_channel();
-        let (mut ws_client, mut rx_msg) =
-            WebSocketClient::new(tx_cmd.clone(), rx_cmd, self.client_id, config.websocket());
+        let (mut ws_client, mut rx_msg) = WebSocketClient::new(
+            tx_cmd.clone(),
+            rx_cmd,
+            self.client_id,
+            self.config.websocket(),
+        );
 
         self.cmd_sender = Some(tx_cmd.clone());
 
         // Send register command
         let _ = tx_cmd.send(TobogganCommand::Register {
             client: self.client_id,
-            renderer: Renderer::Raw,
         });
 
         // Start WebSocket connection and message forwarding in background
@@ -211,13 +214,9 @@ impl App {
         info!("Talk loaded: {}", talk_response.title);
         // For now, create a simplified talk from the response
         let talk = Talk {
-            title: Content::Text {
-                text: talk_response.title.clone(),
-            },
+            title: talk_response.title.clone(),
             date: talk_response.date,
-            footer: Content::Text {
-                text: talk_response.footer.clone(),
-            },
+            footer: talk_response.footer.clone().unwrap_or_default(),
             slides: vec![], // We'll load slides separately
         };
         self.state.talk = Some(talk);
@@ -236,13 +235,9 @@ impl App {
         );
         // Create talk with actual slides
         let talk = Talk {
-            title: Content::Text {
-                text: talk_response.title.clone(),
-            },
+            title: talk_response.title.clone(),
             date: talk_response.date,
-            footer: Content::Text {
-                text: talk_response.footer.clone(),
-            },
+            footer: talk_response.footer.clone().unwrap_or_default(),
             slides: slides_response.slides.clone(),
         };
         self.state.talk = Some(talk);

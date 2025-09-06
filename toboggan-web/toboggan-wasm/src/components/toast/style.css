@@ -13,11 +13,11 @@ output {
   animation:
     fade-in var(--animation-fast) ease,
     slide-in var(--animation-fast) ease,
-      fade-out var(--animation-fast) ease var(--duration);
+    fade-out var(--animation-fast) ease var(--duration);
   max-inline-size: min(40ch 50vw);
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--radius-sm);
-    border: 0.125rem solid var(--color-border-transparent);
+  border: 0.125rem solid var(--color-border-transparent);
   display: grid;
   grid-template-columns: 1fr 1.5rem;
   gap: var(--spacing-md);
@@ -35,7 +35,7 @@ output {
 }
 
 output {
-  color: var(--color-light);
+  color: var(--bg);
 
   &.error {
     background-color: var(--color-error);
@@ -56,6 +56,9 @@ output {
 
 button {
   background: transparent;
+  color: var(--bg);
+  align-self: center;
+  justify-self: center;
   border: thin solid transparent;
   border-radius: var(--radius-sm);
   --size: var(--icon-size-md);
@@ -65,7 +68,6 @@ button {
   justify-content: center;
   align-items: center;
   padding: 0;
-  align-self: baseline;
 
   &:focus &:active &:hover {
     box-shadow: none;

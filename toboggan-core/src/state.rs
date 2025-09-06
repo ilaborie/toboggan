@@ -1,14 +1,12 @@
-#[cfg(feature = "openapi")]
-use alloc::{format, string::String, vec::Vec};
-
 use serde::{Deserialize, Serialize};
 
 use crate::{Duration, Timestamp};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(tag = "state")]
 pub enum State {
+    #[default]
     Init,
     Paused {
         current: Option<usize>,
@@ -35,13 +33,11 @@ impl State {
         }
     }
 
-    #[cfg(feature = "std")]
     #[must_use]
     pub fn is_first_slide(&self, total_slides: usize) -> bool {
         total_slides > 0 && self.current() == Some(0)
     }
 
-    #[cfg(feature = "std")]
     #[must_use]
     pub fn is_last_slide(&self, total_slides: usize) -> bool {
         if total_slides == 0 {
@@ -50,21 +46,18 @@ impl State {
         self.current() == Some(total_slides - 1)
     }
 
-    #[cfg(feature = "std")]
     #[must_use]
     pub fn next(&self, total_slides: usize) -> Option<usize> {
         let current = self.current()?;
         (current + 1 < total_slides).then(|| current + 1)
     }
 
-    #[cfg(feature = "std")]
     #[must_use]
     pub fn previous(&self, _total_slides: usize) -> Option<usize> {
         let current = self.current()?;
         (current > 0).then(|| current - 1)
     }
 
-    #[cfg(feature = "std")]
     pub fn auto_resume(&mut self) {
         if let Self::Paused {
             current: Some(slide_index),
@@ -79,7 +72,6 @@ impl State {
         }
     }
 
-    #[cfg(feature = "std")]
     pub fn update_slide(&mut self, slide_index: usize) {
         let total_duration = self.calculate_total_duration();
         match self {
@@ -114,7 +106,6 @@ impl State {
         }
     }
 
-    #[cfg(feature = "std")]
     #[must_use]
     pub fn calculate_total_duration(&self) -> Duration {
         match self {
@@ -128,12 +119,6 @@ impl State {
                 ..
             } => *total_duration + since.elapsed(),
         }
-    }
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self::Init
     }
 }
 

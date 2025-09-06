@@ -1,9 +1,4 @@
-//! Time-related wrapper types and utility functions.
-//!
-//! This module provides wrapper types around jiff time types with
-//! additional utility methods and trait implementations.
-
-use core::fmt::{self, Display, Formatter};
+use std::fmt::{self, Display, Formatter};
 
 use serde::{Deserialize, Serialize};
 
@@ -16,27 +11,27 @@ use serde::{Deserialize, Serialize};
     PartialOrd,
     Ord,
     Default,
-    Serialize,
-    Deserialize,
     derive_more::Add,
+    derive_more::Deref,
+    derive_more::From,
 )]
-pub struct Duration(core::time::Duration);
+pub struct Duration(std::time::Duration);
 
 impl Duration {
-    pub const ZERO: Self = Self(core::time::Duration::ZERO);
+    pub const ZERO: Self = Self(std::time::Duration::ZERO);
 
     #[must_use]
     pub fn from_secs(secs: u64) -> Self {
-        Self(core::time::Duration::from_secs(secs))
+        Self(std::time::Duration::from_secs(secs))
     }
 
     #[must_use]
     pub fn from_millis(millis: u64) -> Self {
-        Self(core::time::Duration::from_millis(millis))
+        Self(std::time::Duration::from_millis(millis))
     }
 }
 
-impl From<Duration> for core::time::Duration {
+impl From<Duration> for std::time::Duration {
     fn from(value: Duration) -> Self {
         value.0
     }
@@ -51,10 +46,36 @@ impl Display for Duration {
     }
 }
 
-/// Wrapper around `jiff::Timestamp` with additional utility methods.
-///
-/// This type provides a convenient wrapper for timestamp operations
-/// while maintaining compatibility with jiff's timestamp functionality.
+// Custom serialization/deserialization
+pub mod duration_serde {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    use super::Duration;
+
+    impl Serialize for Duration {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            humantime::format_duration(self.0)
+                .to_string()
+                .serialize(serializer)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for Duration {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let duration = String::deserialize(deserializer)?;
+            humantime::parse_duration(&duration)
+                .map(Duration)
+                .map_err(serde::de::Error::custom)
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Timestamp(pub jiff::Timestamp);
 
@@ -79,19 +100,10 @@ impl Display for Timestamp {
     }
 }
 
-/// Wrapper around `jiff::civil::Date` with additional utility methods.
-///
-/// This type provides a convenient wrapper for date operations
-/// while maintaining compatibility with jiff's date functionality.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct Date(pub jiff::civil::Date);
+pub struct Date(jiff::civil::Date);
 
 impl Date {
-    /// Create a new Date from year, month, and day.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the date is invalid (e.g., month out of range, day out of range for the month).
     pub fn new(year: i16, month: i8, day: i8) -> Result<Self, jiff::Error> {
         jiff::civil::Date::new(year, month, day).map(Self)
     }
@@ -102,15 +114,13 @@ impl Date {
         Self(now.date())
     }
 
-    /// Create a new Date from year, month, and day.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the date is invalid (e.g., month out of range, day out of range for the month).
-    #[allow(clippy::expect_used)] // Acceptable for date validation - invalid dates should panic
+    #[cfg(feature = "tracing")]
     #[must_use]
     pub fn ymd(year: i16, month: i8, day: i8) -> Date {
-        Date::new(year, month, day).expect("valid date")
+        Date::new(year, month, day).unwrap_or_else(|error| {
+            tracing::warn!(?error, year, month, day, "fail to build date");
+            Self::today()
+        })
     }
 }
 

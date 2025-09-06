@@ -8,7 +8,7 @@ nav {
   display: grid;
   grid-template-columns: 1fr var(--nav-grid-column);
   grid-template-areas: "title status" "title buttons";
-  grid-gap: var(--spacing-md) 1px;
+  grid-gap: 1em 1px;
   padding: var(--spacing-md);
 }
 
@@ -24,7 +24,7 @@ progress {
 h1 {
   grid-area: title;
   margin: 0;
-  font-size: var(--font-size-heading);
+  font-size: 120%;
   font-weight: var(--font-weight-semibold);
   display: flex;
   align-items: center;
@@ -42,9 +42,7 @@ h1 {
   display: flex;
   gap: var(--spacing-md);
   align-items: center;
-  font-size: var(--font-size-sm);
 }
-
 
 .slide-info {
   font-weight: var(--font-weight-bold);
@@ -165,17 +163,33 @@ button::before {
 }
 
 /* Button visibility based on state and position */
-nav.init:not(.at-last) .next-btn { display: inline-block; }
+nav.init:not(.at-last) .next-btn {
+  display: inline-block;
+}
 
-nav.running:not(.at-first) .prev-btn { display: inline-block; }
-nav.running:not(.at-last) .next-btn { display: inline-block; }
-nav.running .pause-btn { display: inline-block; }
+nav.running:not(.at-first) .prev-btn {
+  display: inline-block;
+}
+nav.running:not(.at-last) .next-btn {
+  display: inline-block;
+}
+nav.running .pause-btn {
+  display: inline-block;
+}
 
-nav.paused .home-btn { display: inline-block; }
-nav.paused .last-btn { display: inline-block; }
-nav.paused .resume-btn { display: inline-block; }
+nav.paused .home-btn {
+  display: inline-block;
+}
+nav.paused .last-btn {
+  display: inline-block;
+}
+nav.paused .resume-btn {
+  display: inline-block;
+}
 
-nav.done .home-btn { display: inline-block; }
+nav.done .home-btn {
+  display: inline-block;
+}
 
 /* Connection status with Lucide icons */
 .connection {

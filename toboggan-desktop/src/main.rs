@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use iced::Settings;
+use toboggan_client::TobogganConfig;
 use toboggan_desktop::App;
 
 fn main() -> Result<()> {
@@ -7,7 +8,9 @@ fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     // Setup Lucide icons font
-    let lucide_font = lucide_icons::lucide_font_bytes();
+    let lucide_font = lucide_icons::LUCIDE_FONT_BYTES;
+
+    let config = TobogganConfig::default();
 
     // Run the application
     iced::application("Toboggan Desktop", App::update, App::view)
@@ -21,7 +24,7 @@ fn main() -> Result<()> {
         .font(lucide_font)
         .subscription(App::subscription)
         .theme(App::theme)
-        .run_with(App::new)
+        .run_with(move || App::new(config))
         .context("Running application")?;
 
     Ok(())

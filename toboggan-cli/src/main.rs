@@ -1,13 +1,27 @@
-use anyhow::Context;
 use clap::Parser;
-use toboggan_cli::{Settings, launch};
+use clap::error::ErrorKind;
+use miette::IntoDiagnostic;
+use toboggan_cli::{Settings, run};
 
-fn main() -> anyhow::Result<()> {
+fn main() -> miette::Result<()> {
     tracing_subscriber::fmt().pretty().init();
 
-    let settings = Settings::try_parse().context("parsing arguments")?;
+    let settings = match Settings::try_parse() {
+        Ok(settings) => settings,
+        Err(err) => match err.kind() {
+            ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => {
+                // Let clap handle help and version output normally
+                let _ = err.print();
+                std::process::exit(0);
+            }
+            _ => {
+                // Convert other errors to miette diagnostics
+                return Err(miette::miette!(err));
+            }
+        },
+    };
 
-    launch(settings)?;
+    run(&settings).into_diagnostic()?;
 
     Ok(())
 }

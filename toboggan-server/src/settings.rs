@@ -35,13 +35,9 @@ pub struct Settings {
     #[clap(long, env = "TOBOGGAN_CORS_ORIGINS", value_delimiter = ',')]
     pub allowed_origins: Option<Vec<String>>,
 
-    /// Enable request tracing
-    #[clap(long, env = "TOBOGGAN_ENABLE_TRACING", action = clap::ArgAction::SetTrue)]
-    pub enable_tracing: bool,
-
-    /// Log level
-    #[clap(long, env = "TOBOGGAN_LOG_LEVEL", default_value = "info")]
-    pub log_level: String,
+    /// Optional local assets folder (e.g., ./assets for images)
+    #[clap(long, env = "TOBOGGAN_ASSETS_DIR")]
+    pub assets_dir: Option<PathBuf>,
 }
 
 impl Settings {
@@ -77,6 +73,21 @@ impl Settings {
 
         if self.talk.extension().is_none_or(|ext| ext != "toml") {
             return Err("Talk file must have .toml extension".to_string());
+        }
+
+        if let Some(ref assets_dir) = self.assets_dir {
+            if !assets_dir.exists() {
+                return Err(format!(
+                    "Assets directory does not exist: {}",
+                    assets_dir.display()
+                ));
+            }
+            if !assets_dir.is_dir() {
+                return Err(format!(
+                    "Assets path is not a directory: {}",
+                    assets_dir.display()
+                ));
+            }
         }
 
         Ok(())

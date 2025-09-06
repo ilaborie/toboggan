@@ -9,8 +9,8 @@ use crate::KeyboardMapping;
 pub struct WebSocketConfig {
     pub(crate) url: String,
     pub max_retries: usize,
-    pub initial_retry_delay: usize, // ms
-    pub max_retry_delay: usize,     //ms
+    pub initial_retry_delay: usize,
+    pub max_retry_delay: usize,
 }
 
 #[wasm_bindgen]
@@ -18,14 +18,11 @@ impl WebSocketConfig {
     #[wasm_bindgen(constructor)]
     #[must_use]
     pub fn new(url: String) -> Self {
-        let max_retries = 5;
-        let initial_retry_delay = 1_000;
-        let max_retry_delay = 30_000;
         Self {
             url,
-            max_retries,
-            initial_retry_delay,
-            max_retry_delay,
+            max_retries: 5,
+            initial_retry_delay: 1_000,
+            max_retry_delay: 30_000,
         }
     }
 }
@@ -55,13 +52,12 @@ impl AppConfig {
         let api_base_url = location.origin().unwrap_throw();
         let ws_url = format!("ws://{}/api/ws", location.host().unwrap_throw());
         let websocket = WebSocketConfig::new(ws_url);
-        let keymap = None;
 
         Self {
             client_id,
             api_base_url,
             websocket,
-            keymap,
+            keymap: None,
         }
     }
 

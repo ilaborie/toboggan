@@ -1,52 +1,50 @@
-use web_sys::{Element, HtmlElement, ShadowRoot};
+use web_sys::{Element, HtmlElement};
+
+use toboggan_core::Content;
 
 use crate::components::WasmElement;
-use crate::{
-    create_and_append_element, create_shadow_root_with_style, dom_try_or_return, unwrap_or_return,
-};
+use crate::{create_and_append_element, create_shadow_root_with_style, dom_try, render_content};
+
+const CSS: &str = include_str!("style.css");
 
 #[derive(Debug, Default)]
 pub struct TobogganFooterElement {
-    parent: Option<HtmlElement>,
-    root: Option<ShadowRoot>,
     container: Option<Element>,
-    content: Option<String>,
+    content: Option<Content>,
 }
 
 impl TobogganFooterElement {
-    pub fn set_content(&mut self, content: Option<String>) {
+    pub fn set_content(&mut self, content: Option<Content>) {
         self.content = content;
         self.render_content();
     }
 
     fn render_content(&mut self) {
-        let container = unwrap_or_return!(&self.container);
+        let Some(container) = &self.container else {
+            return;
+        };
 
-        // Set content or leave empty (CSS will handle default content via ::before)
-        if let Some(content) = &self.content {
-            container.set_text_content(Some(content));
-        } else {
-            container.set_inner_html("");
-        }
+        let html = self
+            .content
+            .as_ref()
+            .map_or_else(String::new, |content| render_content(content, None));
+        container.set_inner_html(&html);
     }
 }
 
 impl WasmElement for TobogganFooterElement {
     fn render(&mut self, host: &HtmlElement) {
-        let root = dom_try_or_return!(
-            create_shadow_root_with_style(host, include_str!("./style.css")),
+        let root = dom_try!(
+            create_shadow_root_with_style(host, CSS),
             "create shadow root"
         );
 
-        let container: Element = dom_try_or_return!(
+        let container: Element = dom_try!(
             create_and_append_element(&root, "footer"),
             "create footer element"
         );
 
-        self.root = Some(root);
-        self.parent = Some(host.clone());
         self.container = Some(container);
-
         self.render_content();
     }
 }
