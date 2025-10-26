@@ -1,4 +1,4 @@
-use comrak::{Arena, ComrakOptions, parse_document};
+use comrak::{Arena, Options, parse_document};
 use toboggan_cli::Result;
 use toboggan_cli::parser::SlideContentParser;
 use toboggan_core::Content;
@@ -8,7 +8,7 @@ fn main() -> Result<()> {
     let raw = include_str!("./slide.md");
 
     let arena = Arena::new();
-    let options = ComrakOptions::default();
+    let options = Options::default();
 
     let doc = parse_document(&arena, raw, &options);
 

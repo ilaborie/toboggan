@@ -26,7 +26,7 @@ toboggan-core = { path = "../toboggan-core", features = ["std"] }
 toboggan-client = { path = "../toboggan-client" }
 
 uniffi = { version = "0.29.4", features = ["cli"] }
-tokio = { version = "1.0", features = [
+tokio = { workspace = true, features = [
     "rt",
     "rt-multi-thread",
     "macros",

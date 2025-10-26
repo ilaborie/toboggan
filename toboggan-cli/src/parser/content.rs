@@ -2,7 +2,8 @@ use std::path::Path;
 use std::string::ToString;
 
 use comrak::nodes::NodeValue;
-use comrak::{Options, Plugins, format_commonmark};
+use comrak::options::Plugins;
+use comrak::{Options, format_commonmark};
 use miette::SourceSpan;
 use toboggan_core::{Content, Slide, SlideKind};
 

@@ -1,6 +1,7 @@
 use std::fmt::Write;
 
-use comrak::{Options, Plugins, markdown_to_html_with_plugins};
+use comrak::options::Plugins;
+use comrak::{Options, markdown_to_html_with_plugins};
 use toboggan_core::{Content, Style};
 
 use super::CssClasses;
@@ -115,13 +116,14 @@ fn generate_alt_text(before_steps: &str, steps: &[(String, CssClasses)]) -> Stri
 
 #[cfg(test)]
 mod tests {
-    use comrak::{ComrakOptions, Plugins};
+    use comrak::Options;
+    use comrak::options::Plugins;
     use toboggan_core::Style;
 
     use super::*;
 
     fn setup_test_renderer() -> HtmlRenderer<'static> {
-        let options = Box::leak(Box::new(ComrakOptions::default()));
+        let options = Box::leak(Box::new(Options::default()));
         let plugins = Box::leak(Box::new(Plugins::default()));
         HtmlRenderer::new(options, plugins, Style::default())
     }

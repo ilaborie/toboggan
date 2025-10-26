@@ -1,12 +1,13 @@
+use comrak::Options;
+use comrak::options::Plugins;
 use comrak::plugins::syntect::{SyntectAdapter, SyntectAdapterBuilder};
-use comrak::{ComrakOptions, Plugins};
 
 use crate::parser::FRONT_MATTER_DELIMITER;
 
 /// Get standardized Markdown parsing options
 #[must_use]
-pub(super) fn default_options() -> ComrakOptions<'static> {
-    let mut options = ComrakOptions::default();
+pub(super) fn default_options() -> Options<'static> {
+    let mut options = Options::default();
 
     // Enable extensions
     options.extension.strikethrough = true;
@@ -22,7 +23,7 @@ pub(super) fn default_options() -> ComrakOptions<'static> {
     options.extension.spoiler = true;
     options.extension.greentext = true;
 
-    options.render.unsafe_ = true;
+    options.render.r#unsafe = true;
 
     options
 }
