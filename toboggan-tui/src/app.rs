@@ -6,12 +6,11 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use crossterm::event::{self, Event};
 use ratatui::prelude::*;
-use toboggan_client::TobogganApi;
+use toboggan_client::{TobogganApi, TobogganConfig};
 use toboggan_core::ClientConfig;
 use tokio::sync::mpsc;
 use tracing::{debug, info};
 
-use crate::config::Config;
 use crate::connection_handler::ConnectionHandler;
 use crate::events::AppEvent;
 use crate::state::AppState;
@@ -36,7 +35,7 @@ impl App {
     /// # Errors
     ///
     /// Returns an error if terminal setup fails.
-    pub async fn new(terminal: TerminalType, config: &Config) -> Result<Self> {
+    pub async fn new(terminal: TerminalType, config: &TobogganConfig) -> Result<Self> {
         let api = TobogganApi::new(config.api_url());
         let talk = api.talk().await.context("fetching talk")?;
         let slides = api.slides().await.context("fetching slides")?;

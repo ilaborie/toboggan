@@ -11,11 +11,9 @@ toboggan-core = { path = "../toboggan-core", features = ["std"] }
 toboggan-client = { path = "../toboggan-client" }
 
 iced = { workspace = true }
-lucide-icons = { version = "0.541.0", features = ["iced"] }
-iced_aw = { version = "0.12.2", features = ["card", "badge"] }
+lucide-icons = { version = "0.544.0", features = ["iced"] }
 
 tokio = { workspace = true, features = ["full"] }
-futures = { workspace = true }
 async-stream = "0.3"
 
 anyhow = { workspace = true }

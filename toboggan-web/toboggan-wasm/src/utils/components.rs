@@ -2,7 +2,6 @@ use gloo::utils::document;
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlButtonElement, HtmlElement, Node, ShadowRoot, ShadowRootInit, ShadowRootMode};
 
-/// Creates a shadow root with embedded CSS styles
 pub(crate) fn create_shadow_root_with_style(
     host: &HtmlElement,
     css: &str,
@@ -17,7 +16,6 @@ pub(crate) fn create_shadow_root_with_style(
     Ok(root)
 }
 
-/// Creates and appends an element to a parent, returning the typed element
 pub(crate) fn create_and_append_element<T>(parent: &Node, tag: &str) -> Result<T, JsValue>
 where
     T: JsCast + Clone,
@@ -27,7 +25,6 @@ where
     Ok(element.dyn_into::<T>()?)
 }
 
-/// Creates a styled button element
 pub(crate) fn create_button(icon: &str, title: &str) -> Result<HtmlButtonElement, JsValue> {
     let btn = document()
         .create_element("button")?
@@ -37,29 +34,6 @@ pub(crate) fn create_button(icon: &str, title: &str) -> Result<HtmlButtonElement
     Ok(btn)
 }
 
-/// Macro for safe Option unwrapping with early return
-#[macro_export]
-macro_rules! unwrap_or_return {
-    ($option:expr) => {
-        match $option {
-            Some(val) => val,
-            None => return,
-        }
-    };
-}
-
-/// Macro for safe Option unwrapping with early return and custom return value
-#[macro_export]
-macro_rules! unwrap_or_return_with {
-    ($option:expr, $return_val:expr) => {
-        match $option {
-            Some(val) => val,
-            None => return $return_val,
-        }
-    };
-}
-
-/// Component state mapper for CSS classes
 pub trait StateClassMapper<T> {
     fn to_css_class(&self) -> &'static str;
 }

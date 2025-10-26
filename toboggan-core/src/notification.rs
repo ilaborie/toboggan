@@ -1,52 +1,36 @@
-use alloc::format;
-use alloc::string::String;
-#[cfg(feature = "openapi")]
-use alloc::vec::Vec;
-use core::fmt::Debug;
+use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{State, Timestamp};
+use crate::State;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(tag = "type")]
 pub enum Notification {
-    State {
-        timestamp: Timestamp,
-        state: State,
-    },
-    Error {
-        timestamp: Timestamp,
-        message: String,
-    },
-    Pong {
-        timestamp: Timestamp,
-    },
+    State { state: State },
+    Error { message: String },
+    Pong,
     Blink,
 }
 
 impl Notification {
+    pub const BLINK: Self = Self::Blink;
+    pub const PONG: Self = Self::Pong;
+
     #[must_use]
     pub fn state(state: State) -> Self {
-        let timestamp = Timestamp::now();
-        Self::State { timestamp, state }
+        Self::State { state }
     }
 
     pub fn error(err: impl Debug) -> Self {
         let message = format!("{err:?}");
-        let timestamp = Timestamp::now();
-        Self::Error { timestamp, message }
+        Self::Error { message }
     }
+}
 
-    #[must_use]
-    pub fn pong() -> Self {
-        let timestamp = Timestamp::now();
-        Self::Pong { timestamp }
-    }
-
-    #[must_use]
-    pub fn blink() -> Self {
-        Self::Blink
+impl From<State> for Notification {
+    fn from(state: State) -> Self {
+        Self::State { state }
     }
 }

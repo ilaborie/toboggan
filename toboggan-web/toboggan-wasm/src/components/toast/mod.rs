@@ -1,17 +1,15 @@
-use std::cell::RefCell;
 use std::fmt::Display;
 
 use gloo::events::EventListener;
 use gloo::timers::callback::Timeout;
 use gloo::utils::document;
 use wasm_bindgen::prelude::*;
-use web_sys::{HtmlElement, ShadowRoot};
+use web_sys::HtmlElement;
 
 use crate::components::WasmElement;
-use crate::{
-    create_and_append_element, create_shadow_root_with_style, dom_try, dom_try_or_return,
-    unwrap_or_return,
-};
+use crate::{create_and_append_element, create_shadow_root_with_style, dom_try};
+
+const CSS: &str = include_str!("style.css");
 
 #[derive(Debug, Clone, Copy)]
 pub enum ToastType {
@@ -34,150 +32,99 @@ impl Display for ToastType {
 
 #[derive(Debug)]
 pub struct TobogganToastElement {
-    parent: Option<HtmlElement>,
-    root: Option<ShadowRoot>,
     container: Option<HtmlElement>,
-    // Store event listeners and timeouts to prevent memory leaks
-    event_listeners: RefCell<Vec<EventListener>>,
-    timeouts: RefCell<Vec<Timeout>>,
-    /// Duration in milliseconds for how long a toast should be visible (default: 3000ms)
-    pub duration_ms: u32,
+    duration_ms: u32,
 }
 
 impl Default for TobogganToastElement {
     fn default() -> Self {
         Self {
-            parent: None,
-            root: None,
             container: None,
-            event_listeners: RefCell::new(Vec::new()),
-            timeouts: RefCell::new(Vec::new()),
-            duration_ms: 3000, // 3 seconds default
+            duration_ms: 3000,
         }
     }
 }
 
 impl TobogganToastElement {
     pub fn toast(&self, toast_type: ToastType, message: &str) {
-        let container = unwrap_or_return!(&self.container);
+        let Some(container) = &self.container else {
+            return;
+        };
 
-        let node = dom_try_or_return!(
+        let toast = dom_try!(
             document()
                 .create_element("output")
                 .map(|el| el.dyn_into::<HtmlElement>().unwrap_throw()),
             "create toast element"
         );
 
-        dom_try!(node.set_attribute("role", "status"), "set role attribute");
-        node.set_class_name(&toast_type.to_string());
+        dom_try!(toast.set_attribute("role", "status"), "set role");
+        toast.set_class_name(&toast_type.to_string());
+        toast.set_inner_html(&format!(
+            r#"<p>{message}</p><button class="close" title="close"></button>"#
+        ));
 
-        let inner = format!(
-            r#"<p>{message}</p><button class="close" title="close" style="color:inherit;"></button>"#
-        );
-        node.set_inner_html(&inner);
+        if let Ok(Some(btn)) = toast.query_selector("button") {
+            let btn = btn.dyn_into::<HtmlElement>().unwrap_throw();
+            let toast_clone = toast.clone();
+            let container_clone = container.clone();
+            EventListener::new(&btn, "click", move |_| {
+                let _ = container_clone.remove_child(&toast_clone);
+            })
+            .forget();
+        }
 
-        // Toast animations implemented in Rust - store returned objects to prevent memory leaks
-        if let Some(event_listener) = register_close_handler(container, &node) {
-            self.event_listeners.borrow_mut().push(event_listener);
+        Self::animate_toast_entry(container, &toast);
+        let _ = container.append_child(&toast);
+
+        let toast_clone = toast.clone();
+        Timeout::new(self.duration_ms, move || {
+            if let Some(parent) = toast_clone.parent_node() {
+                let _ = parent.remove_child(&toast_clone);
+            }
+        })
+        .forget();
+    }
+
+    fn animate_toast_entry(container: &HtmlElement, _toast: &HtmlElement) {
+        if container.child_element_count() > 0 {
+            let first = container.offset_height();
+            let last = container.offset_height() + 50; // Estimate
+            let invert = last - first;
+
+            if invert != 0 {
+                let style = container.style();
+                style
+                    .set_property("transform", &format!("translateY({invert}px)"))
+                    .ok();
+                style
+                    .set_property("transition", "transform 150ms ease-out")
+                    .ok();
+                let _ = container.offset_height(); // Force reflow
+                style.set_property("transform", "translateY(0)").ok();
+
+                let container_clone = container.clone();
+                Timeout::new(200, move || {
+                    container_clone.style().set_property("transition", "").ok();
+                })
+                .forget();
+            }
         }
-        if let Some(timeout) = toast_animation(container, &node) {
-            self.timeouts.borrow_mut().push(timeout);
-        }
-        let timeout = wait_and_remove(&node, self.duration_ms);
-        self.timeouts.borrow_mut().push(timeout);
     }
 }
 
 impl WasmElement for TobogganToastElement {
     fn render(&mut self, host: &HtmlElement) {
-        let root = dom_try_or_return!(
-            create_shadow_root_with_style(host, include_str!("./style.css")),
+        let root = dom_try!(
+            create_shadow_root_with_style(host, CSS),
             "create shadow root"
         );
 
-        let container: HtmlElement = dom_try_or_return!(
+        let container: HtmlElement = dom_try!(
             create_and_append_element(&root, "footer"),
             "create footer element"
         );
 
-        self.root = Some(root);
-        self.parent = Some(host.clone());
         self.container = Some(container);
     }
-}
-
-/// Register a close button click handler using gloo `EventListener`
-fn register_close_handler(container: &HtmlElement, node: &HtmlElement) -> Option<EventListener> {
-    let node_clone = node.clone();
-    let container_clone = container.clone();
-
-    if let Ok(btn) = node.query_selector("button")
-        && let Some(btn) = btn
-    {
-        let btn = btn.dyn_into::<HtmlElement>().unwrap_throw();
-        let event_listener = EventListener::new(&btn, "click", move |_event| {
-            let _ = container_clone.remove_child(&node_clone);
-        });
-        return Some(event_listener);
-    }
-    None
-}
-
-/// Implement FLIP animation for smooth height transitions using gloo Timeout
-fn toast_animation(container: &HtmlElement, node: &HtmlElement) -> Option<Timeout> {
-    // Check if container has children (FLIP technique)
-    if container.child_element_count() > 0 {
-        // FLIP: First - record the current height
-        let first = container.offset_height();
-
-        // FLIP: Last - append node and record new height
-        let _ = container.append_child(node);
-        let last = container.offset_height();
-
-        // FLIP: Invert - calculate the difference
-        let invert = last - first;
-
-        if invert != 0 {
-            // Use CSS transition for smooth animation (simpler than Web Animations API)
-            let container_style = container.style();
-            container_style
-                .set_property("transform", &format!("translateY({invert}px)"))
-                .unwrap_throw();
-            container_style
-                .set_property("transition", "transform 150ms ease-out")
-                .unwrap_throw();
-
-            // Trigger reflow then remove transform to animate
-            let _ = container.offset_height(); // Force reflow
-            container_style
-                .set_property("transform", "translateY(0)")
-                .unwrap_throw();
-
-            // Clean up transition after animation using gloo Timeout
-            let container_clone = container.clone();
-            let timeout = Timeout::new(200, move || {
-                // Slightly longer than animation duration
-                container_clone
-                    .style()
-                    .set_property("transition", "")
-                    .unwrap_throw();
-            });
-            return Some(timeout);
-        }
-    } else {
-        // No existing children, just append
-        let _ = container.append_child(node);
-    }
-    None
-}
-
-/// Wait for animations to finish and remove the node using gloo Timeout
-fn wait_and_remove(node: &HtmlElement, duration_ms: u32) -> Timeout {
-    // Configurable timeout-based removal
-    let node_clone = node.clone();
-    Timeout::new(duration_ms, move || {
-        if let Some(parent) = node_clone.parent_node() {
-            let _ = parent.remove_child(&node_clone);
-        }
-    })
 }

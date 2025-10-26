@@ -4,7 +4,8 @@ use std::time::{Duration, Instant};
 
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
-use toboggan_core::{ClientId, Command, Notification, Renderer, State};
+use toboggan_core::timeouts::PING_PERIOD;
+use toboggan_core::{ClientId, Command, Notification, State};
 use tokio::net::TcpStream;
 use tokio::sync::{Mutex, mpsc};
 use tokio::task::JoinHandle;
@@ -58,7 +59,6 @@ impl Default for ConnectionState {
     }
 }
 
-const PING_PERIOD: Duration = Duration::from_secs(10);
 const RECONNECT_DELAY: Duration = Duration::from_secs(5);
 
 pub struct WebSocketClient {
@@ -70,18 +70,6 @@ pub struct WebSocketClient {
     state: Arc<Mutex<ConnectionState>>,
     ping_task: Option<JoinHandle<()>>,
     last_ping: Arc<Mutex<Option<Instant>>>,
-}
-
-fn create_reconnecting_status(
-    attempt: usize,
-    max_attempt: usize,
-    delay: Duration,
-) -> ConnectionStatus {
-    ConnectionStatus::Reconnecting {
-        attempt,
-        max_attempt,
-        delay,
-    }
 }
 
 impl WebSocketClient {
@@ -131,7 +119,6 @@ impl WebSocketClient {
     }
 
     async fn attempt_connection(&mut self) {
-        // Notify connecting status
         self.send_status_change(ConnectionStatus::Connecting);
 
         let (ws, _) = match connect_async(&self.config.websocket_url).await {
@@ -148,14 +135,11 @@ impl WebSocketClient {
 
         let (write, read) = ws.split();
 
-        // Handle connection success
         self.handle_connection_open().await;
 
-        // Handle outgoing messages
         let rx_cmd = Arc::clone(&self.rx_cmd);
         tokio::spawn(handle_outgoing_commands(rx_cmd, write));
 
-        // Handle incoming messages and connection lifecycle
         let tx_msg_clone = self.tx_msg.clone();
         let state_clone = self.state.clone();
         let config = self.config.clone();
@@ -170,17 +154,14 @@ impl WebSocketClient {
     }
 
     async fn handle_connection_open(&mut self) {
-        // Reset retry state
         {
             let mut state = self.state.lock().await;
             state.retry_count = 0;
             state.retry_delay = self.config.retry_delay;
         }
 
-        // Start pinging
         self.start_pinging();
 
-        // Notify connected status
         self.send_status_change(ConnectionStatus::Connected);
     }
 
@@ -201,13 +182,12 @@ impl WebSocketClient {
             (state.retry_count, RECONNECT_DELAY, self.config.max_retries)
         };
 
-        self.send_status_change(create_reconnecting_status(
-            retry_count,
-            max_retries,
-            retry_delay,
-        ));
+        self.send_status_change(ConnectionStatus::Reconnecting {
+            attempt: retry_count,
+            max_attempt: max_retries,
+            delay: retry_delay,
+        });
 
-        // Schedule reconnection with current delay
         let tx_msg_clone = self.tx_msg.clone();
         let config = self.config.clone();
         let client_id = self.client_id;
@@ -235,7 +215,6 @@ impl WebSocketClient {
     }
 
     fn start_pinging(&mut self) {
-        // Stop any existing ping task
         if let Some(task) = self.ping_task.take() {
             task.abort();
         }
@@ -258,17 +237,14 @@ impl WebSocketClient {
 
 impl Drop for WebSocketClient {
     fn drop(&mut self) {
-        // Mark as disposed to prevent reconnection attempts
         if let Ok(mut state) = self.state.try_lock() {
             state.is_disposed = true;
         }
 
-        // Clear last ping state
         if let Ok(mut last_ping) = self.last_ping.try_lock() {
             last_ping.take();
         }
 
-        // Abort ping task if running
         if let Some(task) = self.ping_task.take() {
             task.abort();
         }
@@ -277,7 +253,7 @@ impl Drop for WebSocketClient {
 
 async fn reconnect_with_channel(
     config: &TobogganWebsocketConfig,
-    client_id: ClientId,
+    client: ClientId,
     tx_msg: mpsc::UnboundedSender<CommunicationMessage>,
     tx_cmd: &mpsc::UnboundedSender<Command>,
     rx_cmd: Arc<Mutex<mpsc::UnboundedReceiver<Command>>>,
@@ -295,17 +271,12 @@ async fn reconnect_with_channel(
 
     let (write, read) = ws.split();
 
-    // Notify connected and register with server
     debug!("🗿connection status: {}", ConnectionStatus::Connected);
     let _ = tx_msg.send(CommunicationMessage::ConnectionStatusChange {
         status: ConnectionStatus::Connected,
     });
-    let _ = tx_cmd.send(Command::Register {
-        client: client_id,
-        renderer: Renderer::default(),
-    });
+    let _ = tx_cmd.send(Command::Register { client });
 
-    // Handle outgoing and incoming messages
     tokio::spawn(handle_outgoing_commands(rx_cmd, write));
     tokio::spawn(async move {
         let mut read = read;
@@ -368,14 +339,12 @@ async fn handle_incoming_messages(
         }
     }
 
-    // Connection closed - notify
     warn!("⚠️ WebSocket connection closed, will attempt reconnection in 5 seconds");
     debug!("🗿connection status: {}", ConnectionStatus::Closed);
     let _ = tx_msg.send(CommunicationMessage::ConnectionStatusChange {
         status: ConnectionStatus::Closed,
     });
 
-    // Schedule reconnect if not disposed (fixed 5-second delay)
     let (retry_count, retry_delay, should_reconnect) = {
         let mut state_ref = state.lock().await;
         if state_ref.is_disposed || state_ref.retry_count >= config.max_retries {
@@ -387,7 +356,11 @@ async fn handle_incoming_messages(
     };
 
     if should_reconnect {
-        let status = create_reconnecting_status(retry_count, config.max_retries, retry_delay);
+        let status = ConnectionStatus::Reconnecting {
+            attempt: retry_count,
+            max_attempt: config.max_retries,
+            delay: retry_delay,
+        };
         debug!(%status, "🗿connection status");
         let _ = tx_msg.send(CommunicationMessage::ConnectionStatusChange { status });
     }
@@ -418,7 +391,7 @@ async fn handle_ws_message(
         Notification::Error { message, .. } => {
             let _ = tx.send(CommunicationMessage::Error { error: message });
         }
-        Notification::Pong { .. } => {
+        Notification::Pong => {
             let mut lock = last_ping.lock().await;
             if let Some(instant) = lock.take() {
                 let elapsed = instant.elapsed();

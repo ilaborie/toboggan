@@ -50,36 +50,6 @@ pub fn error_container() -> impl Fn(&Theme) -> container::Style {
     }
 }
 
-pub fn terminal_container() -> impl Fn(&Theme) -> container::Style {
-    |theme: &Theme| {
-        let palette = theme.extended_palette();
-        container::Style {
-            background: Some(Background::Color(palette.secondary.strong.color)),
-            border: Border {
-                color: palette.success.base.color,
-                width: BORDER_WIDTH,
-                radius: BORDER_RADIUS.into(),
-            },
-            ..Default::default()
-        }
-    }
-}
-
-pub fn iframe_container() -> impl Fn(&Theme) -> container::Style {
-    |theme: &Theme| {
-        let palette = theme.extended_palette();
-        container::Style {
-            background: Some(Background::Color(palette.primary.weak.color)),
-            border: Border {
-                color: palette.primary.strong.color,
-                width: BORDER_WIDTH,
-                radius: BORDER_RADIUS.into(),
-            },
-            ..Default::default()
-        }
-    }
-}
-
 pub fn preview_container() -> impl Fn(&Theme) -> container::Style {
     |theme: &Theme| {
         let palette = theme.extended_palette();

@@ -10,7 +10,7 @@ WASM_PROJECT="toboggan-web/toboggan-wasm"
 wasm-pack build --target web --no-pack --no-opt --release --out-dir pkg $WASM_PROJECT
 
 # Try to compress
-wasm-opt --enable-bulk-memory -Os -o $WASM_PROJECT/pkg/toboggan_wasm_bg_opt.wasm $WASM_PROJECT/pkg/toboggan_wasm_bg.wasm
+wasm-opt --enable-bulk-memory --enable-nontrapping-float-to-int -Os -o $WASM_PROJECT/pkg/toboggan_wasm_bg.wasm $WASM_PROJECT/pkg/toboggan_wasm_bg.wasm
 
 # Show file size
 echo "Build complete! File sizes:"

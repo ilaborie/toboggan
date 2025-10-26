@@ -22,6 +22,9 @@ pub use self::state::*;
 mod router;
 pub use self::router::{routes_with_cors, *};
 
+mod static_assets;
+pub use self::static_assets::*;
+
 #[doc(hidden)]
 #[instrument]
 pub async fn launch(settings: Settings) -> anyhow::Result<()> {
@@ -41,7 +44,7 @@ pub async fn launch(settings: Settings) -> anyhow::Result<()> {
         .await
         .with_context(|| format!("Connecting to {addr} ..."))?;
 
-    let state = TobogganState::new(talk, max_clients);
+    let state = TobogganState::new(talk, max_clients).context("build state")?;
 
     let cleanup_state = state.clone();
     let cleanup_interval = settings.cleanup_interval();
@@ -50,7 +53,11 @@ pub async fn launch(settings: Settings) -> anyhow::Result<()> {
         info!("Cleanup task completed");
     });
 
-    let router = routes_with_cors(settings.allowed_origins.as_deref()).with_state(state);
+    let router = routes_with_cors(
+        settings.allowed_origins.as_deref(),
+        settings.assets_dir.clone(),
+    )
+    .with_state(state);
     let shutdown_signal = setup_shutdown_signal(settings.shutdown_timeout());
 
     axum::serve(listener, router.into_make_service())

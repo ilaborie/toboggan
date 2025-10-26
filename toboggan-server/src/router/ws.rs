@@ -4,12 +4,11 @@ use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::response::Response;
 use futures::{SinkExt, StreamExt};
+use toboggan_core::timeouts::HEARTBEAT_INTERVAL;
 use toboggan_core::{ClientId, Command, Notification};
 use tracing::{error, info, warn};
 
 use crate::TobogganState;
-
-const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
 
 pub async fn websocket_handler(
     ws: WebSocketUpgrade,
@@ -153,21 +152,14 @@ fn spawn_message_receiver_task(
                         Ok(command) => {
                             info!(?client_id, ?command, "Processing command");
 
-                            match &command {
-                                Command::Register { client, .. } => {
-                                    info!(?client_id, registered_client = ?client, "Client registration via WebSocket");
-                                }
-                                Command::Unregister { client } => {
-                                    info!(?client_id, unregistered_client = ?client, "Client unregistration via WebSocket");
-                                    if *client == client_id {
-                                        info!(
-                                            ?client_id,
-                                            "Client unregistering itself, closing connection"
-                                        );
-                                        break;
-                                    }
-                                }
-                                _ => {}
+                            if let Command::Unregister { client } = &command
+                                && *client == client_id
+                            {
+                                info!(
+                                    ?client_id,
+                                    "Client unregistering itself, closing connection"
+                                );
+                                break;
                             }
 
                             let _notification = state.handle_command(&command).await;
@@ -193,15 +185,7 @@ fn spawn_message_receiver_task(
                     info!(?client_id, "WebSocket connection closed by client");
                     break;
                 }
-                Ok(Message::Ping(_)) => {
-                    info!(
-                        ?client_id,
-                        "Received ping (pong will be sent automatically by axum)"
-                    );
-                }
-                Ok(Message::Pong(_)) => {
-                    info!(?client_id, "Received pong");
-                }
+                Ok(Message::Ping(_) | Message::Pong(_)) => {}
                 Err(err) => {
                     warn!(?client_id, ?err, "WebSocket error");
                     break;
@@ -223,7 +207,7 @@ fn spawn_heartbeat_task(
         loop {
             interval.tick().await;
 
-            let ping_notification = Notification::pong();
+            let ping_notification = Notification::PONG;
             if notification_tx.send(ping_notification).is_err() {
                 info!(
                     ?client_id,

@@ -1,6 +1,14 @@
 # Toboggan Examples
 
-This directory contains examples of different ways to create presentations with Toboggan.
+This directory contains comprehensive examples demonstrating different approaches to creating presentations with Toboggan. These examples showcase the flexibility of the Toboggan CLI and various content authoring strategies.
+
+## Overview
+
+The examples demonstrate two primary authoring approaches:
+1. **Flat Markdown Files** - Single file with slide separators
+2. **Structured Folders** - Hierarchical organization with modular content
+
+Both approaches generate equivalent TOML files that can be served by the Toboggan server.
 
 ## RIIR Talk Examples
 
@@ -121,3 +129,83 @@ You can use the CLI to convert between formats:
 - Use consistent naming conventions across the team
 
 Both formats support the full range of Toboggan features including HTML content, speaker notes, and different slide types.
+
+## Quick Reference
+
+### Command Line Usage
+
+```bash
+# Convert flat Markdown file
+toboggan-cli presentation.md -o talk.toml
+
+# Convert folder structure
+toboggan-cli presentation-folder/ -o talk.toml
+
+# With custom metadata
+toboggan-cli slides/ --title "My Talk" --date "2024-12-31" -o talk.toml
+
+# Using workspace tooling
+cargo run -p toboggan-cli -- examples/riir-flat.md -o output.toml
+```
+
+### Serving Presentations
+
+After conversion, serve the generated TOML file:
+
+```bash
+# Start the Toboggan server with your presentation
+cargo run -p toboggan-server -- talk.toml
+
+# Access via web browser
+open http://localhost:8080
+
+# Or connect with terminal client
+cargo run -p toboggan-tui
+```
+
+## Workflow Integration
+
+### Development Workflow
+1. **Create Content**: Write slides in Markdown or organize in folders
+2. **Convert**: Use `toboggan-cli` to generate TOML
+3. **Preview**: Serve with `toboggan-server` and view in browser/TUI
+4. **Iterate**: Edit source files and re-convert as needed
+5. **Present**: Use any Toboggan client for final presentation
+
+### Content Management Strategies
+- **Single Author**: Use flat Markdown for simple presentations
+- **Team Collaboration**: Use folder structure for distributed development
+- **Version Control**: Both formats work well with Git
+- **Asset Management**: Place images and media in dedicated folders
+
+## Advanced Usage Examples
+
+### Custom Date and Metadata
+```bash
+# Generate talk for specific conference date
+toboggan-cli keynote/ \
+  --title "$(cat keynote/title.txt) - RustConf 2024" \
+  --date "2024-09-10" \
+  -o rustconf-keynote.toml
+```
+
+### Batch Processing
+```bash
+# Convert multiple presentations
+for dir in presentations/*/; do
+  name=$(basename "$dir")
+  toboggan-cli "$dir" \
+    --date "$(date '+%Y-%m-%d')" \
+    -o "output/${name}.toml"
+done
+```
+
+### CI/CD Integration
+```yaml
+# GitHub Actions example
+- name: Build Presentations
+  run: |
+    find presentations/ -name "*.md" | while read file; do
+      toboggan-cli "$file" -o "dist/$(basename "$file" .md).toml"
+    done
+```

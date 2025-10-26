@@ -3,6 +3,5 @@
 
 set -eu
 
-bacon run-long -- -p toboggan-server -- riir.toml
-
+bacon run-long -- -p toboggan-server -- --assets-dir ../riir/assets/ ../riir/riir.toml
 

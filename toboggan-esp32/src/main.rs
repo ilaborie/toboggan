@@ -8,5 +8,5 @@ fn main() -> anyhow::Result<()> {
     let peripherals = Peripherals::take().context("Failed to take peripherals")?;
     let sysloop = EspSystemEventLoop::take()?;
 
-    hello_std::run(peripherals, sysloop)
+    toboggan_esp32::run(peripherals, sysloop)
 }

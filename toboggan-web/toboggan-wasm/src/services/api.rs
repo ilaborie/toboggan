@@ -29,7 +29,7 @@ impl TobogganApi {
 
     /// Fetches the current talk
     pub async fn get_talk(&self) -> Result<TalkResponse, Error> {
-        self.get("api/talk").await
+        self.get("api/talk?footer=true").await
     }
 
     // /// Fetches all slides

@@ -1,293 +1,378 @@
 # Toboggan CLI
 
-A command-line interface for creating and converting Toboggan presentation files from Markdown sources.
+Convert Markdown presentations to Toboggan format with advanced features for speaker notes, progressive reveals, and presentation statistics.
 
 [![Crates.io](https://img.shields.io/crates/v/toboggan-cli.svg)](https://crates.io/crates/toboggan-cli)
 [![Documentation](https://docs.rs/toboggan-cli/badge.svg)](https://docs.rs/toboggan-cli)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](https://github.com/ilaborie/toboggan)
 
-## Overview
-
-The Toboggan CLI converts Markdown files and structured folder hierarchies into TOML configuration files for the Toboggan presentation system. It supports both simple flat Markdown files and complex folder-based organizations.
-
 ## Installation
 
-### From Cargo
-
 ```bash
+# From source
+cargo install --path toboggan-cli
+
+# From crates.io (when published)
 cargo install toboggan-cli
-```
-
-### From Source
-
-```bash
-git clone https://github.com/ilaborie/toboggan
-cd toboggan/toboggan-cli
-cargo install --path .
 ```
 
 ## Quick Start
 
-### Convert a Markdown file
-
 ```bash
-toboggan-cli presentation.md -o talk.toml
+# Convert a presentation folder to TOML
+toboggan-cli slides/ -o presentation.toml
+
+# Override title and date
+toboggan-cli slides/ --title "My Talk" --date "2025-03-15" -o talk.toml
+
+# Use different output format
+toboggan-cli slides/ -f json -o presentation.json
 ```
 
-### Process a folder structure
-
-```bash
-toboggan-cli slides-folder/ -o talk.toml
-```
-
-### Override title and date
-
-```bash
-toboggan-cli slides/ --title "My Conference Talk" --date "2024-12-31"
-```
-
-## Input Formats
-
-### Flat Markdown Files
-
-Use horizontal rules (`---`) to separate slides:
-
-```markdown
-# My Presentation
-
-## Introduction
-Welcome to my talk about Rust!
-
----
-
-### Key Benefits
-- Memory safety
-- Zero-cost abstractions
-- Fearless concurrency
-
-> Remember to mention the borrow checker
-
----
-
-### Getting Started
-Let's dive into some code examples...
-```
-
-**Slide Type Rules:**
-- `#` (H1) → Presentation title
-- `##` (H2) → Part slides (section dividers)
-- `###`+ (H3+) → Standard content slides
-- `>` (Blockquotes) → Speaker notes
-
-### Folder Structure
-
-For complex presentations, organize content in folders:
-
-```
-my-talk/
-├── title.md              # Presentation title
-├── date.txt              # Date in YYYY-MM-DD format
-├── _cover.md             # Cover slide
-├── 01-intro/             # Section folder
-│   ├── _part.md          # Section divider
-│   ├── 01-overview.md    # Content slides
-│   └── 02-goals.md
-├── 02-content/
-│   ├── _part.md
-│   ├── slide1.md
-│   └── slide2.html       # HTML slides supported
-└── 99-conclusion.md      # Final slide
-```
-
-**Special Files:**
-- `title.md`/`title.txt` → Presentation title
-- `date.txt` → Presentation date (YYYY-MM-DD)
-- `_cover.md` → Cover slide content
-- `_part.md` → Section divider content
-
-**Processing Rules:**
-- Files processed in alphabetical order
-- Folders become Part slides
-- `.md` and `.html` files supported
-- Hidden files (starting with `.`) ignored
-- Markdown converted to HTML with alt text
-
-## Command-Line Options
+## CLI Options
 
 ```
 toboggan-cli [OPTIONS] <INPUT>
 
 Arguments:
-  <INPUT>  Input file or folder to process
+  <INPUT>                    Input folder containing presentation files
 
 Options:
-  -o, --output <OUTPUT>  Output file (default: stdout)
-  -t, --title <TITLE>    Title override (takes precedence over files)
-  -d, --date <DATE>      Date override in YYYY-MM-DD format
-  -h, --help             Print help
+  -o, --output <FILE>        Output file (default: stdout)
+  -t, --title <TITLE>        Override presentation title
+  -d, --date <DATE>          Override date (YYYY-MM-DD format)
+  -f, --format <FORMAT>      Output format: toml, json, yaml, cbor, msgpack, bincode
+                            (auto-detected from file extension if not specified)
+  --theme <THEME>            Syntax highlighting theme (default: base16-ocean.light)
+  --list-themes              List all available syntax highlighting themes
+  --no-counter               Disable automatic numbering of parts and slides
+  --no-stats                 Disable presentation statistics display
+  --wpm <WPM>                Speaking rate in words per minute (default: 150)
+  --exclude-notes-from-duration  Exclude speaker notes from duration calculations
+  -h, --help                 Print help information
+```
+
+## Folder Structure
+
+Toboggan CLI processes a folder hierarchy to create presentations:
+
+```
+my-presentation/
+├── _cover.md          # Cover slide (optional, contains title/date)
+├── _footer.md         # Footer content for all slides (optional)
+├── 01-intro/          # Part folder (becomes section divider)
+│   ├── _part.md       # Part slide content
+│   ├── slide1.md      # Regular slides
+│   └── slide2.md
+├── 02-main/
+│   ├── _part.md
+│   └── content.md
+└── 99-conclusion.md   # Standalone slide
+```
+
+### Special Files
+
+| File | Purpose |
+|------|---------|
+| `_cover.md` | Cover slide with presentation title and date |
+| `_part.md` | Section divider slide within a folder |
+| `_footer.md` | Footer content applied to all slides |
+
+### Processing Rules
+
+- Files are processed in **alphabetical order**
+- Folders become **Part slides** (section dividers)
+- Both `.md` and `.html` files are supported
+- Hidden files (starting with `.`) are ignored
+- Inline HTML tags (like `<abbr>`, `<mark>`) are preserved
+
+## Frontmatter
+
+Add TOML frontmatter to any slide using `+++` delimiters, the content should be TOML:
+
+```markdown
++++
+title = "Custom Slide Title"
+skip = false              # Set to true to exclude from output
+classes = ["centered", "dark"]  # CSS classes
+css = "background: linear-gradient(...);"  # Inline CSS
+css_file = "path/to/styles.css"  # External CSS file
+grid = true               # Enable grid layout
+duration = "2m 30s"       # Slide duration (or use seconds: 150)
++++
+
+# Slide Content
+Your content here...
+```
+
+### Cover Slide Frontmatter
+
+The `_cover.md` file can set presentation-wide metadata:
+
+```markdown
++++
+title = "My Awesome Presentation"
+date = "2025-03-15"
++++
+
+# Welcome
+Subtitle or opening content
+```
+
+## Advanced Features
+
+### Progressive Reveals (Steps)
+
+Use `<!-- pause -->` comments to reveal content step-by-step:
+
+```markdown
+# Key Points
+
+First point appears immediately
+
+<!-- pause -->
+Second point appears on next step
+
+<!-- pause: highlight -->
+Third point appears with highlight class
+```
+
+### Grid Layouts
+
+Create multi-column layouts with `<!-- cell -->` comments:
+
+```markdown
++++
+grid = true
++++
+
+# Two Column Slide
+
+<!-- cell -->
+Left column content
+- Point 1
+- Point 2
+
+<!-- cell: highlight -->
+Right column content with highlight class
+- Point A
+- Point B
+```
+
+### Speaker Notes
+
+Add presenter notes that won't be shown during presentation:
+
+```markdown
+# Main Slide Content
+
+Your visible content here
+
+<!-- notes -->
+These are speaker notes:
+- Remember to mention the demo
+- Ask for questions
+- Time check: should be at 10 minutes
+```
+
+### Code Blocks from Files
+
+Include code from external files:
+
+```markdown
+# Code Example
+
+Here's our implementation:
+
+<!-- code:rust:src/main.rs -->
+
+This will be replaced with the contents of src/main.rs
+```
+
+## Presentation Statistics
+
+The CLI provides comprehensive statistics about your presentation:
+
+### Overview Metrics
+- Total slides and parts
+- Word count (body + optional notes)
+- Bullet points and images
+- Estimated duration at your speaking rate
+
+### Part Breakdown
+Shows distribution of content across sections:
+- Slides per part
+- Words and percentage of total
+- Estimated duration per part
+
+### Duration Scenarios
+Calculates presentation length for different speaking rates:
+- Slow (110 WPM)
+- Normal (150 WPM)
+- Fast (170 WPM)
+- Custom (your --wpm setting)
+- Additional time for images (5 seconds each)
+
+### Recommendations
+
+The tool provides smart recommendations when:
+
+| Condition | Recommendation |
+|-----------|----------------|
+| Duration > 50 minutes | Consider splitting into multiple presentations |
+| Duration < 2 minutes | Presentation might be too short |
+| One part > 50% of content | Consider splitting that part |
+| > 100 words/slide average | High density - use more slides with less text |
+| < 20 words/slide average | Low density - slides might need more content |
+
+## Live Development with Bacon
+
+For live updates while editing your presentation, use [bacon](https://dystroy.org/bacon/):
+
+### Setup
+
+Create a `bacon.toml` in your project root:
+
+```toml
+default_job = "toboggan"
+
+[jobs.toboggan]
+command = ["toboggan-cli", "./slides/", "--output", "presentation.toml"]
+need_stdout = true
+allow_warnings = true
+default_watch = false
+watch = ["slides"]  # Watch your presentation folder
+```
+
+### Usage
+
+```bash
+# Install bacon if needed
+cargo install bacon
+
+# Run with live reload
+bacon
+
+# Or run specific job
+bacon toboggan
+```
+
+Now your `presentation.toml` will automatically rebuild whenever you edit files in the `slides/` folder!
+
+## Output Formats
+
+Toboggan CLI supports multiple output formats:
+
+| Format | Extension | Description |
+|--------|-----------|-------------|
+| TOML | `.toml` | Default, human-readable |
+| JSON | `.json` | Web-friendly, readable |
+| YAML | `.yaml`, `.yml` | Alternative readable format |
+| CBOR | `.cbor` | Compact binary, standardized |
+| MessagePack | `.msgpack` | Ultra-compact binary |
+| Bincode | `.bincode`, `.bin` | Rust-native, fastest |
+
+Format is auto-detected from file extension or specify with `-f`:
+
+```bash
+# Auto-detect from extension
+toboggan-cli slides/ -o presentation.json
+
+# Explicit format
+toboggan-cli slides/ -f yaml -o output.txt
 ```
 
 ## Examples
 
-### Simple Presentation
+### Basic Presentation
 
 ```bash
-# Create a markdown file
-cat > slides.md << 'EOF'
-# My Talk
+# Create structure
+mkdir -p my-talk/01-intro
 
-## Introduction
-Welcome to my presentation
+# Create cover
+cat > my-talk/_cover.md << 'EOF'
++++
+title = "Introduction to Rust"
+date = "2025-03-15"
++++
 
----
-
-### Key Points
-- Point 1
-- Point 2
-
-> Don't forget the demo
+# Welcome to Rust Programming
 EOF
 
-# Convert to TOML
-toboggan-cli slides.md -o presentation.toml
+# Create part
+echo "# Chapter 1: Getting Started" > my-talk/01-intro/_part.md
+
+# Create slide
+cat > my-talk/01-intro/hello.md << 'EOF'
+# Hello World
+
+<!-- pause -->
+```rust
+fn main() {
+    println!("Hello, world!");
+}
 ```
 
-### Folder-Based Presentation
+<!-- notes -->
+Explain that println! is a macro, not a function
+EOF
 
-```bash
-# Create folder structure
-mkdir -p my-talk/01-intro
-echo "My Amazing Talk" > my-talk/title.md
-echo "2024-03-15" > my-talk/date.txt
-echo "# Welcome" > my-talk/_cover.md
-echo "## Chapter 1" > my-talk/01-intro/_part.md
-echo "### Overview" > my-talk/01-intro/overview.md
-
-# Convert to TOML
-toboggan-cli my-talk/ -o talk.toml
+# Convert
+toboggan-cli my-talk/ -o presentation.toml
 ```
 
-### Dynamic Content
-
-```bash
-# Use current date and dynamic title
-toboggan-cli slides/ \
-  --title "$(date '+%Y Conference Talk')" \
-  --date "$(date '+%Y-%m-%d')"
-
-# Batch processing
-for dir in talks/*/; do
-  name=$(basename "$dir")
-  toboggan-cli "$dir" -o "output/${name}.toml"
-done
-```
-
-## Integration
-
-### Build Systems
-
-```bash
-# Makefile integration
-presentations/%.toml: presentations/%/
-	toboggan-cli $< -o $@
-
-# GitHub Actions
-- name: Build presentations
-  run: |
-    find presentations/ -type d -name "*/" | while read dir; do
-      toboggan-cli "$dir" -o "dist/$(basename "$dir").toml"
-    done
-```
-
-### Scripting
+### Batch Processing
 
 ```bash
 #!/bin/bash
-# generate-presentations.sh
+# Convert all presentations in a directory
 
-set -euo pipefail
-
-SLIDES_DIR="${1:-slides}"
-OUTPUT_DIR="${2:-output}"
-
-mkdir -p "$OUTPUT_DIR"
-
-for presentation in "$SLIDES_DIR"/*/; do
-  if [[ -d "$presentation" ]]; then
-    name=$(basename "$presentation")
-    toboggan-cli "$presentation" \
-      --date "$(date '+%Y-%m-%d')" \
-      -o "$OUTPUT_DIR/${name}.toml"
-    echo "Generated: $OUTPUT_DIR/${name}.toml"
-  fi
+for dir in presentations/*/; do
+  name=$(basename "$dir")
+  toboggan-cli "$dir" \
+    --date "$(date +%Y-%m-%d)" \
+    --wpm 130 \
+    -o "output/${name}.toml"
 done
 ```
 
-## Output Format
+### CI/CD Integration
 
-The CLI generates TOML files compatible with the Toboggan presentation system:
-
-```toml
-date = "2024-01-26"
-
-[title]
-type = "Text"
-text = "My Presentation"
-
-[[slides]]
-kind = "Cover"
-style = []
-
-[slides.title]
-type = "Text"
-text = "Welcome"
-
-[slides.body]
-type = "Html"
-raw = "<p>Welcome to my presentation</p>"
-alt = "Welcome to my presentation"
-
-[slides.notes]
-type = "Text"
-text = "Remember to speak slowly"
+```yaml
+# GitHub Actions example
+- name: Build Presentations
+  run: |
+    for dir in presentations/*/; do
+      toboggan-cli "$dir" -f json -o "dist/$(basename "$dir").json"
+    done
 ```
 
-## Library Usage
+## Troubleshooting
 
-The CLI can also be used as a library:
+### Common Issues
 
-```rust
-use toboggan_cli::{Settings, launch};
-use std::path::PathBuf;
+**Missing syntax highlighting**
+- Use `--list-themes` to see available themes
+- Specify language in code blocks: ` ```rust`
 
-let settings = Settings {
-    output: Some(PathBuf::from("output.toml")),
-    title: Some("Generated Talk".to_string()),
-    date: Some("2024-12-31".to_string()),
-    input: PathBuf::from("slides/"),
-};
+**Incorrect duration estimates**
+- Adjust `--wpm` to match your speaking pace
+- Use `--exclude-notes-from-duration` if notes are just reminders
 
-launch(settings)?;
-```
-
-## Error Handling
-
-The CLI provides clear error messages for common issues:
-
-- **Invalid date format**: `Date must be in YYYY-MM-DD format (e.g., 2024-12-31)`
-- **File not found**: `Failed to read file: No such file or directory`
-- **Invalid Markdown**: `Failed to parse markdown: unexpected token`
-- **Permission denied**: `Permission denied when writing to output file`
+**Files processed in wrong order**
+- Prefix with numbers: `01-intro.md`, `02-main.md`
+- Use folders for logical grouping
 
 ## Contributing
 
-Contributions are welcome! Please see the [main repository](https://github.com/ilaborie/toboggan) for contribution guidelines.
+Contributions welcome! Please see the [main repository](https://github.com/ilaborie/toboggan) for guidelines.
 
 ## License
 
-This project is licensed under either of
+Licensed under either of:
 
- * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
- * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](LICENSE-MIT))
 
 at your option.

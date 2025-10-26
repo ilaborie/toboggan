@@ -143,9 +143,10 @@ impl AppState {
                 self.current_slide = state.current();
                 self.presentation_state = state;
             }
-            Notification::Pong { .. } | Notification::Blink => {
+            Notification::Pong | Notification::Blink => {
                 // Pong: heartbeat response, no UI action needed
                 // Blink: visual effect not implemented in TUI
+                // TODO https://github.com/junkdog/tachyonfx
             }
             Notification::Error { message, .. } => {
                 self.dialog = AppDialog::Error(message);

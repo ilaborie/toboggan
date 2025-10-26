@@ -110,39 +110,30 @@ components:
       oneOf:
       - type: object
         required:
-        - timestamp
         - state
         - type
         properties:
           state:
             $ref: '#/components/schemas/State'
-          timestamp:
-            $ref: '#/components/schemas/Timestamp'
           type:
             type: string
             enum:
             - State
       - type: object
         required:
-        - timestamp
         - message
         - type
         properties:
           message:
             type: string
-          timestamp:
-            $ref: '#/components/schemas/Timestamp'
           type:
             type: string
             enum:
             - Error
       - type: object
         required:
-        - timestamp
         - type
         properties:
-          timestamp:
-            $ref: '#/components/schemas/Timestamp'
           type:
             type: string
             enum:
@@ -155,15 +146,8 @@ components:
             type: string
             enum:
             - Blink
-    Renderer:
-      type: string
-      enum:
-      - Title
-      - Html
-      - Raw
     SlideKind:
       type: string
-      description: The kind of slide, which affects its styling and role in the presentation.
       enum:
       - Cover
       - Part
@@ -178,36 +162,35 @@ components:
           items:
             $ref: '#/components/schemas/Slide'
     Style:
-      type: array
-      items:
-        type: string
-      description: |-
-        Styling information for slides (only available with `alloc` feature).
-
-        Contains a list of CSS class names that can be applied to customize
-        the appearance of individual slides.
+      type: object
+      properties:
+        classes:
+          type: array
+          items:
+            type: string
+        style:
+          type:
+          - string
+          - 'null'
     TalkResponse:
       type: object
       required:
       - title
       - date
-      - footer
       - titles
       properties:
         date:
           $ref: '#/components/schemas/Date'
-          description: The date of the presentation.
         footer:
-          $ref: '#/components/schemas/Content'
-          description: The footer of the presentation.
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/Content'
         title:
-          $ref: '#/components/schemas/Content'
-          description: The title of the presentation.
+          type: string
         titles:
           type: array
           items:
             type: string
-          description: The slides titles
     Value: {}
 tags:
 - name: command

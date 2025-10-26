@@ -1,13 +1,14 @@
 :host {
   display: block;
   font-family: var(--font-family-primary);
-  background-color: rgb(150, 232, 169);
+  /* inversed colors */
+  color: var(--bg);
+  background-color: var(--fg);
 }
 
 footer {
-  padding: var(--spacing-md);
+  padding: var(--spacing-xs);
   text-align: center;
-  font-size: var(--font-size-sm);
 }
 
 footer p {
@@ -24,7 +25,7 @@ footer p:last-child {
 
 /* Default content when footer is empty */
 footer:empty::before {
-  content: "Toboggan Presentation System";
+  content: "🛝 Toboggan Presentation System";
   font-style: normal;
   color: inherit;
 }

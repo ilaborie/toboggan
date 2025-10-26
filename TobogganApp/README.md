@@ -1,171 +1,219 @@
-# TobogganApp - iOS Presentation Remote Control
+# TobogganApp
 
-A SwiftUI iOS application providing remote control functionality for Toboggan presentations, built with Rust core via UniFFI.
+Native iOS client for Toboggan presentations built with SwiftUI, providing a professional presentation experience on iOS devices.
 
-## 🎯 Overview
+## Features
 
-This app implements the presentation remote control interface shown in your mockup, featuring:
-- **Black background** with **white text** and **blue circular buttons**
-- **Top section**: Presentation title with First/Last navigation
-- **Middle section**: Current slide display with white border
-- **Bottom section**: Blink button and Prev/Next navigation with dynamic next title
+### Presentation Experience
+- **Native SwiftUI Interface**: Modern iOS design with system integration
+- **Presenter View**: Dedicated view showing current slide, notes, and next slide preview
+- **Real-time Synchronization**: WebSocket-based multi-client synchronization
+- **Gesture Controls**: Swipe navigation and tap-to-advance
+- **External Display Support**: AirPlay and wired external display compatibility
 
-## 📱 Features
+### Content Support
+- **Rich Content Rendering**: Full HTML and Markdown slide rendering
+- **Responsive Layout**: Adapts to different device orientations and sizes
+- **Accessibility**: VoiceOver support for all interface elements
+- **Dark Mode**: Full support for system dark mode preferences
 
-### Presentation Control
-- ✅ **Navigation**: Previous/Next slide with circular buttons
-- ✅ **Quick Access**: First/Last slide buttons  
-- ✅ **Play Control**: Blink/Play button for presentation control
-- ✅ **Live Updates**: Dynamic display of current and next slide titles
-- ✅ **Mock Mode**: Works without server for development
+## Architecture
 
-### Implementation Status
-- ✅ **Pure Swift Implementation**: Direct Swift types without framework dependencies
-- ✅ **Mock Mode**: Comprehensive mock data for development without server
-- ✅ **Command System**: Send navigation commands (Next, Previous, First, Last, Play, Pause)
-- ✅ **Error Handling**: Graceful fallback to mock mode
-- 🔄 **Rust Integration**: Available via toboggan-ios directory for future real server connection
+TobogganApp follows modern iOS architecture patterns for maintainability and performance:
 
-### Architecture
-- ✅ **MVVM Pattern**: Clean separation with `@ObservableObject` ViewModels
-- ✅ **Modular Design**: Separate components following DRY, KISS, YAGNI
-- ✅ **SwiftUI**: Native iOS UI with proper state management
-- ✅ **UniFFI**: Type-safe Rust-Swift interoperability
+### Design Patterns
+- **MVVM (Model-View-ViewModel)**: Clear separation between UI and business logic
+- **SwiftUI**: Declarative UI with reactive data binding
+- **Combine Framework**: Reactive programming for state management
+- **Coordinator Pattern**: Navigation flow management
 
-## 📁 Project Structure
+### Core Components
+- **SwiftUI Views**: Native iOS UI components with system styling
+- **ViewModels**: Business logic and state management
+- **Services**: Network communication and data persistence
+- **Mock Types**: Development-time mocks for rapid UI iteration
+
+### Development Modes
+1. **Mock Mode** (Current): Swift-only implementation with mock data
+   - Fast compilation and iteration
+   - SwiftUI previews without external dependencies
+   - Ideal for UI development and testing
+
+2. **Production Mode** (Future): Integration with Rust core via UniFFI
+   - Real WebSocket connectivity to Toboggan server
+   - Shared business logic with other Toboggan clients
+   - Full presentation synchronization
+
+## Getting Started
+
+### Prerequisites
+- **Xcode 15.0+** - Latest stable version recommended
+- **iOS 16.0+** - Minimum deployment target
+- **macOS 13.0+** - For Xcode and development tools
+
+### Building the App
+
+#### Option 1: Using Mise (Recommended)
+```bash
+# From the workspace root
+mise build:ios
+```
+
+#### Option 2: Manual Build
+```bash
+# Navigate to iOS Rust library directory
+cd toboggan-ios
+
+# Build the iOS framework (when needed for production mode)
+./build.sh
+
+# Return to workspace root
+cd ..
+```
+
+#### Option 3: iOS-Only Development
+```bash
+# For UI-only development, no Rust build required
+open TobogganApp/TobogganApp.xcodeproj
+```
+
+### Running the App
+
+1. Open `TobogganApp/TobogganApp.xcodeproj` in Xcode
+2. Select your target device or simulator
+3. Press `Cmd+R` to build and run
+
+## Development Workflow
+
+### Rapid UI Development
+
+The app uses mock types for fast development cycles:
+
+```swift
+// Mock types enable SwiftUI previews
+struct MockSlide: SlideProtocol {
+    let id = UUID()
+    let title = "Sample Slide"
+    let content = "Mock content for development"
+}
+```
+
+**Benefits:**
+- Fast build times (no Rust compilation)
+- SwiftUI previews work instantly
+- Easy UI iteration and testing
+- No external server dependencies
+
+### Project Structure
 
 ```
 TobogganApp/
+├── TobogganApp.xcodeproj/           # Xcode project
 ├── TobogganApp/
-│   ├── App/
-│   │   └── ContentView.swift          # Main UI orchestrator
-│   ├── Views/
-│   │   ├── TopBarView.swift           # Top section with title/buttons  
-│   │   ├── CurrentSlideView.swift     # Main slide display area
-│   │   └── NavigationControlsView.swift # Bottom navigation controls
-│   ├── ViewModels/
-│   │   └── PresentationViewModel.swift # State management + TobogganCore
-│   ├── Utils/
-│   │   └── MockTypes.swift            # Development helpers
-│   ├── Assets.xcassets/               # iOS app assets
-│   └── TobogganAppApp.swift           # App entry point
-├── TobogganAppTests/                  # Unit tests
-├── TobogganAppUITests/                # UI tests
-├── PACKAGE_SETUP.md                  # TobogganCore dependency setup
-├── XCODE_PROJECT_SETUP.md            # File addition instructions
-├── verify_setup.sh                   # Setup verification script
-└── README.md                         # This file
+│   ├── TobogganApp.swift           # App entry point
+│   ├── Views/                      # SwiftUI views
+│   │   ├── ContentView.swift       # Main container view
+│   │   ├── SlideView.swift         # Individual slide display
+│   │   └── PresenterView.swift     # Presenter mode interface
+│   ├── ViewModels/                 # Business logic layer
+│   │   ├── PresentationViewModel.swift
+│   │   └── SlideViewModel.swift
+│   ├── Models/                     # Data types and protocols
+│   │   ├── SlideProtocol.swift
+│   │   └── PresentationProtocol.swift
+│   ├── Services/                   # External integrations
+│   │   └── WebSocketService.swift
+│   ├── Utils/                      # Utilities and helpers
+│   │   ├── MockTypes.swift         # Development mocks
+│   │   └── Extensions.swift        # Swift extensions
+│   └── Resources/                  # Assets and localizations
+├── Tests/                          # Unit and UI tests
+└── README.md                       # This file
 ```
 
-## 🚀 Quick Start
+## Testing
 
-### 1. Verify Setup
+### Unit Tests
 ```bash
-cd TobogganApp
-./verify_setup.sh
+# Run unit tests in Xcode
+Cmd+U
+
+# Or from command line
+xcodebuild test -scheme TobogganApp -destination 'platform=iOS Simulator,name=iPhone 15'
 ```
 
-### 2. Open in Xcode
-```bash
-open TobogganApp.xcodeproj
-```
+### UI Tests
+The app includes UI tests for critical presentation flows:
+- Slide navigation
+- Presenter view transitions
+- External display handling
 
-### 3. Add Files to Project  
-Follow the setup instructions in `FINAL_SETUP_CHECKLIST.md` to add all Swift files to the Xcode target.
+## Future Integration with Rust Core
 
-### 4. Setup Complete!
-All files are ready. The app uses a pure Swift implementation - no framework dependencies needed!
+When ready to integrate with the real Toboggan server:
 
-### 5. Build and Run
-- Select iOS Simulator or device
-- Press ⌘R to build and run
+### Prerequisites for Production Mode
+- Rust toolchain with iOS targets installed
+- UniFFI-generated Swift bindings
+- Built `toboggan-ios` framework
 
-## 🔧 Development
+### Integration Steps
+1. **Build Rust Framework**: Run `mise build:ios` to generate iOS bindings
+2. **Replace Mock Types**: Swap `MockTypes.swift` with real UniFFI-generated types
+3. **Update Services**: Connect `WebSocketService` to real Toboggan server
+4. **Test Integration**: Verify real-time synchronization works
+5. **Update UI**: Adapt views to handle real data and error states
 
-### Mock Data
-The app includes comprehensive mock data for development:
-- **7 Sample Slides**: Realistic presentation content
-- **Dynamic Updates**: Next slide preview updates automatically  
-- **No Server Required**: Works independently for UI development
+### Benefits of Rust Integration
+- Shared business logic with other Toboggan clients
+- Real WebSocket connectivity and synchronization
+- Consistent presentation behavior across platforms
+- Type-safe communication with server
 
-### Navigation Commands (Mock Implementation)
-Current mock implementation with navigation:
-```swift
-// Navigation functions in PresentationViewModel
-func nextSlide()       // Next slide
-func previousSlide()   // Previous slide  
-func firstSlide()      // First slide
-func lastSlide()       // Last slide
+## Contributing to iOS Development
 
-// Playback controls
-func togglePlay()      // Start/pause presentation
-```
+### Code Style Guidelines
+- Follow Swift API Design Guidelines
+- Use SwiftLint for code consistency
+- Maintain SwiftUI best practices
+- Document complex business logic
 
-### Current Implementation Status
-The app currently uses mock data and Pure Swift implementation:
-```swift
-// Mock data automatically loads 7 sample slides
-// Future: Real server connection via Rust integration (see ../toboggan-ios/)
-// Configuration will be available when connecting to actual Toboggan server
-```
+### Common Development Tasks
+- **Adding new views**: Create in `Views/` directory with associated ViewModel
+- **Updating mock data**: Modify `MockTypes.swift` for development
+- **Testing UI changes**: Use SwiftUI previews for rapid iteration
+- **Adding features**: Follow MVVM pattern with proper separation
 
-## 📋 Setup Checklist
+### Performance Considerations
+- Use `@StateObject` and `@ObservedObject` appropriately
+- Minimize view re-rendering with proper state management
+- Optimize image and content loading for smooth scrolling
+- Test on physical devices for real performance
 
-- [x] ✅ **Files Created**: All Swift components are in place
-- [ ] ➕ **Xcode Project**: Add files to project target (see `FINAL_SETUP_CHECKLIST.md`)
-- [x] ✅ **TobogganCore**: Pure Swift implementation (no framework needed)
-- [ ] ➕ **Build Test**: Compile and run application  
-- [ ] ➕ **UI Verification**: Confirm mockup match
+## Troubleshooting
 
-## 🎨 Design Principles
+### Common Issues
 
-- **DRY**: No code duplication, shared state via `@EnvironmentObject`
-- **KISS**: Simple, focused components with single responsibilities  
-- **YAGNI**: Only features shown in mockup are implemented
-- **Separation of Concerns**: Clear UI/state/business logic boundaries
+**Build Errors:**
+- Ensure Xcode is up to date (15.0+)
+- Clean build folder: Product → Clean Build Folder
+- Reset simulators if needed
 
-## 🔍 Verification
+**Preview Issues:**
+- Restart Xcode if SwiftUI previews stop working
+- Check that mock types conform to required protocols
+- Verify preview data is properly initialized
 
-Run the verification script to check setup:
-```bash
-./verify_setup.sh
-```
+**Runtime Issues:**
+- Check console logs in Xcode for error messages
+- Verify mock data matches expected formats
+- Test on different device sizes and orientations
 
-Expected output:
-```
-🎉 All files are in place!
+## License
 
-Next steps:
-1. Open TobogganApp.xcodeproj in Xcode
-2. Add Swift files to project (see DEV.md)  
-3. Configure TobogganCore dependency (see DEV.md)
-4. Build and run!
-```
+Part of the Toboggan project. Licensed under either of:
 
-## 🧩 Dependencies
+- Apache License, Version 2.0 ([LICENSE-APACHE](../LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](../LICENSE-MIT))
 
-### Required
-- **iOS 16.0+**: Minimum deployment target
-- **Xcode 15.0+**: Development environment  
-- **Swift**: Pure Swift implementation (no external frameworks)
-
-### Optional  
-- **Toboggan Server**: For real WebSocket communication (currently uses mock mode)
-- **Rust Integration**: Available in ../toboggan-ios/ for future server connectivity
-
-## 📖 Documentation
-
-- `FINAL_SETUP_CHECKLIST.md`: Current setup instructions for pure Swift approach
-- `DEFINITIVE_FIX.md`: Solution documentation for the pure Swift implementation
-- `verify_setup.sh`: Automated setup verification script
-
-## ✨ Ready to Use
-
-The iOS app is **complete and ready** with:
-- ✅ All SwiftUI components matching your mockup exactly
-- ✅ Pure Swift implementation - no framework dependencies
-- ✅ Clean, modular architecture following DRY, KISS, YAGNI principles
-- ✅ Comprehensive mock data for independent development
-- ✅ Simple setup process with clear documentation
-
-Just follow the setup instructions in `FINAL_SETUP_CHECKLIST.md` to get it running in Xcode!
+at your option.

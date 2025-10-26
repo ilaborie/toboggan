@@ -1,25 +1,31 @@
+use std::path::PathBuf;
+
 use axum::extract::State;
-use axum::http::Method;
-use axum::response::IntoResponse;
+use axum::http::{Method, StatusCode, Uri, header};
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing::error;
 
-use crate::TobogganState;
+use crate::{TobogganState, WebAssets};
 
 mod api;
 mod ws;
 
-pub fn routes() -> Router<TobogganState> {
-    routes_with_cors(None)
+pub fn routes(assets_dir: Option<PathBuf>) -> Router<TobogganState> {
+    routes_with_cors(None, assets_dir)
 }
 
-pub fn routes_with_cors(allowed_origins: Option<&[String]>) -> Router<TobogganState> {
+pub fn routes_with_cors(
+    allowed_origins: Option<&[String]>,
+    assets_dir: Option<PathBuf>,
+) -> Router<TobogganState> {
     let cors = create_cors_layer(allowed_origins);
 
-    Router::new()
+    let mut router = Router::new()
         .nest(
             "/api",
             Router::new()
@@ -29,15 +35,47 @@ pub fn routes_with_cors(allowed_origins: Option<&[String]>) -> Router<TobogganSt
                 .route("/command", post(api::post_command))
                 .route("/ws", get(ws::websocket_handler)),
         )
-        .route("/", get(home))
-        .layer(TraceLayer::new_for_http())
         .route("/health", get(health))
-        .layer(cors)
+        .layer(TraceLayer::new_for_http())
+        .layer(cors);
+
+    // Add local assets directory if provided
+    if let Some(assets_dir) = assets_dir {
+        router = router.nest_service("/assets", ServeDir::new(assets_dir));
+    }
+
+    // Serve embedded web assets (catch-all for SPA)
+    router = router.fallback(serve_embedded_web_assets);
+
+    router
 }
 
-async fn home(State(state): State<TobogganState>) -> impl IntoResponse {
-    let talk = &state.talk().title;
-    format!("🛝 {talk}")
+async fn serve_embedded_web_assets(uri: Uri) -> Response {
+    let path = uri.path().trim_start_matches('/');
+
+    // Try to serve the requested file
+    if let Some(content) = WebAssets::get(path) {
+        let mime = mime_guess::from_path(path).first_or_octet_stream();
+        return (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, mime.as_ref())],
+            content.data,
+        )
+            .into_response();
+    }
+
+    // For SPA: serve index.html for all non-asset routes
+    if let Some(index) = WebAssets::get("index.html") {
+        return (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "text/html")],
+            index.data,
+        )
+            .into_response();
+    }
+
+    // Fallback if index.html is not found
+    (StatusCode::NOT_FOUND, "Not found").into_response()
 }
 
 async fn health(State(state): State<TobogganState>) -> impl IntoResponse {

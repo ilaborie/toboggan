@@ -1,14 +1,12 @@
 use wasm_bindgen::UnwrapThrowExt;
 use web_sys::{AudioContext, GainNode, OscillatorNode, OscillatorType};
 
-// Musical note frequencies in Hz
 const G5: f32 = 784.0;
 const C5: f32 = 523.25;
 const C4: f32 = 261.63;
 const E4: f32 = 329.63;
 const G4: f32 = 392.0;
 
-/// Helper to create and configure an oscillator with gain
 fn create_oscillator(
     context: &AudioContext,
     frequency: f32,
@@ -19,33 +17,29 @@ fn create_oscillator(
     let oscillator = context.create_oscillator().ok()?;
     let gain = context.create_gain().ok()?;
 
-    oscillator.connect_with_audio_node(&gain).ok(); // Ignore return value
+    oscillator.connect_with_audio_node(&gain).ok();
     oscillator.set_type(OscillatorType::Sine);
 
-    // Set frequency and timing
     oscillator
         .frequency()
         .set_value_at_time(frequency, start_time)
         .ok()?;
 
-    // Set volume envelope
     let gain_param = gain.gain();
     gain_param.set_value_at_time(0.0, start_time).ok()?;
     gain_param
         .linear_ramp_to_value_at_time(volume, start_time + 0.02)
-        .ok()?; // Quick attack
+        .ok()?;
     gain_param
         .exponential_ramp_to_value_at_time(0.01, start_time + duration)
-        .ok()?; // Decay
+        .ok()?;
 
-    // Schedule playback
     oscillator.start_with_when(start_time).ok()?;
     oscillator.stop_with_when(start_time + duration).ok()?;
 
     Some((oscillator, gain))
 }
 
-/// Play a notification chime sound
 pub fn play_chime() {
     let Ok(context) = AudioContext::new() else {
         return;
@@ -57,14 +51,12 @@ pub fn play_chime() {
         return;
     };
 
-    // Connect and configure
     oscillator.connect_with_audio_node(&gain).unwrap_throw();
     gain.connect_with_audio_node(&context.destination())
         .unwrap_throw();
 
     let now = context.current_time();
 
-    // Simple two-tone chime: G5 -> C5
     oscillator
         .frequency()
         .set_value_at_time(G5, now)
@@ -74,7 +66,6 @@ pub fn play_chime() {
         .set_value_at_time(C5, now + 0.1)
         .unwrap_throw();
 
-    // Quick fade out
     gain.gain().set_value_at_time(0.3, now).unwrap_throw();
     gain.gain()
         .exponential_ramp_to_value_at_time(0.01, now + 0.5)
@@ -84,7 +75,6 @@ pub fn play_chime() {
     oscillator.stop_with_when(now + 0.5).unwrap_throw();
 }
 
-/// Play a celebration sound effect
 pub fn play_tada() {
     let Ok(context) = AudioContext::new() else {
         return;
@@ -102,7 +92,6 @@ pub fn play_tada() {
         .set_value_at_time(0.3, now)
         .unwrap_throw();
 
-    // Simplified chord progression: C-E-G-C (arpeggiated)
     let notes = [
         (C4, 0.0, 0.15),
         (E4, 0.1, 0.15),
@@ -116,7 +105,6 @@ pub fn play_tada() {
         }
     }
 
-    // Add a harmonic for richness
     if let Some((harmonic, harmonic_gain)) = create_oscillator(&context, G5, now + 0.3, 0.6, 0.2) {
         harmonic.set_type(OscillatorType::Triangle);
         harmonic_gain

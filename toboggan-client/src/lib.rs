@@ -1,5 +1,3 @@
-//! Toboggan client library for async API and WebSocket communication.
-
 mod api;
 pub use self::api::*;
 
