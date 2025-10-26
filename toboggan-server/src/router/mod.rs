@@ -39,9 +39,10 @@ pub fn routes_with_cors(
         .layer(TraceLayer::new_for_http())
         .layer(cors);
 
-    // Add local assets directory if provided
+    // Add local assets directory if provided (for presentation images/files)
+    // Use /public to avoid conflict with embedded web assets
     if let Some(assets_dir) = assets_dir {
-        router = router.nest_service("/assets", ServeDir::new(assets_dir));
+        router = router.nest_service("/public", ServeDir::new(assets_dir));
     }
 
     // Serve embedded web assets (catch-all for SPA)

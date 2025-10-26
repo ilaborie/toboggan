@@ -35,9 +35,10 @@ pub struct Settings {
     #[clap(long, env = "TOBOGGAN_CORS_ORIGINS", value_delimiter = ',')]
     pub allowed_origins: Option<Vec<String>>,
 
-    /// Optional local assets folder (e.g., ./assets for images)
-    #[clap(long, env = "TOBOGGAN_ASSETS_DIR")]
-    pub assets_dir: Option<PathBuf>,
+    /// Optional local public folder for presentation files (served at /public/)
+    /// Example: --public-dir ./public for images, videos, etc.
+    #[clap(long, env = "TOBOGGAN_PUBLIC_DIR")]
+    pub public_dir: Option<PathBuf>,
 }
 
 impl Settings {
@@ -75,7 +76,7 @@ impl Settings {
             return Err("Talk file must have .toml extension".to_string());
         }
 
-        if let Some(ref assets_dir) = self.assets_dir {
+        if let Some(ref assets_dir) = self.public_dir {
             if !assets_dir.exists() {
                 return Err(format!(
                     "Assets directory does not exist: {}",

@@ -55,7 +55,7 @@ pub async fn launch(settings: Settings) -> anyhow::Result<()> {
 
     let router = routes_with_cors(
         settings.allowed_origins.as_deref(),
-        settings.assets_dir.clone(),
+        settings.public_dir.clone(),
     )
     .with_state(state);
     let shutdown_signal = setup_shutdown_signal(settings.shutdown_timeout());
