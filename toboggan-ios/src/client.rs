@@ -44,7 +44,9 @@ pub struct TobogganClient {
 impl TobogganClient {
     async fn read_incoming_messages(
         handler: Arc<dyn ClientNotificationHandler>,
-        total_slides: usize,
+        api: TobogganApi,
+        shared_talk: Arc<Mutex<Option<Talk>>>,
+        shared_slides: Arc<Mutex<Vec<Slide>>>,
         shared_state: Arc<Mutex<Option<State>>>,
         is_connected: Arc<AtomicBool>,
         rx: &mut mpsc::UnboundedReceiver<CommunicationMessage>,
@@ -58,12 +60,59 @@ impl TobogganClient {
                     handler.on_connection_status_change(status.into());
                 }
                 CommunicationMessage::StateChange { state: new_state } => {
+                    // Get current total_slides from shared slides
+                    let total_slides = shared_slides.lock().await.len();
                     let state_value = State::new(total_slides, &new_state);
                     {
                         let mut state_guard = shared_state.lock().await;
                         *state_guard = Some(state_value.clone());
                     }
                     handler.on_state_change(state_value);
+                }
+                CommunicationMessage::TalkChange { state: new_state } => {
+                    println!("📝 Presentation updated - refetching talk and slides");
+
+                    // Refetch talk and slides from server
+                    match tokio::try_join!(api.talk(), api.slides()) {
+                        Ok((new_talk, new_slides)) => {
+                            println!("✅ Talk and slides refetched successfully");
+
+                            // Update talk
+                            {
+                                let mut talk_guard = shared_talk.lock().await;
+                                *talk_guard = Some(new_talk.into());
+                            }
+
+                            // Update slides
+                            let total_slides = new_slides.slides.len();
+                            {
+                                let mut slides_guard = shared_slides.lock().await;
+                                slides_guard.clear();
+                                for slide in new_slides.slides {
+                                    slides_guard.push(slide.into());
+                                }
+                            }
+
+                            // Create state with correct total_slides and update
+                            let state_value = State::new(total_slides, &new_state);
+                            {
+                                let mut state_guard = shared_state.lock().await;
+                                *state_guard = Some(state_value.clone());
+                            }
+                            handler.on_talk_change(state_value);
+                        }
+                        Err(err) => {
+                            println!("🚨 Failed to refetch talk and slides: {err}");
+                            // Still update state even if refetch failed
+                            let total_slides = shared_slides.lock().await.len();
+                            let state_value = State::new(total_slides, &new_state);
+                            {
+                                let mut state_guard = shared_state.lock().await;
+                                *state_guard = Some(state_value.clone());
+                            }
+                            handler.on_talk_change(state_value);
+                        }
+                    }
                 }
                 CommunicationMessage::Error { error } => {
                     handler.on_error(error);
@@ -142,15 +191,14 @@ impl TobogganClient {
                 }
 
                 // Loading slides
-                let total_slides = {
+                {
                     let slides = api.slides().await.expect("find a talk").slides;
                     println!("🦀  count slides: {}", slides.len());
                     let mut sld = shared_slides.lock().await;
                     for slide in slides {
                         sld.push(slide.into());
                     }
-                    sld.len()
-                };
+                }
 
                 // Connect to WebSocket
                 let mut ws = shared_ws.lock().await;
@@ -160,11 +208,16 @@ impl TobogganClient {
                 // Reading incoming messages
                 let state_for_messages = Arc::clone(&self.state);
                 let is_connected_for_messages = Arc::clone(&self.is_connected);
+                let talk_for_messages = Arc::clone(&shared_talk);
+                let slides_for_messages = Arc::clone(&shared_slides);
+                let api_for_messages = api.clone();
                 tokio::spawn(async move {
                     let mut rx = rx_msg.lock().await;
                     Self::read_incoming_messages(
                         handler,
-                        total_slides,
+                        api_for_messages,
+                        talk_for_messages,
+                        slides_for_messages,
                         state_for_messages,
                         is_connected_for_messages,
                         &mut rx,

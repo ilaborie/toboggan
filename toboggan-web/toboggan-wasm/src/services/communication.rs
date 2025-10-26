@@ -7,10 +7,9 @@ use gloo::net::websocket::Message;
 use gloo::net::websocket::futures::WebSocket;
 use gloo::timers::callback::{Interval, Timeout};
 use js_sys::JSON;
+use toboggan_core::{ClientId, Command, Notification};
 use wasm_bindgen::UnwrapThrowExt;
 use wasm_bindgen_futures::spawn_local;
-
-use toboggan_core::{ClientId, Command, Notification};
 
 use crate::config::WebSocketConfig;
 use crate::play_chime;
@@ -240,10 +239,13 @@ fn process_message(message: Message, tx: &UnboundedSender<CommunicationMessage>)
     };
 
     match notification {
-        Notification::State { state, .. } => {
+        Notification::State { state } => {
             let _ = tx.unbounded_send(CommunicationMessage::StateChange { state });
         }
-        Notification::Error { message, .. } => {
+        Notification::TalkChange { state } => {
+            let _ = tx.unbounded_send(CommunicationMessage::TalkChange { state });
+        }
+        Notification::Error { message } => {
             let _ = tx.unbounded_send(CommunicationMessage::Error { error: message });
         }
         Notification::Pong => {

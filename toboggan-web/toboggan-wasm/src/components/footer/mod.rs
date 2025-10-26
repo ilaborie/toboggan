@@ -1,6 +1,5 @@
-use web_sys::{Element, HtmlElement};
-
 use toboggan_core::Content;
+use web_sys::{Element, HtmlElement};
 
 use crate::components::WasmElement;
 use crate::{create_and_append_element, create_shadow_root_with_style, dom_try, render_content};

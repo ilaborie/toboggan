@@ -1,6 +1,6 @@
-use iced::keyboard;
+use iced::keyboard::{Key, Modifiers};
 use toboggan_client::CommunicationMessage;
-use toboggan_core::{Command as TobogganCommand, Slide, SlidesResponse};
+use toboggan_core::{Command as TobogganCommand, Slide, SlidesResponse, State, TalkResponse};
 
 // All WebSocket commands are now unified under SendCommand variant
 #[derive(Debug, Clone)]
@@ -13,8 +13,9 @@ pub enum Message {
     SendCommand(TobogganCommand),
 
     // Data loading
-    TalkLoaded(toboggan_core::TalkResponse),
-    TalkAndSlidesLoaded(toboggan_core::TalkResponse, SlidesResponse),
+    TalkLoaded(TalkResponse),
+    TalkAndSlidesLoaded(TalkResponse, SlidesResponse),
+    TalkChangeComplete(TalkResponse, SlidesResponse, State),
     SlideLoaded(usize, Slide),
     LoadError(String),
 
@@ -25,7 +26,7 @@ pub enum Message {
     ToggleHelp,
     ToggleSidebar,
     ToggleFullscreen,
-    KeyPressed(keyboard::Key, keyboard::Modifiers),
+    KeyPressed(Key, Modifiers),
     WindowResized(f32, f32),
 
     // Tick for periodic updates

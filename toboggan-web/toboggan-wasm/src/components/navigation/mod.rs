@@ -1,10 +1,9 @@
 use futures::channel::mpsc::UnboundedSender;
 use gloo::events::EventListener;
 use gloo::timers::callback::Interval;
+use toboggan_core::{Command, Duration, State, TalkResponse};
 use wasm_bindgen::prelude::*;
 use web_sys::{Element, HtmlButtonElement, HtmlElement, HtmlProgressElement};
-
-use toboggan_core::{Command, Duration, State, TalkResponse};
 
 use crate::components::WasmElement;
 use crate::{

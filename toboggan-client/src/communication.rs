@@ -39,6 +39,7 @@ pub enum ConnectionStatus {
 pub enum CommunicationMessage {
     ConnectionStatusChange { status: ConnectionStatus },
     StateChange { state: State },
+    TalkChange { state: State },
     Error { error: String },
 }
 
@@ -385,10 +386,14 @@ async fn handle_ws_message(
     };
 
     match notification {
-        Notification::State { state, .. } => {
+        Notification::State { state } => {
             let _ = tx.send(CommunicationMessage::StateChange { state });
         }
-        Notification::Error { message, .. } => {
+        Notification::TalkChange { state } => {
+            info!("📝 Talk changed, clients should refetch Talk and Slides");
+            let _ = tx.send(CommunicationMessage::TalkChange { state });
+        }
+        Notification::Error { message } => {
             let _ = tx.send(CommunicationMessage::Error { error: message });
         }
         Notification::Pong => {

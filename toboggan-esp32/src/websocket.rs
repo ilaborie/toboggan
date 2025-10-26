@@ -66,6 +66,7 @@ enum WsMessage {
 enum Message {
     Blink,
     State { state: InnerState },
+    TalkChange { state: InnerState },
     Error { message: String },
 }
 
@@ -221,7 +222,7 @@ fn handle_event(
                     info!("📥 WS - ⚡️ blink event received");
                     WsMessage::Blink
                 }
-                Message::State { state } => {
+                Message::State { state } | Message::TalkChange { state } => {
                     let (current, mode) = match state {
                         InnerState::Init => {
                             warn!("📥 WS - Initialized");

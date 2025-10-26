@@ -57,6 +57,12 @@ impl ConnectionHandler {
                             Notification::State { state },
                         ));
                     }
+                    CommunicationMessage::TalkChange { state } => {
+                        tracing::info!("📝 Presentation updated");
+                        let _ = event_tx_clone.send(AppEvent::NotificationReceived(
+                            Notification::TalkChange { state },
+                        ));
+                    }
                     CommunicationMessage::Error { error } => {
                         let _ = event_tx_clone.send(AppEvent::Error(error));
                     }

@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use toboggan_client::ConnectionStatus;
-use toboggan_core::{Command, Notification};
+use toboggan_core::{Command, Notification, Slide, TalkResponse};
 
 #[derive(Debug, Clone)]
 pub enum AppEvent {
@@ -10,6 +10,7 @@ pub enum AppEvent {
     // Could refactor to use toboggan_client::CommunicationMessage for consistency
     NotificationReceived(Notification),
     ConnectionStatus(ConnectionStatus),
+    TalkAndSlidesRefetched(Box<TalkResponse>, Vec<Slide>),
     Error(String),
 }
 

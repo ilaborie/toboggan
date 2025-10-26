@@ -85,6 +85,10 @@ impl App {
                 self.handle_talk_and_slides_loaded(&talk_response, &slides_response)
             }
 
+            Message::TalkChangeComplete(talk_response, slides_response, state) => {
+                self.handle_talk_change_complete(&talk_response, &slides_response, &state)
+            }
+
             Message::Communication(message) => self.handle_websocket_message(message),
 
             Message::SlideLoaded(id, slide) => {
@@ -248,6 +252,37 @@ impl App {
         Task::none()
     }
 
+    fn handle_talk_change_complete(
+        &mut self,
+        talk_response: &TalkResponse,
+        slides_response: &SlidesResponse,
+        state: &toboggan_core::State,
+    ) -> Task<Message> {
+        info!(
+            "📝 Talk change complete: {} ({} slides)",
+            talk_response.title,
+            slides_response.slides.len()
+        );
+
+        // Update talk and slides
+        let talk = Talk {
+            title: talk_response.title.clone(),
+            date: talk_response.date,
+            footer: talk_response.footer.clone().unwrap_or_default(),
+            slides: slides_response.slides.clone(),
+        };
+        self.state.talk = Some(talk);
+        self.state.slides.clone_from(&slides_response.slides);
+
+        // Now update state atomically with the fresh data
+        self.state.presentation_state = Some(state.clone());
+        if let Some(slide_idx) = state.current() {
+            self.state.current_slide_index = Some(slide_idx);
+        }
+
+        Task::none()
+    }
+
     fn handle_websocket_message(&mut self, message: CommunicationMessage) -> Task<Message> {
         match message {
             CommunicationMessage::ConnectionStatusChange { status } => {
@@ -280,6 +315,25 @@ impl App {
                     }
                 }
                 Task::none()
+            }
+            CommunicationMessage::TalkChange { state } => {
+                info!("📝 Presentation updated, reloading talk and slides");
+
+                // DON'T update state immediately - wait for data to be fetched
+                // Refetch talk and slides from server, then update everything atomically
+                let api = self.api.clone();
+                let state_for_update = state.clone();
+                Task::perform(
+                    async move {
+                        let talk_result = api.talk().await;
+                        let slides_result = api.slides().await;
+                        (talk_result, slides_result, state_for_update)
+                    },
+                    |(talk_result, slides_result, state)| match (talk_result, slides_result) {
+                        (Ok(talk), Ok(slides)) => Message::TalkChangeComplete(talk, slides, state),
+                        (Err(err), _) | (_, Err(err)) => Message::LoadError(err.to_string()),
+                    },
+                )
             }
             CommunicationMessage::Error { error } => {
                 error!("WebSocket error: {}", error);

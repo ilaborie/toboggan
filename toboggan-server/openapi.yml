@@ -146,6 +146,17 @@ components:
             type: string
             enum:
             - Blink
+      - type: object
+        required:
+        - state
+        - type
+        properties:
+          state:
+            $ref: '#/components/schemas/State'
+          type:
+            type: string
+            enum:
+            - TalkChange
     SlideKind:
       type: string
       enum:

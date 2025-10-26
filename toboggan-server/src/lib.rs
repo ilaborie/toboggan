@@ -25,6 +25,9 @@ pub use self::router::{routes_with_cors, *};
 mod static_assets;
 pub use self::static_assets::*;
 
+mod watcher;
+pub use self::watcher::*;
+
 #[doc(hidden)]
 #[instrument]
 pub async fn launch(settings: Settings) -> anyhow::Result<()> {
@@ -53,9 +56,15 @@ pub async fn launch(settings: Settings) -> anyhow::Result<()> {
         info!("Cleanup task completed");
     });
 
+    if settings.watch {
+        let watch_state = state.clone();
+        let watch_path = settings.talk.clone();
+        start_watch_task(watch_path, watch_state).context("Starting file watcher")?;
+    }
+
     let router = routes_with_cors(
         settings.allowed_origins.as_deref(),
-        settings.assets_dir.clone(),
+        settings.public_dir.clone(),
     )
     .with_state(state);
     let shutdown_signal = setup_shutdown_signal(settings.shutdown_timeout());

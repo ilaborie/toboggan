@@ -44,6 +44,10 @@ impl ClientNotificationHandler for NotificationHandler {
         println!("🗿 {state:?}");
     }
 
+    fn on_talk_change(&self, state: State) {
+        println!("📝 Talk changed: {state:?}");
+    }
+
     fn on_connection_status_change(&self, status: ConnectionStatus) {
         println!("🛜 {status:?}");
     }
