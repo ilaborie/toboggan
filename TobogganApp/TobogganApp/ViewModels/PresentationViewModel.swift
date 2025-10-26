@@ -47,11 +47,15 @@ final class NotificationHandler: ClientNotificationHandler, @unchecked Sendable 
     func onStateChange(state: State) {
         viewModel?.handleStateChange(state)
     }
-    
+
+    func onTalkChange(state: State) {
+        viewModel?.handleTalkChange(state)
+    }
+
     func onConnectionStatusChange(status: ConnectionStatus) {
         viewModel?.handleConnectionStatusChange(status)
     }
-    
+
     func onError(error: String) {
         viewModel?.handleError(error)
     }
@@ -160,7 +164,7 @@ class PresentationViewModel: ObservableObject {
     func handleStateChange(_ state: State) {
         Task { @MainActor in
             currentState = state
-            
+
             switch state {
             case .`init`(let totalSlides):
                 // In init state, we don't have a current slide yet
@@ -189,6 +193,19 @@ class PresentationViewModel: ObservableObject {
                 )
             }
         }
+    }
+
+    func handleTalkChange(_ state: State) {
+        print("📝 Presentation updated - refetching talk metadata and slides")
+
+        // Refetch talk information in background
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            guard let self = self else { return }
+            self.fetchTalkInfoDirect(client: self.tobogganClient)
+        }
+
+        // Update state to reflect new slide position (server already adjusted)
+        handleStateChange(state)
     }
     
     private func updatePresentationState(

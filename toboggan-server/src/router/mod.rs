@@ -81,7 +81,7 @@ async fn serve_embedded_web_assets(uri: Uri) -> Response {
 
 async fn health(State(state): State<TobogganState>) -> impl IntoResponse {
     let start_time = std::time::Instant::now();
-    let health_data = state.health();
+    let health_data = state.health().await;
 
     tracing::debug!(
         duration_ms = start_time.elapsed().as_millis(),

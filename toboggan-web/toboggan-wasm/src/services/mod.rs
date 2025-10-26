@@ -51,5 +51,6 @@ impl Display for ConnectionStatus {
 pub enum CommunicationMessage {
     ConnectionStatusChange { status: ConnectionStatus },
     StateChange { state: State },
+    TalkChange { state: State },
     Error { error: String },
 }

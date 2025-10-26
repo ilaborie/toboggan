@@ -39,6 +39,10 @@ pub struct Settings {
     /// Example: --public-dir ./public for images, videos, etc.
     #[clap(long, env = "TOBOGGAN_PUBLIC_DIR")]
     pub public_dir: Option<PathBuf>,
+
+    /// Enable watch mode to automatically reload the talk file when it changes
+    #[clap(long, env = "TOBOGGAN_WATCH")]
+    pub watch: bool,
 }
 
 impl Settings {

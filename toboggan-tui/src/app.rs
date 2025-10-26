@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use crossterm::event::{self, Event};
 use ratatui::prelude::*;
 use toboggan_client::{TobogganApi, TobogganConfig};
-use toboggan_core::ClientConfig;
+use toboggan_core::{ClientConfig, Notification};
 use tokio::sync::mpsc;
 use tracing::{debug, info};
 
@@ -27,6 +27,7 @@ pub struct App {
     event_rx: mpsc::UnboundedReceiver<AppEvent>,
     event_tx: mpsc::UnboundedSender<AppEvent>,
     connection_handler: ConnectionHandler,
+    api: TobogganApi,
 }
 
 impl App {
@@ -52,6 +53,7 @@ impl App {
             event_rx,
             event_tx,
             connection_handler,
+            api,
         })
     }
 
@@ -79,6 +81,30 @@ impl App {
 
             // Handle app events
             while let Ok(app_event) = self.event_rx.try_recv() {
+                // Intercept TalkChange to trigger refetch
+                if let AppEvent::NotificationReceived(ref notification) = app_event
+                    && matches!(notification, Notification::TalkChange { .. })
+                {
+                    info!("📝 TalkChange received - spawning refetch task");
+                    let api = self.api.clone();
+                    let tx = self.event_tx.clone();
+                    tokio::spawn(async move {
+                        match tokio::try_join!(api.talk(), api.slides()) {
+                            Ok((talk, slides)) => {
+                                info!("✅ Talk and slides refetched");
+                                let _ = tx.send(AppEvent::TalkAndSlidesRefetched(
+                                    Box::new(talk),
+                                    slides.slides,
+                                ));
+                            }
+                            Err(err) => {
+                                let _ =
+                                    tx.send(AppEvent::Error(format!("Failed to refetch: {err}")));
+                            }
+                        }
+                    });
+                }
+
                 let mut state = self.state.borrow_mut();
                 if state
                     .handle_event(app_event, &self.connection_handler)
@@ -116,7 +142,7 @@ impl App {
         tokio::spawn(async move {
             loop {
                 if let Ok(event) = event::read()
-                    && let event::Event::Key(key) = event
+                    && let Event::Key(key) = event
                     && tx.send(AppEvent::Key(key)).is_err()
                 {
                     break;

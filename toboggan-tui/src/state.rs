@@ -106,6 +106,11 @@ impl AppState {
             AppEvent::NotificationReceived(notification) => {
                 self.handle_notification(notification);
             }
+            AppEvent::TalkAndSlidesRefetched(talk, slides) => {
+                info!("📝 Updating talk and slides from refetch");
+                self.talk = *talk;
+                self.slides = slides;
+            }
             AppEvent::Error(error) => {
                 self.dialog = AppDialog::Error(error);
             }
@@ -139,7 +144,12 @@ impl AppState {
 
     fn handle_notification(&mut self, notification: Notification) {
         match notification {
-            Notification::State { state, .. } => {
+            Notification::State { state } => {
+                self.current_slide = state.current();
+                self.presentation_state = state;
+            }
+            Notification::TalkChange { state } => {
+                // Presentation updated - state already has correct slide position
                 self.current_slide = state.current();
                 self.presentation_state = state;
             }
@@ -148,7 +158,7 @@ impl AppState {
                 // Blink: visual effect not implemented in TUI
                 // TODO https://github.com/junkdog/tachyonfx
             }
-            Notification::Error { message, .. } => {
+            Notification::Error { message } => {
                 self.dialog = AppDialog::Error(message);
             }
         }

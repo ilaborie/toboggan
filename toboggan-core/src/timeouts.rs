@@ -3,11 +3,10 @@
 //! This module provides centralized configuration for all timing-related
 //! constants used across the client, server, and other components.
 
-#[cfg(feature = "std")]
-use std::time::Duration;
-
 #[cfg(all(not(feature = "std"), feature = "js"))]
 use core::time::Duration;
+#[cfg(feature = "std")]
+use std::time::Duration;
 
 /// Interval between server heartbeat pings to clients
 ///

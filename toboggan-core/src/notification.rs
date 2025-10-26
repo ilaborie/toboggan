@@ -12,6 +12,7 @@ pub enum Notification {
     Error { message: String },
     Pong,
     Blink,
+    TalkChange { state: State },
 }
 
 impl Notification {
@@ -21,6 +22,11 @@ impl Notification {
     #[must_use]
     pub fn state(state: State) -> Self {
         Self::State { state }
+    }
+
+    #[must_use]
+    pub fn talk_change(state: State) -> Self {
+        Self::TalkChange { state }
     }
 
     pub fn error(err: impl Debug) -> Self {

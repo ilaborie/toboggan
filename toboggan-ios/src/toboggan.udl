@@ -53,6 +53,7 @@ interface State {
 [Trait, WithForeign]
 interface ClientNotificationHandler {
     void on_state_change(State state);
+    void on_talk_change(State state);
     void on_connection_status_change(ConnectionStatus status);
     void on_error(string error);
 };

@@ -4,10 +4,11 @@ use std::rc::Rc;
 use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use gloo::console::{debug, error, info};
-use toboggan_core::{Command, State};
 use wasm_bindgen::UnwrapThrowExt;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlElement;
+
+use toboggan_core::{Command, State};
 
 use crate::{
     AppConfig, CommunicationMessage, CommunicationService, ConnectionStatus, KeyboardService,
@@ -190,6 +191,17 @@ async fn handle_messages(
                 )
                 .await;
             }
+            CommunicationMessage::TalkChange { state } => {
+                handle_talk_change(
+                    state,
+                    &api,
+                    &elements,
+                    &root_element,
+                    &tx_cmd,
+                    &recovery_state,
+                )
+                .await;
+            }
             CommunicationMessage::Error { error } => {
                 elements.borrow().toast.toast(ToastType::Error, &error);
             }
@@ -272,6 +284,40 @@ async fn handle_state_change(
     recovery_state.borrow_mut().last_known_state = Some(state.clone());
 
     // Update UI to reflect current state
+    update_root_state_class(&state, root_element);
+    update_slide_display(&state, api, elements).await;
+    update_navigation_state(&state, elements);
+}
+
+async fn handle_talk_change(
+    state: State,
+    api: &Rc<TobogganApi>,
+    elements: &Rc<RefCell<TobogganElements>>,
+    root_element: &Rc<HtmlElement>,
+    _tx_cmd: &UnboundedSender<Command>,
+    recovery_state: &Rc<RefCell<RecoveryState>>,
+) {
+    info!("📝 Presentation updated, reloading talk metadata");
+
+    // Notify user that presentation was updated
+    elements
+        .borrow()
+        .toast
+        .toast(ToastType::Info, "📝 Presentation updated");
+
+    // Refetch talk metadata
+    if let Err(err) = api.get_talk().await {
+        error!("Failed to refetch talk after TalkChange:", err.to_string());
+        elements
+            .borrow()
+            .toast
+            .toast(ToastType::Error, "Failed to reload presentation metadata");
+    }
+
+    // Save current state for future reconnection recovery
+    recovery_state.borrow_mut().last_known_state = Some(state.clone());
+
+    // Update UI to reflect current state (server has already adjusted slide position)
     update_root_state_class(&state, root_element);
     update_slide_display(&state, api, elements).await;
     update_navigation_state(&state, elements);

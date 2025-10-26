@@ -26,6 +26,7 @@ impl From<CoreConnectionStatus> for ConnectionStatus {
 #[uniffi::export(with_foreign)]
 pub trait ClientNotificationHandler: Send + Sync {
     fn on_state_change(&self, state: State);
+    fn on_talk_change(&self, state: State);
     fn on_connection_status_change(&self, status: ConnectionStatus);
     fn on_error(&self, error: String);
 }

@@ -20,7 +20,7 @@ pub(super) async fn get_talk(
     State(state): State<TobogganState>,
     Query(param): Query<TalkParam>,
 ) -> impl IntoResponse {
-    let talk = state.talk().clone();
+    let talk = state.talk().await;
     let mut result = TalkResponse::from(talk);
     if !param.footer {
         result.footer.take();
@@ -30,7 +30,7 @@ pub(super) async fn get_talk(
 }
 
 pub(super) async fn get_slides(State(state): State<TobogganState>) -> impl IntoResponse {
-    let slides = state.slides().to_vec();
+    let slides = state.slides().await;
     let result = SlidesResponse { slides };
 
     Json(result)
@@ -42,6 +42,7 @@ pub(super) async fn get_slide_by_index(
 ) -> impl IntoResponse {
     state
         .slide_by_index(index)
+        .await
         .map(Json)
         .ok_or(StatusCode::NOT_FOUND)
 }

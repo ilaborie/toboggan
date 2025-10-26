@@ -70,8 +70,8 @@ struct Toboggan {
     rt: Runtime,
     _ws: WebSocketClient,
     tx: UnboundedSender<Command>,
-    talk: TalkResponse,
-    slides: SlidesResponse,
+    talk: Arc<RwLock<TalkResponse>>,
+    slides: Arc<RwLock<SlidesResponse>>,
     state: Arc<RwLock<TState>>,
 }
 
@@ -104,16 +104,31 @@ impl Toboggan {
             .build()?;
 
         let state = Arc::<RwLock<TState>>::default();
-        let (talk, slides) = rt
+        let talk = Arc::<RwLock<TalkResponse>>::default();
+        let slides = Arc::<RwLock<SlidesResponse>>::default();
+
+        let (initial_talk, initial_slides) = rt
             .block_on(async {
-                let _read_messages = tokio::spawn(handle_state(Arc::clone(&state), rx_msg));
+                let _read_messages = tokio::spawn(handle_state(
+                    Arc::clone(&state),
+                    Arc::clone(&talk),
+                    Arc::clone(&slides),
+                    api.clone(),
+                    rx_msg,
+                ));
                 ws.connect().await;
                 try_join!(api.talk(), api.slides())
             })
             .map_err(|err| PyConnectionError::new_err(err.to_string()))?;
 
+        // Initialize talk and slides
+        rt.block_on(async {
+            *talk.write().await = initial_talk;
+            *slides.write().await = initial_slides;
+        });
+
         Ok(Self {
-            rt: rt,
+            rt,
             config,
             _ws: ws,
             tx,
@@ -126,13 +141,23 @@ impl Toboggan {
     /// Gets the presentation metadata.
     #[getter]
     pub fn talk(&self) -> PyResult<Talk> {
-        Ok(Talk(self.talk.clone()))
+        let talk = Arc::clone(&self.talk);
+        let talk = self.rt.block_on(async {
+            let guard = talk.read().await;
+            TalkResponse::clone(&guard)
+        });
+        Ok(Talk(talk))
     }
 
     /// Gets all slides in the presentation.
     #[getter]
     pub fn slides(&self) -> PyResult<Slides> {
-        Ok(Slides(self.slides.clone()))
+        let slides = Arc::clone(&self.slides);
+        let slides = self.rt.block_on(async {
+            let guard = slides.read().await;
+            SlidesResponse::clone(&guard)
+        });
+        Ok(Slides(slides))
     }
 
     /// Gets the current presentation state.
@@ -166,21 +191,57 @@ impl Toboggan {
     }
 }
 
-async fn handle_state(state: Arc<RwLock<TState>>, mut rx: UnboundedReceiver<CommunicationMessage>) {
-    println!(">>> Start listenning incomming messages");
+async fn handle_state(
+    state: Arc<RwLock<TState>>,
+    talk: Arc<RwLock<TalkResponse>>,
+    slides: Arc<RwLock<SlidesResponse>>,
+    api: TobogganApi,
+    mut rx: UnboundedReceiver<CommunicationMessage>,
+) {
+    println!(">>> Start listening incoming messages");
     while let Some(msg) = rx.recv().await {
-        let mut st = state.write().await;
         match msg {
             CommunicationMessage::ConnectionStatusChange { status } => {
-                print!("📡 {status}");
+                println!("📡 {status}");
             }
-            CommunicationMessage::StateChange { state } => {
-                *st = state;
+            CommunicationMessage::StateChange { state: new_state } => {
+                let mut st = state.write().await;
+                *st = new_state;
+            }
+            CommunicationMessage::TalkChange { state: new_state } => {
+                println!("📝 Presentation updated - refetching talk and slides");
+
+                // Refetch talk and slides from server
+                match try_join!(api.talk(), api.slides()) {
+                    Ok((new_talk, new_slides)) => {
+                        // Update talk and slides atomically
+                        {
+                            let mut talk_guard = talk.write().await;
+                            *talk_guard = new_talk;
+                        }
+                        {
+                            let mut slides_guard = slides.write().await;
+                            *slides_guard = new_slides;
+                        }
+                        // Update state after data is refreshed
+                        {
+                            let mut st = state.write().await;
+                            *st = new_state;
+                        }
+                        println!("✅ Talk and slides updated successfully");
+                    }
+                    Err(err) => {
+                        eprintln!("🚨 Failed to refetch talk and slides: {err}");
+                        // Still update state even if refetch failed
+                        let mut st = state.write().await;
+                        *st = new_state;
+                    }
+                }
             }
             CommunicationMessage::Error { error } => {
                 eprintln!("🚨 Oops: {error}");
             }
         }
-        println!("<<< End listenning incomming messages");
     }
+    println!("<<< End listening incoming messages");
 }
