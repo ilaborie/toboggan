@@ -5,13 +5,23 @@ mod text;
 pub use self::text::TextRenderer;
 
 mod binary;
+pub use self::binary::BinaryRenderer;
+
+mod html;
+
+use std::fs;
+use std::path::Path;
+
 use toboggan_core::Talk;
 
-pub use self::binary::BinaryRenderer;
-use crate::error::Result;
+use crate::error::{Result, TobogganCliError};
 use crate::settings::OutputFormat;
 
-pub fn serialize_talk(talk: &Talk, format: &OutputFormat) -> Result<Vec<u8>> {
+pub fn serialize_talk(
+    talk: &Talk,
+    format: &OutputFormat,
+    head_html_file: Option<&Path>,
+) -> Result<Vec<u8>> {
     match format {
         OutputFormat::Toml => TextRenderer::toml(talk),
         OutputFormat::Json => TextRenderer::json(talk),
@@ -20,6 +30,17 @@ pub fn serialize_talk(talk: &Talk, format: &OutputFormat) -> Result<Vec<u8>> {
         OutputFormat::Cbor => BinaryRenderer::cbor(talk),
         OutputFormat::MessagePack => BinaryRenderer::msgpack(talk),
         OutputFormat::Bincode => BinaryRenderer::bincode(talk),
+
+        OutputFormat::Html => {
+            let custom_head_html = if let Some(path) = head_html_file {
+                let content = fs::read_to_string(path)
+                    .map_err(|source| TobogganCliError::read_file(path.to_path_buf(), source))?;
+                Some(content)
+            } else {
+                None
+            };
+            html::generate_html(talk, custom_head_html.as_deref())
+        }
     }
 }
 
@@ -32,6 +53,7 @@ pub fn get_extension(format: &OutputFormat) -> &'static str {
         OutputFormat::Cbor => "cbor",
         OutputFormat::MessagePack => "msgpack",
         OutputFormat::Bincode => "bin",
+        OutputFormat::Html => "html",
     }
 }
 
@@ -68,10 +90,11 @@ mod tests {
             OutputFormat::Cbor,
             OutputFormat::MessagePack,
             OutputFormat::Bincode,
+            OutputFormat::Html,
         ];
 
         for format in &formats {
-            let result = serialize_talk(&talk, format);
+            let result = serialize_talk(&talk, format, None);
             assert!(result.is_ok(), "Failed to serialize format: {format:?}");
             if let Ok(output) = result {
                 assert!(!output.is_empty(), "Empty output for format: {format:?}");
@@ -88,6 +111,7 @@ mod tests {
         assert_eq!(get_extension(&OutputFormat::Cbor), "cbor");
         assert_eq!(get_extension(&OutputFormat::MessagePack), "msgpack");
         assert_eq!(get_extension(&OutputFormat::Bincode), "bin");
+        assert_eq!(get_extension(&OutputFormat::Html), "html");
     }
 
     #[test]
@@ -95,6 +119,7 @@ mod tests {
         assert!(!is_binary_format(&OutputFormat::Toml));
         assert!(!is_binary_format(&OutputFormat::Json));
         assert!(!is_binary_format(&OutputFormat::Yaml));
+        assert!(!is_binary_format(&OutputFormat::Html));
         assert!(is_binary_format(&OutputFormat::Cbor));
         assert!(is_binary_format(&OutputFormat::MessagePack));
         assert!(is_binary_format(&OutputFormat::Bincode));

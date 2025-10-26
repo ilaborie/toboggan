@@ -215,7 +215,8 @@ fn display_results(parse_result: &ParseResult, settings: &Settings) -> Result<()
 fn write_output(parse_result: &ParseResult, output: &Path, settings: &Settings) -> Result<()> {
     let format = settings.resolve_format();
     let talk = parse_result.to_talk();
-    let serialized = output::serialize_talk(&talk, &format)?;
+    let head_html_file = settings.head_html_file.as_deref();
+    let serialized = output::serialize_talk(&talk, &format, head_html_file)?;
 
     write_talk(output, &serialized)?;
 

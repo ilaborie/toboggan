@@ -4,11 +4,10 @@ use std::rc::Rc;
 use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use gloo::console::{debug, error, info};
+use toboggan_core::{Command, State};
 use wasm_bindgen::UnwrapThrowExt;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlElement;
-
-use toboggan_core::{Command, State};
 
 use crate::{
     AppConfig, CommunicationMessage, CommunicationService, ConnectionStatus, KeyboardService,
