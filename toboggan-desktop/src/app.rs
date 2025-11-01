@@ -220,7 +220,8 @@ impl App {
         let talk = Talk {
             title: talk_response.title.clone(),
             date: talk_response.date,
-            footer: talk_response.footer.clone().unwrap_or_default(),
+            footer: talk_response.footer.clone(),
+            head: talk_response.head.clone(),
             slides: vec![], // We'll load slides separately
         };
         self.state.talk = Some(talk);
@@ -241,7 +242,8 @@ impl App {
         let talk = Talk {
             title: talk_response.title.clone(),
             date: talk_response.date,
-            footer: talk_response.footer.clone().unwrap_or_default(),
+            footer: talk_response.footer.clone(),
+            head: talk_response.head.clone(),
             slides: slides_response.slides.clone(),
         };
         self.state.talk = Some(talk);
@@ -268,7 +270,8 @@ impl App {
         let talk = Talk {
             title: talk_response.title.clone(),
             date: talk_response.date,
-            footer: talk_response.footer.clone().unwrap_or_default(),
+            footer: talk_response.footer.clone(),
+            head: talk_response.head.clone(),
             slides: slides_response.slides.clone(),
         };
         self.state.talk = Some(talk);

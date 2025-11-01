@@ -285,6 +285,7 @@ mod tests {
             title: "Test Presentation".to_string(),
             date: toboggan_core::Date::today(),
             footer: None,
+            head: None,
         };
 
         let slides = vec![

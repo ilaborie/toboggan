@@ -1,15 +1,16 @@
 use std::net::TcpListener;
-use std::time::Duration;
+use std::time::Duration as StdDuration;
 
 use anyhow::Context;
 use clawspec_core::test_client::{TestClient, TestServer, TestServerConfig};
 use clawspec_core::{ApiClient, register_schemas};
 use serde_json::{Value, json};
 use toboggan_core::{
-    Content, Date, Notification, Slide, SlideKind, SlidesResponse, Style, Talk, TalkResponse,
+    ClientId, Command, Content, Date, Duration, Notification, Slide, SlideKind, SlidesResponse,
+    State, Style, Talk, TalkResponse, Timestamp,
 };
-use toboggan_server::{HealthResponse, TobogganState, routes};
-use utoipa::openapi::{ContactBuilder, InfoBuilder, LicenseBuilder, ServerBuilder};
+use toboggan_server::{HealthResponse, HealthResponseStatus, TobogganState, routes};
+use utoipa::openapi::{ContactBuilder, InfoBuilder, LicenseBuilder, OpenApi, ServerBuilder};
 
 #[derive(Debug, Clone)]
 struct TobogganTestServer {
@@ -30,7 +31,7 @@ impl TobogganTestServer {
             );
 
         let state = TobogganState::new(talk, 100).unwrap();
-        let router = routes(None).with_state(state);
+        let router = routes(None, OpenApi::default()).with_state(state);
 
         Self { router }
     }
@@ -42,25 +43,25 @@ impl TestServer for TobogganTestServer {
     fn config(&self) -> TestServerConfig {
         // Configure OpenAPI metadata
         let info = InfoBuilder::new()
-            .title("Toboggan Server API")
-            .version("0.1.0")
-            .description(Some("REST API for the Toboggan presentation system that allows creating and serving slide-based talks with real-time WebSocket communication for Command/Notification interactions."))
+            .title(env!("CARGO_PKG_NAME"))
+            .version(env!("CARGO_PKG_VERSION"))
+            .description(Some(env!("CARGO_PKG_DESCRIPTION")))
             .contact(Some(
                 ContactBuilder::new()
                     .name(Some("Igor Laborie"))
                     .email(Some("ilaborie@gmail.com"))
-                    .build()
+                    .build(),
             ))
             .license(Some(
                 LicenseBuilder::new()
                     .name("MIT OR Apache-2.0")
                     .identifier(Some("MIT OR Apache-2.0"))
-                    .build()
+                    .build(),
             ))
             .build();
 
         let server = ServerBuilder::new()
-            .url("http://localhost:3000")
+            .url("http://localhost:8080")
             .description(Some("Local development server"))
             .build();
 
@@ -68,8 +69,8 @@ impl TestServer for TobogganTestServer {
 
         TestServerConfig {
             api_client: Some(api_client_builder),
-            min_backoff_delay: Duration::from_millis(25),
-            max_backoff_delay: Duration::from_secs(2),
+            min_backoff_delay: StdDuration::from_millis(25),
+            max_backoff_delay: StdDuration::from_secs(2),
             backoff_jitter: true,
             max_retry_attempts: 15,
         }
@@ -95,8 +96,25 @@ async fn create_test_app() -> anyhow::Result<TestClient<TobogganTestServer>> {
 async fn should_generate_openapi() -> anyhow::Result<()> {
     let mut app = create_test_app().await?;
 
-    // Register basic schemas that have ToSchema implemented
-    register_schemas!(app, SlideKind, Style).await;
+    // Register all schemas that have ToSchema implemented
+    register_schemas!(
+        app,
+        Content,
+        Date,
+        Duration,
+        HealthResponse,
+        HealthResponseStatus,
+        Notification,
+        Slide,
+        SlideKind,
+        SlidesResponse,
+        State,
+        Style,
+        TalkResponse,
+        Timestamp,
+        ClientId,
+    )
+    .await;
 
     // Test all endpoints to generate comprehensive OpenAPI spec
     basic_api_operations(&mut app).await?;
@@ -104,9 +122,10 @@ async fn should_generate_openapi() -> anyhow::Result<()> {
     demonstrate_websocket_endpoint(&mut app).await?;
 
     // Generate and save OpenAPI specification
-    app.write_openapi("./openapi.yml")
+    // Using JSON format for safer deserialization in the server
+    app.write_openapi("./openapi.json")
         .await
-        .context("writing openapi file")?;
+        .context("writing openapi.json file")?;
 
     Ok(())
 }
@@ -139,22 +158,19 @@ async fn basic_api_operations(app: &mut TestClient<TobogganTestServer>) -> anyho
 
 #[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 async fn test_command_operations(app: &mut TestClient<TobogganTestServer>) -> anyhow::Result<()> {
-    // Test ping command - use Value for response since Notification doesn't have ToSchema
-    let ping_command = json!({
-        "command": "Ping"
-    });
+    // Test ping command
+    let ping_command = Command::Ping;
     let _ping_response = app
         .post("/api/command")?
         .json(&ping_command)?
         .await?
         .as_json::<Notification>()
         .await?;
+
     // Test register command
-    let register_command = json!({
-        "command": "Register",
-        "client": "550e8400-e29b-41d4-a716-446655440000",
-        "renderer": "Html"
-    });
+    let register_command = Command::Register {
+        client: ClientId::new(),
+    };
     let _register_response = app
         .post("/api/command")?
         .json(&register_command)?
@@ -164,12 +180,12 @@ async fn test_command_operations(app: &mut TestClient<TobogganTestServer>) -> an
 
     // Test navigation commands
     let commands = vec![
-        json!({"command": "Next"}),
-        json!({"command": "Previous"}),
-        json!({"command": "First"}),
-        json!({"command": "Last"}),
-        json!({"command": "Resume"}),
-        json!({"command": "Pause"}),
+        Command::Next,
+        Command::Previous,
+        Command::First,
+        Command::Last,
+        Command::Resume,
+        Command::Pause,
     ];
 
     for command in commands {
@@ -187,7 +203,7 @@ async fn test_command_operations(app: &mut TestClient<TobogganTestServer>) -> an
 async fn demonstrate_websocket_endpoint(
     app: &mut TestClient<TobogganTestServer>,
 ) -> anyhow::Result<()> {
-    let _response = app.get("/api/ws")?.await?;
+    let _response = app.get("/api/ws")?.without_collection().await?;
 
     Ok(())
 }

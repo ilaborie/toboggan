@@ -21,7 +21,8 @@ const FILE_HTML: &str = "html";
 const FILE_HTM: &str = "htm";
 
 const COVER: &str = "_cover.md";
-const FOOTER: &str = "_footer.md";
+const FOOTER: &str = "_footer.html";
+const HEAD: &str = "_head.html";
 const PART: &str = "_part.md";
 
 #[derive(Debug, Clone)]
@@ -61,6 +62,10 @@ impl TobogganDir {
         self.find_file(FOOTER)
     }
 
+    pub(super) fn get_head(&self) -> Result<Option<DirEntry>> {
+        self.find_file(HEAD)
+    }
+
     pub(super) fn get_part(&self) -> Result<Option<DirEntry>> {
         self.find_file(PART)
     }
@@ -97,7 +102,11 @@ impl TobogganDir {
 
     #[must_use]
     fn should_skip_entry(filename: &str) -> bool {
-        filename.starts_with('.') || filename == COVER || filename == FOOTER || filename == PART
+        filename.starts_with('.')
+            || filename == COVER
+            || filename == FOOTER
+            || filename == HEAD
+            || filename == PART
     }
 }
 
@@ -263,8 +272,15 @@ pub(super) fn process_talk_metadata(
     if let Some(footer) = toboggan_dir.get_footer()? {
         let path = footer.path();
         debug!("Processing footer: {}", path.display());
-        let (footer, _) = create_slide_from_file(&path, theme)?;
-        metadata.footer = Some(footer.body);
+        let content = std::fs::read_to_string(&path)?;
+        metadata.footer = Some(content);
+    }
+
+    if let Some(head) = toboggan_dir.get_head()? {
+        let path = head.path();
+        debug!("Processing head: {}", path.display());
+        let content = std::fs::read_to_string(&path)?;
+        metadata.head = Some(content);
     }
 
     Ok(metadata)
@@ -415,7 +431,8 @@ mod tests {
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let dir_path = temp_dir.path();
 
-        create_test_file(dir_path, "_footer.md", "# Footer").expect("Failed to create footer");
+        create_test_file(dir_path, "_footer.html", "<footer>Footer</footer>")
+            .expect("Failed to create footer");
 
         let toboggan_dir = TobogganDir::new(dir_path.to_path_buf())?;
         let footer = toboggan_dir.get_footer()?;
@@ -426,7 +443,7 @@ mod tests {
                 .expect("Footer should exist")
                 .file_name()
                 .to_string_lossy(),
-            "_footer.md"
+            "_footer.html"
         );
         Ok(())
     }
@@ -459,7 +476,8 @@ mod tests {
     fn test_should_skip_entry() {
         assert!(TobogganDir::should_skip_entry(".hidden"));
         assert!(TobogganDir::should_skip_entry("_cover.md"));
-        assert!(TobogganDir::should_skip_entry("_footer.md"));
+        assert!(TobogganDir::should_skip_entry("_footer.html"));
+        assert!(TobogganDir::should_skip_entry("_head.html"));
         assert!(TobogganDir::should_skip_entry("_part.md"));
 
         assert!(!TobogganDir::should_skip_entry("slide1.md"));

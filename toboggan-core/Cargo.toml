@@ -1,6 +1,7 @@
 [package]
 name = "toboggan-core"
 version = "0.1.0"
+description = "Core types and domain logic for the Toboggan presentation system (no_std compatible)"
 edition = "2024"
 
 rust-version.workspace = true
@@ -10,9 +11,9 @@ authors.workspace = true
 [features]
 default = ["std", "tracing"]
 tracing = ["dep:tracing"]
-std = ["jiff/std", "serde/std", "comrak"]
-js = ["jiff/js", "uuid/js"]
-openapi = ["dep:utoipa"]
+std = ["jiff/std", "serde/std"]
+js = ["jiff/js", "uuid/js", "getrandom/wasm_js"]
+openapi = ["dep:utoipa", "utoipa/uuid"]
 test-utils = []
 
 [dependencies]
@@ -25,7 +26,6 @@ getrandom = { workspace = true }
 
 tracing = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
-comrak = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

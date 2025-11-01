@@ -1,6 +1,7 @@
 [package]
 name = "toboggan-desktop"
 version = "0.1.0"
+description = "Cross-platform desktop application for Toboggan presentations using iced"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -11,10 +12,10 @@ toboggan-core = { path = "../toboggan-core", features = ["std"] }
 toboggan-client = { path = "../toboggan-client" }
 
 iced = { workspace = true }
-lucide-icons = { version = "0.544.0", features = ["iced"] }
+lucide-icons = { workspace = true, features = ["iced"] }
 
 tokio = { workspace = true, features = ["full"] }
-async-stream = "0.3"
+async-stream = { workspace = true }
 
 anyhow = { workspace = true }
 tracing = { workspace = true }

@@ -14,6 +14,8 @@ use crate::TobogganState;
 pub(super) struct TalkParam {
     #[serde(default)]
     footer: bool,
+    #[serde(default)]
+    head: bool,
 }
 
 pub(super) async fn get_talk(
@@ -24,6 +26,9 @@ pub(super) async fn get_talk(
     let mut result = TalkResponse::from(talk);
     if !param.footer {
         result.footer.take();
+    }
+    if !param.head {
+        result.head.take();
     }
 
     Json(result)

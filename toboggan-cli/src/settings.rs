@@ -124,21 +124,11 @@ pub struct Settings {
     #[clap(long, help = "Exclude speaker notes from duration calculations")]
     pub exclude_notes_from_duration: bool,
 
-    /// Path to a file containing custom HTML to insert at the end of the `<head>` element.
-    ///
-    /// This allows for additional customization such as custom CSS, scripts, or meta tags.
-    /// The file content will be inserted as-is before the closing `</head>` tag.
-    /// Only applies to HTML output format.
-    #[clap(
-        long,
-        help = "Path to file with custom HTML to insert in <head> (HTML format only)"
-    )]
-    pub head_html_file: Option<PathBuf>,
-
     /// The input folder to process.
     ///
     /// Must be a folder containing structured presentation content.
     /// The folder should contain markdown (.md) and/or HTML (.html) files.
+    /// Custom head HTML can be provided via a `_head.html` file in the input folder.
     #[clap(help = "Input folder to process")]
     pub input: Option<PathBuf>,
 }

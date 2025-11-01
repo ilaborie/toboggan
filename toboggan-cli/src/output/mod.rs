@@ -9,19 +9,12 @@ pub use self::binary::BinaryRenderer;
 
 mod html;
 
-use std::fs;
-use std::path::Path;
-
 use toboggan_core::Talk;
 
-use crate::error::{Result, TobogganCliError};
+use crate::error::Result;
 use crate::settings::OutputFormat;
 
-pub fn serialize_talk(
-    talk: &Talk,
-    format: &OutputFormat,
-    head_html_file: Option<&Path>,
-) -> Result<Vec<u8>> {
+pub fn serialize_talk(talk: &Talk, format: &OutputFormat) -> Result<Vec<u8>> {
     match format {
         OutputFormat::Toml => TextRenderer::toml(talk),
         OutputFormat::Json => TextRenderer::json(talk),
@@ -31,16 +24,7 @@ pub fn serialize_talk(
         OutputFormat::MessagePack => BinaryRenderer::msgpack(talk),
         OutputFormat::Bincode => BinaryRenderer::bincode(talk),
 
-        OutputFormat::Html => {
-            let custom_head_html = if let Some(path) = head_html_file {
-                let content = fs::read_to_string(path)
-                    .map_err(|source| TobogganCliError::read_file(path.to_path_buf(), source))?;
-                Some(content)
-            } else {
-                None
-            };
-            html::generate_html(talk, custom_head_html.as_deref())
-        }
+        OutputFormat::Html => html::generate_html(talk, talk.head.as_deref()),
     }
 }
 
@@ -94,7 +78,7 @@ mod tests {
         ];
 
         for format in &formats {
-            let result = serialize_talk(&talk, format, None);
+            let result = serialize_talk(&talk, format);
             assert!(result.is_ok(), "Failed to serialize format: {format:?}");
             if let Ok(output) = result {
                 assert!(!output.is_empty(), "Empty output for format: {format:?}");

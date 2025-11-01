@@ -6,6 +6,7 @@ use std::time::Duration;
 use anyhow::Context;
 use toboggan_core::Talk;
 use tracing::{info, instrument, warn};
+use utoipa::openapi::OpenApi;
 
 mod settings;
 pub use self::settings::*;
@@ -62,9 +63,12 @@ pub async fn launch(settings: Settings) -> anyhow::Result<()> {
         start_watch_task(watch_path, watch_state).context("Starting file watcher")?;
     }
 
+    let openapi = create_openapi()?;
+
     let router = routes_with_cors(
         settings.allowed_origins.as_deref(),
         settings.public_dir.clone(),
+        openapi,
     )
     .with_state(state);
     let shutdown_signal = setup_shutdown_signal(settings.shutdown_timeout());
@@ -124,4 +128,37 @@ async fn setup_shutdown_signal(timeout: Duration) {
     );
 
     info!("Shutdown signal processed, server will now terminate gracefully");
+}
+
+fn create_openapi() -> anyhow::Result<OpenApi> {
+    let json_content = include_str!("../openapi.json");
+    let openapi = serde_json::from_str(json_content).context("reading openapi.json file")?;
+    Ok(openapi)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_create_openapi() {
+        let result = create_openapi();
+
+        assert!(result.is_ok(), "create_openapi should succeed: {result:?}");
+
+        let openapi = result.expect("should have OpenApi");
+
+        // Check that paths are present (from the generated openapi.yml)
+        assert!(
+            !openapi.paths.paths.is_empty(),
+            "should have API paths from openapi.yml"
+        );
+
+        // Check that schemas are present
+        assert!(
+            openapi.components.is_some(),
+            "should have component schemas"
+        );
+    }
 }
