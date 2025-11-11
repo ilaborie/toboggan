@@ -17,6 +17,7 @@ use toboggan_server::{TobogganState, routes_with_cors};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::protocol::Message as TungsteniteMessage;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
+use utoipa::openapi::OpenApi;
 
 static GLOBAL_TEST_COUNTER: AtomicU8 = AtomicU8::new(0);
 
@@ -28,7 +29,7 @@ async fn create_test_server() -> (String, TobogganState) {
     let addr = listener.local_addr().unwrap();
     let server_url = format!("ws://127.0.0.1:{}/api/ws", addr.port());
 
-    let app = routes_with_cors(None, None).with_state(state.clone());
+    let app = routes_with_cors(None, None, OpenApi::default()).with_state(state.clone());
 
     tokio::spawn(async move {
         axum::serve(listener, app.into_make_service())

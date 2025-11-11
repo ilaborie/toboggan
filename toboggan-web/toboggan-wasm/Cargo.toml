@@ -28,34 +28,22 @@ gloo = { version = "0.11.0", default-features = false, features = [
 ] }
 web-sys = { version = "0.3.81", features = [
     "HtmlElement",
-    "HtmlButtonElement",
     "KeyboardEvent",
-    "Event",
-    "WebSocket",
-    "MessageEvent",
+    "Element",
+    "HtmlElement",
     "CssStyleDeclaration",
-    "Performance",
-    "Window",
     "Document",
-    "Crypto",
-    "Location",
+    "Node",
+    "NodeList",
     "ShadowRoot",
     "ShadowRootInit",
     "ShadowRootMode",
-    "Animation",
-    "KeyframeAnimationOptions",
     "AudioContext",
-    "AudioNode",
     "AudioDestinationNode",
-    "BaseAudioContext",
+    "AudioParam",
     "OscillatorNode",
     "GainNode",
     "OscillatorType",
-    "AudioParam",
-    "HtmlProgressElement",
-    "Element",
-    "NodeList",
-    "Node",
 ] }
 js-sys = "0.3.81"
 serde-wasm-bindgen = "0.6.5"
@@ -63,7 +51,6 @@ wasm-bindgen-futures = "0.4.54"
 futures = "0.3.31"
 serde = "1.0.228"
 console_error_panic_hook = "0.1.7"
-getrandom = { version = "0.3.3", features = ["wasm_js"] }
 
 [dev-dependencies]
 

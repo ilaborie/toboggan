@@ -1,0 +1,764 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "toboggan-server",
+    "description": "Axum WebSocket server with REST API and real-time presentation synchronization",
+    "contact": {
+      "name": "Igor Laborie",
+      "email": "ilaborie@gmail.com"
+    },
+    "license": {
+      "name": "MIT OR Apache-2.0",
+      "identifier": "MIT OR Apache-2.0"
+    },
+    "version": "0.1.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "Local development server"
+    }
+  ],
+  "paths": {
+    "/api/command": {
+      "post": {
+        "tags": [
+          "command"
+        ],
+        "description": "Create command",
+        "operationId": "post-api-command",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Command"
+              },
+              "example": {
+                "command": "Pause"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status code 200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Notification"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/slides": {
+      "get": {
+        "tags": [
+          "slides"
+        ],
+        "description": "Retrieve slides",
+        "operationId": "get-api-slides",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Status code 200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlidesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/talk": {
+      "get": {
+        "tags": [
+          "talk"
+        ],
+        "description": "Retrieve talk",
+        "operationId": "get-api-talk",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Status code 200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TalkResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "description": "Retrieve health",
+        "operationId": "get-health",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Status code 200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ClientId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "Command": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "client",
+              "command"
+            ],
+            "properties": {
+              "client": {
+                "$ref": "#/components/schemas/ClientId"
+              },
+              "command": {
+                "type": "string",
+                "enum": [
+                  "Register"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "client",
+              "command"
+            ],
+            "properties": {
+              "client": {
+                "$ref": "#/components/schemas/ClientId"
+              },
+              "command": {
+                "type": "string",
+                "enum": [
+                  "Unregister"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "command"
+            ],
+            "properties": {
+              "command": {
+                "type": "string",
+                "enum": [
+                  "Ping"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "command"
+            ],
+            "properties": {
+              "command": {
+                "type": "string",
+                "enum": [
+                  "First"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "command"
+            ],
+            "properties": {
+              "command": {
+                "type": "string",
+                "enum": [
+                  "Last"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "slide",
+              "command"
+            ],
+            "properties": {
+              "command": {
+                "type": "string",
+                "enum": [
+                  "GoTo"
+                ]
+              },
+              "slide": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "command"
+            ],
+            "properties": {
+              "command": {
+                "type": "string",
+                "enum": [
+                  "Next"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "command"
+            ],
+            "properties": {
+              "command": {
+                "type": "string",
+                "enum": [
+                  "Previous"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "command"
+            ],
+            "properties": {
+              "command": {
+                "type": "string",
+                "enum": [
+                  "Pause"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "command"
+            ],
+            "properties": {
+              "command": {
+                "type": "string",
+                "enum": [
+                  "Resume"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "command"
+            ],
+            "properties": {
+              "command": {
+                "type": "string",
+                "enum": [
+                  "Blink"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "Content": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Empty"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "text",
+              "type"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Text"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "raw",
+              "type"
+            ],
+            "properties": {
+              "alt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "raw": {
+                "type": "string"
+              },
+              "style": {
+                "$ref": "#/components/schemas/Style"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Html"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "cells",
+              "style",
+              "type"
+            ],
+            "properties": {
+              "cells": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Content"
+                }
+              },
+              "style": {
+                "$ref": "#/components/schemas/Style"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Grid"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "Date": {
+        "type": "string",
+        "format": "date"
+      },
+      "Duration": {
+        "type": "object",
+        "properties": {
+          "nanos": {
+            "type": "number",
+            "format": "int64"
+          },
+          "secs": {
+            "type": "number",
+            "format": "int64"
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "started_at",
+          "elapsed",
+          "talk",
+          "active_clients"
+        ],
+        "properties": {
+          "active_clients": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "elapsed": {
+            "$ref": "#/components/schemas/Duration"
+          },
+          "started_at": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "status": {
+            "$ref": "#/components/schemas/HealthResponseStatus"
+          },
+          "talk": {
+            "type": "string"
+          }
+        }
+      },
+      "HealthResponseStatus": {
+        "type": "string",
+        "enum": [
+          "Ok",
+          "Oops"
+        ]
+      },
+      "Notification": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "state",
+              "type"
+            ],
+            "properties": {
+              "state": {
+                "$ref": "#/components/schemas/State"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "State"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "message",
+              "type"
+            ],
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Error"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Pong"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Blink"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "state",
+              "type"
+            ],
+            "properties": {
+              "state": {
+                "$ref": "#/components/schemas/State"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "TalkChange"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "Slide": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Content"
+              }
+            ],
+            "default": {
+              "type": "Empty"
+            }
+          },
+          "kind": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SlideKind"
+              }
+            ],
+            "default": "Standard"
+          },
+          "notes": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Content"
+              }
+            ],
+            "default": {
+              "type": "Empty"
+            }
+          },
+          "style": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Style"
+              }
+            ],
+            "default": {}
+          },
+          "title": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Content"
+              }
+            ],
+            "default": {
+              "type": "Empty"
+            }
+          }
+        }
+      },
+      "SlideKind": {
+        "type": "string",
+        "enum": [
+          "Cover",
+          "Part",
+          "Standard"
+        ]
+      },
+      "SlidesResponse": {
+        "type": "object",
+        "required": [
+          "slides"
+        ],
+        "properties": {
+          "slides": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Slide"
+            }
+          }
+        }
+      },
+      "State": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "state"
+            ],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "Init"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "total_duration",
+              "state"
+            ],
+            "properties": {
+              "current": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "Paused"
+                ]
+              },
+              "total_duration": {
+                "$ref": "#/components/schemas/Duration"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "since",
+              "current",
+              "total_duration",
+              "state"
+            ],
+            "properties": {
+              "current": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "since": {
+                "$ref": "#/components/schemas/Timestamp"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "Running"
+                ]
+              },
+              "total_duration": {
+                "$ref": "#/components/schemas/Duration"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "current",
+              "total_duration",
+              "state"
+            ],
+            "properties": {
+              "current": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "Done"
+                ]
+              },
+              "total_duration": {
+                "$ref": "#/components/schemas/Duration"
+              }
+            }
+          }
+        ]
+      },
+      "Style": {
+        "type": "object",
+        "properties": {
+          "classes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "style": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "TalkResponse": {
+        "type": "object",
+        "required": [
+          "title",
+          "date",
+          "titles"
+        ],
+        "properties": {
+          "date": {
+            "$ref": "#/components/schemas/Date"
+          },
+          "footer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "head": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "titles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Timestamp": {
+        "type": "string",
+        "format": "date-time"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "command"
+    },
+    {
+      "name": "health"
+    },
+    {
+      "name": "slides"
+    },
+    {
+      "name": "talk"
+    }
+  ]
+}

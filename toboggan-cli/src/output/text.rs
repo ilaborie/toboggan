@@ -22,8 +22,13 @@ impl TextRenderer {
     }
 
     pub fn yaml(talk: &Talk) -> Result<Vec<u8>> {
-        let (result, _) = measure_render(|| serde_yaml::to_string(talk));
-        Ok(result?.into_bytes())
+        let (result, _) = measure_render(|| serde_saphyr::to_string(talk));
+        Ok(result
+            .map_err(|err| crate::error::TobogganCliError::Serialize {
+                format: "YAML".to_string(),
+                message: err.to_string(),
+            })?
+            .into_bytes())
     }
 
     pub fn metrics(talk: &Talk, format: &str) -> Result<RenderMetrics> {
@@ -39,8 +44,16 @@ impl TextRenderer {
                 (result?.len(), time)
             }
             "yaml" => {
-                let (result, time) = measure_render(|| serde_yaml::to_string(talk));
-                (result?.len(), time)
+                let (result, time) = measure_render(|| serde_saphyr::to_string(talk));
+                (
+                    result
+                        .map_err(|err| crate::error::TobogganCliError::Serialize {
+                            format: "YAML".to_string(),
+                            message: err.to_string(),
+                        })?
+                        .len(),
+                    time,
+                )
             }
             _ => {
                 return Err(crate::error::TobogganCliError::Serialize {

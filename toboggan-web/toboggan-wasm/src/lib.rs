@@ -14,7 +14,7 @@ pub(crate) use crate::app::Action;
 mod components;
 use crate::app::App;
 pub(crate) use crate::components::{
-    ToastType, TobogganFooterElement, TobogganNavigationElement, TobogganSlideElement,
+    ToastType, TobogganFooterElement, TobogganSlideElement,
     TobogganToastElement, WasmElement,
 };
 

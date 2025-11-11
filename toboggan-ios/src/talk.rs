@@ -20,7 +20,7 @@ impl From<TalkResponse> for Talk {
         } = value;
 
         Self {
-            title: title.to_string(),
+            title: title.clone(),
             date: date.to_string(),
             slides: titles,
         }
@@ -66,7 +66,7 @@ impl State {
                 current,
                 total_duration,
             } => {
-                #[allow(clippy::cast_possible_truncation)]
+                #[allow(clippy::cast_possible_truncation, clippy::expect_used)]
                 // UniFFI requires u32, slide indices are typically small
                 let current_index = current.expect("should have a current index") as u32;
                 Self::Paused {

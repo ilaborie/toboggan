@@ -1,13 +1,15 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{Content, Date, Slide};
+use crate::{Date, Slide};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Talk {
     pub title: String,
     pub date: Date,
-    #[serde(default)]
-    pub footer: Content,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub footer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub head: Option<String>,
     pub slides: Vec<Slide>,
 }
 
@@ -16,12 +18,14 @@ impl Talk {
         let title = title.into();
         let date = Date::today();
         let slides = Vec::new();
-        let footer = Content::default();
+        let footer = None;
+        let head = None;
 
         Self {
             title,
             date,
             footer,
+            head,
             slides,
         }
     }
@@ -33,8 +37,14 @@ impl Talk {
     }
 
     #[must_use]
-    pub fn with_footer(mut self, footer: impl Into<Content>) -> Self {
-        self.footer = footer.into();
+    pub fn with_footer(mut self, footer: impl Into<String>) -> Self {
+        self.footer = Some(footer.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_head(mut self, head: impl Into<String>) -> Self {
+        self.head = Some(head.into());
         self
     }
 
@@ -51,8 +61,22 @@ pub struct TalkResponse {
     pub title: String,
     pub date: Date,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub footer: Option<Content>,
+    pub footer: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub head: Option<String>,
     pub titles: Vec<String>,
+}
+
+impl Default for TalkResponse {
+    fn default() -> Self {
+        Self {
+            title: String::default(),
+            date: Date::today(),
+            footer: None,
+            head: None,
+            titles: vec![],
+        }
+    }
 }
 
 impl From<Talk> for TalkResponse {
@@ -61,16 +85,16 @@ impl From<Talk> for TalkResponse {
             title,
             date,
             footer,
+            head,
             slides,
         } = value;
-        let title = title.to_string();
-        let footer = Some(footer);
         let titles = slides.iter().map(|it| it.title.to_string()).collect();
 
         Self {
             title,
             date,
             footer,
+            head,
             titles,
         }
     }

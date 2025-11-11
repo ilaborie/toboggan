@@ -9,19 +9,22 @@ use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing::error;
+use utoipa::openapi::OpenApi;
+use utoipa_scalar::{Scalar, Servable};
 
 use crate::{TobogganState, WebAssets};
 
 mod api;
 mod ws;
 
-pub fn routes(assets_dir: Option<PathBuf>) -> Router<TobogganState> {
-    routes_with_cors(None, assets_dir)
+pub fn routes(assets_dir: Option<PathBuf>, openapi: OpenApi) -> Router<TobogganState> {
+    routes_with_cors(None, assets_dir, openapi)
 }
 
 pub fn routes_with_cors(
     allowed_origins: Option<&[String]>,
     assets_dir: Option<PathBuf>,
+    openapi: OpenApi,
 ) -> Router<TobogganState> {
     let cors = create_cors_layer(allowed_origins);
 
@@ -35,8 +38,9 @@ pub fn routes_with_cors(
                 .route("/command", post(api::post_command))
                 .route("/ws", get(ws::websocket_handler)),
         )
-        .route("/health", get(health))
         .layer(TraceLayer::new_for_http())
+        .route("/health", get(health))
+        .merge(Scalar::with_url("/doc", openapi))
         .layer(cors);
 
     // Add local assets directory if provided (for presentation images/files)

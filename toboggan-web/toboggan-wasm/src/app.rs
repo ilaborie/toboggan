@@ -11,9 +11,16 @@ use web_sys::HtmlElement;
 
 use crate::{
     AppConfig, CommunicationMessage, CommunicationService, ConnectionStatus, KeyboardService,
-    StateClassMapper, ToastType, TobogganApi, TobogganFooterElement, TobogganNavigationElement,
-    TobogganSlideElement, TobogganToastElement, WasmElement, create_html_element, play_tada,
+    StateClassMapper, ToastType, TobogganApi, TobogganFooterElement, TobogganSlideElement,
+    TobogganToastElement, WasmElement, create_html_element, inject_head_html, play_tada,
 };
+
+/// Holds metadata about the presentation
+#[derive(Debug, Clone, Default)]
+struct PresentationMeta {
+    /// Total number of slides in the presentation
+    total_slides: usize,
+}
 
 /// Tracks state recovery information for reconnection scenarios
 #[derive(Debug, Clone, Default)]
@@ -33,7 +40,6 @@ pub(crate) enum Action {
 
 #[derive(Default)]
 struct TobogganElements {
-    navigation: TobogganNavigationElement,
     slide: TobogganSlideElement,
     footer: TobogganFooterElement,
     toast: TobogganToastElement,
@@ -110,15 +116,6 @@ impl WasmElement for App {
         {
             let mut elements = self.elements.borrow_mut();
 
-            if let Some(tx_cmd) = &self.tx_cmd {
-                elements.navigation.set_command_sender(tx_cmd.clone());
-            }
-
-            let el = create_html_element("header");
-            el.set_class_name("toboggan-navigation");
-            elements.navigation.render(&el);
-            host.append_child(&el).unwrap_throw();
-
             let el = create_html_element("div");
             el.set_class_name("toboggan-slide");
             elements.slide.render(&el);
@@ -143,6 +140,7 @@ impl WasmElement for App {
         });
 
         let tx_cmd = self.tx_cmd.take().unwrap_throw();
+        let presentation_meta = Rc::new(RefCell::new(PresentationMeta::default()));
         spawn_local(handle_messages(
             self.api.clone(),
             rx_msg,
@@ -150,6 +148,7 @@ impl WasmElement for App {
             self.client_id,
             tx_cmd.clone(),
             root_element,
+            presentation_meta,
         ));
 
         spawn_local(handle_actions(rx_action, self.elements.clone(), tx_cmd));
@@ -163,6 +162,7 @@ async fn handle_messages(
     client_id: toboggan_core::ClientId,
     tx_cmd: UnboundedSender<Command>,
     root_element: Rc<HtmlElement>,
+    presentation_meta: Rc<RefCell<PresentationMeta>>,
 ) {
     let recovery_state = Rc::new(RefCell::new(RecoveryState::default()));
 
@@ -176,6 +176,7 @@ async fn handle_messages(
                     client_id,
                     &tx_cmd,
                     &recovery_state,
+                    &presentation_meta,
                 )
                 .await;
             }
@@ -187,6 +188,7 @@ async fn handle_messages(
                     &root_element,
                     &tx_cmd,
                     &recovery_state,
+                    &presentation_meta,
                 )
                 .await;
             }
@@ -198,6 +200,7 @@ async fn handle_messages(
                     &root_element,
                     &tx_cmd,
                     &recovery_state,
+                    &presentation_meta,
                 )
                 .await;
             }
@@ -215,10 +218,10 @@ async fn handle_connection_status(
     client_id: toboggan_core::ClientId,
     tx_cmd: &UnboundedSender<Command>,
     recovery_state: &Rc<RefCell<RecoveryState>>,
+    presentation_meta: &Rc<RefCell<PresentationMeta>>,
 ) {
     {
-        let mut elems = elements.borrow_mut();
-        elems.navigation.set_connection_status(Some(status.clone()));
+        let elems = elements.borrow();
 
         match status {
             ConnectionStatus::Connecting => {
@@ -256,10 +259,15 @@ async fn handle_connection_status(
         let _ = tx_cmd.unbounded_send(Command::Register { client: client_id });
 
         if let Ok(talk) = api.get_talk().await {
+            // Update presentation metadata with total slides count
+            presentation_meta.borrow_mut().total_slides = talk.titles.len();
+
             let mut elem = elements.borrow_mut();
             elem.footer.set_content(talk.footer.clone());
-            elem.navigation.set_slide_count(Some(talk.titles.len()));
-            elem.navigation.set_talk(Some(talk));
+            drop(elem);
+
+            // Inject custom head HTML if provided
+            inject_head_html(talk.head.as_deref());
         } else {
             error!("Failed to fetch talk");
         }
@@ -273,7 +281,15 @@ async fn handle_state_change(
     root_element: &Rc<HtmlElement>,
     tx_cmd: &UnboundedSender<Command>,
     recovery_state: &Rc<RefCell<RecoveryState>>,
+    presentation_meta: &Rc<RefCell<PresentationMeta>>,
 ) {
+    // Auto-start presentation when in Init state
+    if matches!(state, State::Init) {
+        info!("Auto-starting presentation from Init state");
+        let _ = tx_cmd.unbounded_send(Command::First);
+        return;
+    }
+
     // Try to restore previous slide position after reconnection
     if try_restore_slide_position(&state, elements, tx_cmd, recovery_state) {
         return; // We'll receive a new StateChange after GoTo command
@@ -283,9 +299,9 @@ async fn handle_state_change(
     recovery_state.borrow_mut().last_known_state = Some(state.clone());
 
     // Update UI to reflect current state
-    update_root_state_class(&state, root_element);
+    update_root_state_class(&state, root_element, presentation_meta);
     update_slide_display(&state, api, elements).await;
-    update_navigation_state(&state, elements);
+    show_completion_toast_if_done(&state, elements);
 }
 
 async fn handle_talk_change(
@@ -295,6 +311,7 @@ async fn handle_talk_change(
     root_element: &Rc<HtmlElement>,
     _tx_cmd: &UnboundedSender<Command>,
     recovery_state: &Rc<RefCell<RecoveryState>>,
+    presentation_meta: &Rc<RefCell<PresentationMeta>>,
 ) {
     info!("📝 Presentation updated, reloading talk metadata");
 
@@ -304,25 +321,38 @@ async fn handle_talk_change(
         .toast
         .toast(ToastType::Info, "📝 Presentation updated");
 
-    // Refetch talk metadata
-    if let Err(err) = api.get_talk().await {
-        error!("Failed to refetch talk after TalkChange:", err.to_string());
-        elements
-            .borrow()
-            .toast
-            .toast(ToastType::Error, "Failed to reload presentation metadata");
+    // Re-fetch talk metadata
+    match api.get_talk().await {
+        Ok(talk) => {
+            // Update presentation metadata with total slides count
+            presentation_meta.borrow_mut().total_slides = talk.titles.len();
+
+            let mut elem = elements.borrow_mut();
+            elem.footer.set_content(talk.footer.clone());
+            drop(elem);
+
+            // Inject custom head HTML if provided
+            inject_head_html(talk.head.as_deref());
+        }
+        Err(err) => {
+            error!("Failed to refetch talk after TalkChange:", err.to_string());
+            elements
+                .borrow()
+                .toast
+                .toast(ToastType::Error, "Failed to reload presentation metadata");
+        }
     }
 
-    // Save current state for future reconnection recovery
+    // Save current state for future re-connection recovery
     recovery_state.borrow_mut().last_known_state = Some(state.clone());
 
     // Update UI to reflect current state (server has already adjusted slide position)
-    update_root_state_class(&state, root_element);
+    update_root_state_class(&state, root_element, presentation_meta);
     update_slide_display(&state, api, elements).await;
-    update_navigation_state(&state, elements);
+    show_completion_toast_if_done(&state, elements);
 }
 
-/// Attempts to restore slide position after reconnection
+/// Attempts to restore slide position after re-connection
 /// Returns true if restoration was attempted (caller should return early)
 fn try_restore_slide_position(
     state: &State,
@@ -363,21 +393,6 @@ fn try_restore_slide_position(
         slide_id, "after reconnection"
     );
 
-    // Validate slide_id is within bounds
-    let slide_count = elements.borrow().navigation.slide_count();
-    if let Some(count) = slide_count
-        && slide_id >= count
-    {
-        error!(
-            "Cannot restore to slide",
-            slide_id,
-            "- out of bounds (max:",
-            count - 1,
-            ")"
-        );
-        return false;
-    }
-
     // Send GoTo command to restore position
     elements.borrow().toast.toast(
         ToastType::Info,
@@ -397,7 +412,11 @@ fn try_restore_slide_position(
 }
 
 /// Updates root element CSS class to reflect current state
-fn update_root_state_class(state: &State, root_element: &HtmlElement) {
+fn update_root_state_class(
+    state: &State,
+    root_element: &HtmlElement,
+    presentation_meta: &Rc<RefCell<PresentationMeta>>,
+) {
     let state_class = state.to_css_class();
     let current_classes = root_element.class_name();
 
@@ -414,6 +433,14 @@ fn update_root_state_class(state: &State, root_element: &HtmlElement) {
     };
 
     root_element.set_class_name(&new_classes);
+
+    // Update CSS custom properties for slide tracking
+    let current_slide = state.current().map_or(0, |idx| idx + 1); // 1-based for display
+    let total_slides = presentation_meta.borrow().total_slides;
+
+    let style = root_element.style();
+    let _ = style.set_property("--current-slide", &current_slide.to_string());
+    let _ = style.set_property("--total-slides", &total_slides.to_string());
 }
 
 /// Fetches and displays the slide corresponding to current state
@@ -439,13 +466,11 @@ async fn update_slide_display(
     elements.borrow_mut().slide.set_slide(Some(slide));
 }
 
-/// Updates navigation component state and shows completion toast if done
-fn update_navigation_state(state: &State, elements: &Rc<RefCell<TobogganElements>>) {
-    let mut elements = elements.borrow_mut();
-    elements.navigation.set_state(Some(state.clone()));
-
+/// Shows completion toast if presentation is done
+fn show_completion_toast_if_done(state: &State, elements: &Rc<RefCell<TobogganElements>>) {
     if matches!(state, State::Done { .. }) {
         debug!("Showing done toast");
+        let elements = elements.borrow();
         elements.toast.toast(ToastType::Success, "🎉 Done");
         play_tada();
     }

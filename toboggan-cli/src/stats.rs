@@ -648,7 +648,7 @@ fn analyze_content_internal(content: &Content, strip_counter: bool) -> ContentAn
             let text_to_analyze = if strip_counter {
                 strip_slide_counter(text)
             } else {
-                text.to_string()
+                text.clone()
             };
             analysis.words += count_words(&text_to_analyze);
             analysis.bullets += count_bullet_points(&text_to_analyze);
@@ -979,6 +979,7 @@ mod tests {
             title: "Test Talk".to_string(),
             date: toboggan_core::Date::today(),
             footer: None,
+            head: None,
         };
 
         let intro_slide = Slide::new("Introduction").with_body(Content::Text {
@@ -1018,6 +1019,7 @@ mod tests {
             title: "Test Talk".to_string(),
             date: toboggan_core::Date::today(),
             footer: None,
+            head: None,
         };
 
         // Simulate a diagram slide with counter: title="3.5 Diagram" body=SVG
@@ -1067,6 +1069,7 @@ mod tests {
             title: "Test Talk".to_string(),
             date: toboggan_core::Date::today(),
             footer: None,
+            head: None,
         };
 
         // Create a slide with content words (2 in title + 6 in body = 8 total) and 4 notes words

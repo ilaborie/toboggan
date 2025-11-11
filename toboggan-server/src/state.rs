@@ -52,7 +52,7 @@ impl TobogganState {
         let started_at = self.started_at;
         let elapsed = started_at.elapsed();
         let talk = self.talk.read().await;
-        let name = talk.title.to_string();
+        let name = talk.title.clone();
         let active_clients = self.clients.len();
 
         HealthResponse {

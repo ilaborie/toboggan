@@ -1,3 +1,5 @@
+#![allow(clippy::print_stdout, clippy::missing_panics_doc, clippy::expect_used)]
+
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;

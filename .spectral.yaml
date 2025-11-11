@@ -1,0 +1,10 @@
+extends: ["spectral:oas"]
+
+# Override rules to handle WebSocket endpoints
+overrides:
+  - files:
+      - "**openapi.json"
+    rules:
+      # WebSocket endpoints don't have traditional HTTP responses
+      oas3-schema: warn
+      operation-success-response: warn

@@ -34,7 +34,8 @@ pub enum SlideProcessingResult {
 pub struct TalkMetadata {
     pub title: String,
     pub date: Date,
-    pub footer: Option<toboggan_core::Content>,
+    pub footer: Option<String>,
+    pub head: Option<String>,
 }
 
 impl Default for TalkMetadata {
@@ -43,6 +44,7 @@ impl Default for TalkMetadata {
             title: "Unknown Talk".to_string(),
             date: Date::today(),
             footer: None,
+            head: None,
         }
     }
 }
@@ -58,9 +60,8 @@ impl ParseResult {
     pub fn to_talk(&self) -> Talk {
         let mut talk = Talk::new(&self.talk_metadata.title);
         talk.date = self.talk_metadata.date;
-        if let Some(footer) = &self.talk_metadata.footer {
-            talk.footer = footer.clone();
-        }
+        talk.footer.clone_from(&self.talk_metadata.footer);
+        talk.head.clone_from(&self.talk_metadata.head);
 
         for slide_result in &self.slides {
             if let SlideProcessingResult::Processed(slide) = slide_result {
@@ -215,8 +216,7 @@ fn display_results(parse_result: &ParseResult, settings: &Settings) -> Result<()
 fn write_output(parse_result: &ParseResult, output: &Path, settings: &Settings) -> Result<()> {
     let format = settings.resolve_format();
     let talk = parse_result.to_talk();
-    let head_html_file = settings.head_html_file.as_deref();
-    let serialized = output::serialize_talk(&talk, &format, head_html_file)?;
+    let serialized = output::serialize_talk(&talk, &format)?;
 
     write_talk(output, &serialized)?;
 
@@ -308,6 +308,7 @@ mod tests {
             title: "Test Presentation".to_string(),
             date: toboggan_core::Date::today(),
             footer: None,
+            head: None,
         };
 
         let slides = vec![
@@ -363,6 +364,7 @@ mod tests {
             title: "Test Presentation".to_string(),
             date: toboggan_core::Date::today(),
             footer: None,
+            head: None,
         };
 
         let slides = vec![

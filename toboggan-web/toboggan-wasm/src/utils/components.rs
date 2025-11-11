@@ -1,6 +1,6 @@
 use gloo::utils::document;
 use wasm_bindgen::prelude::*;
-use web_sys::{HtmlButtonElement, HtmlElement, Node, ShadowRoot, ShadowRootInit, ShadowRootMode};
+use web_sys::{HtmlElement, Node, ShadowRoot, ShadowRootInit, ShadowRootMode};
 
 pub(crate) fn create_shadow_root_with_style(
     host: &HtmlElement,
@@ -23,15 +23,6 @@ where
     let element = document().create_element(tag)?;
     parent.append_child(&element)?;
     Ok(element.dyn_into::<T>()?)
-}
-
-pub(crate) fn create_button(icon: &str, title: &str) -> Result<HtmlButtonElement, JsValue> {
-    let btn = document()
-        .create_element("button")?
-        .dyn_into::<HtmlButtonElement>()?;
-    btn.set_text_content(Some(icon));
-    btn.set_title(title);
-    Ok(btn)
 }
 
 pub trait StateClassMapper<T> {

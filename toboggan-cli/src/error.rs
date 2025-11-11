@@ -255,8 +255,8 @@ impl From<serde_json::Error> for TobogganCliError {
     }
 }
 
-impl From<serde_yaml::Error> for TobogganCliError {
-    fn from(source: serde_yaml::Error) -> Self {
+impl From<serde_saphyr::Error> for TobogganCliError {
+    fn from(source: serde_saphyr::Error) -> Self {
         Self::Serialize {
             format: "YAML".to_string(),
             message: source.to_string(),

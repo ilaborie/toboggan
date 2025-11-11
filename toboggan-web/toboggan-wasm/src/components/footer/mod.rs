@@ -1,19 +1,18 @@
-use toboggan_core::Content;
 use web_sys::{Element, HtmlElement};
 
 use crate::components::WasmElement;
-use crate::{create_and_append_element, create_shadow_root_with_style, dom_try, render_content};
+use crate::{create_and_append_element, create_shadow_root_with_style, dom_try};
 
 const CSS: &str = include_str!("style.css");
 
 #[derive(Debug, Default)]
 pub struct TobogganFooterElement {
     container: Option<Element>,
-    content: Option<Content>,
+    content: Option<String>,
 }
 
 impl TobogganFooterElement {
-    pub fn set_content(&mut self, content: Option<Content>) {
+    pub fn set_content(&mut self, content: Option<String>) {
         self.content = content;
         self.render_content();
     }
@@ -23,11 +22,8 @@ impl TobogganFooterElement {
             return;
         };
 
-        let html = self
-            .content
-            .as_ref()
-            .map_or_else(String::new, |content| render_content(content, None));
-        container.set_inner_html(&html);
+        let html = self.content.as_deref().unwrap_or("");
+        container.set_inner_html(html);
     }
 }
 

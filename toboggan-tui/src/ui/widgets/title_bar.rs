@@ -35,7 +35,7 @@ impl StatefulWidget for &TitleBar {
             .title_bottom(bottom.centered())
             .border_set(border::DOUBLE);
 
-        let title = state.talk.title.to_string();
+        let title = state.talk.title.clone();
         let date = state.talk.date.to_string();
         let content = Line::from(vec![
             Span::raw(title).bold(),

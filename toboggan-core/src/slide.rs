@@ -105,7 +105,7 @@ impl Display for Style {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SlidesResponse {
     pub slides: Vec<Slide>,

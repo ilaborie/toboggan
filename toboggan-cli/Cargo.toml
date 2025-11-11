@@ -21,7 +21,7 @@ toboggan-core = {path = "../toboggan-core", features = ["std"]}
 
 toml = {workspace = true}
 serde_json = {workspace = true}
-serde_yaml = {workspace = true}
+serde-saphyr = {workspace = true}
 ciborium = {workspace = true}
 rmp-serde = {workspace = true}
 bincode = {workspace = true}
@@ -33,7 +33,7 @@ miette = { workspace =true, features = ["fancy"] }
 derive_more = { workspace =true, features = ["error", "from", "display"]}
 comrak = {workspace = true}
 regex = {workspace = true}
-owo-colors = { version = "4.1.0", features = ["supports-colors"] }
+owo-colors = { workspace = true, features = ["supports-colors"] }
 humantime = {workspace = true}
 comfy-table = {workspace = true}
 
