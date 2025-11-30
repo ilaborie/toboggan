@@ -4,10 +4,11 @@ use std::rc::Rc;
 use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use gloo::console::{debug, error, info};
-use toboggan_core::{Command, State};
 use wasm_bindgen::UnwrapThrowExt;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlElement;
+
+use toboggan_core::{Command, State};
 
 use crate::{
     AppConfig, CommunicationMessage, CommunicationService, ConnectionStatus, KeyboardService,
@@ -31,13 +32,6 @@ struct RecoveryState {
     pending_restoration: bool,
 }
 
-#[derive(Debug, Clone)]
-pub(crate) enum Action {
-    Command(Command),
-    NextStep,
-    PreviousStep,
-}
-
 #[derive(Default)]
 struct TobogganElements {
     slide: TobogganSlideElement,
@@ -52,7 +46,7 @@ pub struct App {
     client_id: toboggan_core::ClientId,
     elements: Rc<RefCell<TobogganElements>>,
     rx_msg: Option<UnboundedReceiver<CommunicationMessage>>,
-    rx_action: Option<UnboundedReceiver<Action>>,
+    rx_action: Option<UnboundedReceiver<Command>>,
     tx_cmd: Option<UnboundedSender<Command>>,
     root_element: Option<Rc<HtmlElement>>,
 }
@@ -451,19 +445,26 @@ async fn update_slide_display(
 ) {
     let Some(slide_id) = state.current() else {
         debug!("No current slide, clearing slide component");
-        elements.borrow_mut().slide.set_slide(None);
+        elements.borrow_mut().slide.set_slide(None, 0);
         return;
     };
 
     let state_class = state.to_css_class();
-    debug!("Fetching slide", slide_id, "for state", state_class);
+    let current_step = state.current_step();
+    debug!(
+        "Fetching slide",
+        slide_id, "for state", state_class, "step", current_step
+    );
 
     let Ok(slide) = api.get_slide(slide_id).await else {
         error!("Failed to fetch slide", slide_id);
         return;
     };
 
-    elements.borrow_mut().slide.set_slide(Some(slide));
+    elements
+        .borrow_mut()
+        .slide
+        .set_slide(Some(slide), current_step);
 }
 
 /// Shows completion toast if presentation is done
@@ -477,35 +478,13 @@ fn show_completion_toast_if_done(state: &State, elements: &Rc<RefCell<TobogganEl
 }
 
 async fn handle_actions(
-    mut rx: UnboundedReceiver<Action>,
-    elements: Rc<RefCell<TobogganElements>>,
+    mut rx: UnboundedReceiver<Command>,
+    _elements: Rc<RefCell<TobogganElements>>,
     tx_cmd: UnboundedSender<Command>,
 ) {
-    while let Some(action) = rx.next().await {
-        match action {
-            Action::Command(cmd) => {
-                if tx_cmd.unbounded_send(cmd).is_err() {
-                    error!("Failed to send command");
-                }
-            }
-            Action::NextStep => {
-                let mut elems = elements.borrow_mut();
-                if !elems.slide.next_step() {
-                    // No more steps, go to next slide
-                    if tx_cmd.unbounded_send(Command::Next).is_err() {
-                        error!("Failed to send next command");
-                    }
-                }
-            }
-            Action::PreviousStep => {
-                let mut elems = elements.borrow_mut();
-                if !elems.slide.previous_step() {
-                    // No steps to go back, go to previous slide
-                    if tx_cmd.unbounded_send(Command::Previous).is_err() {
-                        error!("Failed to send previous command");
-                    }
-                }
-            }
+    while let Some(cmd) = rx.next().await {
+        if tx_cmd.unbounded_send(cmd).is_err() {
+            error!("Failed to send command");
         }
     }
 }

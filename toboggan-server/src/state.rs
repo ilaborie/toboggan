@@ -169,6 +169,7 @@ impl TobogganState {
         *state = State::Running {
             since: Timestamp::now(),
             current: slide_index,
+            current_step: 0,
             total_duration,
         };
     }
@@ -256,10 +257,16 @@ impl TobogganState {
     }
 
     fn command_pause(state: &mut State) -> Notification {
-        if let State::Running { current, .. } = *state {
+        if let State::Running {
+            current,
+            current_step,
+            ..
+        } = *state
+        {
             let total_duration = state.calculate_total_duration();
             *state = State::Paused {
                 current: Some(current),
+                current_step,
                 total_duration,
             };
         }
@@ -277,6 +284,52 @@ impl TobogganState {
         Notification::BLINK
     }
 
+    async fn command_next_step(&self, state: &mut State) -> Notification {
+        let Some(current_slide_index) = state.current() else {
+            return Notification::state(state.clone());
+        };
+
+        let Some(slide) = self.slide_by_index(current_slide_index).await else {
+            return Notification::state(state.clone());
+        };
+
+        let current_step = state.current_step();
+        if current_step < slide.step_count {
+            // Reveal next step within current slide
+            state.update_step(current_step + 1);
+        } else {
+            // All steps revealed, go to first step of next slide
+            let total_slides = self.total_slides().await;
+            if let Some(next_slide_index) = state.next(total_slides) {
+                state.update_slide(next_slide_index);
+                state.update_step(0);
+            }
+        }
+
+        Notification::state(state.clone())
+    }
+
+    async fn command_previous_step(&self, state: &mut State) -> Notification {
+        let current_step = state.current_step();
+
+        if current_step > 0 {
+            // Just decrement step within current slide
+            state.update_step(current_step - 1);
+        } else {
+            // At step 0, go to previous slide's last step
+            let total_slides = self.total_slides().await;
+            if let Some(prev_slide_index) = state.previous(total_slides)
+                && let Some(prev_slide) = self.slide_by_index(prev_slide_index).await
+            {
+                state.update_slide(prev_slide_index);
+                // Set to last step of previous slide (step_count means all steps revealed)
+                state.update_step(prev_slide.step_count);
+            }
+        }
+
+        Notification::state(state.clone())
+    }
+
     pub async fn handle_command(&self, command: &Command) -> Notification {
         let start_time = std::time::Instant::now();
         let mut state = self.current_state.write().await;
@@ -290,6 +343,8 @@ impl TobogganState {
             Command::GoTo { slide } => self.command_goto(&mut state, *slide).await,
             Command::Next => self.command_next(&mut state).await,
             Command::Previous => self.command_previous(&mut state).await,
+            Command::NextStep => self.command_next_step(&mut state).await,
+            Command::PreviousStep => self.command_previous_step(&mut state).await,
             Command::Pause => Self::command_pause(&mut state),
             Command::Resume => Self::command_resume(&mut state),
             Command::Blink => Self::command_blink(),
@@ -333,8 +388,10 @@ impl TobogganState {
                 state.update_slide(next_slide);
             } else if state.is_last_slide(total_slides) {
                 let total_duration = state.calculate_total_duration();
+                let current_step = state.current_step();
                 *state = State::Done {
                     current,
+                    current_step,
                     total_duration,
                 };
             }

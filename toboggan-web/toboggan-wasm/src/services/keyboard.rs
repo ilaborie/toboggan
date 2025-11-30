@@ -4,49 +4,48 @@ use futures::channel::mpsc::UnboundedSender;
 use gloo::console::{debug, error, info};
 use gloo::events::EventListener;
 use gloo::utils::window;
-use toboggan_core::Command;
 use wasm_bindgen::JsCast;
 use web_sys::KeyboardEvent;
 
-use crate::Action;
+use toboggan_core::Command;
 
 #[derive(Debug, Clone)]
-pub struct KeyboardMapping(HashMap<&'static str, Action>);
+pub struct KeyboardMapping(HashMap<&'static str, Command>);
 
 impl Default for KeyboardMapping {
     fn default() -> Self {
         let mapping = HashMap::from([
-            ("ArrowLeft", Action::Command(Command::Previous)),
-            ("ArrowUp", Action::PreviousStep),
-            ("ArrowRight", Action::Command(Command::Next)),
-            ("ArrowDown", Action::NextStep),
-            (" ", Action::NextStep),
-            ("Home", Action::Command(Command::First)),
-            ("End", Action::Command(Command::Last)),
-            ("p", Action::Command(Command::Pause)),
-            ("P", Action::Command(Command::Pause)),
-            ("r", Action::Command(Command::Resume)),
-            ("R", Action::Command(Command::Resume)),
-            ("b", Action::Command(Command::Blink)),
-            ("B", Action::Command(Command::Blink)),
+            ("ArrowLeft", Command::Previous),
+            ("ArrowUp", Command::PreviousStep),
+            ("ArrowRight", Command::Next),
+            ("ArrowDown", Command::NextStep),
+            (" ", Command::NextStep),
+            ("Home", Command::First),
+            ("End", Command::Last),
+            ("p", Command::Pause),
+            ("P", Command::Pause),
+            ("r", Command::Resume),
+            ("R", Command::Resume),
+            ("b", Command::Blink),
+            ("B", Command::Blink),
         ]);
         Self(mapping)
     }
 }
 
 impl KeyboardMapping {
-    pub fn get(&self, key: &str) -> Option<Action> {
+    pub fn get(&self, key: &str) -> Option<Command> {
         self.0.get(key).cloned()
     }
 }
 
 pub struct KeyboardService {
-    tx: UnboundedSender<Action>,
+    tx: UnboundedSender<Command>,
     mapping: KeyboardMapping,
 }
 
 impl KeyboardService {
-    pub fn new(tx: UnboundedSender<Action>, mapping: KeyboardMapping) -> Self {
+    pub fn new(tx: UnboundedSender<Command>, mapping: KeyboardMapping) -> Self {
         Self { tx, mapping }
     }
 
