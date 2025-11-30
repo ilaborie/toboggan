@@ -1,0 +1,38 @@
+# Gradle files
+.gradle/
+build/
+
+# Local configuration file
+local.properties
+
+# IDE
+.idea/
+*.iml
+
+# Log files
+*.log
+
+# Android Studio Navigation editor temp files
+.navigation/
+
+# Android Studio captures folder
+captures/
+
+# Keystore files
+*.jks
+*.keystore
+
+# External native build folder
+.externalNativeBuild/
+.cxx/
+
+# Generated files
+app/src/main/jniLibs/
+app/src/main/java/uniffi/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Heap dumps
+*.hprof
