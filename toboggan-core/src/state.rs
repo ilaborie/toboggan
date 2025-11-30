@@ -10,15 +10,18 @@ pub enum State {
     Init,
     Paused {
         current: Option<usize>,
+        current_step: usize,
         total_duration: Duration,
     },
     Running {
         since: Timestamp,
         current: usize,
+        current_step: usize,
         total_duration: Duration,
     },
     Done {
         current: usize,
+        current_step: usize,
         total_duration: Duration,
     },
 }
@@ -30,6 +33,25 @@ impl State {
             Self::Init => None,
             Self::Paused { current, .. } => *current,
             Self::Running { current, .. } | Self::Done { current, .. } => Some(*current),
+        }
+    }
+
+    #[must_use]
+    pub fn current_step(&self) -> usize {
+        match self {
+            Self::Init => 0,
+            Self::Paused { current_step, .. }
+            | Self::Running { current_step, .. }
+            | Self::Done { current_step, .. } => *current_step,
+        }
+    }
+
+    pub fn update_step(&mut self, step: usize) {
+        match self {
+            Self::Init => {}
+            Self::Paused { current_step, .. }
+            | Self::Running { current_step, .. }
+            | Self::Done { current_step, .. } => *current_step = step,
         }
     }
 
@@ -61,12 +83,14 @@ impl State {
     pub fn auto_resume(&mut self) {
         if let Self::Paused {
             current: Some(slide_index),
+            current_step,
             total_duration,
         } = self
         {
             *self = Self::Running {
                 since: Timestamp::now(),
                 current: *slide_index,
+                current_step: *current_step,
                 total_duration: *total_duration,
             };
         }
@@ -80,6 +104,7 @@ impl State {
                 *self = Self::Running {
                     since: Timestamp::now(),
                     current: slide_index,
+                    current_step: 0,
                     total_duration: Duration::default(),
                 };
             }
@@ -87,12 +112,14 @@ impl State {
                 *self = Self::Running {
                     since: *since,
                     current: slide_index,
+                    current_step: 0,
                     total_duration,
                 };
             }
             Self::Paused { .. } => {
                 *self = Self::Paused {
                     current: Some(slide_index),
+                    current_step: 0,
                     total_duration,
                 };
             }
@@ -100,6 +127,7 @@ impl State {
                 // When navigating from Done state, go back to Paused
                 *self = Self::Paused {
                     current: Some(slide_index),
+                    current_step: 0,
                     total_duration,
                 };
             }
@@ -134,6 +162,7 @@ mod tests {
 
         let state = State::Paused {
             current: Some(0),
+            current_step: 0,
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.current(), Some(0));
@@ -141,12 +170,14 @@ mod tests {
         let state = State::Running {
             since: Timestamp::now(),
             current: 0,
+            current_step: 0,
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.current(), Some(0));
 
         let state = State::Done {
             current: 0,
+            current_step: 0,
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.current(), Some(0));
@@ -159,6 +190,7 @@ mod tests {
         // Test with first slide
         let state = State::Paused {
             current: Some(0),
+            current_step: 0,
             total_duration: Duration::from_secs(0),
         };
         assert!(state.is_first_slide(total_slides));
@@ -168,6 +200,7 @@ mod tests {
         let state = State::Running {
             since: Timestamp::now(),
             current: 1,
+            current_step: 0,
             total_duration: Duration::from_secs(0),
         };
         assert!(!state.is_first_slide(total_slides));
@@ -176,6 +209,7 @@ mod tests {
         // Test with last slide
         let state = State::Done {
             current: 2,
+            current_step: 0,
             total_duration: Duration::from_secs(0),
         };
         assert!(!state.is_first_slide(total_slides));
@@ -188,6 +222,7 @@ mod tests {
 
         let state = State::Paused {
             current: Some(0),
+            current_step: 0,
             total_duration: Duration::from_secs(0),
         };
         assert!(!state.is_first_slide(total_slides));
@@ -200,6 +235,7 @@ mod tests {
 
         let state = State::Paused {
             current: Some(0),
+            current_step: 0,
             total_duration: Duration::from_secs(0),
         };
         assert!(state.is_first_slide(total_slides));
@@ -213,6 +249,7 @@ mod tests {
         // Test next from first slide
         let state = State::Paused {
             current: Some(0),
+            current_step: 0,
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.next(total_slides), Some(1));
@@ -221,6 +258,7 @@ mod tests {
         let state = State::Running {
             since: Timestamp::now(),
             current: 1,
+            current_step: 0,
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.next(total_slides), Some(2));
@@ -228,6 +266,7 @@ mod tests {
         // Test next from last slide
         let state = State::Done {
             current: 2,
+            current_step: 0,
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.next(total_slides), None);
@@ -240,6 +279,7 @@ mod tests {
         // Test previous from first slide
         let state = State::Paused {
             current: Some(0),
+            current_step: 0,
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.previous(total_slides), None);
@@ -248,6 +288,7 @@ mod tests {
         let state = State::Running {
             since: Timestamp::now(),
             current: 1,
+            current_step: 0,
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.previous(total_slides), Some(0));
@@ -255,6 +296,7 @@ mod tests {
         // Test previous from last slide
         let state = State::Done {
             current: 2,
+            current_step: 0,
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.previous(total_slides), Some(1));
@@ -266,6 +308,7 @@ mod tests {
 
         let state = State::Paused {
             current: Some(0),
+            current_step: 0,
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.next(total_slides), None);
@@ -278,6 +321,7 @@ mod tests {
 
         let state = State::Paused {
             current: Some(0),
+            current_step: 0,
             total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.next(total_slides), None);
@@ -288,12 +332,14 @@ mod tests {
     fn test_state_serialization_format() {
         let paused_state = State::Paused {
             current: Some(0),
+            current_step: 0,
             total_duration: Duration::from_secs(10),
         };
 
         let running_state = State::Running {
             since: Timestamp::now(),
             current: 0,
+            current_step: 0,
             total_duration: Duration::from_secs(5),
         };
 
@@ -305,5 +351,42 @@ mod tests {
         // Verify the states have the expected variants
         assert!(matches!(paused_state, State::Paused { .. }));
         assert!(matches!(running_state, State::Running { .. }));
+    }
+
+    #[test]
+    fn test_current_step() {
+        let state = State::default();
+        assert_eq!(state.current_step(), 0);
+
+        let state = State::Paused {
+            current: Some(0),
+            current_step: 2,
+            total_duration: Duration::from_secs(0),
+        };
+        assert_eq!(state.current_step(), 2);
+
+        let state = State::Running {
+            since: Timestamp::now(),
+            current: 0,
+            current_step: 3,
+            total_duration: Duration::from_secs(0),
+        };
+        assert_eq!(state.current_step(), 3);
+    }
+
+    #[test]
+    fn test_update_step() {
+        let mut state = State::Paused {
+            current: Some(0),
+            current_step: 0,
+            total_duration: Duration::from_secs(0),
+        };
+        assert_eq!(state.current_step(), 0);
+
+        state.update_step(2);
+        assert_eq!(state.current_step(), 2);
+
+        state.update_step(0);
+        assert_eq!(state.current_step(), 0);
     }
 }

@@ -65,6 +65,7 @@ impl State {
             CoreState::Paused {
                 current,
                 total_duration,
+                ..
             } => {
                 #[allow(clippy::cast_possible_truncation, clippy::expect_used)]
                 // UniFFI requires u32, slide indices are typically small
@@ -94,6 +95,7 @@ impl State {
             CoreState::Done {
                 current,
                 total_duration,
+                ..
             } => {
                 #[allow(clippy::cast_possible_truncation)]
                 // UniFFI requires u32, slide indices are typically small

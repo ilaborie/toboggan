@@ -9,13 +9,11 @@ pub(crate) use self::services::{
 };
 
 mod app;
-pub(crate) use crate::app::Action;
+use crate::app::App;
 
 mod components;
-use crate::app::App;
 pub(crate) use crate::components::{
-    ToastType, TobogganFooterElement, TobogganSlideElement,
-    TobogganToastElement, WasmElement,
+    ToastType, TobogganFooterElement, TobogganSlideElement, TobogganToastElement, WasmElement,
 };
 
 mod config;

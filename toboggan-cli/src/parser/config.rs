@@ -22,6 +22,7 @@ pub(super) fn default_options() -> Options<'static> {
     options.extension.subscript = true;
     options.extension.spoiler = true;
     options.extension.greentext = true;
+    options.extension.highlight = true;
 
     options.render.r#unsafe = true;
 

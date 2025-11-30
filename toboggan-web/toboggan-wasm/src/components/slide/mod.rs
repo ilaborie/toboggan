@@ -14,10 +14,45 @@ pub struct TobogganSlideElement {
 }
 
 impl TobogganSlideElement {
-    pub fn set_slide(&mut self, slide: Option<Slide>) {
+    pub fn set_slide(&mut self, slide: Option<Slide>, current_step: usize) {
         self.slide = slide;
         self.render_slide();
-        self.reset_steps();
+        self.set_current_step(current_step);
+    }
+
+    /// Set the current step state on the DOM.
+    /// `step` represents how many steps have been revealed (0 = none, 1 = first step visible, etc.)
+    pub fn set_current_step(&self, step: usize) {
+        let Some(container) = &self.container else {
+            return;
+        };
+
+        let Ok(steps) = container.query_selector_all(".step") else {
+            return;
+        };
+
+        for i in 0..steps.length() {
+            if let Some(node) = steps.item(i)
+                && let Ok(element) = node.dyn_into::<Element>()
+            {
+                let class_name = element.class_name();
+                let mut new_classes: Vec<&str> = class_name
+                    .split_whitespace()
+                    .filter(|c| *c != "step-done" && *c != "step-current")
+                    .collect();
+
+                let step_index = i as usize;
+                if step_index < step {
+                    new_classes.push("step-done");
+                    // Mark the last revealed step as current
+                    if step_index + 1 == step {
+                        new_classes.push("step-current");
+                    }
+                }
+
+                element.set_class_name(&new_classes.join(" "));
+            }
+        }
     }
 
     fn render_slide(&mut self) {
@@ -63,120 +98,6 @@ impl TobogganSlideElement {
         };
 
         container.set_inner_html(&content);
-    }
-
-    fn reset_steps(&self) {
-        let Some(container) = &self.container else {
-            return;
-        };
-
-        let steps = container.query_selector_all(".step").ok();
-        if let Some(steps) = steps {
-            for i in 0..steps.length() {
-                if let Some(step) = steps.item(i)
-                    && let Ok(element) = step.dyn_into::<Element>()
-                {
-                    let class_name = element.class_name();
-                    let new_classes = class_name
-                        .split_whitespace()
-                        .filter(|content| *content != "step-done" && *content != "step-current")
-                        .collect::<Vec<_>>()
-                        .join(" ");
-                    element.set_class_name(&new_classes);
-                }
-            }
-        }
-    }
-
-    fn update_current_step(&self) {
-        let Some(container) = &self.container else {
-            return;
-        };
-
-        // Remove step-current from all steps
-        if let Ok(steps) = container.query_selector_all(".step") {
-            for i in 0..steps.length() {
-                if let Some(step) = steps.item(i)
-                    && let Ok(element) = step.dyn_into::<Element>()
-                {
-                    let class_name = element.class_name();
-                    let new_classes = class_name
-                        .split_whitespace()
-                        .filter(|content| *content != "step-current")
-                        .collect::<Vec<_>>()
-                        .join(" ");
-                    element.set_class_name(&new_classes);
-                }
-            }
-        }
-
-        // Add step-current to the last step-done
-        if let Ok(done_steps) = container.query_selector_all(".step.step-done")
-            && done_steps.length() > 0
-        {
-            let last_index = done_steps.length() - 1;
-            if let Some(step) = done_steps.item(last_index)
-                && let Ok(element) = step.dyn_into::<Element>()
-            {
-                let class_name = element.class_name();
-                element.set_class_name(&format!("{class_name} step-current"));
-            }
-        }
-    }
-
-    pub fn next_step(&mut self) -> bool {
-        let Some(container) = &self.container else {
-            return false;
-        };
-
-        let steps = match container.query_selector_all(".step") {
-            Ok(steps) if steps.length() > 0 => steps,
-            _ => return false,
-        };
-
-        for i in 0..steps.length() {
-            if let Some(step) = steps.item(i)
-                && let Ok(element) = step.dyn_into::<Element>()
-            {
-                let class_name = element.class_name();
-                if !class_name.contains("step-done") {
-                    element.set_class_name(&format!("{class_name} step-done"));
-                    self.update_current_step();
-                    return true;
-                }
-            }
-        }
-
-        // All steps are done
-        false
-    }
-
-    pub fn previous_step(&mut self) -> bool {
-        let Some(container) = &self.container else {
-            return false;
-        };
-
-        let done_steps = match container.query_selector_all(".step.step-done") {
-            Ok(steps) if steps.length() > 0 => steps,
-            _ => return false,
-        };
-
-        let last_index = done_steps.length() - 1;
-        if let Some(step) = done_steps.item(last_index)
-            && let Ok(element) = step.dyn_into::<Element>()
-        {
-            let class_name = element.class_name();
-            let new_classes = class_name
-                .split_whitespace()
-                .filter(|content| *content != "step-done")
-                .collect::<Vec<_>>()
-                .join(" ");
-            element.set_class_name(&new_classes);
-            self.update_current_step();
-            return true;
-        }
-
-        false
     }
 }
 

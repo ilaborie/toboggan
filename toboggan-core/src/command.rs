@@ -36,6 +36,9 @@ pub enum Command {
     GoTo { slide: usize },
     Next,
     Previous,
+    // Step navigation
+    NextStep,
+    PreviousStep,
     // Status
     Pause,
     Resume,
