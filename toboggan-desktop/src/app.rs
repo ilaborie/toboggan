@@ -378,9 +378,19 @@ impl App {
         modifiers: keyboard::Modifiers,
     ) -> Task<Message> {
         match key {
-            keyboard::Key::Named(
-                keyboard::key::Named::ArrowRight | keyboard::key::Named::Space,
-            ) if !self.state.show_help => self.send_command(TobogganCommand::Next),
+            // Step navigation: Space, ArrowDown → NextStep; ArrowUp → PreviousStep
+            keyboard::Key::Named(keyboard::key::Named::Space | keyboard::key::Named::ArrowDown)
+                if !self.state.show_help =>
+            {
+                self.send_command(TobogganCommand::NextStep)
+            }
+            keyboard::Key::Named(keyboard::key::Named::ArrowUp) if !self.state.show_help => {
+                self.send_command(TobogganCommand::PreviousStep)
+            }
+            // Slide navigation: ArrowRight → Next; ArrowLeft → Previous
+            keyboard::Key::Named(keyboard::key::Named::ArrowRight) if !self.state.show_help => {
+                self.send_command(TobogganCommand::Next)
+            }
             keyboard::Key::Named(keyboard::key::Named::ArrowLeft) if !self.state.show_help => {
                 self.send_command(TobogganCommand::Previous)
             }

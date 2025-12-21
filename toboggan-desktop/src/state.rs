@@ -96,6 +96,17 @@ impl AppState {
             .map(|current_idx| (current_idx + 1, self.slides.len()))
     }
 
+    /// Returns `(current_step, step_count)` for the current slide
+    #[must_use]
+    pub fn step_info(&self) -> Option<(usize, usize)> {
+        let slide = self.current_slide()?;
+        let current_step = self
+            .presentation_state
+            .as_ref()
+            .map_or(0, PresentationState::current_step);
+        Some((current_step, slide.step_count))
+    }
+
     #[must_use]
     #[allow(clippy::unused_self)]
     pub fn theme(&self) -> Theme {

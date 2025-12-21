@@ -80,14 +80,14 @@ fn navigation_controls_view() -> Element<'static, Message> {
         ),
         create_nav_button(
             icon_chevron_left(ICON_SIZE_MEDIUM),
-            "Previous",
-            Message::SendCommand(toboggan_core::Command::Previous),
+            "Previous Step",
+            Message::SendCommand(toboggan_core::Command::PreviousStep),
             NavButtonPosition::Leading
         ),
         create_nav_button(
             icon_chevron_right(ICON_SIZE_MEDIUM),
-            "Next",
-            Message::SendCommand(toboggan_core::Command::Next),
+            "Next Step",
+            Message::SendCommand(toboggan_core::Command::NextStep),
             NavButtonPosition::Trailing
         ),
         create_nav_button(
@@ -100,6 +100,41 @@ fn navigation_controls_view() -> Element<'static, Message> {
     .spacing(SPACING_SMALL)
     .align_y(iced::Alignment::Center)
     .into()
+}
+
+fn step_indicators_view(state: &AppState) -> Element<'_, Message> {
+    use std::cmp::Ordering;
+
+    let Some((current_step, step_count)) = state.step_info() else {
+        return iced::widget::text("").into();
+    };
+
+    if step_count == 0 {
+        return iced::widget::text("").into();
+    }
+
+    let primary_color = state.theme().palette().primary;
+
+    let mut indicators = row![].spacing(2.0);
+    for step in 0..step_count {
+        let circle = match step.cmp(&current_step) {
+            Ordering::Less => {
+                // Done: filled circle
+                iced::widget::text("●").size(10.0)
+            }
+            Ordering::Equal => {
+                // Current: filled circle with primary color
+                iced::widget::text("●").size(10.0).color(primary_color)
+            }
+            Ordering::Greater => {
+                // Remaining: empty circle
+                iced::widget::text("○").size(10.0)
+            }
+        };
+        indicators = indicators.push(circle);
+    }
+
+    indicators.align_y(iced::Alignment::Center).into()
 }
 
 fn presentation_controls_view(state: &AppState) -> Element<'_, Message> {
@@ -146,6 +181,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
     let connection_status = connection_status_view(&state.connection_status);
     let navigation_controls = navigation_controls_view();
     let presentation_controls = presentation_controls_view(state);
+    let step_indicators = step_indicators_view(state);
 
     let slide_counter = if let Some((current, total)) = state.slide_index() {
         let counter_text = format!("Slide {current} / {total}");
@@ -176,6 +212,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
             .width(Length::Fill)
             .center_x(Length::Fill),
             slide_counter,
+            step_indicators,
             help_hint,
         ]
         .spacing(SPACING_MEDIUM)
