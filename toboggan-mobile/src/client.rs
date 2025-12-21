@@ -62,9 +62,10 @@ impl TobogganClient {
                     handler.on_connection_status_change(status.into());
                 }
                 CommunicationMessage::StateChange { state: new_state } => {
-                    // Get current total_slides from shared slides
-                    let total_slides = shared_slides.lock().await.len();
-                    let state_value = State::new(total_slides, &new_state);
+                    // Get current slides for step info
+                    let slides = shared_slides.lock().await;
+                    let state_value = State::new(&slides, &new_state);
+                    drop(slides);
                     {
                         let mut state_guard = shared_state.lock().await;
                         *state_guard = Some(state_value.clone());
@@ -86,7 +87,6 @@ impl TobogganClient {
                             }
 
                             // Update slides
-                            let total_slides = new_slides.slides.len();
                             {
                                 let mut slides_guard = shared_slides.lock().await;
                                 slides_guard.clear();
@@ -95,8 +95,10 @@ impl TobogganClient {
                                 }
                             }
 
-                            // Create state with correct total_slides and update
-                            let state_value = State::new(total_slides, &new_state);
+                            // Create state with slides for step info
+                            let slides = shared_slides.lock().await;
+                            let state_value = State::new(&slides, &new_state);
+                            drop(slides);
                             {
                                 let mut state_guard = shared_state.lock().await;
                                 *state_guard = Some(state_value.clone());
@@ -106,8 +108,9 @@ impl TobogganClient {
                         Err(err) => {
                             println!("🚨 Failed to refetch talk and slides: {err}");
                             // Still update state even if refetch failed
-                            let total_slides = shared_slides.lock().await.len();
-                            let state_value = State::new(total_slides, &new_state);
+                            let slides = shared_slides.lock().await;
+                            let state_value = State::new(&slides, &new_state);
+                            drop(slides);
                             {
                                 let mut state_guard = shared_state.lock().await;
                                 *state_guard = Some(state_value.clone());

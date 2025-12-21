@@ -16,6 +16,7 @@ enum SlideKind {
 dictionary Slide {
     string title;
     SlideKind kind;
+    u32 step_count;
 };
 
 dictionary Talk {
@@ -37,6 +38,8 @@ enum Command {
     "Previous",
     "First",
     "Last",
+    "NextStep",
+    "PreviousStep",
     "Resume",
     "Pause",
     "Blink",
@@ -44,10 +47,10 @@ enum Command {
 
 [Enum]
 interface State {
-    Init(string next);
-    Running(u32? previous, u32 current, u32? next, duration total_duration);
-    Paused(u32? previous, u32 current, u32? next, duration total_duration);
-    Done(u32? previous, u32 current, duration total_duration);
+    Init(u32 total_slides);
+    Running(u32? previous, u32 current, u32? next, u32 current_step, u32 step_count, duration total_duration);
+    Paused(u32? previous, u32 current, u32? next, u32 current_step, u32 step_count, duration total_duration);
+    Done(u32? previous, u32 current, u32 current_step, u32 step_count, duration total_duration);
 };
 
 [Trait, WithForeign]

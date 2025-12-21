@@ -16,11 +16,19 @@ pub enum SlideKind {
 pub struct Slide {
     pub title: String,
     pub kind: SlideKind,
+    pub step_count: u32,
 }
 
 impl From<CoreSlide> for Slide {
     fn from(value: CoreSlide) -> Self {
-        let CoreSlide { kind, title, .. } = value;
+        let CoreSlide {
+            kind,
+            title,
+            step_count,
+            ..
+        } = value;
+        #[allow(clippy::cast_possible_truncation)]
+        // UniFFI requires u32, step counts are typically small
         Self {
             title: title.to_string(),
             kind: match kind {
@@ -28,6 +36,7 @@ impl From<CoreSlide> for Slide {
                 CoreSlideKind::Part => SlideKind::Part,
                 CoreSlideKind::Standard => SlideKind::Standard,
             },
+            step_count: step_count as u32,
         }
     }
 }

@@ -49,28 +49,26 @@ struct NavigationControlsView: View {
             .padding()
             .cardBackground()
             
-            // Navigation controls
+            // Step navigation controls
             HStack(spacing: 16) {
                 Button {
-                    viewModel.previousSlide()
+                    viewModel.previousStep()
                 } label: {
-                    Label("Previous", systemImage: "chevron.left")
+                    Label("Prev Step", systemImage: "chevron.left")
                 }
                 .tobogganButton(style: .secondary)
-                .disabled(!viewModel.canGoPrevious)
-                .accessibilityHint("Go to previous slide")
-                
+                .accessibilityHint("Go to previous step")
+
                 Spacer()
-                
+
                 Button {
-                    viewModel.nextSlide()
+                    viewModel.nextStep()
                 } label: {
-                    Label("Next", systemImage: "chevron.right")
+                    Label("Next Step", systemImage: "chevron.right")
                         .labelStyle(.titleAndIcon)
                 }
                 .tobogganButton(style: .primary)
-                .disabled(!viewModel.canGoNext)
-                .accessibilityHint("Go to next slide")
+                .accessibilityHint("Go to next step")
             }
         }
         .padding()
