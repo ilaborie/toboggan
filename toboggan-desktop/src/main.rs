@@ -3,6 +3,10 @@ use iced::Settings;
 use toboggan_client::TobogganConfig;
 use toboggan_desktop::App;
 
+fn title(_app: &App) -> String {
+    String::from("Toboggan Desktop")
+}
+
 fn main() -> Result<()> {
     // Setup logging
     tracing_subscriber::fmt::init();
@@ -12,8 +16,9 @@ fn main() -> Result<()> {
 
     let config = TobogganConfig::default();
 
-    // Run the application
-    iced::application("Toboggan Desktop", App::update, App::view)
+    // Run the application with iced 0.14 API
+    iced::application(move || App::new(config.clone()), App::update, App::view)
+        .title(title)
         .settings(Settings::default())
         .window(iced::window::Settings {
             size: iced::Size::new(1280.0, 720.0),
@@ -24,7 +29,7 @@ fn main() -> Result<()> {
         .font(lucide_font)
         .subscription(App::subscription)
         .theme(App::theme)
-        .run_with(move || App::new(config))
+        .run()
         .context("Running application")?;
 
     Ok(())

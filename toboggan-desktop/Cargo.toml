@@ -12,7 +12,7 @@ toboggan-core = { path = "../toboggan-core", features = ["std"] }
 toboggan-client = { path = "../toboggan-client" }
 
 iced = { workspace = true }
-lucide-icons = { workspace = true, features = ["iced"] }
+lucide-icons = { workspace = true }
 
 tokio = { workspace = true, features = ["full"] }
 async-stream = { workspace = true }

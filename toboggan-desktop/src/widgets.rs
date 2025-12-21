@@ -8,7 +8,7 @@ use crate::constants::{
 use crate::message::Message;
 
 // Helper function to create text with consistent styling
-pub fn create_text(content: &str, size: u16) -> Text<'_> {
+pub fn create_text(content: &str, size: f32) -> Text<'_> {
     text(content).size(size)
 }
 

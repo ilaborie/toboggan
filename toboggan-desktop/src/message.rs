@@ -1,4 +1,5 @@
 use iced::keyboard::{Key, Modifiers};
+use iced::widget::markdown;
 use toboggan_client::CommunicationMessage;
 use toboggan_core::{Command as TobogganCommand, Slide, SlidesResponse, State, TalkResponse};
 
@@ -28,6 +29,7 @@ pub enum Message {
     ToggleFullscreen,
     KeyPressed(Key, Modifiers),
     WindowResized(f32, f32),
+    LinkClicked(markdown::Uri),
 
     // Tick for periodic updates
     Tick,
