@@ -41,6 +41,15 @@ pub mod state {
     pub const DONE: Style = Style::new().fg(colors::GREEN);
 }
 
+/// Step indicator styles
+pub mod step {
+    use super::{Style, colors};
+
+    pub const DONE: Style = Style::new().fg(colors::WHITE);
+    pub const CURRENT: Style = Style::new().fg(colors::CYAN);
+    pub const REMAINING: Style = Style::new().fg(colors::GRAY);
+}
+
 /// Slide kind specific styles  
 pub mod slide {
     use ratatui::text::Span;

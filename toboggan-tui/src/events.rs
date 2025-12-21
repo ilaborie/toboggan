@@ -16,17 +16,22 @@ pub enum AppEvent {
 
 #[derive(Debug, Clone, Copy, derive_more::Display)]
 pub enum AppAction {
+    // Slide navigation
     First,
     Previous,
     Next,
     Last,
-    Pause,
     #[display("Slide {_0}")]
     Goto(u8),
+    // Step navigation
+    PreviousStep,
+    NextStep,
+    // Presentation control
+    Pause,
     Resume,
     #[display("♪")]
     Blink,
-
+    // UI actions
     #[display("Show log")]
     ShowLog,
     Close,
@@ -40,8 +45,12 @@ impl AppAction {
             KeyCode::Char('q' | 'Q') => Self::Quit,
             KeyCode::Char('c') if event.modifiers.contains(KeyModifiers::CONTROL) => Self::Quit,
             KeyCode::Char('h' | 'H' | '?') => Self::Help,
-            KeyCode::Left | KeyCode::Up => Self::Previous,
-            KeyCode::Right | KeyCode::Down | KeyCode::Char(' ') => Self::Next,
+            // Step navigation: Space, Down, Up
+            KeyCode::Down | KeyCode::Char(' ') => Self::NextStep,
+            KeyCode::Up => Self::PreviousStep,
+            // Slide navigation: Left, Right
+            KeyCode::Left => Self::Previous,
+            KeyCode::Right => Self::Next,
             KeyCode::Home => Self::First,
             KeyCode::End => Self::Last,
             KeyCode::Char('p' | 'P') => Self::Pause,
@@ -64,11 +73,13 @@ impl AppAction {
     pub(crate) fn key(self) -> &'static str {
         match self {
             Self::First => "Home",
-            Self::Previous => "Left",
-            Self::Next => "Right",
+            Self::Previous => "←",
+            Self::Next => "→",
             Self::Last => "End",
-            Self::Pause => "p",
             Self::Goto(_) => "1..n",
+            Self::PreviousStep => "↑",
+            Self::NextStep => "↓",
+            Self::Pause => "p",
             Self::Resume => "r",
             Self::Blink => "b",
             Self::ShowLog => "l",
@@ -81,11 +92,13 @@ impl AppAction {
     pub(crate) fn details(self) -> ActionDetails {
         match self {
             Self::First => ActionDetails::new(vec!["Home"], "Go to first slide"),
-            Self::Previous => ActionDetails::new(vec!["Left", "Up"], "Go to previous slide"),
-            Self::Next => ActionDetails::new(vec!["Right", "Down", "Space"], "Go to next slide"),
+            Self::Previous => ActionDetails::new(vec!["←"], "Previous slide"),
+            Self::Next => ActionDetails::new(vec!["→"], "Next slide"),
             Self::Last => ActionDetails::new(vec!["End"], "Go to last slide"),
-            Self::Pause => ActionDetails::new(vec!["p", "P"], "Pause"),
             Self::Goto(_) => ActionDetails::new(vec!["1..n"], "Go to slide n"),
+            Self::PreviousStep => ActionDetails::new(vec!["↑"], "Previous step"),
+            Self::NextStep => ActionDetails::new(vec!["↓", "Space"], "Next step"),
+            Self::Pause => ActionDetails::new(vec!["p", "P"], "Pause"),
             Self::Resume => ActionDetails::new(vec!["r", "R"], "Resume"),
             Self::Blink => ActionDetails::new(vec!["b", "B"], "Bell or Blink"),
             Self::ShowLog => ActionDetails::new(vec!["l", "L"], "Show logs"),
@@ -101,6 +114,8 @@ impl AppAction {
             Self::Previous => Command::Previous,
             Self::Next => Command::Next,
             Self::Last => Command::Last,
+            Self::PreviousStep => Command::PreviousStep,
+            Self::NextStep => Command::NextStep,
             Self::Pause => Command::Pause,
             Self::Resume => Command::Resume,
             Self::Blink => Command::Blink,
