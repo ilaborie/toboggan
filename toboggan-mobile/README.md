@@ -168,7 +168,7 @@ mise build:ios
 #### Option 2: Manual Build
 ```bash
 # Navigate to iOS library directory
-cd toboggan-ios
+cd toboggan-mobile
 
 # Build iOS framework with script
 ./build.sh
@@ -241,7 +241,7 @@ class PresentationViewModel: ObservableObject {
 ## File Structure
 
 ```
-toboggan-ios/
+toboggan-mobile/
 ├── src/
 │   ├── lib.rs              # Main exports and UniFFI setup
 │   ├── client.rs           # WebSocket client
@@ -328,7 +328,7 @@ open TobogganApp/TobogganApp.xcodeproj
 ### Future Development (With Rust)
 ```bash
 # 1. Update Rust code
-cd toboggan-ios
+cd toboggan-mobile
 # Edit .rs files
 
 # 2. Rebuild framework

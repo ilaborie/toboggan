@@ -62,7 +62,7 @@ mise build:ios
 #### Option 2: Manual Build
 ```bash
 # Navigate to iOS Rust library directory
-cd toboggan-ios
+cd toboggan-mobile
 
 # Build the iOS framework (when needed for production mode)
 ./build.sh
@@ -155,7 +155,7 @@ When ready to integrate with the real Toboggan server:
 ### Prerequisites for Production Mode
 - Rust toolchain with iOS targets installed
 - UniFFI-generated Swift bindings
-- Built `toboggan-ios` framework
+- Built `toboggan-mobile` framework
 
 ### Integration Steps
 1. **Build Rust Framework**: Run `mise build:ios` to generate iOS bindings

@@ -3,6 +3,11 @@ RUST_LOG = "info"
 
 TOBOGGAN_HOST = "0.0.0.0"
 
+# Android SDK
+ANDROID_HOME = "/Users/igorlaborie/Library/Android/sdk"
+ANDROID_SDK_ROOT = "/Users/igorlaborie/Library/Android/sdk"
+ANDROID_NDK_HOME = "/Users/igorlaborie/Library/Android/sdk/ndk/29.0.14206865"
+
 [settings]
 experimental = true
 cargo = { binstall = true }
@@ -19,3 +24,4 @@ swiftlint = "latest"
 "pipx:esptool" = "latest"
 "cargo:espup" = "latest"
 "npm:@stoplight/spectral-cli" = "latest"
+"cargo:cargo-ndk" = "latest"

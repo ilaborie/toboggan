@@ -106,7 +106,7 @@ wasm-pack build --target web --release
 ```bash
 mise build:ios
 # Or manually:
-cd toboggan-ios
+cd toboggan-mobile
 ./build.sh
 ```
 
@@ -135,7 +135,7 @@ toboggan/
 ├── toboggan-web/        # Web frontend with TypeScript and WASM client
 ├── toboggan-tui/        # Terminal UI client using ratatui
 ├── toboggan-desktop/    # Native desktop app using iced framework
-├── toboggan-ios/        # iOS Rust library with UniFFI bindings
+├── toboggan-mobile/        # iOS Rust library with UniFFI bindings
 ├── TobogganApp/         # Native iOS app using SwiftUI
 └── toboggan-esp32/      # ESP32 embedded client (excluded from workspace)
 ```

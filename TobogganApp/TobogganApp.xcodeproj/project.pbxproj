@@ -24,7 +24,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		F84CF58B2E58510800755914 /* toboggan.udl */ = {isa = PBXFileReference; lastKnownFileType = text; name = toboggan.udl; path = "../toboggan-ios/src/toboggan.udl"; sourceTree = SOURCE_ROOT; };
+		F84CF58B2E58510800755914 /* toboggan.udl */ = {isa = PBXFileReference; lastKnownFileType = text; name = toboggan.udl; path = "../toboggan-mobile/src/toboggan.udl"; sourceTree = SOURCE_ROOT; };
 		F84CF58C2E58510900755915 /* toboggan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = toboggan.swift; path = Generated/toboggan.swift; sourceTree = SOURCE_ROOT; };
 		F8C2FCF52E5097D30088D80A /* TobogganApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TobogganApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F8C2FD022E5097D40088D80A /* TobogganAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TobogganAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -256,7 +256,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "bash $SRCROOT/xc-universal-binary.sh toboggan-ios $SRCROOT/.. $CONFIGURATION\n";
+			shellScript = "bash $SRCROOT/xc-universal-binary.sh toboggan-mobile $SRCROOT/.. $CONFIGURATION\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

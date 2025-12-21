@@ -4,9 +4,6 @@ pub use self::renderer::{OutputRenderer, RenderError};
 mod text;
 pub use self::text::TextRenderer;
 
-mod binary;
-pub use self::binary::BinaryRenderer;
-
 mod html;
 
 use toboggan_core::Talk;
@@ -14,15 +11,11 @@ use toboggan_core::Talk;
 use crate::error::Result;
 use crate::settings::OutputFormat;
 
-pub fn serialize_talk(talk: &Talk, format: &OutputFormat) -> Result<Vec<u8>> {
+pub fn serialize_talk(talk: &Talk, format: OutputFormat) -> Result<Vec<u8>> {
     match format {
         OutputFormat::Toml => TextRenderer::toml(talk),
         OutputFormat::Json => TextRenderer::json(talk),
         OutputFormat::Yaml => TextRenderer::yaml(talk),
-
-        OutputFormat::Cbor => BinaryRenderer::cbor(talk),
-        OutputFormat::MessagePack => BinaryRenderer::msgpack(talk),
-        OutputFormat::Bincode => BinaryRenderer::bincode(talk),
 
         OutputFormat::Html => html::generate_html(talk, talk.head.as_deref()),
     }
@@ -34,19 +27,8 @@ pub fn get_extension(format: &OutputFormat) -> &'static str {
         OutputFormat::Toml => "toml",
         OutputFormat::Json => "json",
         OutputFormat::Yaml => "yaml",
-        OutputFormat::Cbor => "cbor",
-        OutputFormat::MessagePack => "msgpack",
-        OutputFormat::Bincode => "bin",
         OutputFormat::Html => "html",
     }
-}
-
-#[must_use]
-pub fn is_binary_format(format: &OutputFormat) -> bool {
-    matches!(
-        format,
-        OutputFormat::Cbor | OutputFormat::MessagePack | OutputFormat::Bincode
-    )
 }
 
 #[cfg(test)]
@@ -71,14 +53,11 @@ mod tests {
             OutputFormat::Toml,
             OutputFormat::Json,
             OutputFormat::Yaml,
-            OutputFormat::Cbor,
-            OutputFormat::MessagePack,
-            OutputFormat::Bincode,
             OutputFormat::Html,
         ];
 
         for format in &formats {
-            let result = serialize_talk(&talk, format);
+            let result = serialize_talk(&talk, *format);
             assert!(result.is_ok(), "Failed to serialize format: {format:?}");
             if let Ok(output) = result {
                 assert!(!output.is_empty(), "Empty output for format: {format:?}");
@@ -92,20 +71,6 @@ mod tests {
         assert_eq!(get_extension(&OutputFormat::Toml), "toml");
         assert_eq!(get_extension(&OutputFormat::Json), "json");
         assert_eq!(get_extension(&OutputFormat::Yaml), "yaml");
-        assert_eq!(get_extension(&OutputFormat::Cbor), "cbor");
-        assert_eq!(get_extension(&OutputFormat::MessagePack), "msgpack");
-        assert_eq!(get_extension(&OutputFormat::Bincode), "bin");
         assert_eq!(get_extension(&OutputFormat::Html), "html");
-    }
-
-    #[test]
-    fn test_binary_format_detection() {
-        assert!(!is_binary_format(&OutputFormat::Toml));
-        assert!(!is_binary_format(&OutputFormat::Json));
-        assert!(!is_binary_format(&OutputFormat::Yaml));
-        assert!(!is_binary_format(&OutputFormat::Html));
-        assert!(is_binary_format(&OutputFormat::Cbor));
-        assert!(is_binary_format(&OutputFormat::MessagePack));
-        assert!(is_binary_format(&OutputFormat::Bincode));
     }
 }

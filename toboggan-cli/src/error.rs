@@ -1,3 +1,5 @@
+#![allow(unused_assignments)]
+
 use std::io;
 use std::path::PathBuf;
 

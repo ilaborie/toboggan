@@ -5,7 +5,7 @@ use toboggan_core::Date;
 use crate::parse_date_string;
 
 /// Output format for the generated presentation
-#[derive(Debug, Clone, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum OutputFormat {
     /// TOML format (default)
     Toml,
@@ -13,13 +13,6 @@ pub enum OutputFormat {
     Json,
     /// YAML format
     Yaml,
-    /// CBOR binary format (compact, standardized)
-    Cbor,
-    /// `MessagePack` binary format (ultra-compact)
-    #[value(name = "msgpack")]
-    MessagePack,
-    /// Bincode binary format (Rust-native, fastest)
-    Bincode,
     /// Static HTML file (single file with inlined CSS)
     Html,
 }
@@ -138,8 +131,8 @@ impl Settings {
     #[must_use]
     pub fn resolve_format(&self) -> OutputFormat {
         // If format is explicitly specified, use it
-        if let Some(format) = &self.format {
-            return format.clone();
+        if let Some(format) = self.format {
+            return format;
         }
 
         // Try to auto-detect from output file extension
@@ -150,9 +143,6 @@ impl Settings {
                 "toml" => return OutputFormat::Toml,
                 "json" => return OutputFormat::Json,
                 "yaml" | "yml" => return OutputFormat::Yaml,
-                "cbor" => return OutputFormat::Cbor,
-                "msgpack" => return OutputFormat::MessagePack,
-                "bin" | "bincode" => return OutputFormat::Bincode,
                 "html" | "htm" => return OutputFormat::Html,
                 _ => {} // Fall through to default
             }

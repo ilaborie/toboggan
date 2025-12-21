@@ -16,8 +16,8 @@
 		"check:fix": "biome check --write src/"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.3.4",
-		"@playwright/test": "^1.56.1",
+		"@biomejs/biome": "^2.3.10",
+		"@playwright/test": "^1.57.0",
 		"typescript": "~5.8.3",
 		"vite": "npm:rolldown-vite@latest"
 	}

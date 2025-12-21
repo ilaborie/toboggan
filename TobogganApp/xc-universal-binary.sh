@@ -103,7 +103,7 @@ for arch in $ARCHS; do
         cp "$RUST_LIB_PATH" "${SRCROOT}/TobogganApp/"
 
         # Generate Swift bindings using the EXACT same library we just compiled
-        RUST_UDL_PATH="${SRC_ROOT}/toboggan-ios/src/toboggan.udl"
+        RUST_UDL_PATH="${SRC_ROOT}/toboggan-mobile/src/toboggan.udl"
         echo "🍎 Generate for sim: $RUST_UDL_PATH (using compiled library metadata)"
         $HOME/.cargo/bin/cargo run $RELFLAG -p "${FFI_TARGET}" --bin uniffi-bindgen -- generate --library --language swift --out-dir "${SRCROOT}/TobogganApp/" "$RUST_LIB_PATH"
       fi
