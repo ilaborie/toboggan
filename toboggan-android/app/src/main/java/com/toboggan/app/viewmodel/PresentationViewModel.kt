@@ -28,7 +28,9 @@ data class PresentationUiState(
     val duration: Long = 0L,
     val canGoPrevious: Boolean = false,
     val canGoNext: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val currentStep: Int = 0,
+    val stepCount: Int = 1
 ) {
     val formattedDuration: String
         get() {
@@ -148,7 +150,9 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
                     isPlaying = true,
                     duration = state.totalDuration.seconds,
                     previousSlideIndex = state.previous?.toInt(),
-                    nextSlideIndex = state.next?.toInt()
+                    nextSlideIndex = state.next?.toInt(),
+                    currentStep = state.currentStep.toInt(),
+                    stepCount = state.stepCount.toInt()
                 )
             }
             is State.Paused -> {
@@ -157,7 +161,9 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
                     isPlaying = false,
                     duration = state.totalDuration.seconds,
                     previousSlideIndex = state.previous?.toInt(),
-                    nextSlideIndex = state.next?.toInt()
+                    nextSlideIndex = state.next?.toInt(),
+                    currentStep = state.currentStep.toInt(),
+                    stepCount = state.stepCount.toInt()
                 )
             }
             is State.Done -> {
@@ -166,7 +172,9 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
                     isPlaying = false,
                     duration = state.totalDuration.seconds,
                     previousSlideIndex = state.previous?.toInt(),
-                    nextSlideIndex = null
+                    nextSlideIndex = null,
+                    currentStep = state.currentStep.toInt(),
+                    stepCount = state.stepCount.toInt()
                 )
             }
         }
@@ -177,7 +185,9 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
         isPlaying: Boolean = false,
         duration: Long = 0L,
         previousSlideIndex: Int? = null,
-        nextSlideIndex: Int? = null
+        nextSlideIndex: Int? = null,
+        currentStep: Int = 0,
+        stepCount: Int = 1
     ) {
         val canGoPrevious = previousSlideIndex != null
         val canGoNext = nextSlideIndex != null
@@ -205,7 +215,9 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
                 canGoNext = canGoNext,
                 currentSlideIndex = currentSlideIndex,
                 currentSlide = currentSlide,
-                nextSlideTitle = nextSlideTitle
+                nextSlideTitle = nextSlideTitle,
+                currentStep = currentStep,
+                stepCount = stepCount
             )
         }
     }
@@ -226,20 +238,11 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
     // MARK: - Actions
 
     fun nextSlide() {
-        tobogganClient?.sendCommand(Command.NEXT)
-        // Optimistic update
-        _uiState.value.currentSlideIndex?.let { current ->
-            if (current < _uiState.value.totalSlides - 1) {
-                _uiState.update { it.copy(currentSlideIndex = current + 1) }
-            }
-        } ?: run {
-            // If we're in init state and going next, we start at first slide
-            _uiState.update { it.copy(currentSlideIndex = 0) }
-        }
+        tobogganClient?.sendCommand(Command.NEXT_STEP)
     }
 
     fun previousSlide() {
-        tobogganClient?.sendCommand(Command.PREVIOUS)
+        tobogganClient?.sendCommand(Command.PREVIOUS_STEP)
     }
 
     fun firstSlide() {

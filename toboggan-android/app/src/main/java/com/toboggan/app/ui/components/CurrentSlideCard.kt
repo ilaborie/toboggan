@@ -52,23 +52,33 @@ fun CurrentSlideCard(
                 )
             }
 
-            // Center: Slide title
+            // Center: Slide title and step indicator
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = uiState.currentSlideTitle,
-                    style = MaterialTheme.typography.displaySmall,
-                    textAlign = TextAlign.Center,
-                    color = if (uiState.currentSlide != null) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = uiState.currentSlideTitle,
+                        style = MaterialTheme.typography.displaySmall,
+                        textAlign = TextAlign.Center,
+                        color = if (uiState.currentSlide != null) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+
+                    StepIndicator(
+                        currentStep = uiState.currentStep,
+                        stepCount = uiState.stepCount
+                    )
+                }
             }
         }
     }
