@@ -237,11 +237,11 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
 
     // MARK: - Actions
 
-    fun nextSlide() {
+    fun nextStep() {
         tobogganClient?.sendCommand(Command.NEXT_STEP)
     }
 
-    fun previousSlide() {
+    fun previousStep() {
         tobogganClient?.sendCommand(Command.PREVIOUS_STEP)
     }
 

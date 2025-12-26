@@ -63,9 +63,10 @@ impl TobogganClient {
                 }
                 CommunicationMessage::StateChange { state: new_state } => {
                     // Get current slides for step info
-                    let slides = shared_slides.lock().await;
-                    let state_value = State::new(&slides, &new_state);
-                    drop(slides);
+                    let state_value = {
+                        let slides = shared_slides.lock().await;
+                        State::new(&slides, &new_state)
+                    };
                     {
                         let mut state_guard = shared_state.lock().await;
                         *state_guard = Some(state_value.clone());
@@ -96,9 +97,10 @@ impl TobogganClient {
                             }
 
                             // Create state with slides for step info
-                            let slides = shared_slides.lock().await;
-                            let state_value = State::new(&slides, &new_state);
-                            drop(slides);
+                            let state_value = {
+                                let slides = shared_slides.lock().await;
+                                State::new(&slides, &new_state)
+                            };
                             {
                                 let mut state_guard = shared_state.lock().await;
                                 *state_guard = Some(state_value.clone());
@@ -108,9 +110,10 @@ impl TobogganClient {
                         Err(err) => {
                             println!("🚨 Failed to refetch talk and slides: {err}");
                             // Still update state even if refetch failed
-                            let slides = shared_slides.lock().await;
-                            let state_value = State::new(&slides, &new_state);
-                            drop(slides);
+                            let state_value = {
+                                let slides = shared_slides.lock().await;
+                                State::new(&slides, &new_state)
+                            };
                             {
                                 let mut state_guard = shared_state.lock().await;
                                 *state_guard = Some(state_value.clone());

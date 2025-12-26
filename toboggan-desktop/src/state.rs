@@ -1,4 +1,3 @@
-use iced::Theme;
 use iced::widget::markdown;
 use toboggan_client::ConnectionStatus;
 use toboggan_core::{Content, Slide, State as PresentationState, Talk};
@@ -96,7 +95,8 @@ impl AppState {
             .map(|current_idx| (current_idx + 1, self.slides.len()))
     }
 
-    /// Returns `(current_step, step_count)` for the current slide
+    /// Returns `(current_step, step_count)` for the current slide.
+    /// Note: Mirrors implementation in toboggan-tui/src/state.rs
     #[must_use]
     pub fn step_info(&self) -> Option<(usize, usize)> {
         let slide = self.current_slide()?;
@@ -105,12 +105,5 @@ impl AppState {
             .as_ref()
             .map_or(0, PresentationState::current_step);
         Some((current_step, slide.step_count))
-    }
-
-    #[must_use]
-    #[allow(clippy::unused_self)]
-    pub fn theme(&self) -> Theme {
-        // Takes &self for future customization (e.g., user preferences)
-        Theme::Dark
     }
 }

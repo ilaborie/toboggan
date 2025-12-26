@@ -1,14 +1,11 @@
 use iced::widget::{container, row};
-use iced::{Element, Length};
+use iced::{Element, Length, Theme};
 use toboggan_client::ConnectionStatus;
 
 use crate::constants::{
     ICON_SIZE_MEDIUM, ICON_SIZE_SMALL, PADDING_CONTAINER, SPACING_MEDIUM, SPACING_SMALL,
 };
-use crate::icons::{
-    icon_bell, icon_chevron_left, icon_chevron_right, icon_loader, icon_pause, icon_play,
-    icon_refresh_cw, icon_skip_back, icon_skip_forward, icon_wifi, icon_wifi_off, icon_x,
-};
+use crate::icons::{Icon, icon};
 use crate::message::Message;
 use crate::state::AppState;
 use crate::styles;
@@ -20,19 +17,19 @@ use crate::widgets::{
 fn connection_status_view(status: &ConnectionStatus) -> Element<'_, Message> {
     match status {
         ConnectionStatus::Closed => create_status_row_with_button(
-            icon_wifi_off(ICON_SIZE_MEDIUM),
+            icon(Icon::WifiOff, ICON_SIZE_MEDIUM),
             "Disconnected",
             create_simple_button("Connect", Message::Connect).into(),
         )
         .into(),
         ConnectionStatus::Connecting => {
-            create_status_row(icon_loader(ICON_SIZE_MEDIUM), "Connecting...").into()
+            create_status_row(icon(Icon::Loader, ICON_SIZE_MEDIUM), "Connecting...").into()
         }
         ConnectionStatus::Connected => create_status_row_with_button(
-            icon_wifi(ICON_SIZE_MEDIUM),
+            icon(Icon::Wifi, ICON_SIZE_MEDIUM),
             "Connected",
             create_icon_button(
-                icon_refresh_cw(ICON_SIZE_SMALL),
+                icon(Icon::RefreshCw, ICON_SIZE_SMALL),
                 "Reconnect",
                 Message::Disconnect,
             )
@@ -47,7 +44,7 @@ fn connection_status_view(status: &ConnectionStatus) -> Element<'_, Message> {
         } => {
             let reconnecting_text = format!("Reconnecting... ({attempt}/{max_attempt})");
             iced::widget::row![
-                icon_refresh_cw(ICON_SIZE_MEDIUM),
+                icon(Icon::RefreshCw, ICON_SIZE_MEDIUM),
                 iced::widget::text(reconnecting_text).size(12.0)
             ]
             .spacing(SPACING_SMALL)
@@ -57,7 +54,7 @@ fn connection_status_view(status: &ConnectionStatus) -> Element<'_, Message> {
         ConnectionStatus::Error { message } => {
             let error_text = format!("Error: {message}");
             iced::widget::row![
-                icon_x(ICON_SIZE_MEDIUM),
+                icon(Icon::X, ICON_SIZE_MEDIUM),
                 iced::widget::text(error_text).size(12.0),
                 iced::widget::button(iced::widget::text("Retry").size(11.0))
                     .on_press(Message::Connect)
@@ -73,25 +70,25 @@ fn connection_status_view(status: &ConnectionStatus) -> Element<'_, Message> {
 fn navigation_controls_view() -> Element<'static, Message> {
     row![
         create_nav_button(
-            icon_skip_back(ICON_SIZE_MEDIUM),
+            icon(Icon::SkipBack, ICON_SIZE_MEDIUM),
             "First",
             Message::SendCommand(toboggan_core::Command::First),
             NavButtonPosition::Leading
         ),
         create_nav_button(
-            icon_chevron_left(ICON_SIZE_MEDIUM),
+            icon(Icon::ChevronLeft, ICON_SIZE_MEDIUM),
             "Previous Step",
             Message::SendCommand(toboggan_core::Command::PreviousStep),
             NavButtonPosition::Leading
         ),
         create_nav_button(
-            icon_chevron_right(ICON_SIZE_MEDIUM),
+            icon(Icon::ChevronRight, ICON_SIZE_MEDIUM),
             "Next Step",
             Message::SendCommand(toboggan_core::Command::NextStep),
             NavButtonPosition::Trailing
         ),
         create_nav_button(
-            icon_skip_forward(ICON_SIZE_MEDIUM),
+            icon(Icon::SkipForward, ICON_SIZE_MEDIUM),
             "Last",
             Message::SendCommand(toboggan_core::Command::Last),
             NavButtonPosition::Trailing
@@ -113,7 +110,7 @@ fn step_indicators_view(state: &AppState) -> Element<'_, Message> {
         return iced::widget::text("").into();
     }
 
-    let primary_color = state.theme().palette().primary;
+    let primary_color = Theme::Dark.palette().primary;
 
     let mut indicators = row![].spacing(2.0);
     for step in 0..step_count {
@@ -142,7 +139,7 @@ fn presentation_controls_view(state: &AppState) -> Element<'_, Message> {
         Some(toboggan_core::State::Running { .. }) => {
             // Show pause button when presentation is running
             create_icon_button(
-                icon_pause(ICON_SIZE_MEDIUM),
+                icon(Icon::Pause, ICON_SIZE_MEDIUM),
                 "Pause",
                 Message::SendCommand(toboggan_core::Command::Pause),
             )
@@ -150,7 +147,7 @@ fn presentation_controls_view(state: &AppState) -> Element<'_, Message> {
         Some(toboggan_core::State::Paused { .. }) => {
             // Show resume (play) button when presentation is paused
             create_icon_button(
-                icon_play(ICON_SIZE_MEDIUM),
+                icon(Icon::Play, ICON_SIZE_MEDIUM),
                 "Resume",
                 Message::SendCommand(toboggan_core::Command::Resume),
             )
@@ -158,7 +155,7 @@ fn presentation_controls_view(state: &AppState) -> Element<'_, Message> {
         _ => {
             // Default to pause button for Init/Done states
             create_icon_button(
-                icon_pause(ICON_SIZE_MEDIUM),
+                icon(Icon::Pause, ICON_SIZE_MEDIUM),
                 "Pause",
                 Message::SendCommand(toboggan_core::Command::Pause),
             )
@@ -166,7 +163,7 @@ fn presentation_controls_view(state: &AppState) -> Element<'_, Message> {
     };
 
     let blink_button = create_icon_button(
-        icon_bell(ICON_SIZE_MEDIUM),
+        icon(Icon::Bell, ICON_SIZE_MEDIUM),
         "Blink",
         Message::SendCommand(toboggan_core::Command::Blink),
     );

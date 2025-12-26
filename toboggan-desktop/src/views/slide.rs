@@ -1,5 +1,5 @@
 use iced::widget::{self, column, container, markdown, scrollable};
-use iced::{Element, Length};
+use iced::{Element, Length, Theme};
 use toboggan_core::Content;
 
 use super::content;
@@ -41,7 +41,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
         if !matches!(&slide.body, Content::Text { text } if text.is_empty()) {
             let body_element: Element<'_, Message> = if let Some(md) = cached_md {
                 let settings = markdown::Settings::with_style(markdown::Style::from_palette(
-                    state.theme().palette(),
+                    Theme::Dark.palette(),
                 ));
                 markdown::view(&md.body_items, settings).map(Message::LinkClicked)
             } else {
@@ -63,7 +63,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
         if !matches!(&slide.notes, Content::Text { text } if text.is_empty()) {
             let notes_element: Element<'_, Message> = if let Some(md) = cached_md {
                 let settings = markdown::Settings::with_style(markdown::Style::from_palette(
-                    state.theme().palette(),
+                    Theme::Dark.palette(),
                 ));
                 markdown::view(&md.notes_items, settings).map(Message::LinkClicked)
             } else {

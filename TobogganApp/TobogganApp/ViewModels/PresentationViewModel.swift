@@ -87,6 +87,15 @@ class PresentationViewModel: ObservableObject {
     @Published var currentStep: Int = 0
     @Published var stepCount: Int = 0
 
+    // Step navigation computed properties
+    var canGoPreviousStep: Bool {
+        currentStep > 0
+    }
+
+    var canGoNextStep: Bool {
+        stepCount > 0 && currentStep < stepCount - 1
+    }
+
     // Error dialog state
     @Published var showErrorAlert = false
     @Published var errorMessage = ""

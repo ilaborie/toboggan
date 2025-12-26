@@ -57,6 +57,7 @@ struct NavigationControlsView: View {
                     Label("Prev Step", systemImage: "chevron.left")
                 }
                 .tobogganButton(style: .secondary)
+                .disabled(!viewModel.canGoPreviousStep)
                 .accessibilityHint("Go to previous step")
 
                 Spacer()
@@ -68,6 +69,7 @@ struct NavigationControlsView: View {
                         .labelStyle(.titleAndIcon)
                 }
                 .tobogganButton(style: .primary)
+                .disabled(!viewModel.canGoNextStep)
                 .accessibilityHint("Go to next step")
             }
         }
