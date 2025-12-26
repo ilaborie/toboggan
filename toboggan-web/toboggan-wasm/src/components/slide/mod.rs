@@ -38,7 +38,7 @@ impl TobogganSlideElement {
                 let class_name = element.class_name();
                 let mut new_classes: Vec<&str> = class_name
                     .split_whitespace()
-                    .filter(|c| *c != "step-done" && *c != "step-current")
+                    .filter(|class| *class != "step-done" && *class != "step-current")
                     .collect();
 
                 let step_index = i as usize;

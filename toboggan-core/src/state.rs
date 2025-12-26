@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{Duration, Timestamp};
-
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(tag = "state")]
@@ -11,18 +9,14 @@ pub enum State {
     Paused {
         current: Option<usize>,
         current_step: usize,
-        total_duration: Duration,
     },
     Running {
-        since: Timestamp,
         current: usize,
         current_step: usize,
-        total_duration: Duration,
     },
     Done {
         current: usize,
         current_step: usize,
-        total_duration: Duration,
     },
 }
 
@@ -84,43 +78,34 @@ impl State {
         if let Self::Paused {
             current: Some(slide_index),
             current_step,
-            total_duration,
         } = self
         {
             *self = Self::Running {
-                since: Timestamp::now(),
                 current: *slide_index,
                 current_step: *current_step,
-                total_duration: *total_duration,
             };
         }
     }
 
     pub fn update_slide(&mut self, slide_index: usize) {
-        let total_duration = self.calculate_total_duration();
         match self {
             Self::Init => {
                 // When navigating from Init state, go to Running
                 *self = Self::Running {
-                    since: Timestamp::now(),
                     current: slide_index,
                     current_step: 0,
-                    total_duration: Duration::default(),
                 };
             }
-            Self::Running { since, .. } => {
+            Self::Running { .. } => {
                 *self = Self::Running {
-                    since: *since,
                     current: slide_index,
                     current_step: 0,
-                    total_duration,
                 };
             }
             Self::Paused { .. } => {
                 *self = Self::Paused {
                     current: Some(slide_index),
                     current_step: 0,
-                    total_duration,
                 };
             }
             Self::Done { .. } => {
@@ -128,24 +113,8 @@ impl State {
                 *self = Self::Paused {
                     current: Some(slide_index),
                     current_step: 0,
-                    total_duration,
                 };
             }
-        }
-    }
-
-    #[must_use]
-    pub fn calculate_total_duration(&self) -> Duration {
-        match self {
-            Self::Init => Duration::default(),
-            Self::Paused { total_duration, .. } | Self::Done { total_duration, .. } => {
-                *total_duration
-            }
-            Self::Running {
-                since,
-                total_duration,
-                ..
-            } => *total_duration + since.elapsed(),
         }
     }
 }
@@ -163,22 +132,18 @@ mod tests {
         let state = State::Paused {
             current: Some(0),
             current_step: 0,
-            total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.current(), Some(0));
 
         let state = State::Running {
-            since: Timestamp::now(),
             current: 0,
             current_step: 0,
-            total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.current(), Some(0));
 
         let state = State::Done {
             current: 0,
             current_step: 0,
-            total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.current(), Some(0));
     }
@@ -191,17 +156,14 @@ mod tests {
         let state = State::Paused {
             current: Some(0),
             current_step: 0,
-            total_duration: Duration::from_secs(0),
         };
         assert!(state.is_first_slide(total_slides));
         assert!(!state.is_last_slide(total_slides));
 
         // Test with middle slide
         let state = State::Running {
-            since: Timestamp::now(),
             current: 1,
             current_step: 0,
-            total_duration: Duration::from_secs(0),
         };
         assert!(!state.is_first_slide(total_slides));
         assert!(!state.is_last_slide(total_slides));
@@ -210,7 +172,6 @@ mod tests {
         let state = State::Done {
             current: 2,
             current_step: 0,
-            total_duration: Duration::from_secs(0),
         };
         assert!(!state.is_first_slide(total_slides));
         assert!(state.is_last_slide(total_slides));
@@ -223,7 +184,6 @@ mod tests {
         let state = State::Paused {
             current: Some(0),
             current_step: 0,
-            total_duration: Duration::from_secs(0),
         };
         assert!(!state.is_first_slide(total_slides));
         assert!(!state.is_last_slide(total_slides));
@@ -236,7 +196,6 @@ mod tests {
         let state = State::Paused {
             current: Some(0),
             current_step: 0,
-            total_duration: Duration::from_secs(0),
         };
         assert!(state.is_first_slide(total_slides));
         assert!(state.is_last_slide(total_slides));
@@ -250,16 +209,13 @@ mod tests {
         let state = State::Paused {
             current: Some(0),
             current_step: 0,
-            total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.next(total_slides), Some(1));
 
         // Test next from middle slide
         let state = State::Running {
-            since: Timestamp::now(),
             current: 1,
             current_step: 0,
-            total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.next(total_slides), Some(2));
 
@@ -267,7 +223,6 @@ mod tests {
         let state = State::Done {
             current: 2,
             current_step: 0,
-            total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.next(total_slides), None);
     }
@@ -280,16 +235,13 @@ mod tests {
         let state = State::Paused {
             current: Some(0),
             current_step: 0,
-            total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.previous(total_slides), None);
 
         // Test previous from middle slide
         let state = State::Running {
-            since: Timestamp::now(),
             current: 1,
             current_step: 0,
-            total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.previous(total_slides), Some(0));
 
@@ -297,7 +249,6 @@ mod tests {
         let state = State::Done {
             current: 2,
             current_step: 0,
-            total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.previous(total_slides), Some(1));
     }
@@ -309,7 +260,6 @@ mod tests {
         let state = State::Paused {
             current: Some(0),
             current_step: 0,
-            total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.next(total_slides), None);
         assert_eq!(state.previous(total_slides), None);
@@ -322,7 +272,6 @@ mod tests {
         let state = State::Paused {
             current: Some(0),
             current_step: 0,
-            total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.next(total_slides), None);
         assert_eq!(state.previous(total_slides), None);
@@ -333,14 +282,11 @@ mod tests {
         let paused_state = State::Paused {
             current: Some(0),
             current_step: 0,
-            total_duration: Duration::from_secs(10),
         };
 
         let running_state = State::Running {
-            since: Timestamp::now(),
             current: 0,
             current_step: 0,
-            total_duration: Duration::from_secs(5),
         };
 
         // Test that the states are constructed correctly with internally tagged serde format
@@ -361,15 +307,12 @@ mod tests {
         let state = State::Paused {
             current: Some(0),
             current_step: 2,
-            total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.current_step(), 2);
 
         let state = State::Running {
-            since: Timestamp::now(),
             current: 0,
             current_step: 3,
-            total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.current_step(), 3);
     }
@@ -379,7 +322,6 @@ mod tests {
         let mut state = State::Paused {
             current: Some(0),
             current_step: 0,
-            total_duration: Duration::from_secs(0),
         };
         assert_eq!(state.current_step(), 0);
 

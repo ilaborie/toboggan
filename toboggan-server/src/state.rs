@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use dashmap::DashMap;
-use toboggan_core::{ClientId, Command, Duration, Notification, Slide, State, Talk, Timestamp};
+use toboggan_core::{ClientId, Command, Notification, Slide, State, Talk, Timestamp};
 use tokio::sync::{RwLock, watch};
 use tracing::{info, warn};
 
@@ -156,21 +156,10 @@ impl TobogganState {
         );
     }
 
-    fn transition_to_running(state: &mut State, slide_index: usize, reset_duration: bool) {
-        let total_duration = if reset_duration {
-            Duration::ZERO
-        } else {
-            match state {
-                State::Init => Duration::ZERO,
-                _ => state.calculate_total_duration(),
-            }
-        };
-
+    fn transition_to_running(state: &mut State, slide_index: usize) {
         *state = State::Running {
-            since: Timestamp::now(),
             current: slide_index,
             current_step: 0,
-            total_duration,
         };
     }
 
@@ -184,7 +173,7 @@ impl TobogganState {
             || !state.is_first_slide(total_slides);
 
         if should_transition {
-            Self::transition_to_running(state, 0, true);
+            Self::transition_to_running(state, 0);
         }
 
         Notification::state(state.clone())
@@ -221,10 +210,10 @@ impl TobogganState {
         }
 
         match state {
-            State::Init => Self::transition_to_running(state, 0, false),
+            State::Init => Self::transition_to_running(state, 0),
             State::Paused { .. } => {
                 if let Some(next_slide) = state.next(total_slides) {
-                    Self::transition_to_running(state, next_slide, false);
+                    Self::transition_to_running(state, next_slide);
                 }
             }
             _ => Self::handle_next_in_running_state(state, total_slides),
@@ -240,10 +229,10 @@ impl TobogganState {
         }
 
         match state {
-            State::Init => Self::transition_to_running(state, 0, false),
+            State::Init => Self::transition_to_running(state, 0),
             State::Paused { .. } => {
                 if let Some(prev_slide) = state.previous(total_slides) {
-                    Self::transition_to_running(state, prev_slide, false);
+                    Self::transition_to_running(state, prev_slide);
                 }
             }
             _ => {
@@ -260,14 +249,11 @@ impl TobogganState {
         if let State::Running {
             current,
             current_step,
-            ..
         } = *state
         {
-            let total_duration = state.calculate_total_duration();
             *state = State::Paused {
                 current: Some(current),
                 current_step,
-                total_duration,
             };
         }
         Notification::state(state.clone())
@@ -367,13 +353,13 @@ impl TobogganState {
     fn navigate_to_slide(state: &mut State, target_slide: usize, total_slides: usize) {
         match state {
             State::Init => {
-                Self::transition_to_running(state, target_slide, false);
+                Self::transition_to_running(state, target_slide);
             }
             State::Paused { .. } => {
                 if state.is_last_slide(total_slides) && target_slide == total_slides - 1 {
                     state.update_slide(target_slide);
                 } else {
-                    Self::transition_to_running(state, target_slide, false);
+                    Self::transition_to_running(state, target_slide);
                 }
             }
             _ => {
@@ -387,16 +373,14 @@ impl TobogganState {
             if let Some(next_slide) = state.next(total_slides) {
                 state.update_slide(next_slide);
             } else if state.is_last_slide(total_slides) {
-                let total_duration = state.calculate_total_duration();
                 let current_step = state.current_step();
                 *state = State::Done {
                     current,
                     current_step,
-                    total_duration,
                 };
             }
         } else {
-            Self::transition_to_running(state, 0, false);
+            Self::transition_to_running(state, 0);
         }
     }
 

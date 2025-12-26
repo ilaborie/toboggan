@@ -1,7 +1,7 @@
 #[cfg(test)]
 #[allow(clippy::module_inception, clippy::unwrap_used)]
 mod tests {
-    use toboggan_core::{ClientId, Command, Date, Duration, Notification, Slide, State, Talk};
+    use toboggan_core::{ClientId, Command, Date, Notification, Slide, State, Talk};
 
     use crate::TobogganState;
 
@@ -341,33 +341,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_duration_tracking() {
-        let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
-
-        // Start tracking by getting to Running state
-        state.handle_command(&Command::Next).await;
-
-        // Wait a tiny bit to ensure duration > 0
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-
-        // Pause and check duration
-        let notification = state.handle_command(&Command::Pause).await;
-
-        match notification {
-            Notification::State {
-                state: inner_state, ..
-            } => match inner_state {
-                State::Paused { total_duration, .. } => {
-                    assert!(total_duration > Duration::from_secs(0));
-                }
-                _ => panic!("Expected Paused state"),
-            },
-            _ => panic!("Expected State notification"),
-        }
-    }
-
-    #[tokio::test]
     async fn test_init_to_running_transition() {
         let talk = create_test_talk();
         let state = TobogganState::new(talk, 100).unwrap();
@@ -450,45 +423,6 @@ mod tests {
                 state: inner_state, ..
             } => assert!(matches!(inner_state, State::Paused { .. })),
             _ => panic!("Expected State notification"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_first_command_resets_timestamp() {
-        let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
-
-        // Start running and navigate to second slide
-        state.handle_command(&Command::Next).await; // Init -> Running (first slide)
-        state.handle_command(&Command::Next).await; // Running (second slide)
-
-        // Wait a bit to accumulate some duration
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-
-        // Pause to capture current duration
-        let pause_notification = state.handle_command(&Command::Pause).await;
-        let Notification::State {
-            state: State::Paused { total_duration, .. },
-            ..
-        } = pause_notification
-        else {
-            panic!("Expected Paused state");
-        };
-
-        // Verify we have some accumulated duration
-        assert!(total_duration > Duration::from_secs(0));
-
-        // Now go to first slide - this should reset the timestamp
-        let first_notification = state.handle_command(&Command::First).await;
-        match first_notification {
-            Notification::State {
-                state: State::Running { total_duration, .. },
-                ..
-            } => {
-                // Duration should be reset to zero
-                assert_eq!(total_duration, Duration::ZERO);
-            }
-            _ => panic!("Expected Running state after First command"),
         }
     }
 }

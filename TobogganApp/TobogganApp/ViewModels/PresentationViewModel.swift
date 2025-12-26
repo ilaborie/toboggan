@@ -79,7 +79,6 @@ class PresentationViewModel: ObservableObject {
     @Published var currentSlideIndex: Int?
     @Published var totalSlides: Int = 0
     @Published var currentSlide: Slide?
-    @Published var duration: TimeInterval = 0
     @Published var canGoPrevious = false
     @Published var canGoNext = false
 
@@ -99,13 +98,7 @@ class PresentationViewModel: ObservableObject {
     // Error dialog state
     @Published var showErrorAlert = false
     @Published var errorMessage = ""
-    
-    var formattedDuration: String {
-        let minutes = Int(duration) / 60
-        let seconds = Int(duration) % 60
-        return String(format: "%02d:%02d", minutes, seconds)
-    }
-    
+
     private let tobogganClient: TobogganClient
     private var currentState: State?
     private let notificationHandler: NotificationHandler
@@ -185,31 +178,28 @@ class PresentationViewModel: ObservableObject {
                 self.currentStep = 0
                 self.stepCount = 0
                 updatePresentationState(currentSlideIndex: nil)
-            case let .running(previous, current, next, currentStep, stepCount, totalDuration):
+            case let .running(previous, current, next, currentStep, stepCount):
                 self.currentStep = Int(currentStep)
                 self.stepCount = Int(stepCount)
                 updatePresentationState(
                     currentSlideIndex: Int(current),
                     isPlaying: true,
-                    duration: totalDuration,
                     previousSlideIndex: previous.map(Int.init),
                     nextSlideIndex: next.map(Int.init)
                 )
-            case let .paused(previous, current, next, currentStep, stepCount, totalDuration):
+            case let .paused(previous, current, next, currentStep, stepCount):
                 self.currentStep = Int(currentStep)
                 self.stepCount = Int(stepCount)
                 updatePresentationState(
                     currentSlideIndex: Int(current),
-                    duration: totalDuration,
                     previousSlideIndex: previous.map(Int.init),
                     nextSlideIndex: next.map(Int.init)
                 )
-            case let .done(previous, current, currentStep, stepCount, totalDuration):
+            case let .done(previous, current, currentStep, stepCount):
                 self.currentStep = Int(currentStep)
                 self.stepCount = Int(stepCount)
                 updatePresentationState(
                     currentSlideIndex: Int(current),
-                    duration: totalDuration,
                     previousSlideIndex: previous.map(Int.init)
                 )
             }
@@ -232,12 +222,10 @@ class PresentationViewModel: ObservableObject {
     private func updatePresentationState(
         currentSlideIndex: Int?,
         isPlaying: Bool = false,
-        duration: TimeInterval = 0,
         previousSlideIndex: Int? = nil,
         nextSlideIndex: Int? = nil
     ) {
         self.isPlaying = isPlaying
-        self.duration = duration
         self.canGoPrevious = (previousSlideIndex != nil)
         self.canGoNext = (nextSlideIndex != nil)
         

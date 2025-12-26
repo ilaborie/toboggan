@@ -650,7 +650,6 @@
             "type": "object",
             "required": [
               "current_step",
-              "total_duration",
               "state"
             ],
             "properties": {
@@ -670,19 +669,14 @@
                 "enum": [
                   "Paused"
                 ]
-              },
-              "total_duration": {
-                "$ref": "#/components/schemas/Duration"
               }
             }
           },
           {
             "type": "object",
             "required": [
-              "since",
               "current",
               "current_step",
-              "total_duration",
               "state"
             ],
             "properties": {
@@ -694,17 +688,11 @@
                 "type": "integer",
                 "minimum": 0
               },
-              "since": {
-                "$ref": "#/components/schemas/Timestamp"
-              },
               "state": {
                 "type": "string",
                 "enum": [
                   "Running"
                 ]
-              },
-              "total_duration": {
-                "$ref": "#/components/schemas/Duration"
               }
             }
           },
@@ -713,7 +701,6 @@
             "required": [
               "current",
               "current_step",
-              "total_duration",
               "state"
             ],
             "properties": {
@@ -730,9 +717,6 @@
                 "enum": [
                   "Done"
                 ]
-              },
-              "total_duration": {
-                "$ref": "#/components/schemas/Duration"
               }
             }
           }

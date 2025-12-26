@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use toboggan_core::{Command as CoreCommand, State as CoreState, TalkResponse};
 
 /// A talk
@@ -38,7 +36,6 @@ pub enum State {
         next: Option<u32>,
         current_step: u32,
         step_count: u32,
-        total_duration: Duration,
     },
     Paused {
         previous: Option<u32>,
@@ -46,14 +43,12 @@ pub enum State {
         next: Option<u32>,
         current_step: u32,
         step_count: u32,
-        total_duration: Duration,
     },
     Done {
         previous: Option<u32>,
         current: u32,
         current_step: u32,
         step_count: u32,
-        total_duration: Duration,
     },
 }
 
@@ -72,7 +67,6 @@ impl State {
             CoreState::Paused {
                 current,
                 current_step,
-                total_duration,
             } => {
                 #[allow(clippy::cast_possible_truncation, clippy::expect_used)]
                 // UniFFI requires u32, slide indices and step counts are typically small
@@ -87,14 +81,11 @@ impl State {
                     next: ((current_index as usize) < total_slides - 1).then(|| current_index + 1),
                     current_step: current_step as u32,
                     step_count,
-                    total_duration: total_duration.into(),
                 }
             }
             CoreState::Running {
                 current,
                 current_step,
-                total_duration,
-                ..
             } => {
                 #[allow(clippy::cast_possible_truncation)]
                 // UniFFI requires u32, slide indices and step counts are typically small
@@ -109,13 +100,11 @@ impl State {
                     next: ((current_index as usize) < total_slides - 1).then(|| current_index + 1),
                     current_step: current_step as u32,
                     step_count,
-                    total_duration: total_duration.into(),
                 }
             }
             CoreState::Done {
                 current,
                 current_step,
-                total_duration,
             } => {
                 #[allow(clippy::cast_possible_truncation)]
                 // UniFFI requires u32, slide indices and step counts are typically small
@@ -129,7 +118,6 @@ impl State {
                     current: current_index,
                     current_step: current_step as u32,
                     step_count,
-                    total_duration: total_duration.into(),
                 }
             }
         }
