@@ -409,16 +409,6 @@ impl App {
                 Task::none()
             }
             keyboard::Key::Character(character)
-                if (character == "p" || character == "P") && !self.state.show_help =>
-            {
-                self.send_command(TobogganCommand::Pause)
-            }
-            keyboard::Key::Character(character)
-                if (character == "r" || character == "R") && !self.state.show_help =>
-            {
-                self.send_command(TobogganCommand::Resume)
-            }
-            keyboard::Key::Character(character)
                 if (character == "b" || character == "B") && !self.state.show_help =>
             {
                 self.send_command(TobogganCommand::Blink)

@@ -35,7 +35,7 @@
                 "$ref": "#/components/schemas/Command"
               },
               "example": {
-                "command": "Pause"
+                "command": "Last"
               }
             }
           }
@@ -277,34 +277,6 @@
                 "type": "string",
                 "enum": [
                   "PreviousStep"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "command"
-            ],
-            "properties": {
-              "command": {
-                "type": "string",
-                "enum": [
-                  "Pause"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "command"
-            ],
-            "properties": {
-              "command": {
-                "type": "string",
-                "enum": [
-                  "Resume"
                 ]
               }
             }
@@ -641,35 +613,6 @@
                 "type": "string",
                 "enum": [
                   "Init"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "current_step",
-              "state"
-            ],
-            "properties": {
-              "current": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SlideId"
-                  }
-                ]
-              },
-              "current_step": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "state": {
-                "type": "string",
-                "enum": [
-                  "Paused"
                 ]
               }
             }

@@ -22,8 +22,6 @@ pub fn view() -> Element<'static, Message> {
         create_text("  End          Last slide", FONT_SIZE_MEDIUM),
         create_text("", 8.0),
         create_text("Presentation Control:", FONT_SIZE_LARGE),
-        create_text("  p / P        Pause presentation", FONT_SIZE_MEDIUM),
-        create_text("  r / R        Resume presentation", FONT_SIZE_MEDIUM),
         create_text("  b / B        Blink (bell/notification)", FONT_SIZE_MEDIUM),
         create_text("", 8.0),
         create_text("View:", FONT_SIZE_LARGE),

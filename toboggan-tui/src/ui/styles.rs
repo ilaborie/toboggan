@@ -36,7 +36,6 @@ pub mod log {
 pub mod state {
     use super::{Style, colors};
 
-    pub const PAUSED: Style = Style::new().fg(colors::YELLOW);
     pub const RUNNING: Style = Style::new().fg(colors::GRAY);
     pub const DONE: Style = Style::new().fg(colors::GREEN);
 }

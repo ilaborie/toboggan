@@ -74,7 +74,6 @@ enum TobogganConfig {
 class PresentationViewModel: ObservableObject {
     @Published var presentationTitle = "Presentation title - Date"
     @Published var nextSlideTitle = "Next Title"
-    @Published var isPlaying = false
     @Published var connectionStatus: ConnectionStatus = .closed
     @Published var currentSlideIndex: Int?
     @Published var totalSlides: Int = 0
@@ -183,15 +182,6 @@ class PresentationViewModel: ObservableObject {
                 self.stepCount = Int(stepCount)
                 updatePresentationState(
                     currentSlideIndex: Int(current),
-                    isPlaying: true,
-                    previousSlideIndex: previous.map(Int.init),
-                    nextSlideIndex: next.map(Int.init)
-                )
-            case let .paused(previous, current, next, currentStep, stepCount):
-                self.currentStep = Int(currentStep)
-                self.stepCount = Int(stepCount)
-                updatePresentationState(
-                    currentSlideIndex: Int(current),
                     previousSlideIndex: previous.map(Int.init),
                     nextSlideIndex: next.map(Int.init)
                 )
@@ -221,11 +211,9 @@ class PresentationViewModel: ObservableObject {
     
     private func updatePresentationState(
         currentSlideIndex: Int?,
-        isPlaying: Bool = false,
         previousSlideIndex: Int? = nil,
         nextSlideIndex: Int? = nil
     ) {
-        self.isPlaying = isPlaying
         self.canGoPrevious = (previousSlideIndex != nil)
         self.canGoNext = (nextSlideIndex != nil)
         
@@ -328,15 +316,7 @@ class PresentationViewModel: ObservableObject {
     func lastSlide() {
         tobogganClient.sendCommand(command: .last)
     }
-    
-    func togglePlayPause() {
-        if isPlaying {
-            tobogganClient.sendCommand(command: .pause)
-        } else {
-            tobogganClient.sendCommand(command: .resume)
-        }
-    }
-    
+
     func blink() {
         tobogganClient.sendCommand(command: .blink)
     }

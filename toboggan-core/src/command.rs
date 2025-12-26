@@ -41,9 +41,6 @@ pub enum Command {
     // Step navigation
     NextStep,
     PreviousStep,
-    // Status
-    Pause,
-    Resume,
     // Effect
     Blink,
 }

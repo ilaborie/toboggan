@@ -29,10 +29,10 @@ struct TobogganAppTests {
     @Test
     func testCommandEnum() async {
         // Test that Command enum values work correctly
-        let commands: [Command] = [.next, .previous, .first, .last, .pause, .resume, .blink]
-        
+        let commands: [Command] = [.next, .previous, .first, .last, .nextStep, .previousStep, .blink]
+
         // Should not crash when accessing enum values
-        #expect(commands.count == 8)
+        #expect(commands.count == 7)
     }
 }
 
@@ -40,15 +40,19 @@ final class TestNotificationHandler: ClientNotificationHandler, @unchecked Senda
     init() {
         print("🔔 iOS: NotificationHandler initialized")
     }
-    
+
     func onStateChange(state: State) {
         print("🔔 iOS: NotificationHandler.onStateChange called with state: \(state)")
     }
-    
+
+    func onTalkChange(state: State) {
+        print("🔔 iOS: NotificationHandler.onTalkChange called with state: \(state)")
+    }
+
     func onConnectionStatusChange(status: ConnectionStatus) {
         print("🔔 iOS: NotificationHandler.onConnectionStatusChange called with status: \(status)")
     }
-    
+
     func onError(error: String) {
         print("🔔 iOS: NotificationHandler.onError called with error: \(error)")
     }

@@ -8,10 +8,6 @@ use crate::SlideId;
 pub enum State {
     #[default]
     Init,
-    Paused {
-        current: Option<SlideId>,
-        current_step: usize,
-    },
     Running {
         current: SlideId,
         current_step: usize,
@@ -27,7 +23,6 @@ impl State {
     pub fn current(&self) -> Option<SlideId> {
         match self {
             Self::Init => None,
-            Self::Paused { current, .. } => *current,
             Self::Running { current, .. } | Self::Done { current, .. } => Some(*current),
         }
     }
@@ -36,18 +31,16 @@ impl State {
     pub fn current_step(&self) -> usize {
         match self {
             Self::Init => 0,
-            Self::Paused { current_step, .. }
-            | Self::Running { current_step, .. }
-            | Self::Done { current_step, .. } => *current_step,
+            Self::Running { current_step, .. } | Self::Done { current_step, .. } => *current_step,
         }
     }
 
     pub fn update_step(&mut self, step: usize) {
         match self {
             Self::Init => {}
-            Self::Paused { current_step, .. }
-            | Self::Running { current_step, .. }
-            | Self::Done { current_step, .. } => *current_step = step,
+            Self::Running { current_step, .. } | Self::Done { current_step, .. } => {
+                *current_step = step;
+            }
         }
     }
 
@@ -76,44 +69,11 @@ impl State {
         self.current()?.prev()
     }
 
-    pub fn auto_resume(&mut self) {
-        if let Self::Paused {
-            current: Some(slide_index),
-            current_step,
-        } = self
-        {
-            *self = Self::Running {
-                current: *slide_index,
-                current_step: *current_step,
-            };
-        }
-    }
-
     pub fn update_slide(&mut self, slide_id: SlideId) {
         match self {
-            Self::Init => {
-                // When navigating from Init state, go to Running
+            Self::Init | Self::Running { .. } | Self::Done { .. } => {
                 *self = Self::Running {
                     current: slide_id,
-                    current_step: 0,
-                };
-            }
-            Self::Running { .. } => {
-                *self = Self::Running {
-                    current: slide_id,
-                    current_step: 0,
-                };
-            }
-            Self::Paused { .. } => {
-                *self = Self::Paused {
-                    current: Some(slide_id),
-                    current_step: 0,
-                };
-            }
-            Self::Done { .. } => {
-                // When navigating from Done state, go back to Paused
-                *self = Self::Paused {
-                    current: Some(slide_id),
                     current_step: 0,
                 };
             }
@@ -130,12 +90,6 @@ mod tests {
     fn test_current() {
         let state = State::default();
         assert_eq!(state.current(), None);
-
-        let state = State::Paused {
-            current: Some(SlideId::FIRST),
-            current_step: 0,
-        };
-        assert_eq!(state.current(), Some(SlideId::FIRST));
 
         let state = State::Running {
             current: SlideId::FIRST,
@@ -155,8 +109,8 @@ mod tests {
         let total_slides = 3;
 
         // Test with first slide
-        let state = State::Paused {
-            current: Some(SlideId::FIRST),
+        let state = State::Running {
+            current: SlideId::FIRST,
             current_step: 0,
         };
         assert!(state.is_first_slide(total_slides));
@@ -183,8 +137,8 @@ mod tests {
     fn test_with_empty_slide_order() {
         let total_slides = 0;
 
-        let state = State::Paused {
-            current: Some(SlideId::FIRST),
+        let state = State::Running {
+            current: SlideId::FIRST,
             current_step: 0,
         };
         assert!(!state.is_first_slide(total_slides));
@@ -195,8 +149,8 @@ mod tests {
     fn test_with_single_slide() {
         let total_slides = 1;
 
-        let state = State::Paused {
-            current: Some(SlideId::FIRST),
+        let state = State::Running {
+            current: SlideId::FIRST,
             current_step: 0,
         };
         assert!(state.is_first_slide(total_slides));
@@ -208,8 +162,8 @@ mod tests {
         let total_slides = 3;
 
         // Test next from first slide
-        let state = State::Paused {
-            current: Some(SlideId::FIRST),
+        let state = State::Running {
+            current: SlideId::FIRST,
             current_step: 0,
         };
         assert_eq!(state.next(total_slides), Some(SlideId::new(1)));
@@ -234,8 +188,8 @@ mod tests {
         let total_slides = 3;
 
         // Test previous from first slide
-        let state = State::Paused {
-            current: Some(SlideId::FIRST),
+        let state = State::Running {
+            current: SlideId::FIRST,
             current_step: 0,
         };
         assert_eq!(state.previous(total_slides), None);
@@ -259,8 +213,8 @@ mod tests {
     fn test_next_previous_with_empty_order() {
         let total_slides = 0;
 
-        let state = State::Paused {
-            current: Some(SlideId::FIRST),
+        let state = State::Running {
+            current: SlideId::FIRST,
             current_step: 0,
         };
         assert_eq!(state.next(total_slides), None);
@@ -271,8 +225,8 @@ mod tests {
     fn test_next_previous_with_single_slide() {
         let total_slides = 1;
 
-        let state = State::Paused {
-            current: Some(SlideId::FIRST),
+        let state = State::Running {
+            current: SlideId::FIRST,
             current_step: 0,
         };
         assert_eq!(state.next(total_slides), None);
@@ -281,24 +235,23 @@ mod tests {
 
     #[test]
     fn test_state_serialization_format() {
-        let paused_state = State::Paused {
-            current: Some(SlideId::FIRST),
-            current_step: 0,
-        };
-
         let running_state = State::Running {
             current: SlideId::FIRST,
             current_step: 0,
         };
 
-        // Test that the states are constructed correctly with internally tagged serde format
-        assert_eq!(paused_state.current(), Some(SlideId::FIRST));
+        let done_state = State::Done {
+            current: SlideId::FIRST,
+            current_step: 0,
+        };
 
+        // Test that the states are constructed correctly with internally tagged serde format
         assert_eq!(running_state.current(), Some(SlideId::FIRST));
+        assert_eq!(done_state.current(), Some(SlideId::FIRST));
 
         // Verify the states have the expected variants
-        assert!(matches!(paused_state, State::Paused { .. }));
         assert!(matches!(running_state, State::Running { .. }));
+        assert!(matches!(done_state, State::Done { .. }));
     }
 
     #[test]
@@ -306,13 +259,13 @@ mod tests {
         let state = State::default();
         assert_eq!(state.current_step(), 0);
 
-        let state = State::Paused {
-            current: Some(SlideId::FIRST),
+        let state = State::Running {
+            current: SlideId::FIRST,
             current_step: 2,
         };
         assert_eq!(state.current_step(), 2);
 
-        let state = State::Running {
+        let state = State::Done {
             current: SlideId::FIRST,
             current_step: 3,
         };
@@ -321,8 +274,8 @@ mod tests {
 
     #[test]
     fn test_update_step() {
-        let mut state = State::Paused {
-            current: Some(SlideId::FIRST),
+        let mut state = State::Running {
+            current: SlideId::FIRST,
             current_step: 0,
         };
         assert_eq!(state.current_step(), 0);

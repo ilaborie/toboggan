@@ -40,17 +40,14 @@ enum Command {
     "Last",
     "NextStep",
     "PreviousStep",
-    "Resume",
-    "Pause",
     "Blink",
 };
 
 [Enum]
 interface State {
     Init(u32 total_slides);
-    Running(u32? previous, u32 current, u32? next, u32 current_step, u32 step_count, duration total_duration);
-    Paused(u32? previous, u32 current, u32? next, u32 current_step, u32 step_count, duration total_duration);
-    Done(u32? previous, u32 current, u32 current_step, u32 step_count, duration total_duration);
+    Running(u32? previous, u32 current, u32? next, u32 current_step, u32 step_count);
+    Done(u32? previous, u32 current, u32 current_step, u32 step_count);
 };
 
 [Trait, WithForeign]

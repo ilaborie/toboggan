@@ -49,7 +49,6 @@ fun PresentationScreen(
             // Navigation controls at the bottom
             NavigationControls(
                 uiState = uiState,
-                onTogglePlayPause = viewModel::togglePlayPause,
                 onBlink = viewModel::blink,
                 onPrevious = viewModel::previousStep,
                 onNext = viewModel::nextStep

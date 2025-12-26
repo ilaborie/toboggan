@@ -31,10 +31,7 @@ impl Widget for &HelpPanel {
             ],
         ));
 
-        content.extend(build_lines(
-            "Presentation",
-            &[AppAction::Pause, AppAction::Resume, AppAction::Blink],
-        ));
+        content.extend(build_lines("Presentation", &[AppAction::Blink]));
 
         content.extend(build_lines(
             "Application",

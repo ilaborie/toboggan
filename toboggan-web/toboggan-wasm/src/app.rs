@@ -416,7 +416,7 @@ fn update_root_state_class(
     // Remove old state classes and add new one
     let classes: Vec<&str> = current_classes
         .split_whitespace()
-        .filter(|class| !matches!(*class, "init" | "paused" | "running" | "done"))
+        .filter(|class| !matches!(*class, "init" | "running" | "done"))
         .collect();
 
     let new_classes = if classes.is_empty() {

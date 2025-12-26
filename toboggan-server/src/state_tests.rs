@@ -235,51 +235,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_pause_command() {
-        let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
-
-        // Get to Running state first by using a navigation command
-        state.handle_command(&Command::Next).await;
-
-        // Then pause
-        let notification = state.handle_command(&Command::Pause).await;
-
-        match notification {
-            Notification::State {
-                state: inner_state, ..
-            } => match inner_state {
-                State::Paused { .. } => {}
-                _ => panic!("Expected Paused state"),
-            },
-            _ => panic!("Expected State notification"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_resume_command() {
-        let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
-
-        // Get to Running state first, then pause
-        state.handle_command(&Command::Next).await;
-        state.handle_command(&Command::Pause).await;
-
-        // Now resume
-        let notification = state.handle_command(&Command::Resume).await;
-
-        match notification {
-            Notification::State {
-                state: inner_state, ..
-            } => match inner_state {
-                State::Running { .. } => {}
-                _ => panic!("Expected Running state"),
-            },
-            _ => panic!("Expected State notification"),
-        }
-    }
-
-    #[tokio::test]
     async fn test_ping_command() {
         let talk = create_test_talk();
         let state = TobogganState::new(talk, 100).unwrap();
@@ -326,15 +281,18 @@ mod tests {
         // Go next from last slide to reach Done state
         state.handle_command(&Command::Next).await;
 
-        // Navigate from Done state
+        // Navigate from Done state - should transition to Running
         let notification = state.handle_command(&Command::Previous).await;
 
         match notification {
             Notification::State {
                 state: inner_state, ..
             } => match inner_state {
-                State::Paused { .. } => {}
-                _ => panic!("Expected Paused state when navigating from Done"),
+                State::Running { current, .. } => {
+                    // Should be on the second-to-last slide (index 1)
+                    assert_eq!(current, SlideId::new(1));
+                }
+                _ => panic!("Expected Running state when navigating from Done"),
             },
             _ => panic!("Expected State notification"),
         }
@@ -368,61 +326,5 @@ mod tests {
         // Verify current state is also Running
         let current_state = state.current_state().await;
         assert!(matches!(current_state, State::Running { .. }));
-    }
-
-    #[tokio::test]
-    async fn test_paused_navigation_to_running() {
-        let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
-
-        // Start running and move to second slide
-        state.handle_command(&Command::Next).await; // Init -> Running (first slide)
-        state.handle_command(&Command::Next).await; // Running (second slide)
-
-        // Pause
-        let notification = state.handle_command(&Command::Pause).await;
-        match notification {
-            Notification::State {
-                state: inner_state, ..
-            } => assert!(matches!(inner_state, State::Paused { .. })),
-            _ => panic!("Expected State notification"),
-        }
-
-        // Now navigate next - should go to Running
-        let notification = state.handle_command(&Command::Next).await;
-        match notification {
-            Notification::State {
-                state: inner_state, ..
-            } => match inner_state {
-                State::Running { current, .. } => {
-                    // Should be on third (last) slide
-                    assert_eq!(current, SlideId::new(2)); // Index 2 (third slide)
-                }
-                _ => panic!("Expected Running state, got: {inner_state:?}"),
-            },
-            _ => panic!("Expected State notification"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_paused_on_last_slide_next_stays_paused() {
-        let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
-
-        // Go to first slide, then navigate to last slide
-        state.handle_command(&Command::Next).await; // Init -> Running (first slide)
-        state.handle_command(&Command::Last).await; // Running -> Running (last slide)
-
-        // Pause
-        state.handle_command(&Command::Pause).await;
-
-        // Try next from last slide - should stay paused (no next slide available)
-        let notification = state.handle_command(&Command::Next).await;
-        match notification {
-            Notification::State {
-                state: inner_state, ..
-            } => assert!(matches!(inner_state, State::Paused { .. })),
-            _ => panic!("Expected State notification"),
-        }
     }
 }

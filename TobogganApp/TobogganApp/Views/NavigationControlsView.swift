@@ -12,25 +12,14 @@ struct NavigationControlsView: View {
     
     var body: some View {
         VStack(spacing: 20) {
-            // Play/Pause and Blink controls
-            HStack(spacing: 16) {
-                Button {
-                    viewModel.togglePlayPause()
-                } label: {
-                    Label(viewModel.isPlaying ? "Pause" : "Resume", 
-                          systemImage: viewModel.isPlaying ? "pause.fill" : "play.fill")
-                }
-                .tobogganButton(style: .primary)
-                .accessibilityHint("Start or pause the presentation")
-                
-                Button {
-                    viewModel.blink()
-                } label: {
-                    Label("Blink", systemImage: "bolt.fill")
-                }
-                .tobogganButton(style: .secondary)
-                .accessibilityHint("Send blink effect")
+            // Blink control
+            Button {
+                viewModel.blink()
+            } label: {
+                Label("Blink", systemImage: "bolt.fill")
             }
+            .tobogganButton(style: .secondary)
+            .accessibilityHint("Send blink effect")
             
             // Next slide preview
             VStack(alignment: .leading, spacing: 8) {

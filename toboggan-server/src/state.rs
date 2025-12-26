@@ -169,8 +169,7 @@ impl TobogganState {
             return Notification::error("No slides available".to_string());
         }
 
-        let should_transition = matches!(state, State::Init | State::Paused { .. })
-            || !state.is_first_slide(total_slides);
+        let should_transition = matches!(state, State::Init) || !state.is_first_slide(total_slides);
 
         if should_transition {
             Self::transition_to_running(state, SlideId::FIRST);
@@ -212,12 +211,9 @@ impl TobogganState {
 
         match state {
             State::Init => Self::transition_to_running(state, SlideId::FIRST),
-            State::Paused { .. } => {
-                if let Some(next_slide) = state.next(total_slides) {
-                    Self::transition_to_running(state, next_slide);
-                }
+            State::Running { .. } | State::Done { .. } => {
+                Self::handle_next_in_running_state(state, total_slides);
             }
-            _ => Self::handle_next_in_running_state(state, total_slides),
         }
 
         Notification::state(state.clone())
@@ -231,39 +227,13 @@ impl TobogganState {
 
         match state {
             State::Init => Self::transition_to_running(state, SlideId::FIRST),
-            State::Paused { .. } => {
-                if let Some(prev_slide) = state.previous(total_slides) {
-                    Self::transition_to_running(state, prev_slide);
-                }
-            }
-            _ => {
+            State::Running { .. } | State::Done { .. } => {
                 if let Some(prev_slide) = state.previous(total_slides) {
                     state.update_slide(prev_slide);
                 }
             }
         }
 
-        Notification::state(state.clone())
-    }
-
-    fn command_pause(state: &mut State) -> Notification {
-        if let State::Running {
-            current,
-            current_step,
-        } = *state
-        {
-            *state = State::Paused {
-                current: Some(current),
-                current_step,
-            };
-        }
-        Notification::state(state.clone())
-    }
-
-    fn command_resume(state: &mut State) -> Notification {
-        if matches!(*state, State::Paused { .. }) {
-            state.auto_resume();
-        }
         Notification::state(state.clone())
     }
 
@@ -332,8 +302,6 @@ impl TobogganState {
             Command::Previous => self.command_previous(&mut state).await,
             Command::NextStep => self.command_next_step(&mut state).await,
             Command::PreviousStep => self.command_previous_step(&mut state).await,
-            Command::Pause => Self::command_pause(&mut state),
-            Command::Resume => Self::command_resume(&mut state),
             Command::Blink => Self::command_blink(),
             Command::Ping => Notification::PONG,
         };
@@ -351,19 +319,12 @@ impl TobogganState {
         notification
     }
 
-    fn navigate_to_slide(state: &mut State, target_slide: SlideId, total_slides: usize) {
+    fn navigate_to_slide(state: &mut State, target_slide: SlideId, _total_slides: usize) {
         match state {
             State::Init => {
                 Self::transition_to_running(state, target_slide);
             }
-            State::Paused { .. } => {
-                if state.is_last_slide(total_slides) && target_slide.index() == total_slides - 1 {
-                    state.update_slide(target_slide);
-                } else {
-                    Self::transition_to_running(state, target_slide);
-                }
-            }
-            _ => {
+            State::Running { .. } | State::Done { .. } => {
                 state.update_slide(target_slide);
             }
         }

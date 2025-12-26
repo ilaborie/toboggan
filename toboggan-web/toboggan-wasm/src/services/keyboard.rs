@@ -21,10 +21,6 @@ impl Default for KeyboardMapping {
             (" ", Command::NextStep),
             ("Home", Command::First),
             ("End", Command::Last),
-            ("p", Command::Pause),
-            ("P", Command::Pause),
-            ("r", Command::Resume),
-            ("R", Command::Resume),
             ("b", Command::Blink),
             ("B", Command::Blink),
         ]);

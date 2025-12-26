@@ -23,7 +23,6 @@ data class PresentationUiState(
     val totalSlides: Int = 0,
     val currentSlide: Slide? = null,
     val nextSlideTitle: String = "<End of presentation>",
-    val isPlaying: Boolean = false,
     val canGoPrevious: Boolean = false,
     val canGoNext: Boolean = false,
     val errorMessage: String? = null,
@@ -138,17 +137,6 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
             is State.Running -> {
                 updatePresentationState(
                     currentSlideIndex = state.current.toInt(),
-                    isPlaying = true,
-                    previousSlideIndex = state.previous?.toInt(),
-                    nextSlideIndex = state.next?.toInt(),
-                    currentStep = state.currentStep.toInt(),
-                    stepCount = state.stepCount.toInt()
-                )
-            }
-            is State.Paused -> {
-                updatePresentationState(
-                    currentSlideIndex = state.current.toInt(),
-                    isPlaying = false,
                     previousSlideIndex = state.previous?.toInt(),
                     nextSlideIndex = state.next?.toInt(),
                     currentStep = state.currentStep.toInt(),
@@ -158,7 +146,6 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
             is State.Done -> {
                 updatePresentationState(
                     currentSlideIndex = state.current.toInt(),
-                    isPlaying = false,
                     previousSlideIndex = state.previous?.toInt(),
                     nextSlideIndex = null,
                     currentStep = state.currentStep.toInt(),
@@ -170,7 +157,6 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
 
     private fun updatePresentationState(
         currentSlideIndex: Int?,
-        isPlaying: Boolean = false,
         previousSlideIndex: Int? = null,
         nextSlideIndex: Int? = null,
         currentStep: Int = 0,
@@ -196,7 +182,6 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
 
         _uiState.update { state ->
             state.copy(
-                isPlaying = isPlaying,
                 canGoPrevious = canGoPrevious,
                 canGoNext = canGoNext,
                 currentSlideIndex = currentSlideIndex,
@@ -237,11 +222,6 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
 
     fun lastSlide() {
         tobogganClient?.sendCommand(Command.LAST)
-    }
-
-    fun togglePlayPause() {
-        val command = if (_uiState.value.isPlaying) Command.PAUSE else Command.RESUME
-        tobogganClient?.sendCommand(command)
     }
 
     fun blink() {

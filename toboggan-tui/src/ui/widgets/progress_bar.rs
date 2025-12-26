@@ -33,11 +33,6 @@ impl StatefulWidget for &ProgressBar {
 
         let bottom = match state.presentation_state {
             State::Init => Line::default(),
-            State::Paused { .. } => Line::from(vec![
-                Span::raw(" "),
-                Span::styled("Paused", styles::state::PAUSED),
-                Span::raw(" "),
-            ]),
             State::Running { .. } => Line::from(vec![
                 Span::raw(" "),
                 Span::styled("Running", styles::state::RUNNING),

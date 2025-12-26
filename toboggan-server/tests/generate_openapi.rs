@@ -184,8 +184,6 @@ async fn test_command_operations(app: &mut TestClient<TobogganTestServer>) -> an
         Command::Previous,
         Command::First,
         Command::Last,
-        Command::Resume,
-        Command::Pause,
     ];
 
     for command in commands {
@@ -224,8 +222,6 @@ mod command_variants {
             json!({"command": "Last"}),
             json!({"command": "Next"}),
             json!({"command": "Previous"}),
-            json!({"command": "Pause"}),
-            json!({"command": "Resume"}),
             json!({
                 "command": "Register",
                 "client": "550e8400-e29b-41d4-a716-446655440000",
