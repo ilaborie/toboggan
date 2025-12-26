@@ -221,8 +221,7 @@
                 ]
               },
               "slide": {
-                "type": "integer",
-                "minimum": 0
+                "$ref": "#/components/schemas/SlideId"
               }
             }
           },
@@ -654,11 +653,14 @@
             ],
             "properties": {
               "current": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "minimum": 0
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SlideId"
+                  }
+                ]
               },
               "current_step": {
                 "type": "integer",
@@ -681,8 +683,7 @@
             ],
             "properties": {
               "current": {
-                "type": "integer",
-                "minimum": 0
+                "$ref": "#/components/schemas/SlideId"
               },
               "current_step": {
                 "type": "integer",
@@ -705,8 +706,7 @@
             ],
             "properties": {
               "current": {
-                "type": "integer",
-                "minimum": 0
+                "$ref": "#/components/schemas/SlideId"
               },
               "current_step": {
                 "type": "integer",

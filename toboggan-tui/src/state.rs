@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use toboggan_client::ConnectionStatus;
-use toboggan_core::{Notification, Slide, State, TalkResponse};
+use toboggan_core::{Notification, Slide, SlideId, State, TalkResponse};
 use tracing::{debug, info};
 
 use crate::connection_handler::ConnectionHandler;
@@ -19,7 +19,7 @@ pub enum AppDialog {
 pub struct AppState {
     // pub(crate) config: Config,
     pub(crate) connection_status: ConnectionStatus,
-    pub(crate) current_slide: Option<usize>,
+    pub(crate) current_slide_id: Option<SlideId>,
 
     pub(crate) talk: TalkResponse,
     pub(crate) slides: Vec<Slide>,
@@ -35,7 +35,7 @@ impl AppState {
     pub fn new(talk: TalkResponse, slides: Vec<Slide>) -> Self {
         Self {
             connection_status: ConnectionStatus::Closed,
-            current_slide: None,
+            current_slide_id: None,
             talk,
             slides,
             presentation_state: State::Init,
@@ -49,7 +49,7 @@ impl AppState {
     }
 
     pub(crate) fn current(&self) -> usize {
-        self.current_slide.unwrap_or_default()
+        self.current_slide_id.map_or(0, SlideId::index)
     }
 
     pub(crate) fn count(&self) -> usize {
@@ -57,25 +57,25 @@ impl AppState {
     }
 
     pub(crate) fn is_first_slide(&self) -> bool {
-        self.current_slide == Some(0)
+        self.current_slide_id == Some(SlideId::FIRST)
     }
 
     pub(crate) fn is_last_slide(&self) -> bool {
-        if let Some(current) = self.current_slide {
-            current == self.slides.len().saturating_sub(1)
+        if let Some(current_id) = self.current_slide_id {
+            current_id.index() == self.slides.len().saturating_sub(1)
         } else {
             false
         }
     }
 
     pub(crate) fn current_slide(&self) -> Option<&Slide> {
-        let current_index = self.current_slide?;
-        self.slides.get(current_index)
+        let current_id = self.current_slide_id?;
+        self.slides.get(current_id.index())
     }
 
     pub(crate) fn next_slide(&self) -> Option<&Slide> {
-        let current_index = self.current_slide?;
-        self.slides.get(current_index + 1)
+        let current_id = self.current_slide_id?;
+        self.slides.get(current_id.index() + 1)
     }
 
     /// Returns `(current_step, step_count)` for the current slide.
@@ -154,12 +154,12 @@ impl AppState {
     fn handle_notification(&mut self, notification: Notification) {
         match notification {
             Notification::State { state } => {
-                self.current_slide = state.current();
+                self.current_slide_id = state.current();
                 self.presentation_state = state;
             }
             Notification::TalkChange { state } => {
                 // Presentation updated - state already has correct slide position
-                self.current_slide = state.current();
+                self.current_slide_id = state.current();
                 self.presentation_state = state;
             }
             Notification::Pong | Notification::Blink => {

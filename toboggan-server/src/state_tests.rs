@@ -1,7 +1,7 @@
 #[cfg(test)]
 #[allow(clippy::module_inception, clippy::unwrap_used)]
 mod tests {
-    use toboggan_core::{ClientId, Command, Date, Notification, Slide, State, Talk};
+    use toboggan_core::{ClientId, Command, Date, Notification, Slide, SlideId, State, Talk};
 
     use crate::TobogganState;
 
@@ -66,7 +66,7 @@ mod tests {
                 state: inner_state, ..
             } => match inner_state {
                 State::Running { current, .. } => {
-                    assert_eq!(current, 0); // First slide index
+                    assert_eq!(current, SlideId::FIRST); // First slide index
                 }
                 _ => panic!("Expected Running state"),
             },
@@ -87,7 +87,7 @@ mod tests {
             } => match inner_state {
                 State::Running { current, .. } => {
                     // From Init state, Last command should go to last slide (index 2 for 3 slides)
-                    assert_eq!(current, 2); // Last slide index (3 slides = indices 0,1,2)
+                    assert_eq!(current, SlideId::new(2)); // Last slide index (3 slides = indices 0,1,2)
                 }
                 _ => panic!("Expected Running state"),
             },
@@ -99,7 +99,7 @@ mod tests {
     async fn test_goto_valid_slide() {
         let talk = create_test_talk();
         let state = TobogganState::new(talk, 100).unwrap();
-        let target_slide = 1; // Index 1 (second slide)
+        let target_slide = SlideId::new(1); // Index 1 (second slide)
 
         let notification = state
             .handle_command(&Command::GoTo {
@@ -124,7 +124,7 @@ mod tests {
     async fn test_goto_invalid_slide() {
         let talk = create_test_talk();
         let state = TobogganState::new(talk, 100).unwrap();
-        let invalid_slide = 999; // Index out of bounds
+        let invalid_slide = SlideId::new(999); // Index out of bounds
 
         let notification = state
             .handle_command(&Command::GoTo {
@@ -153,7 +153,7 @@ mod tests {
             } => match inner_state {
                 State::Running { current, .. } => {
                     // From Init state, Next command should go to first slide
-                    assert_eq!(current, 0); // First slide index
+                    assert_eq!(current, SlideId::FIRST); // First slide index
                 }
                 _ => panic!("Expected Running state"),
             },
@@ -205,7 +205,7 @@ mod tests {
                 state: inner_state, ..
             } => match inner_state {
                 State::Running { current, .. } => {
-                    assert_eq!(current, 0); // First slide index
+                    assert_eq!(current, SlideId::FIRST); // First slide index
                 }
                 _ => panic!("Expected Running state"),
             },
@@ -226,7 +226,7 @@ mod tests {
                 state: inner_state, ..
             } => match inner_state {
                 State::Running { current, .. } => {
-                    assert_eq!(current, 0); // First slide index
+                    assert_eq!(current, SlideId::FIRST); // First slide index
                 }
                 _ => panic!("Expected Running state"),
             },
@@ -358,7 +358,7 @@ mod tests {
                 state: inner_state, ..
             } => match inner_state {
                 State::Running { current, .. } => {
-                    assert_eq!(current, 0); // First slide index
+                    assert_eq!(current, SlideId::FIRST); // First slide index
                 }
                 _ => panic!("Expected Running state in notification, got: {inner_state:?}"),
             },
@@ -396,7 +396,7 @@ mod tests {
             } => match inner_state {
                 State::Running { current, .. } => {
                     // Should be on third (last) slide
-                    assert_eq!(current, 2); // Index 2 (third slide)
+                    assert_eq!(current, SlideId::new(2)); // Index 2 (third slide)
                 }
                 _ => panic!("Expected Running state, got: {inner_state:?}"),
             },

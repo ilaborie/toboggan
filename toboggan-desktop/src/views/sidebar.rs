@@ -1,6 +1,6 @@
 use iced::widget::{self, button, column, container, scrollable};
 use iced::{Element, Length, Padding, Theme};
-use toboggan_core::{Command, Content};
+use toboggan_core::{Command, Content, SlideId};
 
 use super::content;
 use crate::constants::{PADDING_CONTAINER, SPACING_MEDIUM, SPACING_SMALL};
@@ -18,7 +18,8 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
         let mut slides_list = column![].spacing(SPACING_SMALL);
 
         for (index, slide) in state.slides.iter().enumerate() {
-            let is_current = Some(index) == state.current_slide_index;
+            let slide_id = SlideId::new(index);
+            let is_current = state.current_slide == Some(slide_id);
 
             let slide_text = if matches!(&slide.title, Content::Text { text } if text.is_empty()) {
                 format!("{}. Slide {index}", index + 1)
@@ -27,7 +28,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
             };
 
             let slide_button = widget::button(widget::text(slide_text))
-                .on_press(Message::SendCommand(Command::GoTo { slide: index }))
+                .on_press(Message::SendCommand(Command::GoTo { slide: slide_id }))
                 .padding(Padding::new(4.0).right(8.0).left(8.0))
                 .style(if is_current {
                     |theme: &Theme, status| button::primary(theme, status)

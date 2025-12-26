@@ -296,8 +296,8 @@ impl App {
 
         // Now update state atomically with the fresh data
         self.state.presentation_state = Some(state.clone());
-        if let Some(slide_idx) = state.current() {
-            self.state.current_slide_index = Some(slide_idx);
+        if let Some(slide_id) = state.current() {
+            self.state.current_slide = Some(slide_id);
         }
 
         Task::none()
@@ -323,8 +323,8 @@ impl App {
             CommunicationMessage::StateChange { state } => {
                 debug!("State change received: {:?}", state);
                 self.state.presentation_state = Some(state.clone());
-                if let Some(slide_idx) = state.current() {
-                    self.state.current_slide_index = Some(slide_idx);
+                if let Some(slide_id) = state.current() {
+                    self.state.current_slide = Some(slide_id);
 
                     // Ensure slides are loaded from talk data
                     if let Some(talk) = &self.state.talk

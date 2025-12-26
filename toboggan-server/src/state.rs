@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use dashmap::DashMap;
-use toboggan_core::{ClientId, Command, Notification, Slide, State, Talk, Timestamp};
+use toboggan_core::{ClientId, Command, Notification, Slide, SlideId, State, Talk, Timestamp};
 use tokio::sync::{RwLock, watch};
 use tracing::{info, warn};
 
@@ -73,9 +73,9 @@ impl TobogganState {
         talk.slides.clone()
     }
 
-    pub(crate) async fn slide_by_index(&self, index: usize) -> Option<Slide> {
+    pub(crate) async fn slide_by_index(&self, slide_id: SlideId) -> Option<Slide> {
         let talk = self.talk.read().await;
-        talk.slides.get(index).cloned()
+        talk.slides.get(slide_id.index()).cloned()
     }
 
     async fn total_slides(&self) -> usize {
@@ -156,9 +156,9 @@ impl TobogganState {
         );
     }
 
-    fn transition_to_running(state: &mut State, slide_index: usize) {
+    fn transition_to_running(state: &mut State, slide_id: SlideId) {
         *state = State::Running {
-            current: slide_index,
+            current: slide_id,
             current_step: 0,
         };
     }
@@ -173,7 +173,7 @@ impl TobogganState {
             || !state.is_first_slide(total_slides);
 
         if should_transition {
-            Self::transition_to_running(state, 0);
+            Self::transition_to_running(state, SlideId::FIRST);
         }
 
         Notification::state(state.clone())
@@ -185,20 +185,21 @@ impl TobogganState {
             return Notification::error("No slides available".to_string());
         }
 
-        let last_index = total_slides - 1;
-        Self::navigate_to_slide(state, last_index, total_slides);
+        let last_slide = SlideId::new(total_slides - 1);
+        Self::navigate_to_slide(state, last_slide, total_slides);
         Notification::state(state.clone())
     }
 
-    async fn command_goto(&self, state: &mut State, slide_index: usize) -> Notification {
+    async fn command_goto(&self, state: &mut State, slide_id: SlideId) -> Notification {
         let total_slides = self.total_slides().await;
-        if slide_index >= total_slides {
+        if slide_id.index() >= total_slides {
             return Notification::error(format!(
-                "Slide index {slide_index} not found, total slides: {total_slides}"
+                "Slide index {} not found, total slides: {total_slides}",
+                slide_id.index()
             ));
         }
 
-        Self::navigate_to_slide(state, slide_index, total_slides);
+        Self::navigate_to_slide(state, slide_id, total_slides);
         Notification::state(state.clone())
     }
 
@@ -210,7 +211,7 @@ impl TobogganState {
         }
 
         match state {
-            State::Init => Self::transition_to_running(state, 0),
+            State::Init => Self::transition_to_running(state, SlideId::FIRST),
             State::Paused { .. } => {
                 if let Some(next_slide) = state.next(total_slides) {
                     Self::transition_to_running(state, next_slide);
@@ -229,7 +230,7 @@ impl TobogganState {
         }
 
         match state {
-            State::Init => Self::transition_to_running(state, 0),
+            State::Init => Self::transition_to_running(state, SlideId::FIRST),
             State::Paused { .. } => {
                 if let Some(prev_slide) = state.previous(total_slides) {
                     Self::transition_to_running(state, prev_slide);
@@ -350,13 +351,13 @@ impl TobogganState {
         notification
     }
 
-    fn navigate_to_slide(state: &mut State, target_slide: usize, total_slides: usize) {
+    fn navigate_to_slide(state: &mut State, target_slide: SlideId, total_slides: usize) {
         match state {
             State::Init => {
                 Self::transition_to_running(state, target_slide);
             }
             State::Paused { .. } => {
-                if state.is_last_slide(total_slides) && target_slide == total_slides - 1 {
+                if state.is_last_slide(total_slides) && target_slide.index() == total_slides - 1 {
                     state.update_slide(target_slide);
                 } else {
                     Self::transition_to_running(state, target_slide);
@@ -380,7 +381,7 @@ impl TobogganState {
                 };
             }
         } else {
-            Self::transition_to_running(state, 0);
+            Self::transition_to_running(state, SlideId::FIRST);
         }
     }
 
@@ -412,29 +413,29 @@ impl TobogganState {
         }
 
         let mut state = self.current_state.write().await;
-        let current_slide_index = state.current().unwrap_or(0);
+        let current_slide_id = state.current().unwrap_or(SlideId::FIRST);
 
         let old_talk = self.talk.read().await;
-        let current_slide = old_talk.slides.get(current_slide_index);
+        let current_slide = old_talk.slides.get(current_slide_id.index());
 
         // Preserve slide position: by title -> by index -> fallback to first
-        let new_slide_index = Self::preserve_slide_position(
+        let new_slide_id = Self::preserve_slide_position(
             current_slide,
-            current_slide_index,
+            current_slide_id,
             &old_talk.slides,
             &new_talk.slides,
         );
 
         info!(
-            old_slide = current_slide_index,
-            new_slide = new_slide_index,
+            old_slide = current_slide_id.index(),
+            new_slide = new_slide_id.index(),
             old_title = ?current_slide.map(|slide| &slide.title),
-            new_title = ?new_talk.slides.get(new_slide_index).map(|slide| &slide.title),
+            new_title = ?new_talk.slides.get(new_slide_id.index()).map(|slide| &slide.title),
             "Talk reloaded"
         );
 
         // Update slide index in current state
-        state.update_slide(new_slide_index);
+        state.update_slide(new_slide_id);
         drop(old_talk);
 
         // Replace the talk
@@ -451,32 +452,33 @@ impl TobogganState {
 
     fn preserve_slide_position(
         current_slide: Option<&Slide>,
-        current_index: usize,
+        current_id: SlideId,
         old_slides: &[Slide],
         new_slides: &[Slide],
-    ) -> usize {
+    ) -> SlideId {
         if let Some(slide) = current_slide {
             // Try to match by title (exact match first, then case-insensitive if text)
             if let Some(position) = new_slides
                 .iter()
                 .position(|new_slide| new_slide.title == slide.title)
             {
-                return position;
+                return SlideId::new(position);
             }
 
             // For text titles, try case-insensitive comparison
             if let Some(position) = Self::find_by_title_text(&slide.title, new_slides) {
-                return position;
+                return SlideId::new(position);
             }
         }
 
         // Try to preserve index if slide count unchanged
+        let current_index = current_id.index();
         if old_slides.len() == new_slides.len() && current_index < new_slides.len() {
-            return current_index;
+            return current_id;
         }
 
         // Fallback to first slide
-        0
+        SlideId::FIRST
     }
 
     fn find_by_title_text(title: &toboggan_core::Content, slides: &[Slide]) -> Option<usize> {

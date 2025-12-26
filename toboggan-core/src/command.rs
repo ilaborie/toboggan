@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::SlideId;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ClientId(Uuid);
@@ -33,7 +35,7 @@ pub enum Command {
     // Navigation
     First,
     Last,
-    GoTo { slide: usize },
+    GoTo { slide: SlideId },
     Next,
     Previous,
     // Step navigation

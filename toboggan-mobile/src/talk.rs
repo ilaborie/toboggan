@@ -70,7 +70,7 @@ impl State {
             } => {
                 #[allow(clippy::cast_possible_truncation, clippy::expect_used)]
                 // UniFFI requires u32, slide indices and step counts are typically small
-                let current_index = current.expect("should have a current index") as u32;
+                let current_index = current.expect("should have a current index").index() as u32;
                 let step_count = slides
                     .get(current_index as usize)
                     .map_or(0, |slide| slide.step_count);
@@ -89,7 +89,7 @@ impl State {
             } => {
                 #[allow(clippy::cast_possible_truncation)]
                 // UniFFI requires u32, slide indices and step counts are typically small
-                let current_index = current as u32;
+                let current_index = current.index() as u32;
                 let step_count = slides
                     .get(current_index as usize)
                     .map_or(0, |slide| slide.step_count);
@@ -108,7 +108,7 @@ impl State {
             } => {
                 #[allow(clippy::cast_possible_truncation)]
                 // UniFFI requires u32, slide indices and step counts are typically small
-                let current_index = current as u32;
+                let current_index = current.index() as u32;
                 let step_count = slides
                     .get(current_index as usize)
                     .map_or(0, |slide| slide.step_count);

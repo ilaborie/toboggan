@@ -428,7 +428,7 @@ fn update_root_state_class(
     root_element.set_class_name(&new_classes);
 
     // Update CSS custom properties for slide tracking
-    let current_slide = state.current().map_or(0, |idx| idx + 1); // 1-based for display
+    let current_slide = state.current().map_or(0, SlideId::display_number);
     let total_slides = presentation_meta.borrow().total_slides;
 
     let style = root_element.style();

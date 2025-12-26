@@ -1,17 +1,17 @@
-use toboggan_core::State;
+use toboggan_core::{SlideId, State};
 
 #[test]
 #[allow(clippy::unwrap_used, clippy::print_stdout)] // Acceptable in test code
 fn test_state_serialization_format() {
-    let slide_index = 1; // Use slide index instead of SlideId
+    let slide_id = SlideId::new(1);
 
     let paused_state = State::Paused {
-        current: Some(slide_index),
+        current: Some(slide_id),
         current_step: 0,
     };
 
     let running_state = State::Running {
-        current: slide_index,
+        current: slide_id,
         current_step: 0,
     };
 
@@ -27,14 +27,14 @@ fn test_state_serialization_format() {
 
     match paused_deserialized {
         State::Paused { current, .. } => {
-            assert_eq!(current, Some(slide_index));
+            assert_eq!(current, Some(slide_id));
         }
         _ => panic!("Expected Paused state"),
     }
 
     match running_deserialized {
         State::Running { current, .. } => {
-            assert_eq!(current, slide_index);
+            assert_eq!(current, slide_id);
         }
         _ => panic!("Expected Running state"),
     }

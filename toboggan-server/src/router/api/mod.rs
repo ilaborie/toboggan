@@ -5,7 +5,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
-use toboggan_core::{Command, Notification, SlidesResponse, TalkResponse};
+use toboggan_core::{Command, Notification, SlideId, SlidesResponse, TalkResponse};
 use tracing::{info, warn};
 
 use crate::TobogganState;
@@ -43,10 +43,10 @@ pub(super) async fn get_slides(State(state): State<TobogganState>) -> impl IntoR
 
 pub(super) async fn get_slide_by_index(
     State(state): State<TobogganState>,
-    Path(index): Path<usize>,
+    Path(slide_id): Path<SlideId>,
 ) -> impl IntoResponse {
     state
-        .slide_by_index(index)
+        .slide_by_index(slide_id)
         .await
         .map(Json)
         .ok_or(StatusCode::NOT_FOUND)

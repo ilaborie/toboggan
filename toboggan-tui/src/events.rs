@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use toboggan_client::ConnectionStatus;
-use toboggan_core::{Command, Notification, Slide, TalkResponse};
+use toboggan_core::{Command, Notification, Slide, SlideId, TalkResponse};
 
 #[derive(Debug, Clone)]
 pub enum AppEvent {
@@ -119,7 +119,9 @@ impl AppAction {
             Self::Pause => Command::Pause,
             Self::Resume => Command::Resume,
             Self::Blink => Command::Blink,
-            Self::Goto(id) => Command::GoTo { slide: id.into() },
+            Self::Goto(id) => Command::GoTo {
+                slide: SlideId::new(usize::from(id)),
+            },
             Self::ShowLog | Self::Close | Self::Quit | Self::Help => {
                 return None;
             }
