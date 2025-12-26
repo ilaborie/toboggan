@@ -78,6 +78,15 @@ impl AppState {
         self.slides.get(current_index + 1)
     }
 
+    /// Returns `(current_step, step_count)` for the current slide.
+    /// Note: Mirrors implementation in toboggan-desktop/src/state.rs
+    #[must_use]
+    pub(crate) fn step_info(&self) -> Option<(usize, usize)> {
+        let slide = self.current_slide()?;
+        let current_step = self.presentation_state.current_step();
+        Some((current_step, slide.step_count))
+    }
+
     // Event handling methods
     pub fn handle_event(
         &mut self,

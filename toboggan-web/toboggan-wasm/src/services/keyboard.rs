@@ -4,10 +4,9 @@ use futures::channel::mpsc::UnboundedSender;
 use gloo::console::{debug, error, info};
 use gloo::events::EventListener;
 use gloo::utils::window;
+use toboggan_core::Command;
 use wasm_bindgen::JsCast;
 use web_sys::KeyboardEvent;
-
-use toboggan_core::Command;
 
 #[derive(Debug, Clone)]
 pub struct KeyboardMapping(HashMap<&'static str, Command>);

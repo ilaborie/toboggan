@@ -16,13 +16,18 @@ impl Widget for &HelpPanel {
 
         let mut content = vec![];
         content.extend(build_lines(
-            "Navigation",
+            "Step Navigation",
+            &[AppAction::PreviousStep, AppAction::NextStep],
+        ));
+
+        content.extend(build_lines(
+            "Slide Navigation",
             &[
                 AppAction::First,
                 AppAction::Previous,
-                AppAction::Goto(1),
                 AppAction::Next,
                 AppAction::Last,
+                AppAction::Goto(1),
             ],
         ));
 

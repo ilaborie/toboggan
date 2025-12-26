@@ -51,8 +51,8 @@ fun PresentationScreen(
                 uiState = uiState,
                 onTogglePlayPause = viewModel::togglePlayPause,
                 onBlink = viewModel::blink,
-                onPrevious = viewModel::previousSlide,
-                onNext = viewModel::nextSlide
+                onPrevious = viewModel::previousStep,
+                onNext = viewModel::nextStep
             )
         }
 

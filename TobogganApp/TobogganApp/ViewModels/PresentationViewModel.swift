@@ -82,7 +82,20 @@ class PresentationViewModel: ObservableObject {
     @Published var duration: TimeInterval = 0
     @Published var canGoPrevious = false
     @Published var canGoNext = false
-    
+
+    // Step tracking
+    @Published var currentStep: Int = 0
+    @Published var stepCount: Int = 0
+
+    // Step navigation computed properties
+    var canGoPreviousStep: Bool {
+        currentStep > 0
+    }
+
+    var canGoNextStep: Bool {
+        stepCount > 0 && currentStep < stepCount - 1
+    }
+
     // Error dialog state
     @Published var showErrorAlert = false
     @Published var errorMessage = ""
@@ -169,8 +182,12 @@ class PresentationViewModel: ObservableObject {
             case .`init`(let totalSlides):
                 // In init state, we don't have a current slide yet
                 self.totalSlides = Int(totalSlides)
+                self.currentStep = 0
+                self.stepCount = 0
                 updatePresentationState(currentSlideIndex: nil)
-            case let .running(previous, current, next, totalDuration):
+            case let .running(previous, current, next, currentStep, stepCount, totalDuration):
+                self.currentStep = Int(currentStep)
+                self.stepCount = Int(stepCount)
                 updatePresentationState(
                     currentSlideIndex: Int(current),
                     isPlaying: true,
@@ -178,14 +195,18 @@ class PresentationViewModel: ObservableObject {
                     previousSlideIndex: previous.map(Int.init),
                     nextSlideIndex: next.map(Int.init)
                 )
-            case let .paused(previous, current, next, totalDuration):
+            case let .paused(previous, current, next, currentStep, stepCount, totalDuration):
+                self.currentStep = Int(currentStep)
+                self.stepCount = Int(stepCount)
                 updatePresentationState(
                     currentSlideIndex: Int(current),
                     duration: totalDuration,
                     previousSlideIndex: previous.map(Int.init),
                     nextSlideIndex: next.map(Int.init)
                 )
-            case let .done(previous, current, totalDuration):
+            case let .done(previous, current, currentStep, stepCount, totalDuration):
+                self.currentStep = Int(currentStep)
+                self.stepCount = Int(stepCount)
                 updatePresentationState(
                     currentSlideIndex: Int(current),
                     duration: totalDuration,
@@ -285,6 +306,18 @@ class PresentationViewModel: ObservableObject {
     
     // MARK: - Actions
     
+    // MARK: - Step Navigation
+
+    func nextStep() {
+        tobogganClient.sendCommand(command: .nextStep)
+    }
+
+    func previousStep() {
+        tobogganClient.sendCommand(command: .previousStep)
+    }
+
+    // MARK: - Slide Navigation
+
     func nextSlide() {
         tobogganClient.sendCommand(command: .next)
         // Update local index optimistically
@@ -295,7 +328,7 @@ class PresentationViewModel: ObservableObject {
             currentSlideIndex = 0
         }
     }
-    
+
     func previousSlide() {
         tobogganClient.sendCommand(command: .previous)
     }

@@ -1,5 +1,6 @@
-use iced::widget::{button, column, container, scrollable};
-use iced::{Element, Length};
+use iced::widget::{self, button, column, container, scrollable};
+use iced::{Element, Length, Padding, Theme};
+use toboggan_core::{Command, Content};
 
 use super::content;
 use crate::constants::{PADDING_CONTAINER, SPACING_MEDIUM, SPACING_SMALL};
@@ -19,28 +20,27 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
         for (index, slide) in state.slides.iter().enumerate() {
             let is_current = Some(index) == state.current_slide_index;
 
-            let slide_text = if matches!(&slide.title, toboggan_core::Content::Text { text } if text.is_empty())
-            {
-                format!("{}. Slide {}", index + 1, index)
+            let slide_text = if matches!(&slide.title, Content::Text { text } if text.is_empty()) {
+                format!("{}. Slide {index}", index + 1)
             } else {
                 format!("{}. {}", index + 1, content::render_content(&slide.title))
             };
 
-            let slide_button = iced::widget::button(iced::widget::text(slide_text))
-                .on_press(Message::SendCommand(toboggan_core::Command::GoTo {
-                    slide: index,
-                }))
-                .padding([4, 8])
+            let slide_button = widget::button(widget::text(slide_text))
+                .on_press(Message::SendCommand(Command::GoTo { slide: index }))
+                .padding(Padding::new(4.0).right(8.0).left(8.0))
                 .style(if is_current {
-                    |theme: &iced::Theme, status| button::primary(theme, status)
+                    |theme: &Theme, status| button::primary(theme, status)
                 } else {
-                    |theme: &iced::Theme, status| button::secondary(theme, status)
+                    |theme: &Theme, status| button::secondary(theme, status)
                 });
 
             slides_list = slides_list.push(slide_button);
         }
 
-        sidebar_content = sidebar_content.push(scrollable(slides_list).height(Length::Fill));
+        // Slide list with anchor_top for stable scroll position
+        sidebar_content =
+            sidebar_content.push(scrollable(slides_list).height(Length::Fill).anchor_top());
     }
 
     // Next slide preview
@@ -50,10 +50,10 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                 column![
                     create_body_text("Next Slide"),
                     container(if matches!(&next_slide.title, toboggan_core::Content::Text { text } if text.is_empty()) {
-                        iced::widget::text("No title").size(12)
+                        widget::text("No title").size(12.0)
                     } else {
                         let title_content = content::render_content(&next_slide.title);
-                        iced::widget::text(title_content).size(12)
+                        widget::text(title_content).size(12.0)
                     })
                     .padding(SPACING_SMALL)
                     .style(styles::preview_container())

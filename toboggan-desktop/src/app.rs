@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use iced::{Element, Subscription, Task, Theme, keyboard};
+use iced::{Element, Subscription, Task, Theme, event, keyboard};
 use toboggan_client::{
     CommunicationMessage, ConnectionStatus, TobogganApi, TobogganApiError, TobogganConfig,
     WebSocketClient,
@@ -12,7 +12,7 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error, info};
 
 use crate::message::Message;
-use crate::state::AppState;
+use crate::state::{AppState, parse_slides_markdown};
 use crate::views;
 
 // Global channel for forwarding WebSocket messages to Iced
@@ -130,6 +130,12 @@ impl App {
 
             Message::KeyPressed(key, modifiers) => self.handle_keyboard(key, modifiers),
 
+            Message::LinkClicked(url) => {
+                info!(?url, "Link clicked");
+                // Could open URL in browser if needed
+                Task::none()
+            }
+
             Message::WindowResized(_, _) | Message::Tick => Task::none(),
         }
     }
@@ -141,12 +147,17 @@ impl App {
 
     #[must_use]
     pub fn theme(&self) -> Theme {
-        Theme::default()
+        Theme::Dark
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        let keyboard_subscription = iced::keyboard::on_key_press(|key, modifiers| {
-            Some(Message::KeyPressed(key, modifiers))
+        let keyboard_subscription = event::listen_with(|event, _status, _window| {
+            if let iced::Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = event
+            {
+                Some(Message::KeyPressed(key, modifiers))
+            } else {
+                None
+            }
         });
 
         let tick_subscription =
@@ -251,6 +262,9 @@ impl App {
         // Store all slides in the Vec
         self.state.slides.clone_from(&slides_response.slides);
 
+        // Parse and cache markdown for all slides
+        self.state.cached_markdown = parse_slides_markdown(&slides_response.slides);
+
         Task::none()
     }
 
@@ -276,6 +290,9 @@ impl App {
         };
         self.state.talk = Some(talk);
         self.state.slides.clone_from(&slides_response.slides);
+
+        // Parse and cache markdown for all slides
+        self.state.cached_markdown = parse_slides_markdown(&slides_response.slides);
 
         // Now update state atomically with the fresh data
         self.state.presentation_state = Some(state.clone());
@@ -361,9 +378,19 @@ impl App {
         modifiers: keyboard::Modifiers,
     ) -> Task<Message> {
         match key {
-            keyboard::Key::Named(
-                keyboard::key::Named::ArrowRight | keyboard::key::Named::Space,
-            ) if !self.state.show_help => self.send_command(TobogganCommand::Next),
+            // Step navigation: Space, ArrowDown → NextStep; ArrowUp → PreviousStep
+            keyboard::Key::Named(keyboard::key::Named::Space | keyboard::key::Named::ArrowDown)
+                if !self.state.show_help =>
+            {
+                self.send_command(TobogganCommand::NextStep)
+            }
+            keyboard::Key::Named(keyboard::key::Named::ArrowUp) if !self.state.show_help => {
+                self.send_command(TobogganCommand::PreviousStep)
+            }
+            // Slide navigation: ArrowRight → Next; ArrowLeft → Previous
+            keyboard::Key::Named(keyboard::key::Named::ArrowRight) if !self.state.show_help => {
+                self.send_command(TobogganCommand::Next)
+            }
             keyboard::Key::Named(keyboard::key::Named::ArrowLeft) if !self.state.show_help => {
                 self.send_command(TobogganCommand::Previous)
             }
