@@ -13,56 +13,56 @@ resolver = "2"
 
 [workspace.package]
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.92"
 license = "MIT OR Apache-2.0"
 authors = ["Igor Laborie <ilaborie@gmail.com>"]
 repository = "https://github.com/ilaborie/toboggan"
 
 [workspace.dependencies]
 # Core dependencies
-derive_more = { version = "2.0.1", default-features = false }
-jiff = { version = "0.2.15", default-features = false }
+derive_more = { version = "2.1.1", default-features = false }
+jiff = { version = "0.2.17", default-features = false }
 serde = { version = "1.0.219", default-features = false }
 uuid = { version = "1.18.1", default-features = false }
 humantime = "2.1.0"
 getrandom = "0.3.4"
 
 # Server dependencies
-axum = "0.8.4"
-tokio = "1.46.1"
+axum = "0.8.8"
+tokio = "1.48.0"
 toml = "0.9.8"
-tracing = "0.1.41"
-tracing-subscriber = "0.3.19"
-clap = "4.5.51"
-anyhow = "1.0.99"
-serde_json = "1.0.140"
+tracing = "0.1.44"
+tracing-subscriber = "0.3.22"
+clap = "4.5.53"
+anyhow = "1.0.100"
+serde_json = "1.0.147"
 serde-saphyr = "0.0.11"
-tower-http = "0.6.6"
-futures = "0.3"
+tower-http = "0.6.8"
+futures = "0.3.31"
 dashmap = "6.1.0"
 
 # OpenAPI dependencies
-utoipa = "5.0"
-utoipa-scalar = "0.3"
+utoipa = "5.4.0"
+utoipa-scalar = "0.3.0"
 
 # Dev dependencies
 clawspec-core = "0.3.0"
-tempfile = "3.22.0"
+tempfile = "3.24.0"
 
 # Other dependencies
 comrak = "0.49.0"
 miette = "7.6.0"
-comfy-table = "7.1"
+comfy-table = "7.2.1"
 
 # Desktop dependencies
-iced = { version = "0.14", features = ["tokio", "advanced", "markdown", "highlighter"] }
+iced = { version = "0.14.0", features = ["tokio", "advanced", "markdown", "highlighter"] }
 tokio-tungstenite = { version = "0.28.0", default-features = false, features = ["connect", "rustls-tls-native-roots"] }
-reqwest = { version = "0.12.23", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12.28", default-features = false, features = ["json", "rustls-tls"] }
 lucide-icons = "0.562.0"
-async-stream = "0.3"
+async-stream = "0.3.6"
 
 # Other dependencies
-regex = "1.11"
+regex = "1.12.2"
 
 # Server-specific dependencies
 rust-embed = "8.9.0"
@@ -70,12 +70,12 @@ mime_guess = "2.0.5"
 notify = "8.2.0"
 
 # CLI-specific dependencies
-owo-colors = "4.1.0"
+owo-colors = "4.2.3"
 
 # TUI-specific dependencies
-ratatui = "0.29"
+ratatui = "0.29.0"
 crossterm = "0.29.0"
-tui-logger = "0.17.3"
+tui-logger = "0.17.4"
 
 # Mobile-specific dependencies (iOS & Android)
 uniffi = "0.30.0"
