@@ -1,42 +1,91 @@
+use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 
-use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::{ConnectInfo, FromRef, State};
 use axum::response::Response;
 use futures::{SinkExt, StreamExt};
 use toboggan_core::timeouts::HEARTBEAT_INTERVAL;
 use toboggan_core::{ClientId, Command, Notification};
+use tokio::sync::{mpsc, watch};
 use tracing::{error, info, warn};
 
 use crate::TobogganState;
+use crate::services::{ClientService, TalkService};
 
 pub async fn websocket_handler(
     ws: WebSocketUpgrade,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<TobogganState>,
 ) -> Response {
-    ws.on_upgrade(move |socket| handle_websocket(socket, state))
+    let ip_addr = addr.ip();
+    ws.on_upgrade(move |socket| handle_websocket(socket, state, ip_addr))
 }
 
-async fn handle_websocket(socket: WebSocket, state: TobogganState) {
-    let client_id = ClientId::new();
-    info!(?client_id, "New WebSocket connection established");
+async fn handle_websocket(socket: WebSocket, state: TobogganState, ip_addr: IpAddr) {
+    info!(%ip_addr, "New WebSocket connection established, waiting for Register command");
 
-    let notification_rx = match state.register_client(client_id).await {
-        Ok(rx) => rx,
-        Err(err) => {
-            error!(?client_id, "Failed to register client: {err}");
-            return;
+    let (mut ws_sender, mut ws_receiver) = socket.split();
+    let client_service = ClientService::from_ref(&state);
+
+    // Wait for Register command from client
+    let (client_id, client_name, notification_rx) = loop {
+        match ws_receiver.next().await {
+            Some(Ok(Message::Text(text))) => match serde_json::from_str::<Command>(&text) {
+                Ok(Command::Register { name }) => {
+                    let initial_notification = TalkService::from_ref(&state)
+                        .create_initial_notification()
+                        .await;
+                    match client_service
+                        .register_client(name.clone(), ip_addr, initial_notification)
+                        .await
+                    {
+                        Ok((id, rx)) => {
+                            // Send Registered notification to this client
+                            let registered = Notification::registered(id);
+                            if let Ok(msg) = serde_json::to_string(&registered)
+                                && ws_sender.send(Message::Text(msg.into())).await.is_err()
+                            {
+                                error!("Failed to send Registered notification");
+                                return;
+                            }
+                            break (id, name, rx);
+                        }
+                        Err(err) => {
+                            error!("Failed to register client: {err}");
+                            let error_notification = Notification::error(err.to_string());
+                            if let Ok(msg) = serde_json::to_string(&error_notification) {
+                                let _ = ws_sender.send(Message::Text(msg.into())).await;
+                            }
+                            return;
+                        }
+                    }
+                }
+                Ok(_) => {
+                    // Ignore other commands until registered
+                    warn!("Received command before registration, ignoring");
+                }
+                Err(err) => {
+                    warn!(?err, "Failed to parse command");
+                }
+            },
+            Some(Ok(Message::Close(_))) | None => {
+                info!("WebSocket closed before registration");
+                return;
+            }
+            _ => {}
         }
     };
 
-    let (mut ws_sender, ws_receiver) = socket.split();
+    info!(?client_id, %client_name, %ip_addr, "Client registered via WebSocket");
 
+    // Send initial state after registration
     if let Err(()) = send_initial_state(&mut ws_sender, &state, client_id).await {
+        client_service.unregister_client(client_id).await;
         return;
     }
 
-    let (notification_tx, notification_rx_internal) =
-        tokio::sync::mpsc::unbounded_channel::<Notification>();
+    let (notification_tx, notification_rx_internal) = mpsc::unbounded_channel::<Notification>();
     let error_notification_tx = notification_tx.clone();
 
     let watcher_task =
@@ -62,7 +111,7 @@ async fn handle_websocket(socket: WebSocket, state: TobogganState) {
         }
     }
 
-    state.unregister_client(client_id);
+    client_service.unregister_client(client_id).await;
     info!(
         ?client_id,
         "Client unregistered and WebSocket connection closed"
@@ -75,8 +124,8 @@ async fn send_initial_state(
     client_id: ClientId,
 ) -> Result<(), ()> {
     let initial_notification = {
-        let current_state = state.current_state().await;
-        Notification::state(current_state.clone())
+        let current_state = TalkService::from_ref(state).current_state().await;
+        Notification::state(current_state)
     };
 
     if let Ok(msg) = serde_json::to_string(&initial_notification)
@@ -90,8 +139,8 @@ async fn send_initial_state(
 }
 
 fn spawn_notification_watcher_task(
-    mut notification_rx: tokio::sync::watch::Receiver<Notification>,
-    notification_tx: tokio::sync::mpsc::UnboundedSender<Notification>,
+    mut notification_rx: watch::Receiver<Notification>,
+    notification_tx: mpsc::UnboundedSender<Notification>,
     client_id: ClientId,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
@@ -110,7 +159,7 @@ fn spawn_notification_watcher_task(
 }
 
 fn spawn_notification_sender_task(
-    mut notification_rx_internal: tokio::sync::mpsc::UnboundedReceiver<Notification>,
+    mut notification_rx_internal: mpsc::UnboundedReceiver<Notification>,
     mut ws_sender: futures::stream::SplitSink<WebSocket, Message>,
     client_id: ClientId,
 ) -> tokio::task::JoinHandle<()> {
@@ -139,7 +188,7 @@ fn spawn_notification_sender_task(
 fn spawn_message_receiver_task(
     mut ws_receiver: futures::stream::SplitStream<WebSocket>,
     state: TobogganState,
-    error_notification_tx: tokio::sync::mpsc::UnboundedSender<Notification>,
+    error_notification_tx: mpsc::UnboundedSender<Notification>,
     client_id: ClientId,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
@@ -197,7 +246,7 @@ fn spawn_message_receiver_task(
 }
 
 fn spawn_heartbeat_task(
-    notification_tx: tokio::sync::mpsc::UnboundedSender<Notification>,
+    notification_tx: mpsc::UnboundedSender<Notification>,
     client_id: ClientId,
     heartbeat_interval: Duration,
 ) -> tokio::task::JoinHandle<()> {

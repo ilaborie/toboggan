@@ -14,7 +14,7 @@ fn main() {
     };
 
     let handler = Arc::new(NotificationHandler);
-    let client = TobogganClient::new(config, handler);
+    let client = TobogganClient::new(config, "Test Client".to_string(), handler);
 
     client.connect();
     println!("state: {:?}", client.get_state());
@@ -52,6 +52,18 @@ impl ClientNotificationHandler for NotificationHandler {
 
     fn on_connection_status_change(&self, status: ConnectionStatus) {
         println!("🛜 {status:?}");
+    }
+
+    fn on_registered(&self, client_id: String) {
+        println!("✅ Registered: {client_id}");
+    }
+
+    fn on_client_connected(&self, client_id: String, name: String) {
+        println!("👋 Client connected: {client_id} ({name})");
+    }
+
+    fn on_client_disconnected(&self, client_id: String, name: String) {
+        println!("👋 Client disconnected: {client_id} ({name})");
     }
 
     fn on_error(&self, error: String) {

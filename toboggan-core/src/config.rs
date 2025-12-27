@@ -1,9 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{ClientId, Duration};
+use crate::Duration;
 
 pub trait ClientConfig {
-    fn client_id(&self) -> ClientId;
     fn api_url(&self) -> &str;
     fn websocket_url(&self) -> &str;
 }
@@ -90,7 +89,6 @@ impl RetryConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BaseClientConfig {
-    pub client_id: ClientId,
     pub api_url: String,
     pub websocket_url: String,
     pub retry: RetryConfig,
@@ -102,7 +100,6 @@ impl BaseClientConfig {
         let api_url = format!("http://{host}:{port}");
         let websocket_url = format!("ws://{host}:{port}/api/ws");
         Self {
-            client_id: ClientId::new(),
             api_url,
             websocket_url,
             retry: RetryConfig::default(),
@@ -122,10 +119,6 @@ impl BaseClientConfig {
 }
 
 impl ClientConfig for BaseClientConfig {
-    fn client_id(&self) -> ClientId {
-        self.client_id
-    }
-
     fn api_url(&self) -> &str {
         &self.api_url
     }

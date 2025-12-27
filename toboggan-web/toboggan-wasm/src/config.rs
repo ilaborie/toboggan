@@ -1,5 +1,4 @@
 use gloo::utils::document;
-use toboggan_core::ClientId;
 use wasm_bindgen::prelude::*;
 
 use crate::KeyboardMapping;
@@ -30,7 +29,6 @@ impl WebSocketConfig {
 #[wasm_bindgen]
 #[derive(Debug, Clone)]
 pub struct AppConfig {
-    pub(crate) client_id: ClientId,
     pub(crate) api_base_url: String,
     pub(crate) websocket: WebSocketConfig,
     pub(crate) keymap: Option<KeyboardMapping>,
@@ -47,14 +45,12 @@ impl AppConfig {
     #[wasm_bindgen(constructor)]
     #[must_use]
     pub fn new() -> Self {
-        let client_id = ClientId::new();
         let location = document().location().unwrap_throw();
         let api_base_url = location.origin().unwrap_throw();
         let ws_url = format!("ws://{}/api/ws", location.host().unwrap_throw());
         let websocket = WebSocketConfig::new(ws_url);
 
         Self {
-            client_id,
             api_base_url,
             websocket,
             keymap: None,

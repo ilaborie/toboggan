@@ -35,6 +35,12 @@ impl State {
         }
     }
 
+    /// Returns `(current_step, step_count)` for the given slide step count.
+    #[must_use]
+    pub fn step_info(&self, slide_step_count: usize) -> (usize, usize) {
+        (self.current_step(), slide_step_count)
+    }
+
     pub fn update_step(&mut self, step: usize) {
         match self {
             Self::Init => {}

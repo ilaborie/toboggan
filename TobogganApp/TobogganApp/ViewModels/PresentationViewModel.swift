@@ -56,6 +56,18 @@ final class NotificationHandler: ClientNotificationHandler, @unchecked Sendable 
         viewModel?.handleConnectionStatusChange(status)
     }
 
+    func onRegistered(clientId: String) {
+        // Client registration notification - no UI action needed
+    }
+
+    func onClientConnected(clientId: String, name: String) {
+        // Another client connected - no UI action needed
+    }
+
+    func onClientDisconnected(clientId: String, name: String) {
+        // Another client disconnected - no UI action needed
+    }
+
     func onError(error: String) {
         viewModel?.handleError(error)
     }
@@ -85,6 +97,15 @@ class PresentationViewModel: ObservableObject {
     @Published var currentStep: Int = 0
     @Published var stepCount: Int = 0
 
+    // Duration tracking
+    @Published var totalDuration: TimeInterval = 0
+
+    var formattedDuration: String {
+        let minutes = Int(totalDuration) / 60
+        let seconds = Int(totalDuration) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+
     // Step navigation computed properties
     var canGoPreviousStep: Bool {
         currentStep > 0
@@ -92,6 +113,17 @@ class PresentationViewModel: ObservableObject {
 
     var canGoNextStep: Bool {
         stepCount > 0 && currentStep < stepCount - 1
+    }
+    
+    // Navigation button logic
+    // When on first step, previous button becomes "previous slide"
+    var showPreviousSlideInsteadOfStep: Bool {
+        currentStep == 0
+    }
+    
+    // When on last step, next button becomes "next slide"
+    var showNextSlideInsteadOfStep: Bool {
+        stepCount == 0 || currentStep >= stepCount - 1
     }
 
     // Error dialog state
@@ -109,6 +141,7 @@ class PresentationViewModel: ObservableObject {
         self.notificationHandler = NotificationHandler(viewModel: nil)
         self.tobogganClient = TobogganClient(
             config: TobogganConfig.shared,
+            clientName: "TobogganApp",
             handler: self.notificationHandler
         )
         self.notificationHandler.viewModel = self

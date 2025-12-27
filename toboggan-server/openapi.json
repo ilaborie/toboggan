@@ -124,26 +124,26 @@
   "components": {
     "schemas": {
       "ClientId": {
-        "type": "string",
-        "format": "uuid"
+        "type": "object",
+        "description": "Client identifier (server-assigned)"
       },
       "Command": {
         "oneOf": [
           {
             "type": "object",
             "required": [
-              "client",
+              "name",
               "command"
             ],
             "properties": {
-              "client": {
-                "$ref": "#/components/schemas/ClientId"
-              },
               "command": {
                 "type": "string",
                 "enum": [
                   "Register"
                 ]
+              },
+              "name": {
+                "type": "string"
               }
             }
           },
@@ -234,7 +234,7 @@
               "command": {
                 "type": "string",
                 "enum": [
-                  "Next"
+                  "NextSlide"
                 ]
               }
             }
@@ -248,7 +248,7 @@
               "command": {
                 "type": "string",
                 "enum": [
-                  "Previous"
+                  "PreviousSlide"
                 ]
               }
             }
@@ -433,8 +433,7 @@
       "HealthResponseStatus": {
         "type": "string",
         "enum": [
-          "Ok",
-          "Oops"
+          "Ok"
         ]
       },
       "Notification": {
@@ -517,6 +516,71 @@
                 "type": "string",
                 "enum": [
                   "TalkChange"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Sent to the registering client with their assigned ID",
+            "required": [
+              "client_id",
+              "type"
+            ],
+            "properties": {
+              "client_id": {
+                "$ref": "#/components/schemas/ClientId"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Registered"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Broadcast when a client connects",
+            "required": [
+              "client_id",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "client_id": {
+                "$ref": "#/components/schemas/ClientId"
+              },
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ClientConnected"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Broadcast when a client disconnects",
+            "required": [
+              "client_id",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "client_id": {
+                "$ref": "#/components/schemas/ClientId"
+              },
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ClientDisconnected"
                 ]
               }
             }

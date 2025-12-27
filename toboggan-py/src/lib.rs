@@ -7,7 +7,7 @@ use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::try_join;
 
 use toboggan_client::{CommunicationMessage, TobogganApi, TobogganConfig, WebSocketClient};
-use toboggan_core::{ClientConfig as _, Command, SlidesResponse, State as TState, TalkResponse};
+use toboggan_core::{Command, SlidesResponse, State as TState, TalkResponse};
 
 /// Toboggan for Python
 #[pymodule]
@@ -94,10 +94,9 @@ impl Toboggan {
         let api_url = config.api_url();
         let api = TobogganApi::new(api_url);
 
-        let client_id = config.client_id();
         let ws_config = config.websocket();
         let (tx, rx) = mpsc::unbounded_channel();
-        let (mut ws, rx_msg) = WebSocketClient::new(tx.clone(), rx, client_id, ws_config);
+        let (mut ws, rx_msg) = WebSocketClient::new(tx.clone(), rx, "Python", ws_config);
 
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()

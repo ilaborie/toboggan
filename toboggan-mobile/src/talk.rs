@@ -115,8 +115,8 @@ pub enum Command {
 impl From<Command> for CoreCommand {
     fn from(value: Command) -> Self {
         match value {
-            Command::Next => Self::Next,
-            Command::Previous => Self::Previous,
+            Command::Next => Self::NextSlide,
+            Command::Previous => Self::PreviousSlide,
             Command::First => Self::First,
             Command::Last => Self::Last,
             Command::NextStep => Self::NextStep,

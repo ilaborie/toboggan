@@ -28,5 +28,8 @@ pub trait ClientNotificationHandler: Send + Sync {
     fn on_state_change(&self, state: State);
     fn on_talk_change(&self, state: State);
     fn on_connection_status_change(&self, status: ConnectionStatus);
+    fn on_registered(&self, client_id: String);
+    fn on_client_connected(&self, client_id: String, name: String);
+    fn on_client_disconnected(&self, client_id: String, name: String);
     fn on_error(&self, error: String);
 }

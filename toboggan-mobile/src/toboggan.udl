@@ -34,8 +34,8 @@ enum ConnectionStatus {
 };
 
 enum Command {
-    "Next",
-    "Previous",
+    "NextSlide",
+    "PreviousSlide",
     "First",
     "Last",
     "NextStep",
@@ -55,11 +55,14 @@ interface ClientNotificationHandler {
     void on_state_change(State state);
     void on_talk_change(State state);
     void on_connection_status_change(ConnectionStatus status);
+    void on_registered(string client_id);
+    void on_client_connected(string client_id, string name);
+    void on_client_disconnected(string client_id, string name);
     void on_error(string error);
 };
 
 interface TobogganClient {
-    constructor(ClientConfig config, ClientNotificationHandler handler);
+    constructor(ClientConfig config, string client_name, ClientNotificationHandler handler);
 
     void connect();
 

@@ -103,8 +103,8 @@ impl AppAction {
     pub(crate) fn command(self) -> Option<Command> {
         let cmd = match self {
             Self::First => Command::First,
-            Self::Previous => Command::Previous,
-            Self::Next => Command::Next,
+            Self::Previous => Command::PreviousSlide,
+            Self::Next => Command::NextSlide,
             Self::Last => Command::Last,
             Self::PreviousStep => Command::PreviousStep,
             Self::NextStep => Command::NextStep,

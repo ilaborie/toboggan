@@ -27,6 +27,7 @@ gloo = { version = "0.11.0", default-features = false, features = [
     "net",
 ] }
 web-sys = { version = "0.3.81", features = [
+    "BeforeUnloadEvent",
     "HtmlElement",
     "KeyboardEvent",
     "Element",
@@ -44,6 +45,7 @@ web-sys = { version = "0.3.81", features = [
     "OscillatorNode",
     "GainNode",
     "OscillatorType",
+    "Window",
 ] }
 js-sys = "0.3.81"
 serde-wasm-bindgen = "0.6.5"

@@ -13,7 +13,7 @@ const DEBOUNCE_DURATION: Duration = Duration::from_millis(300);
 pub fn start_watch_task(talk_path: PathBuf, state: TobogganState) -> anyhow::Result<()> {
     info!(path = %talk_path.display(), "Starting file watcher");
 
-    let (tx, mut rx) = mpsc::channel::<Result<Event, notify::Error>>(100);
+    let (tx, rx) = mpsc::channel::<Result<Event, notify::Error>>(100);
 
     let mut watcher: RecommendedWatcher = notify::recommended_watcher(move |res| {
         if tx.blocking_send(res).is_err() {
@@ -26,37 +26,55 @@ pub fn start_watch_task(talk_path: PathBuf, state: TobogganState) -> anyhow::Res
         .watch(&talk_path, RecursiveMode::NonRecursive)
         .with_context(|| format!("Failed to watch file: {}", talk_path.display()))?;
 
-    tokio::spawn(async move {
-        let mut last_reload = tokio::time::Instant::now();
-        let _watcher = watcher; // Keep watcher alive
-
-        while let Some(event_result) = rx.recv().await {
-            match event_result {
-                Ok(event) => {
-                    if should_reload(&event) {
-                        let now = tokio::time::Instant::now();
-                        let elapsed = now.duration_since(last_reload);
-
-                        if elapsed >= DEBOUNCE_DURATION {
-                            info!("File change detected, reloading talk");
-                            if let Err(err) = reload_talk(&talk_path, &state).await {
-                                error!("Failed to reload talk: {err:?}");
-                            } else {
-                                last_reload = now;
-                            }
-                        }
-                    }
-                }
-                Err(err) => {
-                    warn!("File watcher error: {err}");
-                }
-            }
-        }
-
-        info!("File watcher task stopped");
-    });
+    tokio::spawn(watch_loop(watcher, rx, talk_path, state));
 
     Ok(())
+}
+
+async fn watch_loop(
+    watcher: RecommendedWatcher,
+    mut rx: mpsc::Receiver<Result<Event, notify::Error>>,
+    talk_path: PathBuf,
+    state: TobogganState,
+) {
+    let mut last_reload = tokio::time::Instant::now();
+    let _watcher = watcher; // Keep watcher alive
+
+    while let Some(event_result) = rx.recv().await {
+        match event_result {
+            Ok(event) => {
+                if should_reload(&event)
+                    && let Some(reload_time) = handle_reload(&talk_path, &state, last_reload).await
+                {
+                    last_reload = reload_time;
+                }
+            }
+            Err(error) => {
+                warn!(?error, "File watcher error");
+            }
+        }
+    }
+
+    info!("File watcher task stopped");
+}
+
+async fn handle_reload(
+    talk_path: &Path,
+    state: &TobogganState,
+    last_reload: tokio::time::Instant,
+) -> Option<tokio::time::Instant> {
+    let now = tokio::time::Instant::now();
+    let elapsed = now.duration_since(last_reload);
+
+    if elapsed >= DEBOUNCE_DURATION {
+        info!("File change detected, reloading talk");
+        if let Err(err) = reload_talk(talk_path, state).await {
+            error!("Failed to reload talk: {err:?}");
+        } else {
+            return Some(now);
+        }
+    }
+    None
 }
 
 fn should_reload(event: &Event) -> bool {

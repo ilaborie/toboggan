@@ -40,6 +40,7 @@ serde-saphyr = "0.0.11"
 tower-http = "0.6.8"
 futures = "0.3.31"
 dashmap = "6.1.0"
+slotmap = { version = "1.0.7", features = ["serde"] }
 
 # OpenAPI dependencies
 utoipa = "5.4.0"

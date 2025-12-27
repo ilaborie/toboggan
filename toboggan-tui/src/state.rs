@@ -57,15 +57,11 @@ impl AppState {
     }
 
     pub(crate) fn is_first_slide(&self) -> bool {
-        self.current_slide_id == Some(SlideId::FIRST)
+        self.presentation_state.is_first_slide(self.slides.len())
     }
 
     pub(crate) fn is_last_slide(&self) -> bool {
-        if let Some(current_id) = self.current_slide_id {
-            current_id.index() == self.slides.len().saturating_sub(1)
-        } else {
-            false
-        }
+        self.presentation_state.is_last_slide(self.slides.len())
     }
 
     pub(crate) fn current_slide(&self) -> Option<&Slide> {
@@ -79,12 +75,10 @@ impl AppState {
     }
 
     /// Returns `(current_step, step_count)` for the current slide.
-    /// Note: Mirrors implementation in toboggan-desktop/src/state.rs
     #[must_use]
     pub(crate) fn step_info(&self) -> Option<(usize, usize)> {
         let slide = self.current_slide()?;
-        let current_step = self.presentation_state.current_step();
-        Some((current_step, slide.step_count))
+        Some(self.presentation_state.step_info(slide.step_count))
     }
 
     // Event handling methods
@@ -162,10 +156,14 @@ impl AppState {
                 self.current_slide_id = state.current();
                 self.presentation_state = state;
             }
-            Notification::Pong | Notification::Blink => {
+            Notification::Pong
+            | Notification::Blink
+            | Notification::Registered { .. }
+            | Notification::ClientConnected { .. }
+            | Notification::ClientDisconnected { .. } => {
                 // Pong: heartbeat response, no UI action needed
                 // Blink: visual effect not implemented in TUI
-                // TODO https://github.com/junkdog/tachyonfx
+                // Client registration events - no UI action needed in TUI
             }
             Notification::Error { message } => {
                 self.dialog = AppDialog::Error(message);

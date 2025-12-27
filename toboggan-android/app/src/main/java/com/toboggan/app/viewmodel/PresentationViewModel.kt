@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Duration
 import uniffi.toboggan.ClientConfig
 import uniffi.toboggan.ClientNotificationHandler
 import uniffi.toboggan.Command
@@ -64,7 +65,7 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
 
             _uiState.update { it.copy(connectionStatus = ConnectionStatus.CONNECTING) }
 
-            tobogganClient = TobogganClient(config, this@PresentationViewModel)
+            tobogganClient = TobogganClient(config, "Android Remote", this@PresentationViewModel)
             tobogganClient?.connect()
 
             fetchTalkInfo()
@@ -122,6 +123,18 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
         viewModelScope.launch(Dispatchers.Main) {
             handleError(error)
         }
+    }
+
+    override fun onRegistered(clientId: String) {
+        // Client registration notification - no UI action needed
+    }
+
+    override fun onClientConnected(clientId: String, name: String) {
+        // Another client connected - no UI action needed
+    }
+
+    override fun onClientDisconnected(clientId: String, name: String) {
+        // Another client disconnected - no UI action needed
     }
 
     // MARK: - State handling

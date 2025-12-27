@@ -20,7 +20,7 @@ struct TobogganAppTests {
         
         let testHandler = TestNotificationHandler()
         // This should not crash with UniFFI checksum mismatch
-        let client = TobogganClient(config: config, handler: testHandler)
+        let client = TobogganClient(config: config, clientName: "iOS Test", handler: testHandler)
         
         // Verify client was created successfully
         #expect(client.isConnected() == false) // Should be false initially
@@ -55,5 +55,17 @@ final class TestNotificationHandler: ClientNotificationHandler, @unchecked Senda
 
     func onError(error: String) {
         print("🔔 iOS: NotificationHandler.onError called with error: \(error)")
+    }
+
+    func onRegistered(clientId: String) {
+        print("🔔 iOS: NotificationHandler.onRegistered called with clientId: \(clientId)")
+    }
+
+    func onClientConnected(clientId: String, name: String) {
+        print("🔔 iOS: NotificationHandler.onClientConnected called with clientId: \(clientId), name: \(name)")
+    }
+
+    func onClientDisconnected(clientId: String, name: String) {
+        print("🔔 iOS: NotificationHandler.onClientDisconnected called with clientId: \(clientId), name: \(name)")
     }
 }

@@ -14,9 +14,9 @@ pub struct KeyboardMapping(HashMap<&'static str, Command>);
 impl Default for KeyboardMapping {
     fn default() -> Self {
         let mapping = HashMap::from([
-            ("ArrowLeft", Command::Previous),
+            ("ArrowLeft", Command::PreviousSlide),
             ("ArrowUp", Command::PreviousStep),
-            ("ArrowRight", Command::Next),
+            ("ArrowRight", Command::NextSlide),
             ("ArrowDown", Command::NextStep),
             (" ", Command::NextStep),
             ("Home", Command::First),

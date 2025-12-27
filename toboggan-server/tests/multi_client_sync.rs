@@ -6,6 +6,7 @@
 
 mod common;
 
+use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use anyhow::bail;
@@ -13,7 +14,7 @@ use common::create_multi_slide_talk;
 use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
 use toboggan_core::{ClientId, Command, Notification};
-use toboggan_server::{TobogganState, routes_with_cors};
+use toboggan_server::{ClientService, TalkService, TobogganState, routes_with_cors};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::protocol::Message as TungsteniteMessage;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
@@ -23,7 +24,9 @@ static GLOBAL_TEST_COUNTER: AtomicU8 = AtomicU8::new(0);
 
 async fn create_test_server() -> (String, TobogganState) {
     let talk = create_multi_slide_talk();
-    let state = TobogganState::new(talk, 100).unwrap();
+    let talk_service = TalkService::new(talk).unwrap();
+    let client_service = ClientService::new(100);
+    let state = TobogganState::new(talk_service, client_service);
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -32,9 +35,12 @@ async fn create_test_server() -> (String, TobogganState) {
     let app = routes_with_cors(None, None, OpenApi::default()).with_state(state.clone());
 
     tokio::spawn(async move {
-        axum::serve(listener, app.into_make_service())
-            .await
-            .expect("Server failed");
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .expect("Server failed");
     });
 
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -53,16 +59,39 @@ async fn connect_and_register_client(
     let (ws_stream, _) = connect_async(server_url).await?;
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
 
-    let client = ClientId::new();
-
-    let register_cmd = Command::Register { client };
+    // Send Register command with client name
+    let register_cmd = Command::Register {
+        name: client_name.to_string(),
+    };
     let register_msg = serde_json::to_string(&register_cmd)?;
     ws_sender
         .send(TungsteniteMessage::text(register_msg))
         .await?;
 
-    println!("[{client_name}] Sent registration for client: {client:?}");
+    println!("[{client_name}] Sent registration");
 
+    // First message should be Registered notification with assigned client_id
+    let client = if let Some(msg) = ws_receiver.next().await {
+        let msg = msg?;
+        if let TungsteniteMessage::Text(text) = msg {
+            let notification: Notification = serde_json::from_str(&text)?;
+            match notification {
+                Notification::Registered { client_id } => {
+                    println!("[{client_name}] Registered as client: {client_id:?}");
+                    client_id
+                }
+                _ => {
+                    bail!("Expected Registered notification, got: {notification:?}");
+                }
+            }
+        } else {
+            bail!("Expected text message for Registered notification");
+        }
+    } else {
+        bail!("Expected Registered notification but got nothing");
+    };
+
+    // Second message should be State notification
     if let Some(msg) = ws_receiver.next().await {
         let msg = msg?;
         if let TungsteniteMessage::Text(text) = msg {
@@ -181,7 +210,7 @@ async fn test_client_disconnect_and_reconnect_sync() {
     let _next_notification = send_command_and_get_response(
         &mut client1_sender,
         &mut client1_receiver,
-        Command::Next,
+        Command::NextSlide,
         "Client1",
     )
     .await
@@ -199,7 +228,7 @@ async fn test_client_disconnect_and_reconnect_sync() {
     let _next2_notification = send_command_and_get_response(
         &mut client1_sender,
         &mut client1_receiver,
-        Command::Next,
+        Command::NextSlide,
         "Client1",
     )
     .await

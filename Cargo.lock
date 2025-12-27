@@ -1290,20 +1290,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dashmap"
-version = "6.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
-dependencies = [
- "cfg-if",
- "crossbeam-utils",
- "hashbrown 0.14.5",
- "lock_api",
- "once_cell",
- "parking_lot_core",
-]
-
-[[package]]
 name = "data-encoding"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2012,12 +1998,6 @@ dependencies = [
  "read-fonts",
  "smallvec 1.15.1",
 ]
-
-[[package]]
-name = "hashbrown"
-version = "0.14.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 
 [[package]]
 name = "hashbrown"
@@ -4688,6 +4668,7 @@ version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dbff4acf519f630b3a3ddcfaea6c06b42174d9a44bc70c620e9ed1649d58b82a"
 dependencies = [
+ "serde",
  "version_check",
 ]
 
@@ -5238,9 +5219,9 @@ dependencies = [
  "jiff",
  "serde",
  "serde_json",
+ "slotmap",
  "tracing",
  "utoipa",
- "uuid",
 ]
 
 [[package]]
@@ -5276,7 +5257,6 @@ dependencies = [
  "axum",
  "clap",
  "clawspec-core",
- "dashmap",
  "derive_more",
  "futures",
  "mime_guess",
@@ -5284,6 +5264,7 @@ dependencies = [
  "rust-embed",
  "serde",
  "serde_json",
+ "slotmap",
  "toboggan-core",
  "tokio",
  "tokio-tungstenite",
@@ -5910,7 +5891,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
- "uuid",
 ]
 
 [[package]]

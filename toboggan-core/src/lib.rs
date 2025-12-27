@@ -23,3 +23,6 @@ pub use self::command::*;
 
 mod notification;
 pub use self::notification::*;
+
+mod client;
+pub use self::client::*;

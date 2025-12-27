@@ -96,14 +96,11 @@ impl AppState {
     }
 
     /// Returns `(current_step, step_count)` for the current slide.
-    /// Note: Mirrors implementation in toboggan-tui/src/state.rs
     #[must_use]
     pub fn step_info(&self) -> Option<(usize, usize)> {
         let slide = self.current_slide()?;
-        let current_step = self
-            .presentation_state
+        self.presentation_state
             .as_ref()
-            .map_or(0, PresentationState::current_step);
-        Some((current_step, slide.step_count))
+            .map(|state| state.step_info(slide.step_count))
     }
 }
