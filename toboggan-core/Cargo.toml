@@ -12,14 +12,14 @@ authors.workspace = true
 default = ["std", "tracing"]
 tracing = ["dep:tracing"]
 std = ["jiff/std", "serde/std"]
-js = ["jiff/js", "uuid/js", "getrandom/wasm_js"]
-openapi = ["dep:utoipa", "utoipa/uuid"]
+js = ["jiff/js", "getrandom/wasm_js"]
+openapi = ["dep:utoipa"]
 test-utils = []
 
 [dependencies]
 jiff = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
-uuid = { workspace = true, features = ["serde", "v4"] }
+slotmap = { workspace = true }
 derive_more = { workspace = true, features = ["add", "from", "deref"] }
 humantime = { workspace = true }
 getrandom = { workspace = true }

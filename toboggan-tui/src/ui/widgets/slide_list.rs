@@ -1,6 +1,7 @@
 use ratatui::prelude::*;
 use ratatui::symbols::border;
 use ratatui::widgets::{Block, List, ListItem, ListState};
+use toboggan_core::SlideId;
 
 use crate::state::AppState;
 use crate::ui::styles;
@@ -13,7 +14,7 @@ impl StatefulWidget for &SlideList {
 
     #[allow(clippy::cast_possible_truncation)]
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let selected = state.current_slide;
+        let selected = state.current_slide_id;
 
         // Create list items for each slide
         let items: Vec<ListItem> = state
@@ -21,14 +22,16 @@ impl StatefulWidget for &SlideList {
             .titles
             .iter()
             .enumerate()
-            .map(|(index, text)| build_list_item(selected == Some(index), index + 1, text))
+            .map(|(index, text)| {
+                build_list_item(selected == Some(SlideId::new(index)), index + 1, text)
+            })
             .collect();
 
         let block = Block::bordered()
             .title(Line::from(" Slides "))
             .border_set(border::THICK);
 
-        let mut list_state = ListState::default().with_selected(selected);
+        let mut list_state = ListState::default().with_selected(selected.map(SlideId::index));
         let list = List::new(items).block(block);
         StatefulWidget::render(list, area, buf, &mut list_state);
     }

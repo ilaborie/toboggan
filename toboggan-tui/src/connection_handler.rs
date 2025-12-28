@@ -1,7 +1,7 @@
 // Re-export toboggan-client types
 pub use toboggan_client::{CommunicationMessage, WebSocketClient};
 use toboggan_client::{ConnectionStatus, TobogganConfig};
-use toboggan_core::{ClientConfig, Command, Notification};
+use toboggan_core::{Command, Notification};
 use tokio::sync::mpsc;
 use tracing::{error, info};
 
@@ -30,11 +30,10 @@ impl ConnectionHandler {
         let (command_tx, command_rx) = mpsc::unbounded_channel();
         self.command_tx = Some(command_tx.clone());
 
-        let client_id = self.config.client_id();
         let websocket_config = self.config.websocket();
 
         let (mut ws_client, mut message_rx) =
-            WebSocketClient::new(command_tx.clone(), command_rx, client_id, websocket_config);
+            WebSocketClient::new(command_tx.clone(), command_rx, "TUI", websocket_config);
 
         let event_tx = self.event_tx.clone();
         let _ = event_tx.send(AppEvent::ConnectionStatus(ConnectionStatus::Closed));
@@ -66,6 +65,10 @@ impl ConnectionHandler {
                     CommunicationMessage::Error { error } => {
                         let _ = event_tx_clone.send(AppEvent::Error(error));
                     }
+                    // Client registration events - no UI action needed in TUI
+                    CommunicationMessage::Registered { .. }
+                    | CommunicationMessage::ClientConnected { .. }
+                    | CommunicationMessage::ClientDisconnected { .. } => {}
                 }
             }
         });

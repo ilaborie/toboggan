@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use iced::Settings;
+use iced::window::icon;
 use toboggan_client::TobogganConfig;
 use toboggan_desktop::App;
 
@@ -21,6 +22,11 @@ fn main() -> Result<()> {
         .title(title)
         .settings(Settings::default())
         .window(iced::window::Settings {
+            icon: icon::from_file_data(
+                include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icon.ico")),
+                None,
+            )
+            .ok(),
             size: iced::Size::new(1280.0, 720.0),
             resizable: true,
             decorations: true,

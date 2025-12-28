@@ -14,5 +14,4 @@ pub struct HealthResponse {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub enum HealthResponseStatus {
     Ok,
-    Oops,
 }

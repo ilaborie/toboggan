@@ -34,17 +34,11 @@ fun CurrentSlideCard(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // First line: Duration and slide progress
+            // First line: Slide progress
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.End
             ) {
-                Text(
-                    text = uiState.formattedDuration,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
                 Text(
                     text = uiState.slideProgress,
                     style = MaterialTheme.typography.bodyMedium,

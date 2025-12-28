@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use std::time::Duration;
 
-use toboggan_core::State;
+use toboggan_core::{ClientId, State};
 
 mod api;
 pub use self::api::TobogganApi;
@@ -48,9 +48,13 @@ impl Display for ConnectionStatus {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum CommunicationMessage {
     ConnectionStatusChange { status: ConnectionStatus },
     StateChange { state: State },
     TalkChange { state: State },
+    Registered { client_id: ClientId },
+    ClientConnected { client_id: ClientId, name: String },
+    ClientDisconnected { client_id: ClientId, name: String },
     Error { error: String },
 }

@@ -12,36 +12,50 @@ struct TopBarView: View {
     
     var body: some View {
         VStack(spacing: 12) {
-            // Presentation title
+            // Presentation title with modern styling
             Text(viewModel.presentationTitle)
                 .font(.headline)
-                .fontWeight(.medium)
+                .fontWeight(.semibold)
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
             
-            // Connection status
-            Text(viewModel.connectionStatus.displayText)
-                .font(.caption)
-                .foregroundStyle(viewModel.connectionStatus.color)
-                .animation(.easeInOut, value: viewModel.connectionStatus)
+            // Connection status with animated color badge
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(viewModel.connectionStatus.color)
+                    .frame(width: 8, height: 8)
+                    .animation(.easeInOut, value: viewModel.connectionStatus)
+                
+                Text(viewModel.connectionStatus.displayText)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                    .animation(.easeInOut, value: viewModel.connectionStatus)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .glassEffect(.regular, in: .capsule)
             
-            // First/Last navigation buttons
+            // First/Last navigation buttons with Liquid Glass
             HStack(spacing: 16) {
-                Button("First Slide") {
+                Button {
                     viewModel.firstSlide()
+                } label: {
+                    Label("First", systemImage: "arrow.backward.to.line")
                 }
                 .tobogganButton(style: .secondary)
                 
                 Spacer()
                 
-                Button("Last Slide") {
+                Button {
                     viewModel.lastSlide()
+                } label: {
+                    Label("Last", systemImage: "arrow.forward.to.line")
                 }
                 .tobogganButton(style: .secondary)
             }
         }
-        .padding()
         .cardBackground()
     }
 }

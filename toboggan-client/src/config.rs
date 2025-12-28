@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use toboggan_core::{BaseClientConfig, ClientConfig, ClientId, RetryConfig};
+use toboggan_core::{BaseClientConfig, ClientConfig, RetryConfig};
 
 #[derive(Debug, Clone, Default)]
 pub struct TobogganConfig {
@@ -29,10 +29,6 @@ impl TobogganConfig {
 }
 
 impl ClientConfig for TobogganConfig {
-    fn client_id(&self) -> ClientId {
-        self.base.client_id()
-    }
-
     fn api_url(&self) -> &str {
         self.base.api_url()
     }

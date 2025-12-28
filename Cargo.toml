@@ -35,11 +35,12 @@ tracing = "0.1.44"
 tracing-subscriber = "0.3.22"
 clap = "4.5.53"
 anyhow = "1.0.100"
-serde_json = "1.0.147"
+serde_json = "1.0.148"
 serde-saphyr = "0.0.11"
 tower-http = "0.6.8"
 futures = "0.3.31"
 dashmap = "6.1.0"
+slotmap = { version = "1.1.1", features = ["serde"] }
 
 # OpenAPI dependencies
 utoipa = "5.4.0"
@@ -55,7 +56,7 @@ miette = "7.6.0"
 comfy-table = "7.2.1"
 
 # Desktop dependencies
-iced = { version = "0.14.0", features = ["tokio", "advanced", "markdown", "highlighter"] }
+iced = { version = "0.14.0", features = ["tokio", "advanced", "markdown", "highlighter", "image"] }
 tokio-tungstenite = { version = "0.28.0", default-features = false, features = ["connect", "rustls-tls-native-roots"] }
 reqwest = { version = "0.12.28", default-features = false, features = ["json", "rustls-tls"] }
 lucide-icons = "0.562.0"
@@ -73,9 +74,9 @@ notify = "8.2.0"
 owo-colors = "4.2.3"
 
 # TUI-specific dependencies
-ratatui = "0.29.0"
+ratatui = "0.30.0"
 crossterm = "0.29.0"
-tui-logger = "0.17.4"
+tui-logger = "0.18.0"
 
 # Mobile-specific dependencies (iOS & Android)
 uniffi = "0.30.0"

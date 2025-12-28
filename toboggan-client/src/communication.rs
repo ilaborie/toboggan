@@ -1,5 +1,5 @@
 use std::mem;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
 use futures::stream::{SplitSink, SplitStream};
@@ -40,6 +40,9 @@ pub enum CommunicationMessage {
     ConnectionStatusChange { status: ConnectionStatus },
     StateChange { state: State },
     TalkChange { state: State },
+    Registered { client_id: ClientId },
+    ClientConnected { client_id: ClientId, name: String },
+    ClientDisconnected { client_id: ClientId, name: String },
     Error { error: String },
 }
 
@@ -63,7 +66,7 @@ impl Default for ConnectionState {
 const RECONNECT_DELAY: Duration = Duration::from_secs(5);
 
 pub struct WebSocketClient {
-    client_id: ClientId,
+    client_name: String,
     config: TobogganWebsocketConfig,
     tx_msg: mpsc::UnboundedSender<CommunicationMessage>,
     tx_cmd: mpsc::UnboundedSender<Command>,
@@ -71,6 +74,7 @@ pub struct WebSocketClient {
     state: Arc<Mutex<ConnectionState>>,
     ping_task: Option<JoinHandle<()>>,
     last_ping: Arc<Mutex<Option<Instant>>>,
+    client_id: Arc<RwLock<Option<ClientId>>>,
 }
 
 impl WebSocketClient {
@@ -78,7 +82,7 @@ impl WebSocketClient {
     pub fn new(
         tx_cmd: mpsc::UnboundedSender<Command>,
         rx_cmd: mpsc::UnboundedReceiver<Command>,
-        client_id: ClientId,
+        client_name: impl Into<String>,
         config: TobogganWebsocketConfig,
     ) -> (Self, mpsc::UnboundedReceiver<CommunicationMessage>) {
         let (tx_msg, rx_msg) = mpsc::unbounded_channel();
@@ -89,7 +93,7 @@ impl WebSocketClient {
         let rx_cmd = Arc::new(Mutex::new(rx_cmd));
 
         let result = Self {
-            client_id,
+            client_name: client_name.into(),
             config,
             tx_msg,
             tx_cmd,
@@ -97,6 +101,7 @@ impl WebSocketClient {
             state,
             ping_task: None,
             last_ping: Arc::default(),
+            client_id: Arc::default(),
         };
         (result, rx_msg)
     }
@@ -145,12 +150,14 @@ impl WebSocketClient {
         let state_clone = self.state.clone();
         let config = self.config.clone();
         let last_ping = Arc::clone(&self.last_ping);
+        let client_id = Arc::clone(&self.client_id);
         tokio::spawn(handle_incoming_messages(
             read,
             tx_msg_clone,
             state_clone,
             config,
             last_ping,
+            client_id,
         ));
     }
 
@@ -160,6 +167,11 @@ impl WebSocketClient {
             state.retry_count = 0;
             state.retry_delay = self.config.retry_delay;
         }
+
+        // Send Register command with client name
+        let _ = self.tx_cmd.send(Command::Register {
+            name: self.client_name.clone(),
+        });
 
         self.start_pinging();
 
@@ -191,11 +203,12 @@ impl WebSocketClient {
 
         let tx_msg_clone = self.tx_msg.clone();
         let config = self.config.clone();
-        let client_id = self.client_id;
+        let client_name = self.client_name.clone();
         let state_clone = Arc::clone(&self.state);
         let tx_cmd = self.tx_cmd.clone();
         let rx_cmd = Arc::clone(&self.rx_cmd);
         let last_ping = Arc::clone(&self.last_ping);
+        let client_id = Arc::clone(&self.client_id);
 
         tokio::spawn(async move {
             tokio::time::sleep(retry_delay).await;
@@ -204,11 +217,12 @@ impl WebSocketClient {
                 mem::drop(state);
                 reconnect_with_channel(
                     &config,
-                    client_id,
+                    &client_name,
                     tx_msg_clone,
                     &tx_cmd,
                     rx_cmd,
                     last_ping,
+                    client_id,
                 )
                 .await;
             }
@@ -238,6 +252,13 @@ impl WebSocketClient {
 
 impl Drop for WebSocketClient {
     fn drop(&mut self) {
+        // Send Unregister command if we have a client_id
+        if let Ok(guard) = self.client_id.try_read()
+            && let Some(id) = *guard
+        {
+            let _ = self.tx_cmd.send(Command::Unregister { client: id });
+        }
+
         if let Ok(mut state) = self.state.try_lock() {
             state.is_disposed = true;
         }
@@ -254,11 +275,12 @@ impl Drop for WebSocketClient {
 
 async fn reconnect_with_channel(
     config: &TobogganWebsocketConfig,
-    client: ClientId,
+    client_name: &str,
     tx_msg: mpsc::UnboundedSender<CommunicationMessage>,
     tx_cmd: &mpsc::UnboundedSender<Command>,
     rx_cmd: Arc<Mutex<mpsc::UnboundedReceiver<Command>>>,
     last_ping: Arc<Mutex<Option<Instant>>>,
+    client_id: Arc<RwLock<Option<ClientId>>>,
 ) {
     info!("Attempting to reconnect...");
 
@@ -276,14 +298,16 @@ async fn reconnect_with_channel(
     let _ = tx_msg.send(CommunicationMessage::ConnectionStatusChange {
         status: ConnectionStatus::Connected,
     });
-    let _ = tx_cmd.send(Command::Register { client });
+    let _ = tx_cmd.send(Command::Register {
+        name: client_name.to_string(),
+    });
 
     tokio::spawn(handle_outgoing_commands(rx_cmd, write));
     tokio::spawn(async move {
         let mut read = read;
         while let Some(msg) = read.next().await {
             if let Ok(msg) = msg {
-                handle_ws_message(msg, &tx_msg, last_ping.clone()).await;
+                handle_ws_message(msg, &tx_msg, last_ping.clone(), client_id.clone()).await;
             }
         }
     });
@@ -323,11 +347,12 @@ async fn handle_incoming_messages(
     state: Arc<Mutex<ConnectionState>>,
     config: TobogganWebsocketConfig,
     last_ping: Arc<Mutex<Option<Instant>>>,
+    client_id: Arc<RwLock<Option<ClientId>>>,
 ) {
     while let Some(msg) = read.next().await {
         match msg {
             Ok(msg) => {
-                handle_ws_message(msg, &tx_msg, last_ping.clone()).await;
+                handle_ws_message(msg, &tx_msg, last_ping.clone(), client_id.clone()).await;
             }
             Err(error) => {
                 error!(?error, "Failed to read WS incoming message");
@@ -371,6 +396,7 @@ async fn handle_ws_message(
     message: Message,
     tx: &mpsc::UnboundedSender<CommunicationMessage>,
     last_ping: Arc<Mutex<Option<Instant>>>,
+    client_id: Arc<RwLock<Option<ClientId>>>,
 ) {
     let Message::Text(message_text) = message else {
         error!(?message, "unexpected message kind");
@@ -405,6 +431,21 @@ async fn handle_ws_message(
         }
         Notification::Blink => {
             info!("🔔 Blink");
+        }
+        Notification::Registered { client_id: id } => {
+            info!(?id, "✅ Registered");
+            if let Ok(mut guard) = client_id.write() {
+                *guard = Some(id);
+            }
+            let _ = tx.send(CommunicationMessage::Registered { client_id: id });
+        }
+        Notification::ClientConnected { client_id, name } => {
+            info!(?client_id, %name, "👋 Client connected");
+            let _ = tx.send(CommunicationMessage::ClientConnected { client_id, name });
+        }
+        Notification::ClientDisconnected { client_id, name } => {
+            info!(?client_id, %name, "👋 Client disconnected");
+            let _ = tx.send(CommunicationMessage::ClientDisconnected { client_id, name });
         }
     }
 }

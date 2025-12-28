@@ -12,8 +12,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.FlashOn
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -31,7 +29,6 @@ import com.toboggan.app.viewmodel.PresentationUiState
 @Composable
 fun NavigationControls(
     uiState: PresentationUiState,
-    onTogglePlayPause: () -> Unit,
     onBlink: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
@@ -48,34 +45,17 @@ fun NavigationControls(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            // Play/Pause and Blink controls
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            // Blink control
+            FilledTonalButton(
+                onClick = onBlink,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Button(
-                    onClick = onTogglePlayPause,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = if (uiState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = null
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(if (uiState.isPlaying) "Pause" else "Resume")
-                }
-
-                FilledTonalButton(
-                    onClick = onBlink,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.FlashOn,
-                        contentDescription = null
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Blink")
-                }
+                Icon(
+                    imageVector = Icons.Default.FlashOn,
+                    contentDescription = null
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Blink")
             }
 
             Spacer(modifier = Modifier.height(16.dp))

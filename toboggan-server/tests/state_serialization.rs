@@ -1,54 +1,41 @@
-use toboggan_core::{Duration, State, Timestamp};
+use toboggan_core::{SlideId, State};
 
 #[test]
 #[allow(clippy::unwrap_used, clippy::print_stdout)] // Acceptable in test code
 fn test_state_serialization_format() {
-    let slide_index = 1; // Use slide index instead of SlideId
-
-    let paused_state = State::Paused {
-        current: Some(slide_index),
-        current_step: 0,
-        total_duration: Duration::from_secs(10),
-    };
+    let slide_id = SlideId::new(1);
 
     let running_state = State::Running {
-        since: Timestamp::now(),
-        current: slide_index,
+        current: slide_id,
         current_step: 0,
-        total_duration: Duration::from_secs(5),
     };
 
-    let paused_json = serde_json::to_string_pretty(&paused_state).unwrap();
-    let running_json = serde_json::to_string_pretty(&running_state).unwrap();
+    let done_state = State::Done {
+        current: slide_id,
+        current_step: 0,
+    };
 
-    println!("Paused state JSON:\n{paused_json}");
+    let running_json = serde_json::to_string_pretty(&running_state).unwrap();
+    let done_json = serde_json::to_string_pretty(&done_state).unwrap();
+
     println!("Running state JSON:\n{running_json}");
+    println!("Done state JSON:\n{done_json}");
 
     // Test round-trip
-    let paused_deserialized: State = serde_json::from_str(&paused_json).unwrap();
     let running_deserialized: State = serde_json::from_str(&running_json).unwrap();
-
-    match paused_deserialized {
-        State::Paused {
-            current,
-            total_duration,
-            ..
-        } => {
-            assert_eq!(current, Some(slide_index));
-            assert_eq!(total_duration, Duration::from_secs(10));
-        }
-        _ => panic!("Expected Paused state"),
-    }
+    let done_deserialized: State = serde_json::from_str(&done_json).unwrap();
 
     match running_deserialized {
-        State::Running {
-            current,
-            total_duration,
-            ..
-        } => {
-            assert_eq!(current, slide_index);
-            assert_eq!(total_duration, Duration::from_secs(5));
+        State::Running { current, .. } => {
+            assert_eq!(current, slide_id);
         }
         _ => panic!("Expected Running state"),
+    }
+
+    match done_deserialized {
+        State::Done { current, .. } => {
+            assert_eq!(current, slide_id);
+        }
+        _ => panic!("Expected Done state"),
     }
 }

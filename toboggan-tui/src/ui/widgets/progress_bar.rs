@@ -33,25 +33,14 @@ impl StatefulWidget for &ProgressBar {
 
         let bottom = match state.presentation_state {
             State::Init => Line::default(),
-            State::Paused { total_duration, .. } => Line::from(vec![
-                Span::raw(" "),
-                Span::styled("Paused", styles::state::PAUSED),
-                Span::raw(" - "),
-                Span::raw(format!("{total_duration}")),
-                Span::raw(" "),
-            ]),
-            State::Running { total_duration, .. } => Line::from(vec![
+            State::Running { .. } => Line::from(vec![
                 Span::raw(" "),
                 Span::styled("Running", styles::state::RUNNING),
-                Span::raw(" - "),
-                Span::raw(format!("{total_duration}")),
                 Span::raw(" "),
             ]),
-            State::Done { total_duration, .. } => Line::from(vec![
+            State::Done { .. } => Line::from(vec![
                 Span::raw(" "),
                 Span::styled("🎉 Done", styles::state::DONE),
-                Span::raw(" - "),
-                Span::raw(format!("{total_duration}")),
                 Span::raw(" "),
             ]),
         };
@@ -62,7 +51,8 @@ impl StatefulWidget for &ProgressBar {
 
         #[allow(clippy::cast_precision_loss)]
         LineGauge::default()
-            .line_set(symbols::line::THICK)
+            .filled_symbol(symbols::line::THICK_HORIZONTAL)
+            .unfilled_symbol(symbols::line::THICK_HORIZONTAL)
             .ratio(current as f64 / count as f64)
             .filled_style(styles::colors::BLUE)
             .unfilled_style(styles::colors::BLACK)

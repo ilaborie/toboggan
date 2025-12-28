@@ -28,29 +28,49 @@ struct CurrentSlideView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            // First line: Duration and slide progress
-            HStack {
-                Text(viewModel.formattedDuration)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            // First line: Duration and slide progress with glass badges
+            HStack(spacing: 12) {
+                // Duration badge
+                Label {
+                    Text(viewModel.formattedDuration)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                } icon: {
+                    Image(systemName: "clock.fill")
+                        .font(.caption)
+                }
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .glassEffect(.regular, in: .capsule)
 
                 Spacer()
 
-                Text(slideProgressText)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                // Slide progress badge
+                Label {
+                    Text(slideProgressText)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                } icon: {
+                    Image(systemName: "square.stack.3d.up.fill")
+                        .font(.caption)
+                }
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .glassEffect(.regular, in: .capsule)
             }
 
-            // Center: Slide title
+            // Center: Slide title with modern typography
             VStack {
                 Spacer()
 
                 Text(slideTitle)
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
                     .foregroundStyle(viewModel.currentSlide != nil ? .primary : .secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
+                    .padding(.horizontal)
 
                 Spacer()
             }
@@ -69,37 +89,46 @@ struct CurrentSlideView: View {
     }
 }
 
-// Step indicator circles view
+// Modern step indicator with Liquid Glass effect
 struct StepIndicatorView: View {
     let currentStep: Int
     let stepCount: Int
 
-    private let circleSize: CGFloat = 10
+    private let circleSize: CGFloat = 12
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             ForEach(0..<stepCount, id: \.self) { step in
                 stepCircle(for: step)
                     .frame(width: circleSize, height: circleSize)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentStep)
             }
         }
-        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .glassEffect(.regular.interactive(), in: .capsule)
     }
 
     @ViewBuilder
     private func stepCircle(for step: Int) -> some View {
         if step < currentStep {
-            // Done: filled circle in text color
-            Circle()
-                .fill(Color.primary)
+            // Done: filled circle with checkmark
+            ZStack {
+                Circle()
+                    .fill(Color.green.gradient)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 6, weight: .bold))
+                    .foregroundStyle(.white)
+            }
         } else if step == currentStep {
-            // Current: filled circle in accent color
+            // Current: pulsing filled circle with accent color
             Circle()
-                .fill(Color.accentColor)
+                .fill(Color.accentColor.gradient)
+                .shadow(color: .accentColor.opacity(0.5), radius: 4)
         } else {
-            // Remaining: unfilled circle
+            // Remaining: subtle circle
             Circle()
-                .stroke(Color.secondary, lineWidth: 1.5)
+                .stroke(Color.secondary.opacity(0.5), lineWidth: 2)
         }
     }
 }

@@ -7,7 +7,6 @@ impl StateClassMapper<State> for State {
     fn to_css_class(&self) -> &'static str {
         match self {
             State::Init => "init",
-            State::Paused { .. } => "paused",
             State::Running { .. } => "running",
             State::Done { .. } => "done",
         }

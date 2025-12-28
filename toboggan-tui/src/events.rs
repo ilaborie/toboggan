@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use toboggan_client::ConnectionStatus;
-use toboggan_core::{Command, Notification, Slide, TalkResponse};
+use toboggan_core::{Command, Notification, Slide, SlideId, TalkResponse};
 
 #[derive(Debug, Clone)]
 pub enum AppEvent {
@@ -27,8 +27,6 @@ pub enum AppAction {
     PreviousStep,
     NextStep,
     // Presentation control
-    Pause,
-    Resume,
     #[display("♪")]
     Blink,
     // UI actions
@@ -53,8 +51,6 @@ impl AppAction {
             KeyCode::Right => Self::Next,
             KeyCode::Home => Self::First,
             KeyCode::End => Self::Last,
-            KeyCode::Char('p' | 'P') => Self::Pause,
-            KeyCode::Char('r' | 'R') => Self::Resume,
             KeyCode::Char('b' | 'B') => Self::Blink,
             KeyCode::Char(ch @ '1'..='9') =>
             {
@@ -79,8 +75,6 @@ impl AppAction {
             Self::Goto(_) => "1..n",
             Self::PreviousStep => "↑",
             Self::NextStep => "↓",
-            Self::Pause => "p",
-            Self::Resume => "r",
             Self::Blink => "b",
             Self::ShowLog => "l",
             Self::Close => "Esc",
@@ -98,8 +92,6 @@ impl AppAction {
             Self::Goto(_) => ActionDetails::new(vec!["1..n"], "Go to slide n"),
             Self::PreviousStep => ActionDetails::new(vec!["↑"], "Previous step"),
             Self::NextStep => ActionDetails::new(vec!["↓", "Space"], "Next step"),
-            Self::Pause => ActionDetails::new(vec!["p", "P"], "Pause"),
-            Self::Resume => ActionDetails::new(vec!["r", "R"], "Resume"),
             Self::Blink => ActionDetails::new(vec!["b", "B"], "Bell or Blink"),
             Self::ShowLog => ActionDetails::new(vec!["l", "L"], "Show logs"),
             Self::Close => ActionDetails::new(vec!["Esc"], "Close popup"),
@@ -111,15 +103,15 @@ impl AppAction {
     pub(crate) fn command(self) -> Option<Command> {
         let cmd = match self {
             Self::First => Command::First,
-            Self::Previous => Command::Previous,
-            Self::Next => Command::Next,
+            Self::Previous => Command::PreviousSlide,
+            Self::Next => Command::NextSlide,
             Self::Last => Command::Last,
             Self::PreviousStep => Command::PreviousStep,
             Self::NextStep => Command::NextStep,
-            Self::Pause => Command::Pause,
-            Self::Resume => Command::Resume,
             Self::Blink => Command::Blink,
-            Self::Goto(id) => Command::GoTo { slide: id.into() },
+            Self::Goto(id) => Command::GoTo {
+                slide: SlideId::new(usize::from(id)),
+            },
             Self::ShowLog | Self::Close | Self::Quit | Self::Help => {
                 return None;
             }

@@ -34,23 +34,20 @@ enum ConnectionStatus {
 };
 
 enum Command {
-    "Next",
-    "Previous",
+    "NextSlide",
+    "PreviousSlide",
     "First",
     "Last",
     "NextStep",
     "PreviousStep",
-    "Resume",
-    "Pause",
     "Blink",
 };
 
 [Enum]
 interface State {
     Init(u32 total_slides);
-    Running(u32? previous, u32 current, u32? next, u32 current_step, u32 step_count, duration total_duration);
-    Paused(u32? previous, u32 current, u32? next, u32 current_step, u32 step_count, duration total_duration);
-    Done(u32? previous, u32 current, u32 current_step, u32 step_count, duration total_duration);
+    Running(u32? previous, u32 current, u32? next, u32 current_step, u32 step_count);
+    Done(u32? previous, u32 current, u32 current_step, u32 step_count);
 };
 
 [Trait, WithForeign]
@@ -58,11 +55,14 @@ interface ClientNotificationHandler {
     void on_state_change(State state);
     void on_talk_change(State state);
     void on_connection_status_change(ConnectionStatus status);
+    void on_registered(string client_id);
+    void on_client_connected(string client_id, string name);
+    void on_client_disconnected(string client_id, string name);
     void on_error(string error);
 };
 
 interface TobogganClient {
-    constructor(ClientConfig config, ClientNotificationHandler handler);
+    constructor(ClientConfig config, string client_name, ClientNotificationHandler handler);
 
     void connect();
 

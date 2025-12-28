@@ -1,9 +1,10 @@
 #[cfg(test)]
-#[allow(clippy::module_inception, clippy::unwrap_used)]
+#[allow(clippy::module_inception, clippy::unwrap_used, clippy::expect_used)]
 mod tests {
-    use toboggan_core::{ClientId, Command, Date, Duration, Notification, Slide, State, Talk};
+    use axum::extract::FromRef;
+    use toboggan_core::{Command, Date, Notification, Slide, SlideId, State, Talk};
 
-    use crate::TobogganState;
+    use crate::{ClientService, TalkService, TobogganState};
 
     fn create_test_talk() -> Talk {
         Talk::new("Test Talk")
@@ -13,14 +14,22 @@ mod tests {
             .add_slide(Slide::new("Third Slide"))
     }
 
+    fn create_test_state(talk: Talk) -> TobogganState {
+        let talk_service = TalkService::new(talk).unwrap();
+        let client_service = ClientService::new(100);
+        TobogganState::new(talk_service, client_service)
+    }
+
     #[tokio::test]
     async fn test_register_command() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
-        let client_id = ClientId::new();
+        let state = create_test_state(talk);
 
+        // Register command with name (server assigns client_id in ws handler)
         let notification = state
-            .handle_command(&Command::Register { client: client_id })
+            .handle_command(&Command::Register {
+                name: "Test Client".to_string(),
+            })
             .await;
 
         match notification {
@@ -36,9 +45,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_unregister_command() {
+        use std::net::{IpAddr, Ipv4Addr};
+
         let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
-        let client_id = ClientId::new();
+        let state = create_test_state(talk);
+        let ip_addr = IpAddr::V4(Ipv4Addr::LOCALHOST);
+
+        // First register a client to get a valid ClientId
+        let initial_notification = TalkService::from_ref(&state)
+            .create_initial_notification()
+            .await;
+        let (client_id, _rx) = ClientService::from_ref(&state)
+            .register_client("Test Client".to_string(), ip_addr, initial_notification)
+            .await
+            .expect("register client");
 
         let notification = state
             .handle_command(&Command::Unregister { client: client_id })
@@ -51,9 +71,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_register_client_and_get_clients() {
+        use std::net::{IpAddr, Ipv4Addr};
+
+        let talk = create_test_talk();
+        let state = create_test_state(talk);
+        let ip_addr = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        let client_service = ClientService::from_ref(&state);
+
+        // Register a client
+        let initial_notification = TalkService::from_ref(&state)
+            .create_initial_notification()
+            .await;
+        let (client_id, _rx) = client_service
+            .register_client("Test Client".to_string(), ip_addr, initial_notification)
+            .await
+            .expect("register client");
+
+        // Check connected clients
+        let clients = client_service.connected_clients().await;
+        assert_eq!(clients.clients.len(), 1);
+        let first_client = clients.clients.first().expect("first client");
+        // Note: The stored ClientInfo may have a different id field since we assign it after insertion
+        // but the returned client_id is the real one
+        assert_eq!(first_client.name, "Test Client");
+        assert_eq!(first_client.ip_addr, ip_addr);
+
+        // Unregister and check again
+        client_service.unregister_client(client_id).await;
+        let clients = client_service.connected_clients().await;
+        assert_eq!(clients.clients.len(), 0);
+    }
+
+    #[tokio::test]
     async fn test_first_command() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
+        let state = create_test_state(talk);
 
         // Move to last slide first (this will go to Running from Init)
         state.handle_command(&Command::Last).await;
@@ -66,7 +119,7 @@ mod tests {
                 state: inner_state, ..
             } => match inner_state {
                 State::Running { current, .. } => {
-                    assert_eq!(current, 0); // First slide index
+                    assert_eq!(current, SlideId::FIRST); // First slide index
                 }
                 _ => panic!("Expected Running state"),
             },
@@ -77,7 +130,7 @@ mod tests {
     #[tokio::test]
     async fn test_last_command() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
+        let state = create_test_state(talk);
 
         let notification = state.handle_command(&Command::Last).await;
 
@@ -87,7 +140,7 @@ mod tests {
             } => match inner_state {
                 State::Running { current, .. } => {
                     // From Init state, Last command should go to last slide (index 2 for 3 slides)
-                    assert_eq!(current, 2); // Last slide index (3 slides = indices 0,1,2)
+                    assert_eq!(current, SlideId::new(2)); // Last slide index (3 slides = indices 0,1,2)
                 }
                 _ => panic!("Expected Running state"),
             },
@@ -98,8 +151,8 @@ mod tests {
     #[tokio::test]
     async fn test_goto_valid_slide() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
-        let target_slide = 1; // Index 1 (second slide)
+        let state = create_test_state(talk);
+        let target_slide = SlideId::new(1); // Index 1 (second slide)
 
         let notification = state
             .handle_command(&Command::GoTo {
@@ -123,8 +176,8 @@ mod tests {
     #[tokio::test]
     async fn test_goto_invalid_slide() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
-        let invalid_slide = 999; // Index out of bounds
+        let state = create_test_state(talk);
+        let invalid_slide = SlideId::new(999); // Index out of bounds
 
         let notification = state
             .handle_command(&Command::GoTo {
@@ -143,9 +196,9 @@ mod tests {
     #[tokio::test]
     async fn test_next_command() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
+        let state = create_test_state(talk);
 
-        let notification = state.handle_command(&Command::Next).await;
+        let notification = state.handle_command(&Command::NextSlide).await;
 
         match notification {
             Notification::State {
@@ -153,7 +206,7 @@ mod tests {
             } => match inner_state {
                 State::Running { current, .. } => {
                     // From Init state, Next command should go to first slide
-                    assert_eq!(current, 0); // First slide index
+                    assert_eq!(current, SlideId::FIRST); // First slide index
                 }
                 _ => panic!("Expected Running state"),
             },
@@ -164,7 +217,7 @@ mod tests {
     #[tokio::test]
     async fn test_next_at_last_slide() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
+        let state = create_test_state(talk);
 
         // Go to last slide (from Init this will go to first slide)
         state.handle_command(&Command::Last).await;
@@ -173,7 +226,7 @@ mod tests {
         state.handle_command(&Command::Last).await;
 
         // Try to go next from last slide
-        let notification = state.handle_command(&Command::Next).await;
+        let notification = state.handle_command(&Command::NextSlide).await;
 
         match notification {
             Notification::State {
@@ -189,23 +242,23 @@ mod tests {
     #[tokio::test]
     async fn test_previous_command() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
+        let state = create_test_state(talk);
 
         // Move to first slide (from Init)
-        state.handle_command(&Command::Next).await;
+        state.handle_command(&Command::NextSlide).await;
 
         // Move to second slide
-        state.handle_command(&Command::Next).await;
+        state.handle_command(&Command::NextSlide).await;
 
         // Then go back to first
-        let notification = state.handle_command(&Command::Previous).await;
+        let notification = state.handle_command(&Command::PreviousSlide).await;
 
         match notification {
             Notification::State {
                 state: inner_state, ..
             } => match inner_state {
                 State::Running { current, .. } => {
-                    assert_eq!(current, 0); // First slide index
+                    assert_eq!(current, SlideId::FIRST); // First slide index
                 }
                 _ => panic!("Expected Running state"),
             },
@@ -216,63 +269,18 @@ mod tests {
     #[tokio::test]
     async fn test_previous_at_first_slide() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
+        let state = create_test_state(talk);
 
         // From Init state, Previous command should go to first slide
-        let notification = state.handle_command(&Command::Previous).await;
+        let notification = state.handle_command(&Command::PreviousSlide).await;
 
         match notification {
             Notification::State {
                 state: inner_state, ..
             } => match inner_state {
                 State::Running { current, .. } => {
-                    assert_eq!(current, 0); // First slide index
+                    assert_eq!(current, SlideId::FIRST); // First slide index
                 }
-                _ => panic!("Expected Running state"),
-            },
-            _ => panic!("Expected State notification"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_pause_command() {
-        let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
-
-        // Get to Running state first by using a navigation command
-        state.handle_command(&Command::Next).await;
-
-        // Then pause
-        let notification = state.handle_command(&Command::Pause).await;
-
-        match notification {
-            Notification::State {
-                state: inner_state, ..
-            } => match inner_state {
-                State::Paused { .. } => {}
-                _ => panic!("Expected Paused state"),
-            },
-            _ => panic!("Expected State notification"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_resume_command() {
-        let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
-
-        // Get to Running state first, then pause
-        state.handle_command(&Command::Next).await;
-        state.handle_command(&Command::Pause).await;
-
-        // Now resume
-        let notification = state.handle_command(&Command::Resume).await;
-
-        match notification {
-            Notification::State {
-                state: inner_state, ..
-            } => match inner_state {
-                State::Running { .. } => {}
                 _ => panic!("Expected Running state"),
             },
             _ => panic!("Expected State notification"),
@@ -282,7 +290,7 @@ mod tests {
     #[tokio::test]
     async fn test_ping_command() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
+        let state = create_test_state(talk);
 
         let notification = state.handle_command(&Command::Ping).await;
 
@@ -295,13 +303,13 @@ mod tests {
     #[tokio::test]
     async fn test_state_preservation_during_navigation() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
+        let state = create_test_state(talk);
 
         // Start in Running state
-        state.handle_command(&Command::Next).await;
+        state.handle_command(&Command::NextSlide).await;
 
         // Navigate while running
-        let notification = state.handle_command(&Command::Next).await;
+        let notification = state.handle_command(&Command::NextSlide).await;
 
         match notification {
             Notification::State {
@@ -317,51 +325,27 @@ mod tests {
     #[tokio::test]
     async fn test_navigation_from_done_state() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
+        let state = create_test_state(talk);
 
         // Go to first slide (from Init), then navigate to last slide
-        state.handle_command(&Command::Next).await;
+        state.handle_command(&Command::NextSlide).await;
         state.handle_command(&Command::Last).await;
 
         // Go next from last slide to reach Done state
-        state.handle_command(&Command::Next).await;
+        state.handle_command(&Command::NextSlide).await;
 
-        // Navigate from Done state
-        let notification = state.handle_command(&Command::Previous).await;
-
-        match notification {
-            Notification::State {
-                state: inner_state, ..
-            } => match inner_state {
-                State::Paused { .. } => {}
-                _ => panic!("Expected Paused state when navigating from Done"),
-            },
-            _ => panic!("Expected State notification"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_duration_tracking() {
-        let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
-
-        // Start tracking by getting to Running state
-        state.handle_command(&Command::Next).await;
-
-        // Wait a tiny bit to ensure duration > 0
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-
-        // Pause and check duration
-        let notification = state.handle_command(&Command::Pause).await;
+        // Navigate from Done state - should transition to Running
+        let notification = state.handle_command(&Command::PreviousSlide).await;
 
         match notification {
             Notification::State {
                 state: inner_state, ..
             } => match inner_state {
-                State::Paused { total_duration, .. } => {
-                    assert!(total_duration > Duration::from_secs(0));
+                State::Running { current, .. } => {
+                    // Should be on the second-to-last slide (index 1)
+                    assert_eq!(current, SlideId::new(1));
                 }
-                _ => panic!("Expected Paused state"),
+                _ => panic!("Expected Running state when navigating from Done"),
             },
             _ => panic!("Expected State notification"),
         }
@@ -370,14 +354,14 @@ mod tests {
     #[tokio::test]
     async fn test_init_to_running_transition() {
         let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
+        let state = create_test_state(talk);
 
         // Verify initial state is Init
-        let initial_state = state.current_state().await;
+        let initial_state = TalkService::from_ref(&state).current_state().await;
         assert!(matches!(initial_state, State::Init));
 
         // Send Next command
-        let notification = state.handle_command(&Command::Next).await;
+        let notification = state.handle_command(&Command::NextSlide).await;
 
         // Verify notification contains Running state
         match notification {
@@ -385,7 +369,7 @@ mod tests {
                 state: inner_state, ..
             } => match inner_state {
                 State::Running { current, .. } => {
-                    assert_eq!(current, 0); // First slide index
+                    assert_eq!(current, SlideId::FIRST); // First slide index
                 }
                 _ => panic!("Expected Running state in notification, got: {inner_state:?}"),
             },
@@ -393,102 +377,7 @@ mod tests {
         }
 
         // Verify current state is also Running
-        let current_state = state.current_state().await;
+        let current_state = TalkService::from_ref(&state).current_state().await;
         assert!(matches!(current_state, State::Running { .. }));
-    }
-
-    #[tokio::test]
-    async fn test_paused_navigation_to_running() {
-        let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
-
-        // Start running and move to second slide
-        state.handle_command(&Command::Next).await; // Init -> Running (first slide)
-        state.handle_command(&Command::Next).await; // Running (second slide)
-
-        // Pause
-        let notification = state.handle_command(&Command::Pause).await;
-        match notification {
-            Notification::State {
-                state: inner_state, ..
-            } => assert!(matches!(inner_state, State::Paused { .. })),
-            _ => panic!("Expected State notification"),
-        }
-
-        // Now navigate next - should go to Running
-        let notification = state.handle_command(&Command::Next).await;
-        match notification {
-            Notification::State {
-                state: inner_state, ..
-            } => match inner_state {
-                State::Running { current, .. } => {
-                    // Should be on third (last) slide
-                    assert_eq!(current, 2); // Index 2 (third slide)
-                }
-                _ => panic!("Expected Running state, got: {inner_state:?}"),
-            },
-            _ => panic!("Expected State notification"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_paused_on_last_slide_next_stays_paused() {
-        let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
-
-        // Go to first slide, then navigate to last slide
-        state.handle_command(&Command::Next).await; // Init -> Running (first slide)
-        state.handle_command(&Command::Last).await; // Running -> Running (last slide)
-
-        // Pause
-        state.handle_command(&Command::Pause).await;
-
-        // Try next from last slide - should stay paused (no next slide available)
-        let notification = state.handle_command(&Command::Next).await;
-        match notification {
-            Notification::State {
-                state: inner_state, ..
-            } => assert!(matches!(inner_state, State::Paused { .. })),
-            _ => panic!("Expected State notification"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_first_command_resets_timestamp() {
-        let talk = create_test_talk();
-        let state = TobogganState::new(talk, 100).unwrap();
-
-        // Start running and navigate to second slide
-        state.handle_command(&Command::Next).await; // Init -> Running (first slide)
-        state.handle_command(&Command::Next).await; // Running (second slide)
-
-        // Wait a bit to accumulate some duration
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-
-        // Pause to capture current duration
-        let pause_notification = state.handle_command(&Command::Pause).await;
-        let Notification::State {
-            state: State::Paused { total_duration, .. },
-            ..
-        } = pause_notification
-        else {
-            panic!("Expected Paused state");
-        };
-
-        // Verify we have some accumulated duration
-        assert!(total_duration > Duration::from_secs(0));
-
-        // Now go to first slide - this should reset the timestamp
-        let first_notification = state.handle_command(&Command::First).await;
-        match first_notification {
-            Notification::State {
-                state: State::Running { total_duration, .. },
-                ..
-            } => {
-                // Duration should be reset to zero
-                assert_eq!(total_duration, Duration::ZERO);
-            }
-            _ => panic!("Expected Running state after First command"),
-        }
     }
 }

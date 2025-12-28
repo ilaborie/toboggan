@@ -21,7 +21,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = {workspace = true}
 tower-http = { workspace = true, features = ["trace", "cors", "fs"] }
 futures = { workspace = true }
-dashmap = { workspace = true }
+slotmap = { workspace = true }
 derive_more = { workspace = true, features = ["display",  "error"]}
 utoipa = { workspace = true }
 utoipa-scalar = { workspace = true, features = ["axum"] }

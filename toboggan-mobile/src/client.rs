@@ -7,7 +7,7 @@ use std::time::Duration;
 use toboggan_client::{
     CommunicationMessage, TobogganApi, TobogganWebsocketConfig, WebSocketClient,
 };
-use toboggan_core::{ClientId, Command as CoreCommand};
+use toboggan_core::Command as CoreCommand;
 use tokio::runtime::Runtime;
 use tokio::sync::{Mutex, mpsc};
 
@@ -125,6 +125,15 @@ impl TobogganClient {
                 CommunicationMessage::Error { error } => {
                     handler.on_error(error);
                 }
+                CommunicationMessage::Registered { client_id } => {
+                    handler.on_registered(format!("{client_id:?}"));
+                }
+                CommunicationMessage::ClientConnected { client_id, name } => {
+                    handler.on_client_connected(format!("{client_id:?}"), name);
+                }
+                CommunicationMessage::ClientDisconnected { client_id, name } => {
+                    handler.on_client_disconnected(format!("{client_id:?}"), name);
+                }
             }
         }
     }
@@ -133,7 +142,11 @@ impl TobogganClient {
 #[uniffi::export]
 impl TobogganClient {
     #[uniffi::constructor]
-    pub fn new(config: ClientConfig, handler: Arc<dyn ClientNotificationHandler>) -> Self {
+    pub fn new(
+        config: ClientConfig,
+        client_name: String,
+        handler: Arc<dyn ClientNotificationHandler>,
+    ) -> Self {
         println!("🦀 using {config:#?}");
         let ClientConfig {
             url,
@@ -141,7 +154,6 @@ impl TobogganClient {
             retry_delay,
         } = config;
         let api = TobogganApi::new(url.trim_end_matches('/'));
-        let client_id = ClientId::new();
 
         let websocket_url = if url.starts_with("http://") {
             format!("ws://{}/api/ws", url.trim_start_matches("http://"))
@@ -158,7 +170,7 @@ impl TobogganClient {
             max_retry_delay: retry_delay * max_retries,
         };
         let (tx, rx) = mpsc::unbounded_channel();
-        let (ws, rx_msg) = WebSocketClient::new(tx.clone(), rx, client_id, websocket);
+        let (ws, rx_msg) = WebSocketClient::new(tx.clone(), rx, client_name, websocket);
 
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()

@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Duration
 import uniffi.toboggan.ClientConfig
 import uniffi.toboggan.ClientNotificationHandler
 import uniffi.toboggan.Command
@@ -15,7 +16,6 @@ import uniffi.toboggan.ConnectionStatus
 import uniffi.toboggan.Slide
 import uniffi.toboggan.State
 import uniffi.toboggan.TobogganClient
-import java.time.Duration
 
 data class PresentationUiState(
     val presentationTitle: String = "Presentation title - Date",
@@ -24,21 +24,12 @@ data class PresentationUiState(
     val totalSlides: Int = 0,
     val currentSlide: Slide? = null,
     val nextSlideTitle: String = "<End of presentation>",
-    val isPlaying: Boolean = false,
-    val duration: Long = 0L,
     val canGoPrevious: Boolean = false,
     val canGoNext: Boolean = false,
     val errorMessage: String? = null,
     val currentStep: Int = 0,
     val stepCount: Int = 1
 ) {
-    val formattedDuration: String
-        get() {
-            val minutes = (duration / 60).toInt()
-            val seconds = (duration % 60).toInt()
-            return String.format("%02d:%02d", minutes, seconds)
-        }
-
     val slideProgress: String
         get() = when (currentSlideIndex) {
             null -> "Ready to Start"
@@ -74,7 +65,7 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
 
             _uiState.update { it.copy(connectionStatus = ConnectionStatus.CONNECTING) }
 
-            tobogganClient = TobogganClient(config, this@PresentationViewModel)
+            tobogganClient = TobogganClient(config, "Android Remote", this@PresentationViewModel)
             tobogganClient?.connect()
 
             fetchTalkInfo()
@@ -134,6 +125,18 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
         }
     }
 
+    override fun onRegistered(clientId: String) {
+        // Client registration notification - no UI action needed
+    }
+
+    override fun onClientConnected(clientId: String, name: String) {
+        // Another client connected - no UI action needed
+    }
+
+    override fun onClientDisconnected(clientId: String, name: String) {
+        // Another client disconnected - no UI action needed
+    }
+
     // MARK: - State handling
 
     private fun handleStateChange(state: State) {
@@ -147,19 +150,6 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
             is State.Running -> {
                 updatePresentationState(
                     currentSlideIndex = state.current.toInt(),
-                    isPlaying = true,
-                    duration = state.totalDuration.seconds,
-                    previousSlideIndex = state.previous?.toInt(),
-                    nextSlideIndex = state.next?.toInt(),
-                    currentStep = state.currentStep.toInt(),
-                    stepCount = state.stepCount.toInt()
-                )
-            }
-            is State.Paused -> {
-                updatePresentationState(
-                    currentSlideIndex = state.current.toInt(),
-                    isPlaying = false,
-                    duration = state.totalDuration.seconds,
                     previousSlideIndex = state.previous?.toInt(),
                     nextSlideIndex = state.next?.toInt(),
                     currentStep = state.currentStep.toInt(),
@@ -169,8 +159,6 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
             is State.Done -> {
                 updatePresentationState(
                     currentSlideIndex = state.current.toInt(),
-                    isPlaying = false,
-                    duration = state.totalDuration.seconds,
                     previousSlideIndex = state.previous?.toInt(),
                     nextSlideIndex = null,
                     currentStep = state.currentStep.toInt(),
@@ -182,8 +170,6 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
 
     private fun updatePresentationState(
         currentSlideIndex: Int?,
-        isPlaying: Boolean = false,
-        duration: Long = 0L,
         previousSlideIndex: Int? = null,
         nextSlideIndex: Int? = null,
         currentStep: Int = 0,
@@ -209,8 +195,6 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
 
         _uiState.update { state ->
             state.copy(
-                isPlaying = isPlaying,
-                duration = duration,
                 canGoPrevious = canGoPrevious,
                 canGoNext = canGoNext,
                 currentSlideIndex = currentSlideIndex,
@@ -251,11 +235,6 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
 
     fun lastSlide() {
         tobogganClient?.sendCommand(Command.LAST)
-    }
-
-    fun togglePlayPause() {
-        val command = if (_uiState.value.isPlaying) Command.PAUSE else Command.RESUME
-        tobogganClient?.sendCommand(command)
     }
 
     fun blink() {

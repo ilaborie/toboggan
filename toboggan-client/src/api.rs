@@ -1,6 +1,8 @@
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use toboggan_core::{Command, Notification, Slide, SlidesResponse, TalkResponse};
+use toboggan_core::{
+    ClientInfo, Command, Notification, Slide, SlideId, SlidesResponse, TalkResponse,
+};
 
 #[derive(Debug, derive_more::Error, derive_more::From, derive_more::Display)]
 pub enum TobogganApiError {
@@ -55,12 +57,16 @@ impl TobogganApi {
         self.get("/api/talk").await
     }
 
+    pub async fn clients(&self) -> Result<Vec<ClientInfo>, TobogganApiError> {
+        self.get("/api/clients").await
+    }
+
     pub async fn slides(&self) -> Result<SlidesResponse, TobogganApiError> {
         self.get("/api/slides").await
     }
 
-    pub async fn slide(&self, slide_index: usize) -> Result<Slide, TobogganApiError> {
-        let path = format!("/api/slides/{slide_index}");
+    pub async fn slide(&self, slide_id: SlideId) -> Result<Slide, TobogganApiError> {
+        let path = format!("/api/slides/{}", slide_id.index());
         self.get(&path).await
     }
 

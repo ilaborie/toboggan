@@ -5,9 +5,7 @@ use toboggan_client::{
     CommunicationMessage, ConnectionStatus, TobogganApi, TobogganApiError, TobogganConfig,
     WebSocketClient,
 };
-use toboggan_core::{
-    ClientConfig, ClientId, Command as TobogganCommand, SlidesResponse, Talk, TalkResponse,
-};
+use toboggan_core::{ClientConfig, Command as TobogganCommand, SlidesResponse, Talk, TalkResponse};
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error, info};
 
@@ -24,7 +22,6 @@ pub struct App {
     websocket_client: Option<WebSocketClient>,
     cmd_sender: Option<mpsc::UnboundedSender<TobogganCommand>>,
     api: TobogganApi,
-    client_id: ClientId,
 }
 
 impl App {
@@ -34,7 +31,6 @@ impl App {
     /// Panics if the message channel has already been initialized.
     pub fn new(config: TobogganConfig) -> (Self, Task<Message>) {
         let api_client = TobogganApi::new(config.api_url());
-        let client_id = config.client_id();
 
         // Initialize the global message channel for WebSocket message forwarding
         let (tx, _) = broadcast::channel(1000);
@@ -49,7 +45,6 @@ impl App {
             websocket_client: None,
             cmd_sender: None,
             api: api_client.clone(),
-            client_id,
         };
 
         // Load talk and slides immediately, then connect
@@ -177,19 +172,10 @@ impl App {
     fn handle_connect(&mut self) -> Task<Message> {
         info!("Connecting to server...");
         let (tx_cmd, rx_cmd) = mpsc::unbounded_channel();
-        let (mut ws_client, mut rx_msg) = WebSocketClient::new(
-            tx_cmd.clone(),
-            rx_cmd,
-            self.client_id,
-            self.config.websocket(),
-        );
+        let (mut ws_client, mut rx_msg) =
+            WebSocketClient::new(tx_cmd.clone(), rx_cmd, "Desktop", self.config.websocket());
 
         self.cmd_sender = Some(tx_cmd.clone());
-
-        // Send register command
-        let _ = tx_cmd.send(TobogganCommand::Register {
-            client: self.client_id,
-        });
 
         // Start WebSocket connection and message forwarding in background
         tokio::spawn(async move {
@@ -296,8 +282,8 @@ impl App {
 
         // Now update state atomically with the fresh data
         self.state.presentation_state = Some(state.clone());
-        if let Some(slide_idx) = state.current() {
-            self.state.current_slide_index = Some(slide_idx);
+        if let Some(slide_id) = state.current() {
+            self.state.current_slide = Some(slide_id);
         }
 
         Task::none()
@@ -323,8 +309,8 @@ impl App {
             CommunicationMessage::StateChange { state } => {
                 debug!("State change received: {:?}", state);
                 self.state.presentation_state = Some(state.clone());
-                if let Some(slide_idx) = state.current() {
-                    self.state.current_slide_index = Some(slide_idx);
+                if let Some(slide_id) = state.current() {
+                    self.state.current_slide = Some(slide_id);
 
                     // Ensure slides are loaded from talk data
                     if let Some(talk) = &self.state.talk
@@ -360,6 +346,10 @@ impl App {
                 self.state.error_message = Some(error.clone());
                 Task::none()
             }
+            // Client registration events - no UI action needed in desktop
+            CommunicationMessage::Registered { .. }
+            | CommunicationMessage::ClientConnected { .. }
+            | CommunicationMessage::ClientDisconnected { .. } => Task::none(),
         }
     }
 
@@ -389,10 +379,10 @@ impl App {
             }
             // Slide navigation: ArrowRight → Next; ArrowLeft → Previous
             keyboard::Key::Named(keyboard::key::Named::ArrowRight) if !self.state.show_help => {
-                self.send_command(TobogganCommand::Next)
+                self.send_command(TobogganCommand::NextSlide)
             }
             keyboard::Key::Named(keyboard::key::Named::ArrowLeft) if !self.state.show_help => {
-                self.send_command(TobogganCommand::Previous)
+                self.send_command(TobogganCommand::PreviousSlide)
             }
             keyboard::Key::Named(keyboard::key::Named::Home) if !self.state.show_help => {
                 self.send_command(TobogganCommand::First)
@@ -407,16 +397,6 @@ impl App {
             keyboard::Key::Character(character) if character == "s" && !self.state.show_help => {
                 self.state.show_sidebar = !self.state.show_sidebar;
                 Task::none()
-            }
-            keyboard::Key::Character(character)
-                if (character == "p" || character == "P") && !self.state.show_help =>
-            {
-                self.send_command(TobogganCommand::Pause)
-            }
-            keyboard::Key::Character(character)
-                if (character == "r" || character == "R") && !self.state.show_help =>
-            {
-                self.send_command(TobogganCommand::Resume)
             }
             keyboard::Key::Character(character)
                 if (character == "b" || character == "B") && !self.state.show_help =>

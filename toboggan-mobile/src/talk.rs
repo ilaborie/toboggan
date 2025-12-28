@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use toboggan_core::{Command as CoreCommand, State as CoreState, TalkResponse};
 
 /// A talk
@@ -38,22 +36,12 @@ pub enum State {
         next: Option<u32>,
         current_step: u32,
         step_count: u32,
-        total_duration: Duration,
-    },
-    Paused {
-        previous: Option<u32>,
-        current: u32,
-        next: Option<u32>,
-        current_step: u32,
-        step_count: u32,
-        total_duration: Duration,
     },
     Done {
         previous: Option<u32>,
         current: u32,
         current_step: u32,
         step_count: u32,
-        total_duration: Duration,
     },
 }
 
@@ -69,36 +57,13 @@ impl State {
             CoreState::Init => Self::Init {
                 total_slides: total_slides_u32,
             },
-            CoreState::Paused {
-                current,
-                current_step,
-                total_duration,
-            } => {
-                #[allow(clippy::cast_possible_truncation, clippy::expect_used)]
-                // UniFFI requires u32, slide indices and step counts are typically small
-                let current_index = current.expect("should have a current index") as u32;
-                let step_count = slides
-                    .get(current_index as usize)
-                    .map_or(0, |slide| slide.step_count);
-                #[allow(clippy::cast_possible_truncation)]
-                Self::Paused {
-                    previous: (current_index > 0).then(|| current_index - 1),
-                    current: current_index,
-                    next: ((current_index as usize) < total_slides - 1).then(|| current_index + 1),
-                    current_step: current_step as u32,
-                    step_count,
-                    total_duration: total_duration.into(),
-                }
-            }
             CoreState::Running {
                 current,
                 current_step,
-                total_duration,
-                ..
             } => {
                 #[allow(clippy::cast_possible_truncation)]
                 // UniFFI requires u32, slide indices and step counts are typically small
-                let current_index = current as u32;
+                let current_index = current.index() as u32;
                 let step_count = slides
                     .get(current_index as usize)
                     .map_or(0, |slide| slide.step_count);
@@ -109,17 +74,15 @@ impl State {
                     next: ((current_index as usize) < total_slides - 1).then(|| current_index + 1),
                     current_step: current_step as u32,
                     step_count,
-                    total_duration: total_duration.into(),
                 }
             }
             CoreState::Done {
                 current,
                 current_step,
-                total_duration,
             } => {
                 #[allow(clippy::cast_possible_truncation)]
                 // UniFFI requires u32, slide indices and step counts are typically small
-                let current_index = current as u32;
+                let current_index = current.index() as u32;
                 let step_count = slides
                     .get(current_index as usize)
                     .map_or(0, |slide| slide.step_count);
@@ -129,7 +92,6 @@ impl State {
                     current: current_index,
                     current_step: current_step as u32,
                     step_count,
-                    total_duration: total_duration.into(),
                 }
             }
         }
@@ -147,22 +109,18 @@ pub enum Command {
     NextStep,
     PreviousStep,
     // Presentation control
-    Pause,
-    Resume,
     Blink,
 }
 
 impl From<Command> for CoreCommand {
     fn from(value: Command) -> Self {
         match value {
-            Command::Next => Self::Next,
-            Command::Previous => Self::Previous,
+            Command::Next => Self::NextSlide,
+            Command::Previous => Self::PreviousSlide,
             Command::First => Self::First,
             Command::Last => Self::Last,
             Command::NextStep => Self::NextStep,
             Command::PreviousStep => Self::PreviousStep,
-            Command::Resume => Self::Resume,
-            Command::Pause => Self::Pause,
             Command::Blink => Self::Blink,
         }
     }

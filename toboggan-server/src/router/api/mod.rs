@@ -5,10 +5,13 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
-use toboggan_core::{Command, Notification, SlidesResponse, TalkResponse};
+use toboggan_core::{
+    ClientsResponse, Command, Notification, SlideId, SlidesResponse, TalkResponse,
+};
 use tracing::{info, warn};
 
 use crate::TobogganState;
+use crate::services::{ClientService, TalkService};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(super) struct TalkParam {
@@ -19,10 +22,10 @@ pub(super) struct TalkParam {
 }
 
 pub(super) async fn get_talk(
-    State(state): State<TobogganState>,
+    State(talk_service): State<TalkService>,
     Query(param): Query<TalkParam>,
 ) -> impl IntoResponse {
-    let talk = state.talk().await;
+    let talk = talk_service.talk().await;
     let mut result = TalkResponse::from(talk);
     if !param.footer {
         result.footer.take();
@@ -34,19 +37,19 @@ pub(super) async fn get_talk(
     Json(result)
 }
 
-pub(super) async fn get_slides(State(state): State<TobogganState>) -> impl IntoResponse {
-    let slides = state.slides().await;
+pub(super) async fn get_slides(State(talk_service): State<TalkService>) -> impl IntoResponse {
+    let slides = talk_service.slides().await;
     let result = SlidesResponse { slides };
 
     Json(result)
 }
 
 pub(super) async fn get_slide_by_index(
-    State(state): State<TobogganState>,
-    Path(index): Path<usize>,
+    State(talk_service): State<TalkService>,
+    Path(slide_id): Path<SlideId>,
 ) -> impl IntoResponse {
-    state
-        .slide_by_index(index)
+    talk_service
+        .slide_by_index(slide_id)
         .await
         .map(Json)
         .ok_or(StatusCode::NOT_FOUND)
@@ -75,4 +78,11 @@ pub(super) async fn post_command(
     }
 
     Json(result)
+}
+
+pub(super) async fn get_clients(
+    State(client_service): State<ClientService>,
+) -> Json<ClientsResponse> {
+    let clients = client_service.connected_clients().await;
+    Json(clients)
 }

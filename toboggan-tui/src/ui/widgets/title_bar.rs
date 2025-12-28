@@ -1,7 +1,6 @@
 use ratatui::prelude::*;
 use ratatui::symbols::border;
 use ratatui::widgets::{Block, Paragraph};
-use toboggan_core::State;
 
 use crate::events::AppAction;
 use crate::state::AppState;
@@ -50,17 +49,11 @@ impl StatefulWidget for &TitleBar {
     }
 }
 
-fn global_actions(state: &AppState) -> Vec<AppAction> {
-    let mut actions = vec![AppAction::Blink];
-    match state.presentation_state {
-        State::Paused { .. } => actions.push(AppAction::Resume),
-        State::Running { .. } => actions.push(AppAction::Pause),
-        State::Init | State::Done { .. } => {}
-    }
-
-    actions.push(AppAction::ShowLog);
-    actions.push(AppAction::Quit);
-    actions.push(AppAction::Help);
-
-    actions
+fn global_actions(_state: &AppState) -> Vec<AppAction> {
+    vec![
+        AppAction::Blink,
+        AppAction::ShowLog,
+        AppAction::Quit,
+        AppAction::Help,
+    ]
 }

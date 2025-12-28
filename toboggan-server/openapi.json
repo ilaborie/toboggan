@@ -35,7 +35,8 @@
                 "$ref": "#/components/schemas/Command"
               },
               "example": {
-                "command": "Pause"
+                "command": "GoTo",
+                "slide": 0
               }
             }
           }
@@ -124,26 +125,26 @@
   "components": {
     "schemas": {
       "ClientId": {
-        "type": "string",
-        "format": "uuid"
+        "type": "object",
+        "description": "Client identifier (server-assigned)"
       },
       "Command": {
         "oneOf": [
           {
             "type": "object",
             "required": [
-              "client",
+              "name",
               "command"
             ],
             "properties": {
-              "client": {
-                "$ref": "#/components/schemas/ClientId"
-              },
               "command": {
                 "type": "string",
                 "enum": [
                   "Register"
                 ]
+              },
+              "name": {
+                "type": "string"
               }
             }
           },
@@ -221,8 +222,7 @@
                 ]
               },
               "slide": {
-                "type": "integer",
-                "minimum": 0
+                "$ref": "#/components/schemas/SlideId"
               }
             }
           },
@@ -235,7 +235,7 @@
               "command": {
                 "type": "string",
                 "enum": [
-                  "Next"
+                  "NextSlide"
                 ]
               }
             }
@@ -249,7 +249,7 @@
               "command": {
                 "type": "string",
                 "enum": [
-                  "Previous"
+                  "PreviousSlide"
                 ]
               }
             }
@@ -278,34 +278,6 @@
                 "type": "string",
                 "enum": [
                   "PreviousStep"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "command"
-            ],
-            "properties": {
-              "command": {
-                "type": "string",
-                "enum": [
-                  "Pause"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "command"
-            ],
-            "properties": {
-              "command": {
-                "type": "string",
-                "enum": [
-                  "Resume"
                 ]
               }
             }
@@ -462,8 +434,7 @@
       "HealthResponseStatus": {
         "type": "string",
         "enum": [
-          "Ok",
-          "Oops"
+          "Ok"
         ]
       },
       "Notification": {
@@ -549,6 +520,71 @@
                 ]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Sent to the registering client with their assigned ID",
+            "required": [
+              "client_id",
+              "type"
+            ],
+            "properties": {
+              "client_id": {
+                "$ref": "#/components/schemas/ClientId"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Registered"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Broadcast when a client connects",
+            "required": [
+              "client_id",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "client_id": {
+                "$ref": "#/components/schemas/ClientId"
+              },
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ClientConnected"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Broadcast when a client disconnects",
+            "required": [
+              "client_id",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "client_id": {
+                "$ref": "#/components/schemas/ClientId"
+              },
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ClientDisconnected"
+                ]
+              }
+            }
           }
         ]
       },
@@ -608,6 +644,11 @@
           }
         }
       },
+      "SlideId": {
+        "type": "integer",
+        "description": "A type-safe identifier for slides in a presentation.\n\n`SlideId` wraps a `usize` to provide type safety when indexing into slide collections.",
+        "minimum": 0
+      },
       "SlideKind": {
         "type": "string",
         "enum": [
@@ -649,62 +690,23 @@
           {
             "type": "object",
             "required": [
-              "current_step",
-              "total_duration",
-              "state"
-            ],
-            "properties": {
-              "current": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "minimum": 0
-              },
-              "current_step": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "state": {
-                "type": "string",
-                "enum": [
-                  "Paused"
-                ]
-              },
-              "total_duration": {
-                "$ref": "#/components/schemas/Duration"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "since",
               "current",
               "current_step",
-              "total_duration",
               "state"
             ],
             "properties": {
               "current": {
-                "type": "integer",
-                "minimum": 0
+                "$ref": "#/components/schemas/SlideId"
               },
               "current_step": {
                 "type": "integer",
                 "minimum": 0
-              },
-              "since": {
-                "$ref": "#/components/schemas/Timestamp"
               },
               "state": {
                 "type": "string",
                 "enum": [
                   "Running"
                 ]
-              },
-              "total_duration": {
-                "$ref": "#/components/schemas/Duration"
               }
             }
           },
@@ -713,13 +715,11 @@
             "required": [
               "current",
               "current_step",
-              "total_duration",
               "state"
             ],
             "properties": {
               "current": {
-                "type": "integer",
-                "minimum": 0
+                "$ref": "#/components/schemas/SlideId"
               },
               "current_step": {
                 "type": "integer",
@@ -730,9 +730,6 @@
                 "enum": [
                   "Done"
                 ]
-              },
-              "total_duration": {
-                "$ref": "#/components/schemas/Duration"
               }
             }
           }

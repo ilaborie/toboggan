@@ -12,9 +12,10 @@ use tracing::error;
 use utoipa::openapi::OpenApi;
 use utoipa_scalar::{Scalar, Servable};
 
-use crate::{TobogganState, WebAssets};
+use crate::TobogganState;
 
 mod api;
+mod static_assets;
 mod ws;
 
 pub fn routes(assets_dir: Option<PathBuf>, openapi: OpenApi) -> Router<TobogganState> {
@@ -36,6 +37,7 @@ pub fn routes_with_cors(
                 .route("/slides", get(api::get_slides))
                 .route("/slides/{index}", get(api::get_slide_by_index))
                 .route("/command", post(api::post_command))
+                .route("/clients", get(api::get_clients))
                 .route("/ws", get(ws::websocket_handler)),
         )
         .layer(TraceLayer::new_for_http())
@@ -59,7 +61,7 @@ async fn serve_embedded_web_assets(uri: Uri) -> Response {
     let path = uri.path().trim_start_matches('/');
 
     // Try to serve the requested file
-    if let Some(content) = WebAssets::get(path) {
+    if let Some(content) = static_assets::WebAppAssets::get(path) {
         let mime = mime_guess::from_path(path).first_or_octet_stream();
         return (
             StatusCode::OK,
@@ -70,7 +72,7 @@ async fn serve_embedded_web_assets(uri: Uri) -> Response {
     }
 
     // For SPA: serve index.html for all non-asset routes
-    if let Some(index) = WebAssets::get("index.html") {
+    if let Some(index) = static_assets::WebAppAssets::get("index.html") {
         return (
             StatusCode::OK,
             [(header::CONTENT_TYPE, "text/html")],

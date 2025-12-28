@@ -7,7 +7,7 @@ use gloo::net::websocket::Message;
 use gloo::net::websocket::futures::WebSocket;
 use gloo::timers::callback::{Interval, Timeout};
 use js_sys::JSON;
-use toboggan_core::{ClientId, Command, Notification};
+use toboggan_core::{Command, Notification};
 use wasm_bindgen::UnwrapThrowExt;
 use wasm_bindgen_futures::spawn_local;
 
@@ -19,7 +19,7 @@ use crate::utils::Timer;
 const PING_INTERVAL_MS: u32 = 60_000; // 1 minute
 
 pub struct CommunicationService {
-    client_id: ClientId,
+    client_name: String,
     tx_msg: UnboundedSender<CommunicationMessage>,
     tx_cmd: UnboundedSender<Command>,
     rx_cmd: Option<UnboundedReceiver<Command>>,
@@ -31,7 +31,7 @@ pub struct CommunicationService {
 
 impl CommunicationService {
     pub fn new(
-        client_id: ClientId,
+        client_name: impl Into<String>,
         config: WebSocketConfig,
         tx_msg: UnboundedSender<CommunicationMessage>,
         tx_cmd: UnboundedSender<Command>,
@@ -39,7 +39,7 @@ impl CommunicationService {
     ) -> Self {
         let retry_delay = config.initial_retry_delay.try_into().unwrap_or(1000);
         Self {
-            client_id,
+            client_name: client_name.into(),
             config,
             tx_msg,
             tx_cmd,
@@ -74,6 +74,11 @@ impl CommunicationService {
         self.start_pinging();
         self.send_status(ConnectionStatus::Connected);
 
+        // Send Register command with client name
+        let _ = self.tx_cmd.unbounded_send(Command::Register {
+            name: self.client_name.clone(),
+        });
+
         // Handle outgoing messages
         if let Some(rx_cmd) = self.rx_cmd.take() {
             spawn_local(handle_outgoing_commands(rx_cmd, write));
@@ -81,10 +86,10 @@ impl CommunicationService {
 
         // Handle incoming messages
         let tx_msg = self.tx_msg.clone();
-        let client_id = self.client_id;
+        let client_name = self.client_name.clone();
         let config = self.config.clone();
         spawn_local(async move {
-            handle_incoming_messages(read, tx_msg, client_id, config).await;
+            handle_incoming_messages(read, tx_msg, client_name, config).await;
         });
     }
 
@@ -117,7 +122,7 @@ impl CommunicationService {
         });
 
         let mut service = Self::new(
-            self.client_id,
+            self.client_name.clone(),
             self.config.clone(),
             self.tx_msg.clone(),
             self.tx_cmd.clone(),
@@ -178,7 +183,7 @@ async fn handle_outgoing_commands(
 async fn handle_incoming_messages(
     mut read: futures::stream::SplitStream<WebSocket>,
     tx_msg: UnboundedSender<CommunicationMessage>,
-    client_id: ClientId,
+    client_name: String,
     config: WebSocketConfig,
 ) {
     while let Some(msg) = read.next().await {
@@ -207,7 +212,7 @@ async fn handle_incoming_messages(
 
     // Schedule reconnection
     let mut service = CommunicationService::new(
-        client_id,
+        client_name,
         config,
         tx_msg,
         futures::channel::mpsc::unbounded().0,
@@ -253,6 +258,23 @@ fn process_message(message: Message, tx: &UnboundedSender<CommunicationMessage>)
         }
         Notification::Blink => {
             play_chime();
+        }
+        Notification::Registered { client_id } => {
+            info!("Registered with id", format!("{client_id:?}"));
+            let _ = tx.unbounded_send(CommunicationMessage::Registered { client_id });
+        }
+        Notification::ClientConnected { client_id, name } => {
+            info!("Client connected:", &name, "id:", format!("{client_id:?}"));
+            let _ = tx.unbounded_send(CommunicationMessage::ClientConnected { client_id, name });
+        }
+        Notification::ClientDisconnected { client_id, name } => {
+            info!(
+                "Client disconnected:",
+                &name,
+                "id:",
+                format!("{client_id:?}")
+            );
+            let _ = tx.unbounded_send(CommunicationMessage::ClientDisconnected { client_id, name });
         }
     }
 }

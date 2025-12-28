@@ -4,8 +4,9 @@ use std::rc::Rc;
 use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use gloo::console::{debug, error, info};
-use toboggan_core::{Command, State};
-use wasm_bindgen::UnwrapThrowExt;
+use toboggan_core::{ClientId, Command, SlideId, State};
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlElement;
 
@@ -42,7 +43,6 @@ pub struct App {
     api: Rc<TobogganApi>,
     kbd: KeyboardService,
     com: Rc<RefCell<CommunicationService>>,
-    client_id: toboggan_core::ClientId,
     elements: Rc<RefCell<TobogganElements>>,
     rx_msg: Option<UnboundedReceiver<CommunicationMessage>>,
     rx_action: Option<UnboundedReceiver<Command>>,
@@ -53,7 +53,6 @@ pub struct App {
 impl App {
     pub fn new(config: AppConfig) -> Self {
         let AppConfig {
-            client_id,
             api_base_url,
             websocket,
             keymap,
@@ -65,14 +64,14 @@ impl App {
         let (tx_action, rx_action) = unbounded();
 
         let kbd = KeyboardService::new(tx_action, keymap.unwrap_or_default());
-        let com = CommunicationService::new(client_id, websocket, tx_msg, tx_cmd.clone(), rx_cmd);
+        let com =
+            CommunicationService::new("Web Client", websocket, tx_msg, tx_cmd.clone(), rx_cmd);
         let com = Rc::new(RefCell::new(com));
 
         Self {
             api,
             kbd,
             com,
-            client_id,
             elements: Rc::new(RefCell::new(TobogganElements::default())),
             rx_msg: Some(rx_msg),
             rx_action: Some(rx_action),
@@ -134,14 +133,32 @@ impl WasmElement for App {
 
         let tx_cmd = self.tx_cmd.take().unwrap_throw();
         let presentation_meta = Rc::new(RefCell::new(PresentationMeta::default()));
+        let client_id: Rc<RefCell<Option<ClientId>>> = Rc::new(RefCell::new(None));
+
+        // Register beforeunload listener to send Unregister command
+        {
+            let client_id = Rc::clone(&client_id);
+            let tx_cmd = tx_cmd.clone();
+            let window = web_sys::window().unwrap_throw();
+            let closure = Closure::<dyn FnMut(_)>::new(move |_: web_sys::BeforeUnloadEvent| {
+                if let Some(id) = *client_id.borrow() {
+                    let _ = tx_cmd.unbounded_send(Command::Unregister { client: id });
+                }
+            });
+            window
+                .add_event_listener_with_callback("beforeunload", closure.as_ref().unchecked_ref())
+                .unwrap_throw();
+            closure.forget();
+        }
+
         spawn_local(handle_messages(
             self.api.clone(),
             rx_msg,
             self.elements.clone(),
-            self.client_id,
             tx_cmd.clone(),
             root_element,
             presentation_meta,
+            client_id,
         ));
 
         spawn_local(handle_actions(rx_action, self.elements.clone(), tx_cmd));
@@ -152,10 +169,10 @@ async fn handle_messages(
     api: Rc<TobogganApi>,
     mut rx: UnboundedReceiver<CommunicationMessage>,
     elements: Rc<RefCell<TobogganElements>>,
-    client_id: toboggan_core::ClientId,
     tx_cmd: UnboundedSender<Command>,
     root_element: Rc<HtmlElement>,
     presentation_meta: Rc<RefCell<PresentationMeta>>,
+    client_id: Rc<RefCell<Option<ClientId>>>,
 ) {
     let recovery_state = Rc::new(RefCell::new(RecoveryState::default()));
 
@@ -166,7 +183,6 @@ async fn handle_messages(
                     &status,
                     &api,
                     &elements,
-                    client_id,
                     &tx_cmd,
                     &recovery_state,
                     &presentation_meta,
@@ -200,6 +216,21 @@ async fn handle_messages(
             CommunicationMessage::Error { error } => {
                 elements.borrow().toast.toast(ToastType::Error, &error);
             }
+            CommunicationMessage::Registered { client_id: id } => {
+                *client_id.borrow_mut() = Some(id);
+            }
+            CommunicationMessage::ClientConnected { name, .. } => {
+                elements
+                    .borrow()
+                    .toast
+                    .toast(ToastType::Info, &format!("{name} connected"));
+            }
+            CommunicationMessage::ClientDisconnected { name, .. } => {
+                elements
+                    .borrow()
+                    .toast
+                    .toast(ToastType::Info, &format!("{name} disconnected"));
+            }
         }
     }
 }
@@ -208,8 +239,7 @@ async fn handle_connection_status(
     status: &ConnectionStatus,
     api: &Rc<TobogganApi>,
     elements: &Rc<RefCell<TobogganElements>>,
-    client_id: toboggan_core::ClientId,
-    tx_cmd: &UnboundedSender<Command>,
+    _tx_cmd: &UnboundedSender<Command>,
     recovery_state: &Rc<RefCell<RecoveryState>>,
     presentation_meta: &Rc<RefCell<PresentationMeta>>,
 ) {
@@ -249,7 +279,7 @@ async fn handle_connection_status(
         // Mark that we should attempt recovery when we receive the next state
         recovery_state.borrow_mut().pending_restoration = true;
 
-        let _ = tx_cmd.unbounded_send(Command::Register { client: client_id });
+        // Register command is sent automatically by CommunicationService
 
         if let Ok(talk) = api.get_talk().await {
             // Update presentation metadata with total slides count
@@ -383,7 +413,8 @@ fn try_restore_slide_position(
 
     info!(
         "Attempting to restore to slide",
-        slide_id, "after reconnection"
+        slide_id.display_number(),
+        "after reconnection"
     );
 
     // Send GoTo command to restore position
@@ -400,7 +431,10 @@ fn try_restore_slide_position(
         return false;
     }
 
-    info!("Sent GoTo command to restore to slide", slide_id);
+    info!(
+        "Sent GoTo command to restore to slide",
+        slide_id.display_number()
+    );
     true
 }
 
@@ -416,7 +450,7 @@ fn update_root_state_class(
     // Remove old state classes and add new one
     let classes: Vec<&str> = current_classes
         .split_whitespace()
-        .filter(|class| !matches!(*class, "init" | "paused" | "running" | "done"))
+        .filter(|class| !matches!(*class, "init" | "running" | "done"))
         .collect();
 
     let new_classes = if classes.is_empty() {
@@ -428,7 +462,7 @@ fn update_root_state_class(
     root_element.set_class_name(&new_classes);
 
     // Update CSS custom properties for slide tracking
-    let current_slide = state.current().map_or(0, |idx| idx + 1); // 1-based for display
+    let current_slide = state.current().map_or(0, SlideId::display_number);
     let total_slides = presentation_meta.borrow().total_slides;
 
     let style = root_element.style();
@@ -452,11 +486,15 @@ async fn update_slide_display(
     let current_step = state.current_step();
     debug!(
         "Fetching slide",
-        slide_id, "for state", state_class, "step", current_step
+        slide_id.display_number(),
+        "for state",
+        state_class,
+        "step",
+        current_step
     );
 
     let Ok(slide) = api.get_slide(slide_id).await else {
-        error!("Failed to fetch slide", slide_id);
+        error!("Failed to fetch slide", slide_id.display_number());
         return;
     };
 

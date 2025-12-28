@@ -1,6 +1,6 @@
 use iced::widget::markdown;
 use toboggan_client::ConnectionStatus;
-use toboggan_core::{Content, Slide, State as PresentationState, Talk};
+use toboggan_core::{Content, Slide, SlideId, State as PresentationState, Talk};
 
 /// Cached markdown content for a slide
 #[derive(Debug, Clone, Default)]
@@ -16,7 +16,7 @@ pub struct AppState {
     pub slides: Vec<Slide>,
     pub cached_markdown: Vec<CachedMarkdown>,
     pub presentation_state: Option<PresentationState>,
-    pub current_slide_index: Option<usize>,
+    pub current_slide: Option<SlideId>,
     pub show_help: bool,
     pub show_sidebar: bool,
     pub fullscreen: bool,
@@ -61,7 +61,7 @@ impl Default for AppState {
             slides: Vec::new(),
             cached_markdown: Vec::new(),
             presentation_state: None,
-            current_slide_index: None,
+            current_slide: None,
             show_help: false,
             show_sidebar: true,
             fullscreen: false,
@@ -72,18 +72,18 @@ impl Default for AppState {
 
 impl AppState {
     pub fn current_slide(&self) -> Option<&Slide> {
-        self.current_slide_index
-            .and_then(|idx| self.slides.get(idx))
+        self.current_slide
+            .and_then(|id| self.slides.get(id.index()))
     }
 
     pub fn current_markdown(&self) -> Option<&CachedMarkdown> {
-        self.current_slide_index
-            .and_then(|idx| self.cached_markdown.get(idx))
+        self.current_slide
+            .and_then(|id| self.cached_markdown.get(id.index()))
     }
 
     pub fn next_slide(&self) -> Option<&Slide> {
-        if let Some(current_idx) = self.current_slide_index {
-            let next_idx = current_idx + 1;
+        if let Some(current_id) = self.current_slide {
+            let next_idx = current_id.index() + 1;
             self.slides.get(next_idx)
         } else {
             None
@@ -91,19 +91,16 @@ impl AppState {
     }
 
     pub fn slide_index(&self) -> Option<(usize, usize)> {
-        self.current_slide_index
-            .map(|current_idx| (current_idx + 1, self.slides.len()))
+        self.current_slide
+            .map(|id| (id.display_number(), self.slides.len()))
     }
 
     /// Returns `(current_step, step_count)` for the current slide.
-    /// Note: Mirrors implementation in toboggan-tui/src/state.rs
     #[must_use]
     pub fn step_info(&self) -> Option<(usize, usize)> {
         let slide = self.current_slide()?;
-        let current_step = self
-            .presentation_state
+        self.presentation_state
             .as_ref()
-            .map_or(0, PresentationState::current_step);
-        Some((current_step, slide.step_count))
+            .map(|state| state.step_info(slide.step_count))
     }
 }

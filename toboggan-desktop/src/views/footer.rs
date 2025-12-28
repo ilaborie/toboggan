@@ -134,41 +134,14 @@ fn step_indicators_view(state: &AppState) -> Element<'_, Message> {
     indicators.align_y(iced::Alignment::Center).into()
 }
 
-fn presentation_controls_view(state: &AppState) -> Element<'_, Message> {
-    let pause_resume_button = match &state.presentation_state {
-        Some(toboggan_core::State::Running { .. }) => {
-            // Show pause button when presentation is running
-            create_icon_button(
-                icon(Icon::Pause, ICON_SIZE_MEDIUM),
-                "Pause",
-                Message::SendCommand(toboggan_core::Command::Pause),
-            )
-        }
-        Some(toboggan_core::State::Paused { .. }) => {
-            // Show resume (play) button when presentation is paused
-            create_icon_button(
-                icon(Icon::Play, ICON_SIZE_MEDIUM),
-                "Resume",
-                Message::SendCommand(toboggan_core::Command::Resume),
-            )
-        }
-        _ => {
-            // Default to pause button for Init/Done states
-            create_icon_button(
-                icon(Icon::Pause, ICON_SIZE_MEDIUM),
-                "Pause",
-                Message::SendCommand(toboggan_core::Command::Pause),
-            )
-        }
-    };
-
+fn presentation_controls_view(_state: &AppState) -> Element<'_, Message> {
     let blink_button = create_icon_button(
         icon(Icon::Bell, ICON_SIZE_MEDIUM),
         "Blink",
         Message::SendCommand(toboggan_core::Command::Blink),
     );
 
-    row![pause_resume_button, blink_button]
+    row![blink_button]
         .spacing(SPACING_SMALL)
         .align_y(iced::Alignment::Center)
         .into()
