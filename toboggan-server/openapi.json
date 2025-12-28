@@ -35,7 +35,8 @@
                 "$ref": "#/components/schemas/Command"
               },
               "example": {
-                "command": "Last"
+                "command": "GoTo",
+                "slide": 0
               }
             }
           }
@@ -642,6 +643,11 @@
             }
           }
         }
+      },
+      "SlideId": {
+        "type": "integer",
+        "description": "A type-safe identifier for slides in a presentation.\n\n`SlideId` wraps a `usize` to provide type safety when indexing into slide collections.",
+        "minimum": 0
       },
       "SlideKind": {
         "type": "string",

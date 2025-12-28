@@ -6,8 +6,8 @@ use clawspec_core::test_client::{TestClient, TestServer, TestServerConfig};
 use clawspec_core::{ApiClient, register_schemas};
 use serde_json::{Value, json};
 use toboggan_core::{
-    ClientId, Command, Content, Date, Duration, Notification, Slide, SlideKind, SlidesResponse,
-    State, Style, Talk, TalkResponse, Timestamp,
+    ClientId, Command, Content, Date, Duration, Notification, Slide, SlideId, SlideKind,
+    SlidesResponse, State, Style, Talk, TalkResponse, Timestamp,
 };
 use toboggan_server::{
     ClientService, HealthResponse, HealthResponseStatus, TalkService, TobogganState, routes,
@@ -110,6 +110,7 @@ async fn should_generate_openapi() -> anyhow::Result<()> {
         HealthResponseStatus,
         Notification,
         Slide,
+        SlideId,
         SlideKind,
         SlidesResponse,
         State,
@@ -188,6 +189,9 @@ async fn test_command_operations(app: &mut TestClient<TobogganTestServer>) -> an
         Command::PreviousSlide,
         Command::First,
         Command::Last,
+        Command::GoTo {
+            slide: SlideId::default(),
+        },
     ];
 
     for command in commands {
