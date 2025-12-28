@@ -1,13 +1,12 @@
 use std::cell::RefCell;
-use std::io::Stdout;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use crossterm::event::{self, Event};
-use ratatui::prelude::*;
+use ratatui::DefaultTerminal;
 use toboggan_client::{TobogganApi, TobogganConfig};
-use toboggan_core::{ClientConfig, Notification};
+use toboggan_core::{Notification, Slide, TalkResponse};
 use tokio::sync::mpsc;
 use tracing::{debug, info};
 
@@ -16,14 +15,11 @@ use crate::events::AppEvent;
 use crate::state::AppState;
 use crate::ui::PresenterComponents;
 
-type TerminalType = Terminal<CrosstermBackend<Stdout>>;
-
 const EVENT_POLL_TIMEOUT: Duration = Duration::from_millis(50);
 const TICK_DELAY: Duration = Duration::from_millis(250);
 
 pub struct App {
     state: Rc<RefCell<AppState>>,
-    terminal: TerminalType,
     event_rx: mpsc::UnboundedReceiver<AppEvent>,
     event_tx: mpsc::UnboundedSender<AppEvent>,
     connection_handler: ConnectionHandler,
@@ -31,30 +27,28 @@ pub struct App {
 }
 
 impl App {
-    /// Create a new TUI application.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if terminal setup fails.
-    pub async fn new(terminal: TerminalType, config: &TobogganConfig) -> Result<Self> {
-        let api = TobogganApi::new(config.api_url());
-        let talk = api.talk().await.context("fetching talk")?;
-        let slides = api.slides().await.context("fetching slides")?;
+    /// Create a new TUI application with pre-fetched data.
+    #[must_use]
+    pub fn new(
+        config: &TobogganConfig,
+        api: TobogganApi,
+        talk: TalkResponse,
+        slides: Vec<Slide>,
+    ) -> Self {
         let (event_tx, event_rx) = mpsc::unbounded_channel();
-        let state = AppState::new(talk, slides.slides);
+        let state = AppState::new(talk, slides);
         let state = Rc::new(RefCell::new(state));
         let connection_handler = ConnectionHandler::new(config.clone(), event_tx.clone());
 
         debug!("Config: {config:#?}");
 
-        Ok(Self {
+        Self {
             state,
-            terminal,
             event_rx,
             event_tx,
             connection_handler,
             api,
-        })
+        }
     }
 
     /// Run the TUI application.
@@ -62,14 +56,14 @@ impl App {
     /// # Errors
     ///
     /// Returns an error if the application fails to run.
-    pub fn run(&mut self) -> Result<()> {
+    pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         info!("Starting Toboggan TUI Presenter");
         self.connection_handler.start();
         self.start_keyboard_handler();
 
         let mut last_tick = Instant::now();
         'main_loop: loop {
-            self.render_app().context("render")?;
+            self.render_app(terminal).context("render")?;
 
             // Handle crossterm events (resize, etc.)
             if crossterm::event::poll(EVENT_POLL_TIMEOUT).context("poll event")?
@@ -124,9 +118,9 @@ impl App {
         Ok(())
     }
 
-    fn render_app(&mut self) -> Result<()> {
+    fn render_app(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         let shared_state = Rc::clone(&self.state);
-        self.terminal
+        terminal
             .draw(move |frame| {
                 let components = PresenterComponents::default();
                 let mut state = shared_state.borrow_mut();

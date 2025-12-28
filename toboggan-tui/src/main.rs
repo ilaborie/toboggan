@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use toboggan_client::TobogganConfig;
+use toboggan_client::{TobogganApi, TobogganConfig};
+use toboggan_core::ClientConfig;
 use toboggan_tui::App;
 use tracing_subscriber::prelude::*;
 
@@ -28,15 +29,11 @@ async fn main() -> Result<()> {
     // Create config using toboggan-client shared config
     let config = TobogganConfig::new(&host, port);
 
-    // Run the app
-    let terminal = ratatui::init();
-    let result = {
-        App::new(terminal, &config)
-            .await
-            .context("create app")
-            .and_then(|mut app| app.run())
-    };
-    ratatui::restore();
+    // Fetch data async before terminal init
+    let api = TobogganApi::new(config.api_url());
+    let talk = api.talk().await.context("fetching talk")?;
+    let slides = api.slides().await.context("fetching slides")?;
 
-    result
+    // Run the app with ratatui::run() for clean terminal management
+    ratatui::run(|terminal| App::new(&config, api, talk, slides.slides).run(terminal))
 }
