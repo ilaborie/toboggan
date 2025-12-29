@@ -9,6 +9,7 @@ authors.workspace = true
 
 [dependencies]
 toboggan-core = {path = "../toboggan-core", features = ["openapi"]}
+toboggan-stats = {path = "../toboggan-stats"}
 
 axum = { workspace = true, features = ["ws"] }
 tokio = { workspace = true, features = ["full"] }

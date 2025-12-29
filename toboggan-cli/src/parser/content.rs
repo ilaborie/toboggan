@@ -23,10 +23,6 @@ pub struct InnerContent {
 }
 
 impl InnerContent {
-    fn step_count(&self) -> usize {
-        self.steps.len() + usize::from(self.next_step.is_some())
-    }
-
     fn handle<'a>(&mut self, elt: &'a MarkdownNode<'a>, file_name: &str) -> Result<()> {
         // Check if this is a code comment and handle it differently
         let mut code_block_md = None;
@@ -102,15 +98,6 @@ pub struct CellsContent {
 }
 
 impl CellsContent {
-    fn step_count(&self) -> usize {
-        let cells_steps: usize = self.cells.iter().map(|(inner, _)| inner.step_count()).sum();
-        let next_steps = self
-            .next_cell
-            .as_ref()
-            .map_or(0, |(inner, _)| inner.step_count());
-        cells_steps + next_steps
-    }
-
     fn handle<'a>(&mut self, elt: &'a MarkdownNode<'a>, file_name: &str) -> Result<()> {
         let data = &elt.data.borrow().value;
         if let NodeValue::HtmlBlock(html) = data {
@@ -332,14 +319,6 @@ impl SlideContentParser {
         }
     }
 
-    fn step_count(&self) -> usize {
-        match self {
-            Self::Init => 0,
-            Self::Base { inner, .. } | Self::Notes { inner, .. } => inner.step_count(),
-            Self::Grid { cells, .. } | Self::GridNotes { cells, .. } => cells.step_count(),
-        }
-    }
-
     pub fn parse<'a, I>(
         mut self,
         iterator: I,
@@ -364,6 +343,8 @@ impl SlideContentParser {
         let style = front_matter.to_style()?;
         let renderer = HtmlRenderer::new(options, plugins, style.clone());
 
+        let body = self.body(&renderer);
+
         let result = Slide {
             kind: SlideKind::Standard,
             style,
@@ -373,9 +354,8 @@ impl SlideContentParser {
                     .or_else(|| name.map(ToString::to_string))
                     .unwrap_or_else(|| DEFAULT_SLIDE_TITLE.to_string()),
             },
-            body: self.body(&renderer),
+            body,
             notes: self.notes(&renderer),
-            step_count: self.step_count(),
         };
 
         Ok((result, front_matter))

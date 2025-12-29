@@ -1,4 +1,5 @@
 use toboggan_core::{Slide as CoreSlide, SlideKind as CoreSlideKind};
+use toboggan_stats::SlideStats;
 
 /// A slide kind
 #[derive(Debug, Clone, Copy, uniffi::Enum)]
@@ -21,17 +22,14 @@ pub struct Slide {
 
 impl From<CoreSlide> for Slide {
     fn from(value: CoreSlide) -> Self {
-        let CoreSlide {
-            kind,
-            title,
-            step_count,
-            ..
-        } = value;
+        // Compute step count using toboggan-stats
+        let step_count = SlideStats::from_slide(&value).steps;
+
         #[allow(clippy::cast_possible_truncation)]
         // UniFFI requires u32, step counts are typically small
         Self {
-            title: title.to_string(),
-            kind: match kind {
+            title: value.title.to_string(),
+            kind: match value.kind {
                 CoreSlideKind::Cover => SlideKind::Cover,
                 CoreSlideKind::Part => SlideKind::Part,
                 CoreSlideKind::Standard => SlideKind::Standard,

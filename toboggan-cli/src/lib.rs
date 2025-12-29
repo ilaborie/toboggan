@@ -256,45 +256,11 @@ fn list_available_themes() {
 }
 
 fn parse_date_string(date_str: &str) -> Result<Date> {
-    let regex = regex::Regex::new(r"^(\d{4})-(\d{1,2})-(\d{1,2})$")?;
-
-    if let Some(caps) = regex.captures(date_str) {
-        let year =
-            caps[1]
-                .parse::<i16>()
-                .map_err(|source| TobogganCliError::InvalidDateComponent {
-                    component: "year".to_string(),
-                    value: caps[1].to_string(),
-                    source,
-                })?;
-        let month =
-            caps[2]
-                .parse::<i8>()
-                .map_err(|source| TobogganCliError::InvalidDateComponent {
-                    component: "month".to_string(),
-                    value: caps[2].to_string(),
-                    source,
-                })?;
-        let day =
-            caps[3]
-                .parse::<i8>()
-                .map_err(|source| TobogganCliError::InvalidDateComponent {
-                    component: "day".to_string(),
-                    value: caps[3].to_string(),
-                    source,
-                })?;
-        let date = Date::new(year, month, day).map_err(|_| TobogganCliError::InvalidDate {
-            year,
-            month,
-            day,
-        })?;
-
-        Ok(date)
-    } else {
-        Err(TobogganCliError::InvalidDateFormat {
+    date_str
+        .parse::<Date>()
+        .map_err(|_| TobogganCliError::InvalidDateFormat {
             input: date_str.to_string(),
         })
-    }
 }
 
 #[cfg(test)]

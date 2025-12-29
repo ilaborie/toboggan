@@ -619,11 +619,6 @@
               "type": "Empty"
             }
           },
-          "step_count": {
-            "type": "integer",
-            "default": 0,
-            "minimum": 0
-          },
           "style": {
             "oneOf": [
               {

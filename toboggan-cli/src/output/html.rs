@@ -247,7 +247,6 @@ mod tests {
             },
             notes: Content::Empty,
             style: Style::default(),
-            step_count: 0,
         };
         talk.slides.push(slide);
 

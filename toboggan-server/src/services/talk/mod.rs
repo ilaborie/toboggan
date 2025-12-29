@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use toboggan_core::{Command, Content, Notification, Slide, SlideId, State, Talk};
+use toboggan_stats::SlideStats;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
@@ -246,7 +247,8 @@ impl TalkService {
         };
 
         let current_step = state.current_step();
-        if current_step < slide.step_count {
+        let step_count = SlideStats::from_slide(&slide).steps;
+        if current_step < step_count {
             // Reveal next step within current slide
             state.update_step(current_step + 1);
         } else {
@@ -275,7 +277,8 @@ impl TalkService {
             {
                 state.update_slide(prev_slide_index);
                 // Set to last step of previous slide (step_count means all steps revealed)
-                state.update_step(prev_slide.step_count);
+                let prev_step_count = SlideStats::from_slide(&prev_slide).steps;
+                state.update_step(prev_step_count);
             }
         }
 

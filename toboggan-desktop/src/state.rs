@@ -1,6 +1,7 @@
 use iced::widget::markdown;
 use toboggan_client::ConnectionStatus;
 use toboggan_core::{Content, Slide, SlideId, State as PresentationState, Talk};
+use toboggan_stats::SlideStats;
 
 /// Cached markdown content for a slide
 #[derive(Debug, Clone, Default)]
@@ -99,8 +100,9 @@ impl AppState {
     #[must_use]
     pub fn step_info(&self) -> Option<(usize, usize)> {
         let slide = self.current_slide()?;
+        let step_count = SlideStats::from_slide(slide).steps;
         self.presentation_state
             .as_ref()
-            .map(|state| state.step_info(slide.step_count))
+            .map(|state| state.step_info(step_count))
     }
 }

@@ -25,6 +25,7 @@ path = "./uniffi-bindgen-swift.rs"
 [dependencies]
 toboggan-core = { path = "../toboggan-core", features = ["std"] }
 toboggan-client = { path = "../toboggan-client" }
+toboggan-stats = { path = "../toboggan-stats" }
 
 uniffi = { workspace = true, features = ["cli"] }
 tokio = { workspace = true, features = [
