@@ -3,7 +3,7 @@ use std::sync::OnceLock;
 use iced::{Element, Subscription, Task, Theme, event, keyboard};
 use toboggan_client::{
     CommunicationMessage, ConnectionStatus, TobogganApi, TobogganApiError, TobogganConfig,
-    WebSocketClient,
+    WebSocketClient, refetch_talk_and_slides,
 };
 use toboggan_core::{ClientConfig, Command as TobogganCommand, SlidesResponse, Talk, TalkResponse};
 use tokio::sync::{broadcast, mpsc};
@@ -323,21 +323,24 @@ impl App {
                 Task::none()
             }
             CommunicationMessage::TalkChange { state } => {
-                info!("📝 Presentation updated, reloading talk and slides");
+                info!("Presentation updated, reloading talk and slides");
 
                 // DON'T update state immediately - wait for data to be fetched
-                // Refetch talk and slides from server, then update everything atomically
+                // Use shared refetch_talk_and_slides utility
                 let api = self.api.clone();
                 let state_for_update = state.clone();
                 Task::perform(
                     async move {
-                        let talk_result = api.talk().await;
-                        let slides_result = api.slides().await;
-                        (talk_result, slides_result, state_for_update)
+                        let result = refetch_talk_and_slides(&api).await;
+                        (result, state_for_update)
                     },
-                    |(talk_result, slides_result, state)| match (talk_result, slides_result) {
-                        (Ok(talk), Ok(slides)) => Message::TalkChangeComplete(talk, slides, state),
-                        (Err(err), _) | (_, Err(err)) => Message::LoadError(err.to_string()),
+                    |(result, state)| match result {
+                        Ok((talk, slides)) => {
+                            // Wrap slides in SlidesResponse for compatibility
+                            let slides_response = SlidesResponse { slides };
+                            Message::TalkChangeComplete(talk, slides_response, state)
+                        }
+                        Err(err) => Message::LoadError(err.to_string()),
                     },
                 )
             }

@@ -74,7 +74,6 @@ pub struct Slide {
     pub body: Content,
     #[serde(skip_serializing_if = "Content::is_empty")]
     pub notes: Content,
-    pub step_count: usize,
 }
 
 impl Slide {

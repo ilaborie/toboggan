@@ -86,26 +86,6 @@ pub enum TobogganCliError {
     )]
     InvalidDateFormat { input: String },
 
-    #[display("Invalid date component: {component}='{value}'")]
-    #[diagnostic(
-        code(toboggan_cli::invalid_date_component),
-        help(
-            "Date components must be valid integers: year (e.g., 2024), month (1-12), day (1-31)"
-        )
-    )]
-    InvalidDateComponent {
-        component: String,
-        value: String,
-        source: std::num::ParseIntError,
-    },
-
-    #[display("Failed to create valid date from year={year}, month={month}, day={day}")]
-    #[diagnostic(
-        code(toboggan_cli::invalid_date),
-        help("Check that the date components form a valid calendar date")
-    )]
-    InvalidDate { year: i16, month: i8, day: i8 },
-
     #[display("Input path is not a directory: {}", path.display())]
     #[diagnostic(
         code(toboggan_cli::not_a_directory),
@@ -140,13 +120,6 @@ pub enum TobogganCliError {
         help("The presentation structure could not be converted to {format} format")
     )]
     Serialize { format: String, message: String },
-
-    #[display("Failed to compile regex pattern")]
-    #[diagnostic(
-        code(toboggan_cli::regex_compile),
-        help("This is likely a bug in the application. Please report it.")
-    )]
-    RegexCompile { source: regex::Error },
 
     #[display("Failed to parse command-line arguments")]
     #[diagnostic(
@@ -224,12 +197,6 @@ impl TobogganCliError {
     #[must_use]
     pub fn write_file(path: PathBuf, source: io::Error) -> Self {
         Self::WriteFile { path, source }
-    }
-}
-
-impl From<regex::Error> for TobogganCliError {
-    fn from(source: regex::Error) -> Self {
-        Self::RegexCompile { source }
     }
 }
 

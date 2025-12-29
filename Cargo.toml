@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "toboggan-core",
+  "toboggan-stats",
   "toboggan-server",
   "toboggan-cli",
   "toboggan-client",
@@ -63,7 +64,7 @@ lucide-icons = "0.562.0"
 async-stream = "0.3.6"
 
 # Other dependencies
-regex = "1.12.2"
+scraper = "0.25.0"
 
 # Server-specific dependencies
 rust-embed = "8.9.0"

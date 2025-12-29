@@ -39,7 +39,6 @@ pub struct FrontMatter {
     pub skip: bool,
     pub date: Option<String>,
     pub classes: CssClasses,
-    pub grid: bool,
     pub style: Option<String>,
 
     #[serde(
@@ -103,7 +102,6 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::TobogganCliError;
     use crate::parser::directory::create_test_file;
 
     #[test]
@@ -152,6 +150,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::expect_used)]
     fn test_folder_parser_with_overrides() -> Result<()> {
         let temp_dir = tempdir()?;
         let dir_path = temp_dir.path();
@@ -159,11 +158,7 @@ mod tests {
         create_test_file(dir_path, "_cover.md", "# Original Title")?;
 
         let parser = FolderParser::new(dir_path.to_path_buf(), "base16-ocean.light".to_string())?;
-        let custom_date = Date::new(2024, 12, 25).map_err(|_| TobogganCliError::InvalidDate {
-            year: 2024,
-            month: 12,
-            day: 25,
-        })?;
+        let custom_date = Date::new(2024, 12, 25).expect("valid date");
         let result = parser.parse(Some("Override Title".to_string()), Some(custom_date))?;
         let _talk = result.to_talk();
 

@@ -1,4 +1,5 @@
 use std::fmt::{self, Display, Formatter};
+use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
@@ -127,6 +128,33 @@ impl Date {
 impl Display for Date {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> fmt::Result {
         Display::fmt(&self.0, fmt)
+    }
+}
+
+impl FromStr for Date {
+    type Err = jiff::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Try ISO format first (YYYY-MM-DD)
+        jiff::civil::Date::strptime("%Y-%m-%d", s)
+            .or_else(|err| {
+                // For single-digit months/days, parse manually
+                let mut parts = s.splitn(3, '-');
+                let year: i16 = parts
+                    .next()
+                    .and_then(|part| part.parse().ok())
+                    .ok_or_else(|| err.clone())?;
+                let month: i8 = parts
+                    .next()
+                    .and_then(|part| part.parse().ok())
+                    .ok_or_else(|| err.clone())?;
+                let day: i8 = parts
+                    .next()
+                    .and_then(|part| part.parse().ok())
+                    .ok_or_else(|| err.clone())?;
+                jiff::civil::Date::new(year, month, day)
+            })
+            .map(Self)
     }
 }
 

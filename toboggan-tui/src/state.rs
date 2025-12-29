@@ -2,6 +2,7 @@ use std::ops::ControlFlow;
 
 use toboggan_client::ConnectionStatus;
 use toboggan_core::{Notification, Slide, SlideId, State, TalkResponse};
+use toboggan_stats::SlideStats;
 use tracing::{debug, info};
 
 use crate::connection_handler::ConnectionHandler;
@@ -78,7 +79,8 @@ impl AppState {
     #[must_use]
     pub(crate) fn step_info(&self) -> Option<(usize, usize)> {
         let slide = self.current_slide()?;
-        Some(self.presentation_state.step_info(slide.step_count))
+        let step_count = SlideStats::from_slide(slide).steps;
+        Some(self.presentation_state.step_info(step_count))
     }
 
     // Event handling methods

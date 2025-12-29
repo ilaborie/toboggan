@@ -97,7 +97,6 @@ skip = false              # Set to true to exclude from output
 classes = ["centered", "dark"]  # CSS classes
 css = "background: linear-gradient(...);"  # Inline CSS
 css_file = "path/to/styles.css"  # External CSS file
-grid = true               # Enable grid layout
 duration = "2m 30s"       # Slide duration (or use seconds: 150)
 +++
 
@@ -135,28 +134,6 @@ Second point appears on next step
 
 <!-- pause: highlight -->
 Third point appears with highlight class
-```
-
-### Grid Layouts
-
-Create multi-column layouts with `<!-- cell -->` comments:
-
-```markdown
-+++
-grid = true
-+++
-
-# Two Column Slide
-
-<!-- cell -->
-Left column content
-- Point 1
-- Point 2
-
-<!-- cell: highlight -->
-Right column content with highlight class
-- Point A
-- Point B
 ```
 
 ### Speaker Notes

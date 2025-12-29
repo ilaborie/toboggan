@@ -1,13 +1,10 @@
 uniffi::setup_scaffolding!("toboggan");
 
-mod slide;
-pub use self::slide::*;
+mod types;
+pub use self::types::*;
 
-mod talk;
-pub use self::talk::*;
+mod handler;
+pub use self::handler::*;
 
 mod client;
 pub use self::client::*;
-
-mod notif;
-pub use self::notif::*;

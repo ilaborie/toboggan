@@ -22,15 +22,6 @@ pub fn render_content(content: &Content, wrapper: Option<&str>) -> String {
         Content::Empty => String::new(),
         Content::Text { text } => escape_html(text),
         Content::Html { raw, .. } => raw.clone(),
-        Content::Grid { style, cells } => {
-            let Style { classes, .. } = style;
-            let classes = classes.join(" ");
-            let body = cells
-                .iter()
-                .map(|content| render_content(content, None))
-                .collect::<String>();
-            format!(r#"<div class="cell {classes}">{body}</div>"#)
-        }
     };
 
     if let Some(wrapper) = wrapper {

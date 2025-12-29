@@ -16,7 +16,7 @@ serde_json = { workspace = true }
 derive_more = { workspace = true, features = ["from", "error", "display"] }
 
 # Async dependencies (always available now)
-tokio = { workspace = true, features = ["sync", "time"] }
+tokio = { workspace = true, features = ["sync", "time", "macros"] }
 tokio-tungstenite = { workspace = true }
 futures = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }

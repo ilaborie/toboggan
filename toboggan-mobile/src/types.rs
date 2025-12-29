@@ -1,6 +1,20 @@
-use toboggan_core::{Command as CoreCommand, State as CoreState, TalkResponse};
+//! UniFFI-compatible type wrappers for toboggan-core types.
+//!
+//! These newtypes provide FFI-safe interfaces for Swift/Kotlin while
+//! maintaining `From<CoreType>` implementations for easy conversion.
 
-/// A talk
+use toboggan_client::ConnectionStatus as CoreConnectionStatus;
+use toboggan_core::{
+    Command as CoreCommand, Slide as CoreSlide, SlideKind as CoreSlideKind, State as CoreState,
+    TalkResponse,
+};
+use toboggan_stats::SlideStats;
+
+// ============================================================================
+// Talk
+// ============================================================================
+
+/// A talk (presentation metadata)
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct Talk {
     pub title: String,
@@ -25,6 +39,53 @@ impl From<TalkResponse> for Talk {
     }
 }
 
+// ============================================================================
+// Slide
+// ============================================================================
+
+/// A slide kind
+#[derive(Debug, Clone, Copy, uniffi::Enum)]
+pub enum SlideKind {
+    /// Cover slide
+    Cover,
+    /// Part header slide
+    Part,
+    /// Standard slide
+    Standard,
+}
+
+/// A slide
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct Slide {
+    pub title: String,
+    pub kind: SlideKind,
+    pub step_count: u32,
+}
+
+impl From<CoreSlide> for Slide {
+    fn from(value: CoreSlide) -> Self {
+        // Compute step count using toboggan-stats
+        let step_count = SlideStats::from_slide(&value).steps;
+
+        #[allow(clippy::cast_possible_truncation)]
+        // UniFFI requires u32, step counts are typically small
+        Self {
+            title: value.title.to_string(),
+            kind: match value.kind {
+                CoreSlideKind::Cover => SlideKind::Cover,
+                CoreSlideKind::Part => SlideKind::Part,
+                CoreSlideKind::Standard => SlideKind::Standard,
+            },
+            step_count: step_count as u32,
+        }
+    }
+}
+
+// ============================================================================
+// State
+// ============================================================================
+
+/// Presentation state
 #[derive(Debug, Clone, uniffi::Enum)]
 pub enum State {
     Init {
@@ -46,9 +107,11 @@ pub enum State {
 }
 
 impl State {
-    pub(crate) fn new(slides: &[super::Slide], value: &CoreState) -> Self {
+    /// Create a new State from core State and slides (for step count calculation)
+    pub(crate) fn new(slides: &[Slide], value: &CoreState) -> Self {
         let total_slides = slides.len();
         assert!(total_slides > 0, "total_slides must be greater than 0");
+
         #[allow(clippy::cast_possible_truncation)]
         // UniFFI requires u32, truncation unlikely for slide counts
         let total_slides_u32 = total_slides as u32;
@@ -98,6 +161,11 @@ impl State {
     }
 }
 
+// ============================================================================
+// Command
+// ============================================================================
+
+/// Commands that can be sent to the server
 #[derive(Debug, Clone, Copy, uniffi::Enum)]
 pub enum Command {
     // Slide navigation
@@ -122,6 +190,32 @@ impl From<Command> for CoreCommand {
             Command::NextStep => Self::NextStep,
             Command::PreviousStep => Self::PreviousStep,
             Command::Blink => Self::Blink,
+        }
+    }
+}
+
+// ============================================================================
+// ConnectionStatus
+// ============================================================================
+
+/// Connection status (simplified for `UniFFI`)
+#[derive(Debug, Clone, Copy, uniffi::Enum)]
+pub enum ConnectionStatus {
+    Connecting,
+    Connected,
+    Closed,
+    Reconnecting,
+    Error,
+}
+
+impl From<CoreConnectionStatus> for ConnectionStatus {
+    fn from(value: CoreConnectionStatus) -> Self {
+        match value {
+            CoreConnectionStatus::Connecting => Self::Connecting,
+            CoreConnectionStatus::Connected => Self::Connected,
+            CoreConnectionStatus::Closed => Self::Closed,
+            CoreConnectionStatus::Reconnecting { .. } => Self::Reconnecting,
+            CoreConnectionStatus::Error { .. } => Self::Error,
         }
     }
 }

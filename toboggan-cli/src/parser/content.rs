@@ -8,7 +8,7 @@ use miette::SourceSpan;
 use toboggan_core::{Content, Slide, SlideKind};
 
 use crate::error::{Result, TobogganCliError};
-use crate::parser::comments::{is_notes, parse_cell, parse_code, parse_pause};
+use crate::parser::comments::{is_notes, parse_code, parse_pause};
 use crate::parser::directory::{extract_node_text, parse_frontmatter};
 use crate::parser::{
     ContentRenderer, CssClasses, DEFAULT_SLIDE_TITLE, FrontMatter, HtmlRenderer, MarkdownNode,
@@ -23,10 +23,6 @@ pub struct InnerContent {
 }
 
 impl InnerContent {
-    fn step_count(&self) -> usize {
-        self.steps.len() + usize::from(self.next_step.is_some())
-    }
-
     fn handle<'a>(&mut self, elt: &'a MarkdownNode<'a>, file_name: &str) -> Result<()> {
         // Check if this is a code comment and handle it differently
         let mut code_block_md = None;
@@ -95,70 +91,6 @@ impl InnerContent {
     }
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct CellsContent {
-    cells: Vec<(InnerContent, CssClasses)>,
-    next_cell: Option<(InnerContent, CssClasses)>,
-}
-
-impl CellsContent {
-    fn step_count(&self) -> usize {
-        let cells_steps: usize = self.cells.iter().map(|(inner, _)| inner.step_count()).sum();
-        let next_steps = self
-            .next_cell
-            .as_ref()
-            .map_or(0, |(inner, _)| inner.step_count());
-        cells_steps + next_steps
-    }
-
-    fn handle<'a>(&mut self, elt: &'a MarkdownNode<'a>, file_name: &str) -> Result<()> {
-        let data = &elt.data.borrow().value;
-        if let NodeValue::HtmlBlock(html) = data {
-            // Detect new cell
-            if let Some(classes) = parse_cell(&html.literal) {
-                if let Some(current) = self.next_cell.take() {
-                    self.cells.push(current);
-                }
-                self.next_cell = Some((InnerContent::default(), classes));
-            }
-        }
-
-        if let Some((next, _)) = &mut self.next_cell {
-            next.handle(elt, file_name)?;
-        } else {
-            let mut next = InnerContent::default();
-            next.handle(elt, file_name)?;
-            self.next_cell = Some((next, CssClasses::default()));
-        }
-
-        Ok(())
-    }
-
-    fn render_with<R: ContentRenderer>(&self, renderer: &R) -> Content {
-        let cell_contents: Vec<_> = self
-            .cells
-            .iter()
-            .chain(self.next_cell.iter())
-            .map(|(inner_content, classes)| {
-                // For now, we'll extract the content as markdown
-                // In a full refactor, we'd have the renderer handle InnerContent directly
-                let mut content = inner_content.before_steps.clone();
-                for (step, _) in &inner_content.steps {
-                    content.push('\n');
-                    content.push_str(step);
-                }
-                if let Some((next_step, _)) = &inner_content.next_step {
-                    content.push('\n');
-                    content.push_str(next_step);
-                }
-                (content, classes.clone())
-            })
-            .collect();
-
-        renderer.render_cells(&cell_contents)
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum SlideContentParser {
     Init,
@@ -167,21 +99,10 @@ pub enum SlideContentParser {
         title: Option<String>,
         inner: InnerContent,
     },
-    Grid {
-        fm: FrontMatter,
-        title: Option<String>,
-        cells: CellsContent,
-    },
     Notes {
         fm: FrontMatter,
         title: Option<String>,
         inner: InnerContent,
-        notes: InnerContent,
-    },
-    GridNotes {
-        fm: FrontMatter,
-        title: Option<String>,
-        cells: CellsContent,
         notes: InnerContent,
     },
 }
@@ -196,13 +117,7 @@ impl SlideContentParser {
     fn handle_frontmatter(&mut self, content: &str, file_name: &str) -> Result<()> {
         let frontmatter = parse_frontmatter(content, file_name)?;
 
-        if frontmatter.grid {
-            *self = Self::Grid {
-                fm: frontmatter,
-                title: None,
-                cells: CellsContent::default(),
-            };
-        } else if let Self::Base { fm, .. } = self {
+        if let Self::Base { fm, .. } = self {
             *fm = frontmatter;
         }
         Ok(())
@@ -210,36 +125,23 @@ impl SlideContentParser {
 
     /// Handle heading nodes and extract titles
     fn handle_heading(&mut self, heading_text: String) {
-        match self {
-            Self::Base { title, .. } | Self::Grid { title, .. } => {
-                if title.is_none() && !heading_text.is_empty() {
-                    *title = Some(heading_text);
-                }
-            }
-            _ => {}
+        if let Self::Base { title, .. } = self
+            && title.is_none()
+            && !heading_text.is_empty()
+        {
+            *title = Some(heading_text);
         }
     }
 
     /// Transition to notes state
     fn transition_to_notes(&mut self) {
-        match self {
-            Self::Base { fm, title, inner } => {
-                *self = Self::Notes {
-                    fm: fm.clone(),
-                    title: title.clone(),
-                    inner: inner.clone(),
-                    notes: InnerContent::default(),
-                };
-            }
-            Self::Grid { fm, title, cells } => {
-                *self = Self::GridNotes {
-                    fm: fm.clone(),
-                    title: title.clone(),
-                    cells: cells.clone(),
-                    notes: InnerContent::default(),
-                };
-            }
-            _ => {}
+        if let Self::Base { fm, title, inner } = self {
+            *self = Self::Notes {
+                fm: fm.clone(),
+                title: title.clone(),
+                inner: inner.clone(),
+                notes: InnerContent::default(),
+            };
         }
     }
 
@@ -271,23 +173,7 @@ impl SlideContentParser {
                 }
                 _ => inner.handle(elt, file_name)?,
             },
-            Self::Grid { fm, title, cells } => match data {
-                NodeValue::HtmlBlock(html) if is_notes(&html.literal) => {
-                    let new_state = Self::GridNotes {
-                        fm: fm.clone(),
-                        title: title.clone(),
-                        cells: cells.clone(),
-                        notes: InnerContent::default(),
-                    };
-                    *self = new_state;
-                }
-                NodeValue::Heading(_) if title.is_none() => {
-                    *title = Some(extract_node_text(elt));
-                    cells.handle(elt, file_name)?;
-                }
-                _ => cells.handle(elt, file_name)?,
-            },
-            Self::Notes { notes, .. } | Self::GridNotes { notes, .. } => {
+            Self::Notes { notes, .. } => {
                 notes.handle(elt, file_name)?;
             }
         }
@@ -298,29 +184,23 @@ impl SlideContentParser {
     fn front_matter(&self) -> FrontMatter {
         match self {
             Self::Init => FrontMatter::default(),
-            Self::Base { fm, .. }
-            | Self::Grid { fm, .. }
-            | Self::Notes { fm, .. }
-            | Self::GridNotes { fm, .. } => fm.clone(),
+            Self::Base { fm, .. } | Self::Notes { fm, .. } => fm.clone(),
         }
     }
 
     fn title(&self) -> Option<String> {
         match self {
             Self::Init => None,
-            Self::Base { fm, title, .. }
-            | Self::Grid { fm, title, .. }
-            | Self::Notes { fm, title, .. }
-            | Self::GridNotes { fm, title, .. } => fm.title.clone().or_else(|| title.clone()),
+            Self::Base { fm, title, .. } | Self::Notes { fm, title, .. } => {
+                fm.title.clone().or_else(|| title.clone())
+            }
         }
     }
 
     fn notes(&self, renderer: &HtmlRenderer) -> Content {
         match self {
-            Self::Init | Self::Base { .. } | Self::Grid { .. } => Content::Empty,
-            Self::Notes { notes, .. } | Self::GridNotes { notes, .. } => {
-                notes.render_with(renderer)
-            }
+            Self::Init | Self::Base { .. } => Content::Empty,
+            Self::Notes { notes, .. } => notes.render_with(renderer),
         }
     }
 
@@ -328,15 +208,6 @@ impl SlideContentParser {
         match self {
             Self::Init => Content::Empty,
             Self::Base { inner, .. } | Self::Notes { inner, .. } => inner.render_with(renderer),
-            Self::Grid { cells, .. } | Self::GridNotes { cells, .. } => cells.render_with(renderer),
-        }
-    }
-
-    fn step_count(&self) -> usize {
-        match self {
-            Self::Init => 0,
-            Self::Base { inner, .. } | Self::Notes { inner, .. } => inner.step_count(),
-            Self::Grid { cells, .. } | Self::GridNotes { cells, .. } => cells.step_count(),
         }
     }
 
@@ -364,6 +235,8 @@ impl SlideContentParser {
         let style = front_matter.to_style()?;
         let renderer = HtmlRenderer::new(options, plugins, style.clone());
 
+        let body = self.body(&renderer);
+
         let result = Slide {
             kind: SlideKind::Standard,
             style,
@@ -373,9 +246,8 @@ impl SlideContentParser {
                     .or_else(|| name.map(ToString::to_string))
                     .unwrap_or_else(|| DEFAULT_SLIDE_TITLE.to_string()),
             },
-            body: self.body(&renderer),
+            body,
             notes: self.notes(&renderer),
-            step_count: self.step_count(),
         };
 
         Ok((result, front_matter))
@@ -449,32 +321,6 @@ Content here."#;
 
         assert_eq!(front_matter.title, Some("Frontmatter Title".to_string()));
         assert_eq!(front_matter.classes, vec!["custom-class"]);
-        assert!(!front_matter.grid);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_grid_parsing() -> Result<()> {
-        let markdown = r"+++
-grid = true
-+++
-
-# Grid Title
-
-<!-- cell -->
-First cell content
-
-<!-- cell -->
-Second cell content";
-
-        let (slide, front_matter) = parse_markdown_content(markdown)?;
-
-        assert!(front_matter.grid);
-        if let Content::Html { raw, .. } = slide.body {
-            assert!(raw.contains("cell-0"));
-            assert!(raw.contains("cell-1"));
-        }
 
         Ok(())
     }
@@ -535,31 +381,6 @@ Highlighted content.";
         if let Content::Html { raw, .. } = slide.body {
             assert!(raw.contains("highlight"));
         }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_grid_with_notes() -> Result<()> {
-        let markdown = r"+++
-grid = true
-+++
-
-# Grid with Notes
-
-<!-- cell -->
-Cell 1
-
-<!-- cell -->
-Cell 2
-
-<!-- notes -->
-Grid notes here.";
-
-        let (slide, front_matter) = parse_markdown_content(markdown)?;
-
-        assert!(front_matter.grid);
-        assert!(matches!(slide.notes, Content::Html { .. }));
 
         Ok(())
     }
@@ -764,20 +585,6 @@ Before any code.
 Some explanation between code blocks.
 
 <!-- code:javascript:{js_path} -->
-
-## Grid Example
-
-+++
-grid = true
-+++
-
-<!-- cell -->
-Cell 1 content
-
-<!-- code:rust:{rust_path} -->
-
-<!-- cell -->
-Cell 2 with regular content
 
 ## With Pauses
 

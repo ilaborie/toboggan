@@ -1,4 +1,4 @@
-use toboggan_core::{Content, Slide, SlideKind, Style, Talk};
+use toboggan_core::{Content, Slide, SlideKind, Talk};
 
 use crate::error::Result;
 
@@ -32,15 +32,6 @@ fn render_content(content: &Content, wrapper: Option<&str>) -> String {
         Content::Empty => String::new(),
         Content::Text { text } => escape_html(text),
         Content::Html { raw, .. } => raw.clone(),
-        Content::Grid { style, cells } => {
-            let Style { classes, .. } = style;
-            let classes = classes.join(" ");
-            let body: String = cells
-                .iter()
-                .map(|content| render_content(content, None))
-                .collect();
-            format!(r#"<div class="cell {classes}">{body}</div>"#)
-        }
     };
 
     if let Some(wrapper) = wrapper {
@@ -159,7 +150,7 @@ pub fn generate_html(talk: &Talk, custom_head_html: Option<&str>) -> Result<Vec<
 
 #[cfg(test)]
 mod tests {
-    use toboggan_core::Date;
+    use toboggan_core::{Date, Style};
 
     use super::*;
 
@@ -198,28 +189,6 @@ mod tests {
     }
 
     #[test]
-    fn test_render_grid_content() {
-        let content = Content::Grid {
-            style: Style {
-                classes: vec!["test-class".to_string()],
-                style: None,
-            },
-            cells: vec![
-                Content::Text {
-                    text: "Cell 1".to_string(),
-                },
-                Content::Text {
-                    text: "Cell 2".to_string(),
-                },
-            ],
-        };
-        let html = render_content(&content, None);
-        assert!(html.contains(r#"<div class="cell test-class">"#));
-        assert!(html.contains("Cell 1"));
-        assert!(html.contains("Cell 2"));
-    }
-
-    #[test]
     fn test_render_content_with_wrapper() {
         let content = Content::Text {
             text: "Hello".to_string(),
@@ -247,7 +216,6 @@ mod tests {
             },
             notes: Content::Empty,
             style: Style::default(),
-            step_count: 0,
         };
         talk.slides.push(slide);
 
