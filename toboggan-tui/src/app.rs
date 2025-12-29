@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use crossterm::event::{self, Event};
 use ratatui::DefaultTerminal;
-use toboggan_client::{TobogganApi, TobogganConfig};
+use toboggan_client::{TobogganApi, TobogganConfig, refetch_talk_and_slides};
 use toboggan_core::{Notification, Slide, TalkResponse};
 use tokio::sync::mpsc;
 use tracing::{debug, info};
@@ -75,21 +75,19 @@ impl App {
 
             // Handle app events
             while let Ok(app_event) = self.event_rx.try_recv() {
-                // Intercept TalkChange to trigger refetch
+                // Intercept TalkChange to trigger refetch using shared utility
                 if let AppEvent::NotificationReceived(ref notification) = app_event
                     && matches!(notification, Notification::TalkChange { .. })
                 {
-                    info!("📝 TalkChange received - spawning refetch task");
+                    info!("TalkChange received - spawning refetch task");
                     let api = self.api.clone();
                     let tx = self.event_tx.clone();
                     tokio::spawn(async move {
-                        match tokio::try_join!(api.talk(), api.slides()) {
+                        match refetch_talk_and_slides(&api).await {
                             Ok((talk, slides)) => {
-                                info!("✅ Talk and slides refetched");
-                                let _ = tx.send(AppEvent::TalkAndSlidesRefetched(
-                                    Box::new(talk),
-                                    slides.slides,
-                                ));
+                                info!("Talk and slides refetched");
+                                let _ = tx
+                                    .send(AppEvent::TalkAndSlidesRefetched(Box::new(talk), slides));
                             }
                             Err(err) => {
                                 let _ =

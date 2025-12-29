@@ -57,7 +57,8 @@ impl ConnectionHandler {
                         ));
                     }
                     CommunicationMessage::TalkChange { state } => {
-                        tracing::info!("📝 Presentation updated");
+                        info!("Presentation updated");
+                        // TalkChange refetch is handled in App using shared refetch_talk_and_slides
                         let _ = event_tx_clone.send(AppEvent::NotificationReceived(
                             Notification::TalkChange { state },
                         ));
