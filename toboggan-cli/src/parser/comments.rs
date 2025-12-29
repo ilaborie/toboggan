@@ -5,14 +5,12 @@ use crate::parser::CssClasses;
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum CommentType {
     Pause(CssClasses),
-    Cell(CssClasses),
     Notes,
     Code { info: String, path: PathBuf },
     Unknown,
 }
 
 const MARKER_PAUSE: &str = "pause";
-const MARKER_CELL: &str = "cell";
 const MARKER_NOTES: &str = "notes";
 const MARKER_CODE: &str = "code";
 
@@ -37,10 +35,6 @@ pub(super) fn parse_comment_content(html: &str) -> CommentType {
         let classes_str = comment_content.trim_start_matches(MARKER_PAUSE);
         let classes = parse_classes(classes_str);
         CommentType::Pause(classes)
-    } else if comment_content.starts_with(MARKER_CELL) {
-        let classes_str = comment_content.trim_start_matches(MARKER_CELL);
-        let classes = parse_classes(classes_str);
-        CommentType::Cell(classes)
     } else if comment_content.to_lowercase().starts_with(MARKER_NOTES) {
         CommentType::Notes
     } else if comment_content.starts_with(MARKER_CODE) {
@@ -90,13 +84,6 @@ pub(super) fn parse_pause(html: &str) -> Option<CssClasses> {
     }
 }
 
-pub(super) fn parse_cell(html: &str) -> Option<CssClasses> {
-    match parse_comment_content(html) {
-        CommentType::Cell(classes) => Some(classes),
-        _ => None,
-    }
-}
-
 pub(super) fn is_notes(html: &str) -> bool {
     matches!(parse_comment_content(html), CommentType::Notes)
 }
@@ -120,14 +107,6 @@ mod tests {
             assert_eq!(classes, vec!["highlight".to_string()]);
         } else {
             panic!("Expected Pause variant");
-        }
-
-        // Test cell comment
-        let cell_comment = "<!-- cell :special -->";
-        if let CommentType::Cell(classes) = parse_comment_content(cell_comment) {
-            assert_eq!(classes, vec!["special".to_string()]);
-        } else {
-            panic!("Expected Cell variant");
         }
 
         // Test notes comment
@@ -182,10 +161,6 @@ mod tests {
         let pause_comment = "<!-- pause :class1 class2 -->";
         let classes = parse_pause(pause_comment).expect("a pause");
         assert_eq!(classes, vec!["class1".to_string(), "class2".to_string()]);
-
-        let cell_comment = "<!-- cell :grid -->";
-        let classes = parse_cell(cell_comment).expect("a cell");
-        assert_eq!(classes, vec!["grid".to_string()]);
 
         let notes_comment = "<!-- notes -->";
         assert!(is_notes(notes_comment));

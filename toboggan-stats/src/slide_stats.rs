@@ -235,14 +235,6 @@ fn analyze_content(content: &Content, strip_counter: bool) -> ContentAnalysis {
                 analysis.words += count_words(alt_text);
             }
         }
-        Content::Grid { cells, style: _ } => {
-            for cell in cells {
-                let nested = analyze_content(cell, strip_counter);
-                analysis.words += nested.words;
-                analysis.bullets += nested.bullets;
-                analysis.images += nested.images;
-            }
-        }
     }
 
     analysis

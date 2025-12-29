@@ -20,10 +20,6 @@ pub enum Content {
         #[serde(skip_serializing_if = "Option::is_none")]
         alt: Option<String>,
     },
-    Grid {
-        cells: Vec<Content>,
-        style: Style,
-    },
 }
 
 impl Content {
@@ -48,12 +44,6 @@ impl Content {
         let raw = raw.into();
         let alt = Some(alt.into());
         Self::Html { raw, alt, style }
-    }
-
-    pub fn grid(cells: impl IntoIterator<Item = Content>) -> Self {
-        let style = Style::default();
-        let cells = Vec::from_iter(cells);
-        Self::Grid { style, cells }
     }
 }
 
@@ -80,19 +70,6 @@ impl Display for Content {
                 } else {
                     write!(fmt, "{raw}")
                 }
-            }
-            Self::Grid { cells, .. } => {
-                let mut first = true;
-                for cell in cells {
-                    if first {
-                        first = false;
-                    } else {
-                        write!(fmt, " - ")?;
-                    }
-
-                    write!(fmt, "{cell}")?;
-                }
-                Ok(())
             }
         }
     }

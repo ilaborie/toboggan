@@ -358,31 +358,6 @@
                 ]
               }
             }
-          },
-          {
-            "type": "object",
-            "required": [
-              "cells",
-              "style",
-              "type"
-            ],
-            "properties": {
-              "cells": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Content"
-                }
-              },
-              "style": {
-                "$ref": "#/components/schemas/Style"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "Grid"
-                ]
-              }
-            }
           }
         ]
       },

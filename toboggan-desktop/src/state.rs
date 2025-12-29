@@ -30,11 +30,6 @@ fn content_to_markdown_text(content: &Content) -> String {
         Content::Empty => String::new(),
         Content::Text { text } => text.clone(),
         Content::Html { raw, alt, .. } => alt.as_ref().unwrap_or(raw).clone(),
-        Content::Grid { cells, .. } => cells
-            .iter()
-            .map(content_to_markdown_text)
-            .collect::<Vec<_>>()
-            .join("\n\n"),
     }
 }
 

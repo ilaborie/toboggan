@@ -348,7 +348,7 @@ impl TalkService {
             Content::Text { text } => text.to_lowercase(),
             Content::Html { alt: Some(alt), .. } => alt.to_lowercase(),
             Content::Html { raw, .. } => raw.to_lowercase(),
-            _ => return None,
+            Content::Empty => return None,
         };
 
         slides.iter().position(|slide| {
@@ -356,7 +356,7 @@ impl TalkService {
                 Content::Text { text } => text.to_lowercase(),
                 Content::Html { alt: Some(alt), .. } => alt.to_lowercase(),
                 Content::Html { raw, .. } => raw.to_lowercase(),
-                _ => String::new(),
+                Content::Empty => String::new(),
             };
             slide_text == title_text
         })

@@ -39,7 +39,6 @@ pub struct FrontMatter {
     pub skip: bool,
     pub date: Option<String>,
     pub classes: CssClasses,
-    pub grid: bool,
     pub style: Option<String>,
 
     #[serde(

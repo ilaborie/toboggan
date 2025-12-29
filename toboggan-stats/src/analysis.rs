@@ -94,7 +94,6 @@ pub fn strip_slide_counter(text: &str) -> String {
 pub fn count_steps_from_content(content: &Content) -> usize {
     match content {
         Content::Html { raw, .. } => HtmlDocument::parse_fragment(raw).count_steps(),
-        Content::Grid { cells, .. } => cells.iter().map(count_steps_from_content).sum(),
         Content::Empty | Content::Text { .. } => 0,
     }
 }
