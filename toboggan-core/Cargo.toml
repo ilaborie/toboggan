@@ -19,7 +19,7 @@ test-utils = []
 [dependencies]
 jiff = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
-slotmap = { workspace = true }
+slotmap = { workspace = true, features = ["serde"] }
 derive_more = { workspace = true, features = ["add", "from", "deref"] }
 humantime = { workspace = true }
 getrandom = { workspace = true }

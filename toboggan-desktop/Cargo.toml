@@ -10,9 +10,10 @@ authors.workspace = true
 [dependencies]
 toboggan-core = { path = "../toboggan-core", features = ["std"] }
 toboggan-client = { path = "../toboggan-client" }
-toboggan-stats = { path = "../toboggan-stats" }
 
-iced = { workspace = true }
+iced = { workspace = true, features = ["tokio", "advanced", "markdown", "highlighter", "image"] }
+# Force naga termcolor feature - see https://github.com/gfx-rs/wgpu/pull/7482
+naga = { version = "27", features = ["termcolor"] }
 lucide-icons = { workspace = true }
 
 tokio = { workspace = true, features = ["full"] }

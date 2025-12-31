@@ -26,6 +26,7 @@ pub async fn launch(settings: Settings) -> anyhow::Result<()> {
     let talk = load_talk(talk).await.context("Loading talk")?;
 
     let addr = SocketAddr::from((host, port));
+    info!(?addr, "Using address");
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .with_context(|| format!("Connecting to {addr} ..."))?;

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use toboggan_client::{TobogganClientCore, TobogganWebsocketConfig};
-use toboggan_core::Slide as CoreSlide;
+use toboggan_core::{Slide as CoreSlide, TalkResponse};
 use tokio::runtime::Runtime;
 use tokio::sync::{Mutex, watch};
 
@@ -34,6 +34,9 @@ pub struct ClientConfig {
 pub struct TobogganClient {
     // Watch receiver for slides (shared with notification adapter)
     slides_rx: watch::Receiver<Arc<[CoreSlide]>>,
+
+    // Watch receiver for talk (for step counts)
+    talk_rx: watch::Receiver<Option<TalkResponse>>,
 
     // Core client
     core: Mutex<TobogganClientCore<NotificationAdapter>>,
@@ -75,23 +78,26 @@ impl TobogganClient {
             max_retry_delay: retry_delay * max_retries,
         };
 
-        // Create watch channel for slides (shared between core and adapter)
+        // Create watch channels for slides and talk (shared between core and adapter)
         let (slides_tx, slides_rx) = watch::channel::<Arc<[CoreSlide]>>(Arc::from([]));
+        let (talk_tx, talk_rx) = watch::channel::<Option<TalkResponse>>(None);
 
-        // Create notification adapter with slides receiver
-        let adapter = NotificationAdapter::new(handler, slides_rx.clone());
+        // Create notification adapter with slides and talk receivers
+        let adapter = NotificationAdapter::new(handler, slides_rx.clone(), talk_rx.clone());
 
         // Create API URL (trim trailing slash)
         let api_url = url.trim_end_matches('/');
 
-        // Create core client with external slides channel
-        let core = TobogganClientCore::new_with_slides_channel(
+        // Create core client with external channels
+        let core = TobogganClientCore::new_with_external_channels(
             api_url,
             websocket_config,
             client_name,
             adapter,
             slides_tx,
             slides_rx.clone(),
+            talk_tx,
+            talk_rx.clone(),
         );
 
         // Create tokio runtime
@@ -102,6 +108,7 @@ impl TobogganClient {
 
         Self {
             slides_rx,
+            talk_rx,
             core: Mutex::new(core),
             runtime,
         }
@@ -143,11 +150,21 @@ impl TobogganClient {
         self.runtime.block_on(async {
             let core = self.core.lock().await;
             let state = core.get_state()?;
+            let step_counts = self
+                .talk_rx
+                .borrow()
+                .as_ref()
+                .map(|talk| talk.step_counts.clone())
+                .unwrap_or_default();
             let slides: Vec<Slide> = self
                 .slides_rx
                 .borrow()
                 .iter()
-                .map(|slide| Slide::from(slide.clone()))
+                .enumerate()
+                .map(|(i, slide)| {
+                    let step_count = step_counts.get(i).copied().unwrap_or(0);
+                    Slide::from_core_slide(slide, step_count)
+                })
                 .collect();
             if slides.is_empty() {
                 return None;
@@ -159,10 +176,17 @@ impl TobogganClient {
     /// Get a slide by index.
     #[must_use]
     pub fn get_slide(&self, index: u32) -> Option<Slide> {
+        let step_counts = self
+            .talk_rx
+            .borrow()
+            .as_ref()
+            .map(|talk| talk.step_counts.clone())
+            .unwrap_or_default();
+        let step_count = step_counts.get(index as usize).copied().unwrap_or(0);
         let slides = self.slides_rx.borrow();
         slides
             .get(index as usize)
-            .map(|slide| Slide::from(slide.clone()))
+            .map(|slide| Slide::from_core_slide(slide, step_count))
     }
 
     /// Get the current talk metadata.

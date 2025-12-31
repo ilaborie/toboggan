@@ -17,7 +17,7 @@ derive_more = { workspace = true, features = ["from", "error", "display"] }
 
 # Async dependencies (always available now)
 tokio = { workspace = true, features = ["sync", "time", "macros"] }
-tokio-tungstenite = { workspace = true }
+tokio-tungstenite = { workspace = true, features = ["connect", "rustls-tls-native-roots"] }
 futures = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 

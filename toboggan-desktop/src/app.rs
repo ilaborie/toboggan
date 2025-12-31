@@ -222,6 +222,10 @@ impl App {
             slides: vec![], // We'll load slides separately
         };
         self.state.talk = Some(talk);
+        // Store step counts from server
+        self.state
+            .step_counts
+            .clone_from(&talk_response.step_counts);
         Task::none()
     }
 
@@ -247,6 +251,11 @@ impl App {
 
         // Store all slides in the Vec
         self.state.slides.clone_from(&slides_response.slides);
+
+        // Store step counts from server
+        self.state
+            .step_counts
+            .clone_from(&talk_response.step_counts);
 
         // Parse and cache markdown for all slides
         self.state.cached_markdown = parse_slides_markdown(&slides_response.slides);
@@ -276,6 +285,11 @@ impl App {
         };
         self.state.talk = Some(talk);
         self.state.slides.clone_from(&slides_response.slides);
+
+        // Store step counts from server
+        self.state
+            .step_counts
+            .clone_from(&talk_response.step_counts);
 
         // Parse and cache markdown for all slides
         self.state.cached_markdown = parse_slides_markdown(&slides_response.slides);

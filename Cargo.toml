@@ -37,18 +37,18 @@ tracing-subscriber = "0.3.22"
 clap = "4.5.53"
 anyhow = "1.0.100"
 serde_json = "1.0.148"
-serde-saphyr = "0.0.11"
+serde-saphyr = "0.0.12"
 tower-http = "0.6.8"
 futures = "0.3.31"
 dashmap = "6.1.0"
-slotmap = { version = "1.1.1", features = ["serde"] }
+slotmap = "1.1.1"
 
 # OpenAPI dependencies
 utoipa = "5.4.0"
 utoipa-scalar = "0.3.0"
 
 # Dev dependencies
-clawspec-core = "0.3.0"
+clawspec-core = "0.4.1"
 tempfile = "3.24.0"
 
 # Other dependencies
@@ -57,9 +57,9 @@ miette = "7.6.0"
 comfy-table = "7.2.1"
 
 # Desktop dependencies
-iced = { version = "0.14.0", features = ["tokio", "advanced", "markdown", "highlighter", "image"] }
-tokio-tungstenite = { version = "0.28.0", default-features = false, features = ["connect", "rustls-tls-native-roots"] }
-reqwest = { version = "0.12.28", default-features = false, features = ["json", "rustls-tls"] }
+iced = "0.14.0"
+tokio-tungstenite = { version = "0.28.0", default-features = false }
+reqwest = { version = "0.13.1", default-features = false }
 lucide-icons = "0.562.0"
 async-stream = "0.3.6"
 

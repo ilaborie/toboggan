@@ -103,6 +103,38 @@ impl<H: NotificationHandler + 'static> TobogganClientCore<H> {
         )
     }
 
+    /// Create a new client core with external slides and talk channels.
+    ///
+    /// This variant is useful when the handler needs access to both slides
+    /// and talk data (e.g., for step counts in mobile).
+    #[must_use]
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_external_channels(
+        api_url: &str,
+        websocket_config: TobogganWebsocketConfig,
+        client_name: impl Into<String>,
+        handler: H,
+        slides_tx: watch::Sender<Arc<[Slide]>>,
+        slides_rx: watch::Receiver<Arc<[Slide]>>,
+        talk_tx: watch::Sender<Option<TalkResponse>>,
+        talk_rx: watch::Receiver<Option<TalkResponse>>,
+    ) -> Self {
+        let (state_tx, state_rx) = watch::channel(None);
+
+        Self::new_internal(
+            api_url,
+            websocket_config,
+            client_name,
+            handler,
+            talk_tx,
+            talk_rx,
+            slides_tx,
+            slides_rx,
+            state_tx,
+            state_rx,
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn new_internal(
         api_url: &str,

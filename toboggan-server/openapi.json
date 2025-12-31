@@ -745,6 +745,14 @@
               "null"
             ]
           },
+          "step_counts": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Step counts per slide (for clients that display step progress)"
+          },
           "title": {
             "type": "string"
           },

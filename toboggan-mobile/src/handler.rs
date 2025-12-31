@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use toboggan_client::NotificationHandler as CoreNotificationHandler;
-use toboggan_core::{ClientId, Slide as CoreSlide, State as CoreState};
+use toboggan_core::{ClientId, Slide as CoreSlide, State as CoreState, TalkResponse};
 use tokio::sync::watch;
 
 use crate::types::{ConnectionStatus, Slide, State};
@@ -30,6 +30,7 @@ pub trait ClientNotificationHandler: Send + Sync {
 pub struct NotificationAdapter {
     inner: Arc<dyn ClientNotificationHandler>,
     slides_rx: watch::Receiver<Arc<[CoreSlide]>>,
+    talk_rx: watch::Receiver<Option<TalkResponse>>,
 }
 
 impl NotificationAdapter {
@@ -37,22 +38,31 @@ impl NotificationAdapter {
     pub fn new(
         handler: Arc<dyn ClientNotificationHandler>,
         slides_rx: watch::Receiver<Arc<[CoreSlide]>>,
+        talk_rx: watch::Receiver<Option<TalkResponse>>,
     ) -> Self {
         Self {
             inner: handler,
             slides_rx,
+            talk_rx,
         }
     }
 
-    /// Get slides for state conversion.
-    ///
-    /// This uses `watch::Receiver::borrow()` which never fails,
-    /// eliminating the previous `try_lock()` code smell.
+    /// Get slides for state conversion, using step counts from talk.
     fn get_slides(&self) -> Vec<Slide> {
+        let step_counts = self
+            .talk_rx
+            .borrow()
+            .as_ref()
+            .map(|talk| talk.step_counts.clone())
+            .unwrap_or_default();
         self.slides_rx
             .borrow()
             .iter()
-            .map(|slide| Slide::from(slide.clone()))
+            .enumerate()
+            .map(|(i, slide)| {
+                let step_count = step_counts.get(i).copied().unwrap_or(0);
+                Slide::from_core_slide(slide, step_count)
+            })
             .collect()
     }
 }

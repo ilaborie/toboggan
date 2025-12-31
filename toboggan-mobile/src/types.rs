@@ -8,7 +8,6 @@ use toboggan_core::{
     Command as CoreCommand, Slide as CoreSlide, SlideKind as CoreSlideKind, State as CoreState,
     TalkResponse,
 };
-use toboggan_stats::SlideStats;
 
 // ============================================================================
 // Talk
@@ -62,12 +61,11 @@ pub struct Slide {
     pub step_count: u32,
 }
 
-impl From<CoreSlide> for Slide {
-    fn from(value: CoreSlide) -> Self {
-        // Compute step count using toboggan-stats
-        let step_count = SlideStats::from_slide(&value).steps;
-
-        #[allow(clippy::cast_possible_truncation)]
+impl Slide {
+    /// Create a Slide from a `CoreSlide` with step count from server.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn from_core_slide(value: &CoreSlide, step_count: usize) -> Self {
         // UniFFI requires u32, step counts are typically small
         Self {
             title: value.title.to_string(),

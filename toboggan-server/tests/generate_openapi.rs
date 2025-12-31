@@ -123,7 +123,7 @@ async fn should_generate_openapi() -> anyhow::Result<()> {
 
     // Test all endpoints to generate comprehensive OpenAPI spec
     basic_api_operations(&mut app).await?;
-    test_command_operations(&mut app).await?;
+    Box::pin(test_command_operations(&mut app)).await?;
     demonstrate_websocket_endpoint(&mut app).await?;
 
     // Generate and save OpenAPI specification

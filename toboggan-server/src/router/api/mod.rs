@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use toboggan_core::{
     ClientsResponse, Command, Notification, SlideId, SlidesResponse, TalkResponse,
 };
+use toboggan_stats::SlideStats;
 use tracing::{info, warn};
 
 use crate::TobogganState;
@@ -26,7 +27,17 @@ pub(super) async fn get_talk(
     Query(param): Query<TalkParam>,
 ) -> impl IntoResponse {
     let talk = talk_service.talk().await;
+
+    // Calculate step counts from slides before converting to response
+    let step_counts: Vec<usize> = talk
+        .slides
+        .iter()
+        .map(|slide| SlideStats::from_slide(slide).steps)
+        .collect();
+
     let mut result = TalkResponse::from(talk);
+    result.step_counts = step_counts;
+
     if !param.footer {
         result.footer.take();
     }

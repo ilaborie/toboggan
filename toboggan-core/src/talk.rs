@@ -65,6 +65,9 @@ pub struct TalkResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub head: Option<String>,
     pub titles: Vec<String>,
+    /// Step counts per slide (for clients that display step progress)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub step_counts: Vec<usize>,
 }
 
 impl Default for TalkResponse {
@@ -75,6 +78,7 @@ impl Default for TalkResponse {
             footer: None,
             head: None,
             titles: vec![],
+            step_counts: vec![],
         }
     }
 }
@@ -96,6 +100,7 @@ impl From<Talk> for TalkResponse {
             footer,
             head,
             titles,
+            step_counts: vec![], // Populated by server with SlideStats
         }
     }
 }

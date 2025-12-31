@@ -22,7 +22,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = {workspace = true}
 tower-http = { workspace = true, features = ["trace", "cors", "fs"] }
 futures = { workspace = true }
-slotmap = { workspace = true }
+slotmap = { workspace = true, features = ["serde"] }
 derive_more = { workspace = true, features = ["display",  "error"]}
 utoipa = { workspace = true }
 utoipa-scalar = { workspace = true, features = ["axum"] }
@@ -34,7 +34,7 @@ notify = { workspace = true }
 toboggan-core = { path = "../toboggan-core", features = ["openapi", "test-utils"] }
 clawspec-core = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-tokio-tungstenite = { workspace = true }
+tokio-tungstenite = { workspace = true, features = ["connect", "rustls-tls-native-roots"] }
 
 [[test]]
 name = "multi_client_sync"
