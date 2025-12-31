@@ -1,0 +1,41 @@
+/* Toboggan Slide CSS */
+.toboggan-presentation {
+    font-family: system-ui, sans-serif;
+}
+
+.toboggan-slide {
+    min-height: 100vh;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.toboggan-slide header {
+    font-size: 2rem;
+    font-weight: bold;
+    margin-bottom: 1rem;
+}
+
+.toboggan-slide main {
+    flex: 1;
+}
+
+.toboggan-slide.cover {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+}
+
+.toboggan-slide.part {
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+/* Print styles */
+@media print {
+    .toboggan-slide {
+        page-break-after: always;
+    }
+}

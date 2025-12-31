@@ -1,0 +1,39 @@
+[package]
+name = "toboggan-editor"
+version = "0.1.0"
+description = "GPUI-based slide editor for Toboggan presentations"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+# Core
+toboggan-core = { path = "../toboggan-core", features = ["std"] }
+toboggan-stats = { path = "../toboggan-stats" }
+
+# GPUI
+gpui = { workspace = true }
+gpui-component = { workspace = true }
+
+# Serialization
+serde = { workspace = true, features = ["derive"] }
+schemars = "0.8"
+toml = { workspace = true }
+serde_json = { workspace = true }
+
+# Utilities
+jiff = { workspace = true, features = ["std"] }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# File dialogs
+rfd = { workspace = true }
+
+# HTML rendering
+html-escape = { workspace = true }
+chrono = "0.4.42"
+
+[lints]
+workspace = true
