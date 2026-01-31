@@ -27,11 +27,43 @@ pub struct Talk(TalkResponse);
 #[pymethods]
 impl Talk {
     fn __repr__(&self) -> String {
-        format!("{:?}", self.0)
+        let title = &self.0.title;
+        let date = &self.0.date;
+        let slide_count = self.0.titles.len();
+        let footer = self
+            .0
+            .footer
+            .as_ref()
+            .map_or(String::new(), |f| format!("\n  footer: {f}"));
+        format!("Talk(\"{title}\", {date}, {slide_count} slides){footer}")
     }
 
     fn __str__(&self) -> String {
         self.0.title.clone()
+    }
+
+    /// The presentation title.
+    #[getter]
+    fn title(&self) -> &str {
+        &self.0.title
+    }
+
+    /// The presentation date.
+    #[getter]
+    fn date(&self) -> String {
+        self.0.date.to_string()
+    }
+
+    /// The optional footer text.
+    #[getter]
+    fn footer(&self) -> Option<&str> {
+        self.0.footer.as_deref()
+    }
+
+    /// The slide titles.
+    #[getter]
+    fn titles(&self) -> Vec<String> {
+        self.0.titles.clone()
     }
 }
 
@@ -41,14 +73,25 @@ pub struct Slides(SlidesResponse);
 
 #[pymethods]
 impl Slides {
-    fn __str__(&self) -> String {
-        let titles = self
+    fn __repr__(&self) -> String {
+        let count = self.0.slides.len();
+        let slides = self
             .0
             .slides
             .iter()
-            .map(|slide| slide.to_string())
-            .collect::<Vec<_>>();
-        format!("{titles:?}")
+            .enumerate()
+            .map(|(i, slide)| format!("  {}: {slide}", i + 1))
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!("Slides({count}):\n{slides}")
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+
+    fn __len__(&self) -> usize {
+        self.0.slides.len()
     }
 }
 
@@ -59,7 +102,61 @@ pub struct State(TState);
 #[pymethods]
 impl State {
     fn __repr__(&self) -> String {
-        format!("{:?}", self.0)
+        match &self.0 {
+            TState::Init => "State(Init)".to_string(),
+            TState::Running {
+                current,
+                current_step,
+            } => format!("State(Running, slide: {current}, step: {current_step})"),
+            TState::Done {
+                current,
+                current_step,
+            } => format!("State(Done, slide: {current}, step: {current_step})"),
+        }
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+
+    /// Whether the presentation is in the initial state.
+    #[getter]
+    fn is_init(&self) -> bool {
+        matches!(self.0, TState::Init)
+    }
+
+    /// Whether the presentation is currently running.
+    #[getter]
+    fn is_running(&self) -> bool {
+        matches!(self.0, TState::Running { .. })
+    }
+
+    /// Whether the presentation is finished.
+    #[getter]
+    fn is_done(&self) -> bool {
+        matches!(self.0, TState::Done { .. })
+    }
+
+    /// The current slide number (1-indexed), or None if not started.
+    #[getter]
+    fn slide(&self) -> Option<usize> {
+        match &self.0 {
+            TState::Init => None,
+            TState::Running { current, .. } | TState::Done { current, .. } => {
+                Some(current.index() + 1)
+            }
+        }
+    }
+
+    /// The current step within the slide, or None if not started.
+    #[getter]
+    fn step(&self) -> Option<usize> {
+        match &self.0 {
+            TState::Init => None,
+            TState::Running { current_step, .. } | TState::Done { current_step, .. } => {
+                Some(*current_step)
+            }
+        }
     }
 }
 
