@@ -7,7 +7,7 @@ use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::try_join;
 
 use toboggan_client::{CommunicationMessage, TobogganApi, TobogganConfig, WebSocketClient};
-use toboggan_core::{Command, SlidesResponse, State as TState, TalkResponse};
+use toboggan_core::{ClientConfig, Command, SlidesResponse, State as TState, TalkResponse};
 
 /// Toboggan for Python
 #[pymodule]
@@ -173,12 +173,12 @@ impl Toboggan {
 
     /// Navigates to the previous slide.
     pub fn previous(&self) {
-        self.send(Command::Previous);
+        self.send(Command::PreviousSlide);
     }
 
     /// Navigates to the next slide.
     pub fn next(&self) {
-        self.send(Command::Next);
+        self.send(Command::NextSlide);
     }
 
     pub fn __repr__(&self) -> String {
@@ -239,6 +239,15 @@ async fn handle_state(
             }
             CommunicationMessage::Error { error } => {
                 eprintln!("🚨 Oops: {error}");
+            }
+            CommunicationMessage::Registered { client_id } => {
+                println!("🆔 Registered with id: {client_id:?}");
+            }
+            CommunicationMessage::ClientConnected { client_id, name } => {
+                println!("👤 Client connected: {name} ({client_id:?})");
+            }
+            CommunicationMessage::ClientDisconnected { client_id, name } => {
+                println!("👋 Client disconnected: {name} ({client_id:?})");
             }
         }
     }
