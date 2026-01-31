@@ -21,7 +21,5 @@ cargo = { binstall = true }
 "npm:vite" = "latest"
 "npm:wasm-opt" = "latest"
 swiftlint = "latest"
-"pipx:esptool" = "latest"
-"cargo:espup" = "latest"
 "npm:@stoplight/spectral-cli" = "latest"
 "cargo:cargo-ndk" = "latest"
