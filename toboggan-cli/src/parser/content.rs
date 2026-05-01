@@ -72,9 +72,9 @@ impl InnerContent {
         };
 
         if let Some((next, _)) = &mut self.next_step {
-            next.push_str(&md);
+            append_md_block(next, &md);
         } else {
-            self.before_steps.push_str(&md);
+            append_md_block(&mut self.before_steps, &md);
         }
 
         Ok(())
@@ -89,6 +89,17 @@ impl InnerContent {
             .collect();
         renderer.render_steps(&self.before_steps, &all_steps)
     }
+}
+
+/// Appends a markdown block to `dest`, ensuring a blank-line separator when
+/// `dest` already has content. This is necessary because `format_commonmark`
+/// on individual AST nodes emits a single trailing `\n`, so consecutive
+/// blockquote blocks would otherwise merge into one on re-parse.
+fn append_md_block(dest: &mut String, block: &str) {
+    if !dest.is_empty() && !block.is_empty() {
+        dest.push('\n');
+    }
+    dest.push_str(block);
 }
 
 #[derive(Debug, Clone)]

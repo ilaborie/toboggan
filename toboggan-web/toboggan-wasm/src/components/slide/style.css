@@ -222,3 +222,47 @@ section.wide {
 	min-height: calc(100% - 0.25rem);
 	max-height: calc(100% - 0.25rem);
 }
+
+/* GitHub-flavored Markdown alert blocks */
+.markdown-alert {
+	border-left: 0.25em solid var(--alert-clr, currentColor);
+	border-radius: 0 0.25em 0.25em 0;
+	padding: 0.5em 1em;
+	margin: 0.5em 0;
+	background-color: color-mix(in srgb, var(--alert-clr, currentColor) 10%, transparent);
+
+	.markdown-alert-title {
+		font-weight: bold;
+		font-size: 0.85em;
+		margin: 0 0 0.4em;
+		color: var(--alert-clr, inherit);
+		display: flex;
+		align-items: center;
+		gap: 0.4em;
+	}
+}
+
+.markdown-alert-note {
+	--alert-clr: #1f6feb;
+	.markdown-alert-title::before { content: "ⓘ "; }
+}
+
+.markdown-alert-tip {
+	--alert-clr: #1a7f37;
+	.markdown-alert-title::before { content: "✔ "; }
+}
+
+.markdown-alert-important {
+	--alert-clr: #8250df;
+	.markdown-alert-title::before { content: "❗ "; }
+}
+
+.markdown-alert-warning {
+	--alert-clr: #9a6700;
+	.markdown-alert-title::before { content: "⚠ "; }
+}
+
+.markdown-alert-caution {
+	--alert-clr: #cf222e;
+	.markdown-alert-title::before { content: "⛔ "; }
+}
