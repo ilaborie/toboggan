@@ -576,6 +576,19 @@
               "type": "Empty"
             }
           },
+          "body_source": {
+            "type": "string",
+            "description": "Raw markdown source of the slide body, used by non-HTML exporters.",
+            "default": ""
+          },
+          "hidden_in": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RenderTarget"
+            },
+            "description": "Targets this slide should be excluded from. Empty means visible everywhere.",
+            "default": []
+          },
           "kind": {
             "oneOf": [
               {

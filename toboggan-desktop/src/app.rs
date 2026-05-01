@@ -88,6 +88,7 @@ impl App {
 
             Message::SlideLoaded(id, slide) => {
                 debug!("Slide loaded: {}", id);
+                let slide = *slide;
                 if let Some(existing_slide) = self.state.slides.get_mut(id) {
                     *existing_slide = slide;
                 } else {

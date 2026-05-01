@@ -89,6 +89,14 @@ impl InnerContent {
             .collect();
         renderer.render_steps(&self.before_steps, &all_steps)
     }
+
+    fn source(&self) -> String {
+        let mut result = self.before_steps.clone();
+        for (step, _) in self.steps.iter().chain(self.next_step.iter()) {
+            append_md_block(&mut result, step);
+        }
+        result
+    }
 }
 
 /// Appends a markdown block to `dest`, ensuring a blank-line separator when
@@ -255,6 +263,13 @@ impl SlideContentParser {
         }
     }
 
+    fn body_source(&self) -> String {
+        match self {
+            Self::Init => String::new(),
+            Self::Base { inner, .. } | Self::Notes { inner, .. } => inner.source(),
+        }
+    }
+
     pub fn parse<'a, I>(
         mut self,
         iterator: I,
@@ -292,6 +307,8 @@ impl SlideContentParser {
             },
             body,
             notes: self.notes(&renderer),
+            body_source: self.body_source(),
+            hidden_in: front_matter.hidden_in.clone(),
             terminals: self
                 .terminals()
                 .into_iter()
@@ -689,6 +706,46 @@ End of notes."
             panic!("Expected HTML content in slide notes");
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_body_source_populated() -> Result<()> {
+        let markdown = "# Title\n\nSome content.\n\n```rust\nlet x = 1;\n```\n";
+        let (slide, _) = parse_markdown_content(markdown)?;
+
+        assert!(
+            !slide.body_source.is_empty(),
+            "body_source should be populated"
+        );
+        assert!(
+            slide.body_source.contains("Some content"),
+            "body_source contains paragraph"
+        );
+        assert!(
+            slide.body_source.contains("let x = 1"),
+            "body_source contains code block"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_hidden_in_propagated_from_frontmatter() -> Result<()> {
+        use toboggan_core::RenderTarget;
+
+        let markdown = "+++\nhidden_in = [\"pdf\"]\n+++\n\n# Title\n\nContent.";
+        let (slide, _) = parse_markdown_content(markdown)?;
+
+        assert_eq!(slide.hidden_in, vec![RenderTarget::Pdf]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_hidden_in_default_empty() -> Result<()> {
+        let markdown = "# Title\n\nContent.";
+        let (slide, _) = parse_markdown_content(markdown)?;
+
+        assert!(slide.hidden_in.is_empty(), "hidden_in defaults to empty");
         Ok(())
     }
 }

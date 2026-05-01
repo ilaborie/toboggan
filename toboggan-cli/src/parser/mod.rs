@@ -5,7 +5,7 @@ use std::time::Duration;
 use comrak::arena_tree::Node;
 use comrak::nodes::Ast;
 use serde::{Deserialize, Deserializer, Serialize};
-use toboggan_core::{Date, Style};
+use toboggan_core::{Date, RenderTarget, Style};
 
 use crate::ParseResult;
 use crate::error::Result;
@@ -17,7 +17,8 @@ mod renderer;
 use self::renderer::{ContentRenderer, HtmlRenderer};
 
 mod config;
-use self::config::{create_syntax_highlighter, default_options, default_plugins};
+pub(crate) use self::config::default_options;
+use self::config::{create_syntax_highlighter, default_plugins};
 
 mod comments;
 mod directory;
@@ -47,6 +48,9 @@ pub struct FrontMatter {
         deserialize_with = "deserialize_duration"
     )]
     pub duration: Option<Duration>,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hidden_in: Vec<RenderTarget>,
 }
 
 impl FrontMatter {
@@ -428,5 +432,41 @@ title = "Test Slide"
 "#;
         let frontmatter: FrontMatter = toml::from_str(toml_content).expect("TOML should parse");
         assert_eq!(frontmatter.duration, None);
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod hidden_in_tests {
+    use toboggan_core::RenderTarget;
+
+    use super::*;
+
+    #[test]
+    fn test_hidden_in_pdf() {
+        let toml = r#"hidden_in = ["pdf"]"#;
+        let fm: FrontMatter = toml::from_str(toml).expect("parse");
+        assert_eq!(fm.hidden_in, vec![RenderTarget::Pdf]);
+    }
+
+    #[test]
+    fn test_hidden_in_web() {
+        let toml = r#"hidden_in = ["web"]"#;
+        let fm: FrontMatter = toml::from_str(toml).expect("parse");
+        assert_eq!(fm.hidden_in, vec![RenderTarget::Web]);
+    }
+
+    #[test]
+    fn test_hidden_in_both() {
+        let toml = r#"hidden_in = ["web", "pdf"]"#;
+        let fm: FrontMatter = toml::from_str(toml).expect("parse");
+        assert_eq!(fm.hidden_in, vec![RenderTarget::Web, RenderTarget::Pdf]);
+    }
+
+    #[test]
+    fn test_hidden_in_default_empty() {
+        let toml = r#"title = "Test""#;
+        let fm: FrontMatter = toml::from_str(toml).expect("parse");
+        assert!(fm.hidden_in.is_empty());
     }
 }

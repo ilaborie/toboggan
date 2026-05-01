@@ -62,6 +62,20 @@ impl From<SlideId> for usize {
     }
 }
 
+/// Rendering targets for per-slide visibility control.
+///
+/// Used with `hidden_in` on a slide to exclude it from specific outputs.
+/// An empty list means the slide is visible in all targets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum RenderTarget {
+    /// Web / HTML output
+    Web,
+    /// PDF output (Typst)
+    Pdf,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(default)]
@@ -76,6 +90,12 @@ pub struct Slide {
     pub notes: Content,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub terminals: Vec<TerminalConfig>,
+    /// Raw markdown source of the slide body, used by non-HTML exporters.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub body_source: String,
+    /// Targets this slide should be excluded from. Empty means visible everywhere.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hidden_in: Vec<RenderTarget>,
 }
 
 impl Slide {

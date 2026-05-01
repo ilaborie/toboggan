@@ -15,6 +15,8 @@ pub enum OutputFormat {
     Yaml,
     /// Static HTML file (single file with inlined CSS)
     Html,
+    /// Typst file for PDF compilation (`typst compile output.typ`)
+    Typst,
 }
 
 /// Command-line settings for the Toboggan CLI.
@@ -144,6 +146,7 @@ impl Settings {
                 "json" => return OutputFormat::Json,
                 "yaml" | "yml" => return OutputFormat::Yaml,
                 "html" | "htm" => return OutputFormat::Html,
+                "typ" => return OutputFormat::Typst,
                 _ => {} // Fall through to default
             }
         }

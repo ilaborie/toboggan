@@ -14,6 +14,7 @@ style = "background: linear-gradient(#1a1a2e, #16213e);"
 skip = false
 duration = "2m"
 date = "2026-04-04"
+hidden_in = ["pdf"]
 +++
 ```
 
@@ -27,3 +28,4 @@ date = "2026-04-04"
 | `skip` | bool | Skip this slide |
 | `duration` | string | Time hint (humantime) |
 | `date` | string | Slide date |
+| `hidden_in` | list | Exclude from targets: `"web"`, `"pdf"` |

@@ -6,7 +6,7 @@ use crate::parser::FRONT_MATTER_DELIMITER;
 
 /// Get standardized Markdown parsing options
 #[must_use]
-pub(super) fn default_options() -> Options<'static> {
+pub(crate) fn default_options() -> Options<'static> {
     let mut options = Options::default();
 
     // Enable extensions

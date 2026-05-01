@@ -17,7 +17,7 @@ pub enum Message {
     TalkLoaded(TalkResponse),
     TalkAndSlidesLoaded(TalkResponse, SlidesResponse),
     TalkChangeComplete(TalkResponse, SlidesResponse, State),
-    SlideLoaded(usize, Slide),
+    SlideLoaded(usize, Box<Slide>),
     LoadError(String),
 
     // WebSocket message handling
