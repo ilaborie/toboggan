@@ -276,7 +276,7 @@ impl SlideContentParser {
             title: Content::Text {
                 text: self
                     .title()
-                    .or_else(|| name.map(ToString::to_string))
+                    .or_else(|| name.map(str::to_owned))
                     .unwrap_or_else(|| DEFAULT_SLIDE_TITLE.to_owned()),
             },
             body,

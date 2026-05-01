@@ -120,10 +120,10 @@ pub fn add_counters_to_slides(parse_result: &mut ParseResult) {
                     slide_in_part += 1;
                 }
             }
-            SlideProcessingResult::Skipped(slide) => {
-                if slide.kind == toboggan_core::SlideKind::Part {
-                    in_part = false;
-                }
+            SlideProcessingResult::Skipped(slide)
+                if slide.kind == toboggan_core::SlideKind::Part =>
+            {
+                in_part = false;
             }
             _ => {}
         }

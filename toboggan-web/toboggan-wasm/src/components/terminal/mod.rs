@@ -447,7 +447,7 @@ fn build_terminal_ws_url(api_base_url: &str, config: &TerminalConfig, rows: u16)
 
     let encoded_cwd = String::from(js_sys::encode_uri_component(&config.cwd));
     let mut url =
-        format!("{ws_base}/api/terminal?cwd={encoded_cwd}&cols={DEFAULT_COLS}&rows={rows}",);
+        format!("{ws_base}/api/terminal?cwd={encoded_cwd}&cols={DEFAULT_COLS}&rows={rows}");
 
     if let Some(cmd) = &config.cmd {
         url.push_str("&cmd=");

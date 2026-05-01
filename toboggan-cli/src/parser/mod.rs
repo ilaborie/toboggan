@@ -366,7 +366,7 @@ mod duration_tests {
         );
         assert_eq!(
             humantime::parse_duration("2m").expect("2m should parse"),
-            Duration::from_secs(120)
+            Duration::from_mins(2)
         );
         assert_eq!(
             humantime::parse_duration("1m 30s").expect("1m 30s should parse"),
@@ -374,11 +374,11 @@ mod duration_tests {
         );
         assert_eq!(
             humantime::parse_duration("1h").expect("1h should parse"),
-            Duration::from_secs(3600)
+            Duration::from_hours(1)
         );
         assert_eq!(
             humantime::parse_duration("1h 30m").expect("1h 30m should parse"),
-            Duration::from_secs(5400)
+            Duration::from_mins(90)
         );
         assert_eq!(
             humantime::parse_duration("1h 30m 45s").expect("1h 30m 45s should parse"),
@@ -388,11 +388,11 @@ mod duration_tests {
         // Test additional formats supported by humantime
         assert_eq!(
             humantime::parse_duration("1hour").expect("1hour should parse"),
-            Duration::from_secs(3600)
+            Duration::from_hours(1)
         );
         assert_eq!(
             humantime::parse_duration("2 minutes").expect("2 minutes should parse"),
-            Duration::from_secs(120)
+            Duration::from_mins(2)
         );
         assert_eq!(
             humantime::parse_duration("30 seconds").expect("30 seconds should parse"),
@@ -421,7 +421,7 @@ title = "Test Slide"
 duration = "1 hour 30 minutes"
 "#;
         let frontmatter: FrontMatter = toml::from_str(toml_content).expect("TOML should parse");
-        assert_eq!(frontmatter.duration, Some(Duration::from_secs(5400)));
+        assert_eq!(frontmatter.duration, Some(Duration::from_mins(90)));
 
         let toml_content = r#"
 title = "Test Slide"
