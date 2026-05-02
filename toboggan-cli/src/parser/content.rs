@@ -353,7 +353,10 @@ impl Default for SlideContentParser {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use comrak::{Arena, parse_document};
     use toboggan_core::Content;
 
@@ -735,7 +738,6 @@ End of notes."
         let markdown = "+++\nhidden_in = [\"pdf\"]\n+++\n\n# Title\n\nContent.";
         let (slide, _) = parse_markdown_content(markdown)?;
 
-        use std::collections::BTreeSet;
         assert_eq!(slide.hidden_in, BTreeSet::from([RenderTarget::Pdf]));
         Ok(())
     }

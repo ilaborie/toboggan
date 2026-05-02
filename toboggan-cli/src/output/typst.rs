@@ -75,11 +75,10 @@ fn write_standard(out: &mut String, slide: &Slide) {
 
 fn write_terminal_placeholder(out: &mut String, slide: &Slide) {
     let title = content_to_typst(&slide.title);
-    eprintln!(
-        "warning: slide '{}' has live terminals but is not marked \
-         `hidden_in = [\"pdf\"]` — emitting a placeholder page in the PDF. \
-         Add `hidden_in = [\"pdf\"]` to suppress this.",
-        title
+    tracing::warn!(
+        "slide '{title}' has live terminals but is not marked \
+         `hidden_in = [\"pdf\"]` — emitting a placeholder page in the PDF; \
+         add `hidden_in = [\"pdf\"]` to suppress this"
     );
     let _ = writeln!(
         out,
