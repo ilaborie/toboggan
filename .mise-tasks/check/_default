@@ -9,7 +9,7 @@ echo "🚀 Running comprehensive checks for all platforms..."
 echo "==================== RUST CHECKS ===================="
 mise check:rust
 
-# Run web checks  
+# Run web checks
 echo "==================== WEB CHECKS ====================="
 mise check:web
 

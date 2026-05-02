@@ -8,8 +8,8 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-toboggan-core = {path = "../toboggan-core", features = ["std"]}
-scraper = {workspace = true}
+toboggan-core = { path = "../toboggan-core", features = ["std"] }
+scraper = { workspace = true }
 
 [lints]
 workspace = true

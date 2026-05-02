@@ -6,8 +6,8 @@ use clawspec_core::test_client::{TestClient, TestServer, TestServerConfig};
 use clawspec_core::{ApiClient, register_schemas};
 use serde_json::{Value, json};
 use toboggan_core::{
-    ClientId, Command, Content, Date, Duration, Notification, Slide, SlideId, SlideKind,
-    SlidesResponse, State, Style, Talk, TalkResponse, Timestamp,
+    ClientId, Command, Content, Date, Duration, Notification, RenderTarget, Slide, SlideId,
+    SlideKind, SlidesResponse, State, Style, Talk, TalkResponse, TerminalConfig, Theme, Timestamp,
 };
 use toboggan_server::{
     ClientService, HealthResponse, HealthResponseStatus, TalkService, TobogganState, routes,
@@ -103,12 +103,14 @@ async fn should_generate_openapi() -> anyhow::Result<()> {
     // Register all schemas that have ToSchema implemented
     register_schemas!(
         app,
+        ClientId,
         Content,
         Date,
         Duration,
         HealthResponse,
         HealthResponseStatus,
         Notification,
+        RenderTarget,
         Slide,
         SlideId,
         SlideKind,
@@ -116,8 +118,9 @@ async fn should_generate_openapi() -> anyhow::Result<()> {
         State,
         Style,
         TalkResponse,
+        TerminalConfig,
+        Theme,
         Timestamp,
-        ClientId,
     )
     .await;
 

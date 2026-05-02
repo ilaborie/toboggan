@@ -5,6 +5,7 @@ WebAssembly client for the Toboggan presentation system, providing real-time pre
 ## Features
 
 ### Core Functionality
+
 - **Real-time WebSocket Communication**: Bi-directional communication with Toboggan server
 - **Presentation State Management**: Synchronized presentation state across all clients
 - **Command Processing**: Handle navigation and control commands (Next, Previous, Play, Pause)
@@ -12,6 +13,7 @@ WebAssembly client for the Toboggan presentation system, providing real-time pre
 - **Retry Logic**: Automatic reconnection with exponential backoff
 
 ### Web Integration
+
 - **JavaScript Bindings**: Seamless integration with TypeScript/JavaScript frontends
 - **Browser Compatibility**: Works in all modern browsers with WebAssembly support
 - **Memory Efficiency**: Optimized WASM build with minimal memory footprint
@@ -19,6 +21,7 @@ WebAssembly client for the Toboggan presentation system, providing real-time pre
 - **Performance**: Native-speed execution with Rust's zero-cost abstractions
 
 ### Development Features
+
 - **Hot Reload Support**: Fast development cycles with live rebuilding
 - **Debug Support**: Console logging and error reporting
 - **TypeScript Definitions**: Full type safety for web development
@@ -38,7 +41,7 @@ pub struct TobogganClient {
 impl TobogganClient {
     #[wasm_bindgen(constructor)]
     pub fn new(server_url: String) -> TobogganClient;
-    
+
     pub async fn connect(&self) -> Result<(), JsValue>;
     pub async fn send_command(&self, command: &str) -> Result<(), JsValue>;
     pub fn set_state_callback(&self, callback: js_sys::Function);
@@ -79,12 +82,14 @@ bacon wasm
 ```
 
 **Benefits:**
+
 - **Instant Feedback**: Immediate compilation results on file save
 - **Error Reporting**: Clear error messages with source locations
 - **Build Optimization**: Automatic `wasm-opt` optimization
 - **Size Monitoring**: Track WASM bundle size changes
 
 **Output:**
+
 ```
 ✓ Compiling toboggan-wasm
 ✓ Running wasm-pack build
@@ -95,12 +100,14 @@ bacon wasm
 ### Manual Build Process
 
 #### Option 1: Using Mise (Recommended)
+
 ```bash
 # Build optimized WASM package
 mise build:wasm
 ```
 
 #### Option 2: Direct wasm-pack Build
+
 ```bash
 # Development build (faster, larger)
 wasm-pack build --target web --dev
@@ -110,6 +117,7 @@ wasm-pack build --target web --release
 ```
 
 #### Option 3: Custom Build with Optimization
+
 ```bash
 # Build with maximum optimization
 wasm-pack build --target web --release
@@ -168,28 +176,28 @@ import { TobogganClient } from '../pkg/toboggan_wasm';
 export function PresentationController() {
     const [client, setClient] = useState<TobogganClient | null>(null);
     const [state, setState] = useState<any>(null);
-    
+
     useEffect(() => {
         const initClient = async () => {
             const wasmClient = new TobogganClient('ws://localhost:8080/api/ws');
-            
+
             wasmClient.set_state_callback((newState) => {
                 setState(JSON.parse(newState));
             });
-            
+
             await wasmClient.connect();
             setClient(wasmClient);
         };
-        
+
         initClient().catch(console.error);
     }, []);
-    
+
     const sendCommand = async (command: string) => {
         if (client) {
             await client.send_command(JSON.stringify({ type: command }));
         }
     };
-    
+
     return (
         <div>
             <button onClick={() => sendCommand('Next')}>Next</button>
@@ -209,17 +217,17 @@ import init, { TobogganClient } from './pkg/toboggan_wasm.js';
 async function startPresentation() {
     // Initialize WASM module
     await init();
-    
+
     // Create client
     const client = new TobogganClient('ws://localhost:8080/api/ws');
-    
+
     // Set up state handler
     client.set_state_callback((state) => {
         const parsedState = JSON.parse(state);
-        document.getElementById('slide-counter').textContent = 
+        document.getElementById('slide-counter').textContent =
             `Slide ${parsedState.current + 1}`;
     });
-    
+
     // Connect to server
     try {
         await client.connect();
@@ -227,12 +235,12 @@ async function startPresentation() {
     } catch (error) {
         console.error('Connection failed:', error);
     }
-    
+
     // Set up navigation buttons
     document.getElementById('next-btn').addEventListener('click', () => {
         client.send_command('{"type": "Next"}');
     });
-    
+
     document.getElementById('prev-btn').addEventListener('click', () => {
         client.send_command('{"type": "Previous"}');
     });
@@ -259,11 +267,13 @@ wasm-opt pkg/toboggan_wasm_bg.wasm -Os -o pkg/toboggan_wasm_bg_opt.wasm
 ### Bundle Size Optimization
 
 Current optimized sizes:
+
 - **WASM Binary**: ~180KB (gzipped: ~65KB)
 - **JavaScript Glue**: ~15KB (gzipped: ~5KB)
 - **Total Package**: ~195KB (gzipped: ~70KB)
 
 **Size Reduction Techniques:**
+
 - Conditional compilation for debug features
 - Minimal external dependencies
 - Efficient serialization with `serde`
@@ -307,16 +317,16 @@ wasm-pack test --firefox
 // Example integration test
 describe('Toboggan WASM Client', () => {
     let client;
-    
+
     beforeAll(async () => {
         await init(); // Initialize WASM
         client = new TobogganClient('ws://localhost:8080/api/ws');
     });
-    
+
     test('should connect to server', async () => {
         await expect(client.connect()).resolves.toBeUndefined();
     });
-    
+
     test('should send commands', async () => {
         await expect(
             client.send_command('{"type": "Next"}')

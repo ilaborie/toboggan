@@ -28,11 +28,11 @@ toboggan-client = { path = "../toboggan-client" }
 
 uniffi = { workspace = true, features = ["cli"] }
 tokio = { workspace = true, features = [
-    "rt",
-    "rt-multi-thread",
-    "macros",
-    "sync",
-    "time",
+  "rt",
+  "rt-multi-thread",
+  "macros",
+  "sync",
+  "time",
 ] }
 
 [dev-dependencies]

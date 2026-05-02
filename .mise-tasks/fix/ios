@@ -7,19 +7,19 @@ echo "📱 Running iOS auto-fixes..."
 
 # Fix Swift code with SwiftLint
 if command -v swiftlint >/dev/null 2>&1; then
-    echo "🛠️  Auto-fixing Swift code with SwiftLint..."
-    if [ -d "TobogganApp" ]; then
-        if swiftlint --fix --config .swiftlint.yml; then
-            echo "✅ SwiftLint auto-fix completed successfully"
-        else
-            echo "⚠️  SwiftLint auto-fix failed or SourceKit unavailable, skipping Swift auto-fix"
-            echo "Note: This may happen in CI environments or when Xcode tools are not properly configured"
-        fi
+  echo "🛠️  Auto-fixing Swift code with SwiftLint..."
+  if [ -d "TobogganApp" ]; then
+    if swiftlint --fix --config .swiftlint.yml; then
+      echo "✅ SwiftLint auto-fix completed successfully"
     else
-        echo "ℹ️  No Swift code found in TobogganApp, skipping SwiftLint fix"
+      echo "⚠️  SwiftLint auto-fix failed or SourceKit unavailable, skipping Swift auto-fix"
+      echo "Note: This may happen in CI environments or when Xcode tools are not properly configured"
     fi
+  else
+    echo "ℹ️  No Swift code found in TobogganApp, skipping SwiftLint fix"
+  fi
 else
-    echo "⚠️  SwiftLint not found, skipping Swift auto-fix (install with: mise install swiftlint)"
+  echo "⚠️  SwiftLint not found, skipping Swift auto-fix (install with: mise install swiftlint)"
 fi
 
 echo "✅ All iOS auto-fixes completed!"

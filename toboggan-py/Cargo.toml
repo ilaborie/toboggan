@@ -13,8 +13,10 @@ name = "toboggan_py"
 crate-type = ["cdylib"]
 
 [dependencies]
-toboggan-core = { path = "../toboggan-core", default-features = false, features = ["std"] }
+toboggan-core = { path = "../toboggan-core", default-features = false, features = [
+  "std",
+] }
 toboggan-client = { path = "../toboggan-client" }
 
-pyo3 = {version = "0.28.3", features = ["abi3-py38"] }
+pyo3 = { version = "0.28.3", features = ["abi3-py38"] }
 tokio = { version = "1.51.0", features = ["rt-multi-thread", "sync", "macros"] }

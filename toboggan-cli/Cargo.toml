@@ -17,22 +17,22 @@ name = "toboggan-cli"
 path = "src/main.rs"
 
 [dependencies]
-toboggan-core = {path = "../toboggan-core", features = ["std"]}
-toboggan-stats = {path = "../toboggan-stats"}
+toboggan-core = { path = "../toboggan-core", features = ["std"] }
+toboggan-stats = { path = "../toboggan-stats" }
 
-toml = {workspace = true}
-serde_json = {workspace = true}
-serde-saphyr = {workspace = true}
-tracing = {workspace = true}
+toml = { workspace = true }
+serde_json = { workspace = true }
+serde-saphyr = { workspace = true }
+tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 clap = { workspace = true, features = ["env", "derive"] }
-serde = {workspace = true, features = ["derive"]}
-miette = { workspace =true, features = ["fancy"] }
-derive_more = { workspace =true, features = ["error", "from", "display"]}
-comrak = {workspace = true}
+serde = { workspace = true, features = ["derive"] }
+miette = { workspace = true, features = ["fancy"] }
+derive_more = { workspace = true, features = ["error", "from", "display"] }
+comrak = { workspace = true }
 owo-colors = { workspace = true, features = ["supports-colors"] }
-humantime = {workspace = true}
-comfy-table = {workspace = true}
+humantime = { workspace = true }
+comfy-table = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

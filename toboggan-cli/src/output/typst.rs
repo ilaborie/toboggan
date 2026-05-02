@@ -514,13 +514,19 @@ mod tests {
     fn test_inline_code_with_backtick() {
         // Single backtick in content requires double-backtick delimiter in Typst.
         let result = md_to_typst("Use `` `tick` `` here.");
-        assert!(result.contains("`` `tick` ``"), "double-backtick delimiter used");
+        assert!(
+            result.contains("`` `tick` ``"),
+            "double-backtick delimiter used"
+        );
     }
 
     #[test]
     fn test_inline_code_plain() {
         let result = md_to_typst("Use `foo` here.");
-        assert!(result.contains("`foo`"), "single-backtick for plain inline code");
+        assert!(
+            result.contains("`foo`"),
+            "single-backtick for plain inline code"
+        );
     }
 
     #[test]

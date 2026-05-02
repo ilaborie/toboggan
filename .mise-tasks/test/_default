@@ -9,7 +9,7 @@ echo "🚀 Running comprehensive tests for all platforms..."
 echo "==================== RUST TESTS ====================="
 mise test:rust
 
-# Run web tests  
+# Run web tests
 echo "==================== WEB TESTS ======================"
 mise test:web
 

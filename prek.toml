@@ -2,10 +2,137 @@
 # See https://prek.j178.dev for more information.
 #:schema https://www.schemastore.org/prek.json
 
+fail_fast = true
+
 [[repos]]
 repo = "builtin"
 hooks = [
-    { id = "trailing-whitespace" },
-    { id = "end-of-file-fixer" },
-    { id = "check-added-large-files" },
+  { id = "trailing-whitespace" },
+  { id = "end-of-file-fixer" },
+  { id = "check-added-large-files" },
+  { id = "check-merge-conflict" },
+  { id = "check-case-conflict" },
+  { id = "check-toml" },
+  { id = "check-json", exclude = "^(toboggan-cli/test_slides/data\\.json|.*tsconfig\\.json)$" },
+  { id = "check-yaml" },
+  { id = "check-executables-have-shebangs" },
+  { id = "check-shebang-scripts-are-executable", exclude = "\\.rs$" },
+  { id = "mixed-line-ending", args = [
+    "--fix=lf",
+  ] },
+  { id = "detect-private-key" },
+  { id = "forbid-new-submodules" },
+  { id = "no-commit-to-branch", args = [
+    "--branch",
+    "main",
+  ] },
 ]
+
+[[repos]]
+repo = "local"
+
+# Rust: format check (matches mise check:rust which uses nightly + rustfmt.toml)
+[[repos.hooks]]
+id = "cargo-fmt"
+name = "Rust format check"
+entry = "cargo"
+args = ["+nightly", "fmt", "--all", "--", "--check"]
+language = "system"
+types = ["rust"]
+pass_filenames = false
+
+# Spell check across the whole tree (docs, comments, identifiers)
+[[repos.hooks]]
+id = "typos"
+name = "Typo check"
+entry = "typos"
+language = "system"
+exclude = "\\.(png|jpg|jpeg|gif|ico|webp|ttf|woff|woff2|pdf|lock|xcassets)$|^(examples/|toboggan-server/(riir|talk)\\.toml|toboggan-server/examples/)"
+
+# TOML formatter (all Cargo.toml, prek.toml, pyproject.toml, example configs)
+[[repos.hooks]]
+id = "taplo-fmt"
+name = "TOML format check"
+entry = "taplo"
+args = ["fmt", "--check"]
+language = "system"
+types = ["toml"]
+
+# Markdown formatter (README.md files, examples/riir-flat.md)
+[[repos.hooks]]
+id = "mdformat"
+name = "Markdown format check"
+entry = "mdformat"
+args = ["--check", "--number"]
+language = "system"
+types = ["markdown"]
+
+# Web: Biome lint + format (toboggan-web/)
+[[repos.hooks]]
+id = "biome"
+name = "Biome check (web)"
+entry = "pnpm"
+args = ["--dir", "toboggan-web", "run", "check"]
+language = "system"
+files = "^toboggan-web/.*\\.(ts|tsx|js|json)$"
+pass_filenames = false
+
+# OpenAPI: Spectral lint (triggered when openapi.json is staged)
+[[repos.hooks]]
+id = "spectral"
+name = "OpenAPI lint"
+entry = "spectral"
+args = ["lint", "toboggan-server/openapi.json", "--ruleset", ".spectral.yaml"]
+language = "system"
+files = "^toboggan-server/openapi\\.json$"
+pass_filenames = false
+
+# Shell: shellcheck on .mise-tasks/ scripts
+[[repos.hooks]]
+id = "shellcheck"
+name = "Shell script lint"
+entry = "shellcheck"
+language = "system"
+types = ["shell"]
+files = "^\\.mise-tasks/"
+
+# Shell: shfmt format check on .mise-tasks/ scripts
+[[repos.hooks]]
+id = "shfmt"
+name = "Shell script format check"
+entry = "mise"
+args = ["exec", "--", "shfmt", "-d", "-i", "2", "-ci"]
+language = "system"
+types = ["shell"]
+files = "^\\.mise-tasks/"
+
+# iOS: SwiftLint (gracefully skipped if swiftlint is not installed)
+[[repos.hooks]]
+id = "swiftlint"
+name = "Swift lint"
+entry = "swiftlint"
+args = ["lint", "--quiet", "--config", ".swiftlint.yml"]
+language = "system"
+files = "^TobogganApp/.*\\.swift$"
+pass_filenames = false
+
+# --- pre-push: heavy workspace-wide Rust checks ---
+
+[[repos.hooks]]
+id = "cargo-clippy"
+name = "Rust clippy"
+entry = "cargo"
+args = ["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"]
+language = "system"
+types = ["rust"]
+pass_filenames = false
+stages = ["pre-push"]
+
+[[repos.hooks]]
+id = "cargo-machete"
+name = "Unused Rust dependencies"
+entry = "cargo"
+args = ["machete"]
+language = "system"
+pass_filenames = false
+stages = ["pre-push"]

@@ -14,13 +14,13 @@ extension View {
         self.padding()
             .glassEffect(.regular, in: .rect(cornerRadius: 16))
     }
-    
+
     /// Applies an interactive Liquid Glass effect with more prominent corners
     func thinCardBackground() -> some View {
         self.padding()
             .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
     }
-    
+
     /// Applies a tinted Liquid Glass effect
     func tintedGlassBackground(tint: Color) -> some View {
         self.padding()

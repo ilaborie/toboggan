@@ -15,6 +15,7 @@ python3 setup-icons.py
 ```
 
 **Benefits:**
+
 - ✅ Interactive menu
 - ✅ Auto-detects your icons
 - ✅ Can generate all sizes from one 1024x1024 image
@@ -43,11 +44,15 @@ chmod +x setup-icons.sh
 ## 📁 What Files Do You Need?
 
 ### iOS 18+ (Easiest - Single Icon)
+
 Just one file:
+
 - `icon-1024.png` or `AppIcon-1024.png` (1024×1024 pixels)
 
 ### iOS 17 and Earlier (Multiple Icons)
+
 You need these sizes:
+
 - `AppIcon-40.png` (40×40)
 - `AppIcon-60.png` (60×60)
 - `AppIcon-58.png` (58×58)
@@ -62,6 +67,7 @@ You need these sizes:
 If you only have a 1024×1024 icon and need all sizes:
 
 ### Using Python Script (Recommended)
+
 ```bash
 # Install Pillow if you haven't
 pip3 install Pillow
@@ -71,6 +77,7 @@ python3 setup-icons.py
 ```
 
 ### Using macOS sips Command
+
 ```bash
 cd ../logo/AppIcons
 
@@ -89,6 +96,7 @@ python3 setup-icons.py
 ```
 
 ### Using Online Tools
+
 - [AppIcon.co](https://appicon.co) - Upload one, get all sizes
 - [MakeAppIcon](https://makeappicon.com)
 - [App Icon Generator](https://www.appicon.build)
@@ -96,6 +104,7 @@ python3 setup-icons.py
 ## ✅ Icon Requirements
 
 Your icon file(s) must:
+
 - ✅ Be **PNG format**
 - ✅ Be **square** (width = height)
 - ✅ Use **RGB color space**
@@ -103,6 +112,7 @@ Your icon file(s) must:
 - ✅ Be the **exact pixel dimensions** required
 
 ❌ Don't:
+
 - Add rounded corners (iOS adds these automatically)
 - Use transparency in the 1024×1024 version
 - Include text that's too small to read at small sizes
@@ -112,15 +122,19 @@ Your icon file(s) must:
 After setup:
 
 1. **Clean Build Folder**
+
    - In Xcode: `Shift + Command + K`
 
 2. **Build and Run**
+
    - In Xcode: `Command + R`
 
 3. **Check Home Screen**
+
    - Look at your app icon in the simulator or on device
 
 4. **Verify in Xcode**
+
    - Go to Assets.xcassets → AppIcon
    - All icon slots should show your icon
    - No yellow warnings should appear
@@ -128,12 +142,15 @@ After setup:
 ## 🐛 Troubleshooting
 
 ### "No applicable content" Error
+
 **Problem:** AppIcon is completely empty
 **Solution:** Run `python3 setup-icons.py` or manually add icons in Xcode
 
 ### "Alpha channel" Error
+
 **Problem:** Your 1024×1024 icon has transparency
 **Solution:** Remove transparency:
+
 ```bash
 # Using sips
 sips -s format png --setProperty formatOptions normal icon-1024.png
@@ -143,19 +160,24 @@ python3 setup-icons.py
 ```
 
 ### Icons Look Blurry
+
 **Problem:** Icons are scaled incorrectly
 **Solution:** Make sure you're providing exact pixel dimensions (not upscaled/downscaled)
 
 ### Icons Don't Update
+
 **Problem:** Xcode cached old icons
 **Solution:**
+
 1. Clean build folder (`Shift + Command + K`)
 2. Delete derived data: `rm -rf ~/Library/Developer/Xcode/DerivedData/*`
 3. Build again
 
 ### Script Can't Find Icons
+
 **Problem:** Icons are in wrong location
-**Solution:** 
+**Solution:**
+
 - Verify icons are in `../logo/AppIcons/` relative to TobogganApp source directory
 - Run `ls -la ../logo/AppIcons/` to see what's there
 
@@ -194,16 +216,19 @@ TobogganApp/
 ## 🆘 Still Having Issues?
 
 1. Check files in logo directory:
+
    ```bash
    ls -la ../logo/AppIcons/
    ```
 
 2. Verify Assets.xcassets was created:
+
    ```bash
    ls -la Assets.xcassets/AppIcon.appiconset/
    ```
 
 3. Check Contents.json:
+
    ```bash
    cat Assets.xcassets/AppIcon.appiconset/Contents.json
    ```
@@ -216,6 +241,6 @@ TobogganApp/
 - [ICON_SETUP_GUIDE.md](./ICON_SETUP_GUIDE.md) - Detailed guide
 - [Apple: Asset Catalog Format](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_ref-Asset_Catalog_Format/)
 
----
+______________________________________________________________________
 
 **Need more help?** Check the detailed guide: `ICON_SETUP_GUIDE.md`

@@ -8,18 +8,18 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-toboggan-core = {path = "../toboggan-core", features = ["std"]}
-toboggan-client = {path = "../toboggan-client"}
-toboggan-stats = {path = "../toboggan-stats"}
+toboggan-core = { path = "../toboggan-core", features = ["std"] }
+toboggan-client = { path = "../toboggan-client" }
+toboggan-stats = { path = "../toboggan-stats" }
 
 ratatui = { workspace = true }
 crossterm = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["env", "derive"] }
-tracing= { workspace = true }
-tracing-subscriber= { workspace = true }
-tui-logger = { workspace = true, features = ["tracing-support"]}
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tui-logger = { workspace = true, features = ["tracing-support"] }
 tachyonfx = { workspace = true }
 derive_more = { workspace = true, features = ["display"] }
 

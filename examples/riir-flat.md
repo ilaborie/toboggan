@@ -2,7 +2,7 @@
 
 > Rewriting It In Rust - De la startup aux multinationales
 
----
+______________________________________________________________________
 
 ## Introduction
 
@@ -10,7 +10,7 @@
 
 Une question qui fait sourire… mais qui cache une réalité : Rust gagne du terrain partout.
 
----
+______________________________________________________________________
 
 ## 1. Les Success Stories du RIIR
 
@@ -19,26 +19,32 @@ Des réécritures qui ont fait leurs preuves
 Pourquoi ces réécritures réussissent ?
 
 - **ripgrep** (`rg`) : grep réécrit en Rust
+
   - 10x plus rapide que grep classique
   - Recherche récursive native
   - Support Unicode complet
 
 - **fd** : find réécrit en Rust
+
   - Interface plus intuitive
   - Performances supérieures
   - Respect des .gitignore par défaut
 
 - **Fish Shell** : Shell moderne
+
   - Autocomplétion intelligente
   - Sécurité mémoire
   - Configuration simple
 
 - **Performance** : Compilation native + optimisations
+
 - **Sécurité** : Zéro segfault, gestion mémoire automatique
+
 - **Ergonomie** : APIs modernes et intuitives
+
 - **Fiabilité** : System de types expressif
 
----
+______________________________________________________________________
 
 ## 2. Rust, le couteau suisse moderne
 
@@ -49,21 +55,25 @@ Les forces de Rust
 Rust ne se limite pas aux applications terminal :
 
 #### Web & Backend
+
 - **Actix-web**, **Axum** : Serveurs web haute performance
 - **Diesel**, **SQLx** : ORMs type-safe
 - **Tokio** : Runtime async de référence
 
 #### Applications Desktop
+
 - **Tauri** : Alternative à Electron
 - **egui**, **iced** : GUI natives
 - **Bevy** : Moteur de jeu en ECS
 
 #### Microcontrôleurs & IoT
+
 - **Embassy** : Framework async pour embedded
 - Support natif ARM, RISC-V
 - Consommation mémoire optimisée
 
 #### Blockchain & Crypto
+
 - **Solana** : Runtime blockchain
 - **Substrate** : Framework pour blockchains
 - Performances critiques + sécurité
@@ -74,7 +84,7 @@ Rust ne se limite pas aux applications terminal :
 4. **Écosystème** : Cargo + crates.io
 5. **Cross-platform** : Linux, macOS, Windows, WASM, mobile
 
----
+______________________________________________________________________
 
 ## 3. Rust s'intègre partout
 
@@ -134,16 +144,22 @@ impl UserService {
 ```
 
 - Code partagé iOS/Android
+
 - Bindings automatiques Swift/Kotlin
+
 - Utilisé par Mozilla Firefox
 
 - **Node.js** : NAPI-RS
+
 - **Ruby** : magnus, rutie
+
 - **C/C++** : FFI direct
+
 - **Java** : JNI
+
 - **Go** : CGO
 
----
+______________________________________________________________________
 
 ## 4. Rust en startup : Retour d'expérience
 
@@ -154,12 +170,14 @@ Stratégie d'adoption progressive
 Success stories startup
 
 #### Avantages
+
 - **Performance** : Moins de serveurs = coûts réduits
 - **Fiabilité** : Moins de bugs en production
 - **Productivité** : Détection d'erreurs à la compilation
 - **Évolutivité** : Refactoring sûr et confiant
 
 #### Défis
+
 - **Courbe d'apprentissage** : Concepts ownership/borrowing
 - **Écosystème** : Plus jeune que Java/.NET
 - **Recrutement** : Développeurs Rust plus rares
@@ -174,7 +192,7 @@ Success stories startup
 - **Figma** : Moteur de rendu WASM
 - **Vercel** : Bundlers (SWC, Turbo)
 
----
+______________________________________________________________________
 
 ## Conclusion
 
@@ -189,12 +207,14 @@ Le futur est rouillé ? 🦀
 - **Adoption croissante** : Startups → GAFAM
 
 ✅ **OUI** pour :
+
 - Performance critique
 - Sécurité prioritaire
 - Code partagé multi-plateformes
 - Outils système
 
 ❌ **NON** pour :
+
 - Prototypage rapide
 - Équipe junior exclusive
 - Deadline très serrée
@@ -206,7 +226,7 @@ Rust n'est pas la solution à tout, mais il repousse les limites du possible.
 
 Peut-être que la réponse n'est plus si farfelue…
 
----
+______________________________________________________________________
 
 ## Ressources
 

@@ -23,6 +23,7 @@ mise build:android
 ```
 
 This task will:
+
 - Build the Rust library for all Android architectures (arm64-v8a, armeabi-v7a, x86_64, x86)
 - Generate Kotlin bindings using UniFFI
 - Copy the `.so` files to `app/src/main/jniLibs/`

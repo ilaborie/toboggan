@@ -18,7 +18,6 @@ Toboggan is a presentation system that allows you to create, serve, and control 
 - **🌐 Multi-platform Clients**: Web, Terminal, Desktop, iOS, and embedded support
 - **🎯 Educational Focus**: Perfect for exploring Rust ecosystem
 
-
 ## Quick Start
 
 ### Install from source
@@ -95,6 +94,7 @@ cargo clippy
 ### Platform-specific builds
 
 #### Web (WASM)
+
 ```bash
 mise build:wasm
 # Or manually:
@@ -103,6 +103,7 @@ wasm-pack build --target web --release
 ```
 
 #### iOS
+
 ```bash
 mise build:ios
 # Or manually:
@@ -111,11 +112,13 @@ cd toboggan-mobile
 ```
 
 #### Desktop
+
 ```bash
 cargo build -p toboggan-desktop --release
 ```
 
 #### Terminal UI
+
 ```bash
 cargo build -p toboggan-tui --release
 ```
@@ -152,30 +155,35 @@ toboggan/
 Toboggan supports multiple client types, each optimized for different use cases and platforms.
 
 ### Web Browser (`toboggan-web`)
+
 - **Technology**: TypeScript frontend with WASM client
 - **Features**: Modern web interface, keyboard shortcuts, responsive design
 - **Usage**: Open `http://localhost:8080` when server is running
 - **Platform**: Any modern web browser
 
 ### Terminal UI (`toboggan-tui`)
+
 - **Technology**: [ratatui](https://ratatui.rs/) with crossterm
 - **Features**: Full-featured terminal interface, presenter view, slide navigation
 - **Usage**: `cargo run -p toboggan-tui`
 - **Platform**: Linux, macOS, Windows terminals
 
 ### Desktop Application (`toboggan-desktop`)
+
 - **Technology**: [iced](https://github.com/iced-rs/iced) native GUI framework
 - **Features**: Native desktop experience with system integration
 - **Usage**: `cargo run -p toboggan-desktop`
 - **Platform**: Linux, macOS, Windows native
 
 ### iOS Application (`TobogganApp/`)
+
 - **Technology**: SwiftUI with Rust core via UniFFI
 - **Features**: Native iOS interface, gesture controls, AirPlay support
 - **Usage**: Build and run from Xcode
 - **Platform**: iOS 16+ devices and simulator
 
 ### Embedded Client (`toboggan-esp32`)
+
 - **Technology**: ESP-IDF with embedded-graphics
 - **Hardware**: ESP32-S3-BOX-3B development board
 - **Features**: WiFi connectivity, LCD display, LED indicators
@@ -186,12 +194,14 @@ Toboggan supports multiple client types, each optimized for different use cases 
 Toboggan uses a simple JSON-based WebSocket protocol for real-time synchronization:
 
 ### Commands (Client → Server)
+
 - `Next`, `Previous`, `First`, `Last` - Navigation
 - `Goto { slide: N }` - Jump to specific slide
 - `Play`, `Pause`, `Resume` - Presentation control
 - `Register { client_id }` - Client registration
 
 ### Notifications (Server → Clients)
+
 - `State { current_slide, state }` - Presentation state updates
 - `Error { message }` - Error notifications
 - `Pong` - Heartbeat response
@@ -199,6 +209,7 @@ Toboggan uses a simple JSON-based WebSocket protocol for real-time synchronizati
 ## Development
 
 ### Running tests
+
 ```bash
 cargo test              # All tests
 cargo nextest run      # Faster parallel tests
@@ -206,6 +217,7 @@ cargo test -p toboggan-core  # Specific crate
 ```
 
 ### Code quality
+
 ```bash
 cargo fmt              # Format code
 cargo clippy           # Lint code
@@ -213,6 +225,7 @@ mise check            # All checks
 ```
 
 ### Documentation
+
 ```bash
 cargo doc --open      # Generate and open docs
 ```
@@ -222,6 +235,7 @@ cargo doc --open      # Generate and open docs
 We welcome contributions to Toboggan! Here's how you can help:
 
 ### Getting Started
+
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feat/my-feature`
 3. Make your changes following the project guidelines
@@ -229,6 +243,7 @@ We welcome contributions to Toboggan! Here's how you can help:
 5. Submit a pull request
 
 ### Development Guidelines
+
 - **Code Quality**: All code must pass `cargo fmt`, `cargo clippy`, and tests
 - **Safety**: No `unsafe` code allowed (enforced by lints)
 - **Error Handling**: Use `Result` and `Option`, avoid `unwrap()` in favor of `expect()`
@@ -249,12 +264,14 @@ at your option.
 Built with excellent Rust crates including:
 
 **Core Infrastructure**
+
 - [tokio](https://github.com/tokio-rs/tokio) - Async runtime powering the server and clients
 - [axum](https://github.com/tokio-rs/axum) - Web framework for the REST API and WebSocket server
 - [serde](https://github.com/serde-rs/serde) - Serialization framework for all data structures
 - [anyhow](https://github.com/dtolnay/anyhow) - Flexible error handling across the project
 
 **Client Platforms**
+
 - [wasm-bindgen](https://github.com/rustwasm/wasm-bindgen) - WebAssembly bindings for browser
 - [web-sys](https://github.com/rustwasm/wasm-bindgen) - Browser API bindings for WASM
 - [gloo](https://github.com/rustwasm/gloo) - Toolkit for building WASM applications
@@ -267,11 +284,13 @@ Built with excellent Rust crates including:
 - [mipidsi](https://github.com/almindor/mipidsi) - MIPI Display Interface driver
 
 **Networking & Communication**
+
 - [tokio-tungstenite](https://github.com/snapview/tokio-tungstenite) - Async WebSocket implementation
 - [reqwest](https://github.com/seanmonstar/reqwest) - HTTP client for API calls
 - [tower-http](https://github.com/tower-rs/tower-http) - HTTP middleware and services
 
 **Utilities**
+
 - [clap](https://github.com/clap-rs/clap) - Command-line argument parsing
 - [tracing](https://github.com/tokio-rs/tracing) - Structured application logging
 - [jiff](https://github.com/BurntSushi/jiff) - Date and time handling

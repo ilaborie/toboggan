@@ -5,10 +5,7 @@ date = "2026-04-04"
 kind = "Cover"
 
 [slides.style]
-classes = [
-    "no_title",
-    "cover",
-]
+classes = ["no_title", "cover"]
 
 [slides.title]
 type = "Text"
@@ -28,10 +25,7 @@ alt = """
 """
 
 [slides.body.style]
-classes = [
-    "no_title",
-    "cover",
-]
+classes = ["no_title", "cover"]
 
 [[slides]]
 kind = "Standard"
@@ -132,10 +126,7 @@ classes = ["no_title"]
 kind = "Standard"
 
 [slides.style]
-classes = [
-    "no_title",
-    "wide",
-]
+classes = ["no_title", "wide"]
 
 [slides.title]
 type = "Text"
@@ -151,10 +142,7 @@ alt = """
 """
 
 [slides.body.style]
-classes = [
-    "no_title",
-    "wide",
-]
+classes = ["no_title", "wide"]
 
 [[slides.terminals]]
 cwd = "examples/demo-terminal"
@@ -220,10 +208,7 @@ classes = ["no_title"]
 kind = "Standard"
 
 [slides.style]
-classes = [
-    "no_title",
-    "wide",
-]
+classes = ["no_title", "wide"]
 
 [slides.title]
 type = "Text"
@@ -239,10 +224,7 @@ alt = """
 """
 
 [slides.body.style]
-classes = [
-    "no_title",
-    "wide",
-]
+classes = ["no_title", "wide"]
 
 [[slides.terminals]]
 cwd = "examples/demo-terminal"
@@ -252,10 +234,7 @@ theme = "light"
 kind = "Standard"
 
 [slides.style]
-classes = [
-    "no_title",
-    "wide",
-]
+classes = ["no_title", "wide"]
 
 [slides.title]
 type = "Text"
@@ -271,10 +250,7 @@ alt = """
 """
 
 [slides.body.style]
-classes = [
-    "no_title",
-    "wide",
-]
+classes = ["no_title", "wide"]
 
 [[slides.terminals]]
 cwd = "examples/demo-terminal"
@@ -507,10 +483,7 @@ classes = ["no_title"]
 kind = "Standard"
 
 [slides.style]
-classes = [
-    "no_title",
-    "center",
-]
+classes = ["no_title", "center"]
 
 [slides.title]
 type = "Text"
@@ -528,7 +501,4 @@ Toboggan — write slides in Markdown, present from the terminal.
 '''
 
 [slides.body.style]
-classes = [
-    "no_title",
-    "center",
-]
+classes = ["no_title", "center"]

@@ -23,7 +23,7 @@ extension ConnectionStatus {
             return "Connection Error"
         }
     }
-    
+
     var color: Color {
         switch self {
         case .connected:
@@ -39,11 +39,11 @@ extension ConnectionStatus {
 // Notification handler implementation
 final class NotificationHandler: ClientNotificationHandler, @unchecked Sendable {
     weak var viewModel: PresentationViewModel?
-    
+
     init(viewModel: PresentationViewModel?) {
         self.viewModel = viewModel
     }
-    
+
     func onStateChange(state: State) {
         viewModel?.handleStateChange(state)
     }
@@ -114,13 +114,13 @@ class PresentationViewModel: ObservableObject {
     var canGoNextStep: Bool {
         stepCount > 0 && currentStep < stepCount - 1
     }
-    
+
     // Navigation button logic
     // When on first step, previous button becomes "previous slide"
     var showPreviousSlideInsteadOfStep: Bool {
         currentStep == 0
     }
-    
+
     // When on last step, next button becomes "next slide"
     var showNextSlideInsteadOfStep: Bool {
         stepCount == 0 || currentStep >= stepCount - 1
@@ -135,7 +135,7 @@ class PresentationViewModel: ObservableObject {
     private let notificationHandler: NotificationHandler
     private var pendingStateUpdate: State?
     private var talkLoaded = false
-    
+
     init() {
         // Initialize notification handler and client synchronously
         self.notificationHandler = NotificationHandler(viewModel: nil)
@@ -145,45 +145,45 @@ class PresentationViewModel: ObservableObject {
             handler: self.notificationHandler
         )
         self.notificationHandler.viewModel = self
-        
+
         // Connect asynchronously
         connectAndFetchTalk()
     }
-    
+
     // MARK: - TobogganCore Integration
-    
+
     private func connectAndFetchTalk() {
         // Connect and fetch talk info on background thread
         DispatchQueue.global(qos: .background).async { [weak self] in
             guard let self = self else { return }
-            
+
             // Update connection status
             Task { @MainActor in
                 self.connectionStatus = .connecting
             }
-            
+
             // Connect to server
             self.tobogganClient.connect()
-            
+
             self.fetchTalkInfoDirect(client: self.tobogganClient)
         }
     }
-    
+
     private func fetchTalkInfoDirect(client: TobogganClient) {
         if let talk = client.getTalk() {
             // Note: talk.slides contains slide IDs (which happen to be titles in current implementation)
             // We don't store them - we'll fetch slides on demand using client.getSlide()
-            
+
             Task { @MainActor in
                 // Update presentation title
                 presentationTitle = "\(talk.title) - \(talk.date)"
-                
+
                 // Store the count of slides
                 totalSlides = talk.slides.count
-                
+
                 // Mark talk as loaded
                 talkLoaded = true
-                
+
                 // Process any pending state updates
                 if let pendingState = pendingStateUpdate {
                     handleStateChange(pendingState)
@@ -196,9 +196,9 @@ class PresentationViewModel: ObservableObject {
             }
         }
     }
-    
+
     // MARK: - Notification Handlers
-    
+
     func handleStateChange(_ state: State) {
         Task { @MainActor in
             currentState = state
@@ -241,7 +241,7 @@ class PresentationViewModel: ObservableObject {
         // Update state to reflect new slide position (server already adjusted)
         handleStateChange(state)
     }
-    
+
     private func updatePresentationState(
         currentSlideIndex: Int?,
         previousSlideIndex: Int? = nil,
@@ -249,7 +249,7 @@ class PresentationViewModel: ObservableObject {
     ) {
         self.canGoPrevious = (previousSlideIndex != nil)
         self.canGoNext = (nextSlideIndex != nil)
-        
+
         // Update current slide (if we have one)
         if let currentIdx = currentSlideIndex {
             updateSlideFromState(slideIndex: currentIdx)
@@ -258,7 +258,7 @@ class PresentationViewModel: ObservableObject {
             currentSlide = nil
             self.currentSlideIndex = nil
         }
-        
+
         // Update next slide title by fetching it on demand
         if let nextIdx = nextSlideIndex,
            let nextSlide = tobogganClient.getSlide(index: UInt32(nextIdx)) {
@@ -267,7 +267,7 @@ class PresentationViewModel: ObservableObject {
             nextSlideTitle = "<End of presentation>"
         }
     }
-    
+
     func handleConnectionStatusChange(_ status: ConnectionStatus) {
         Task { @MainActor in
             switch status {
@@ -284,7 +284,7 @@ class PresentationViewModel: ObservableObject {
             }
         }
     }
-    
+
     func handleError(_ error: String) {
         Task { @MainActor in
             connectionStatus = .error
@@ -292,18 +292,18 @@ class PresentationViewModel: ObservableObject {
             showErrorAlert = true
         }
     }
-    
+
     private func updateSlideFromState(slideIndex: Int) {
         // Check if talk info has been loaded
         if !talkLoaded {
             pendingStateUpdate = currentState
             return
         }
-        
+
         // Fetch the slide on demand using tobogganClient
         if let slide = tobogganClient.getSlide(index: UInt32(slideIndex)) {
             currentSlide = slide
-            
+
             // Set the slide index directly
             self.currentSlideIndex = slideIndex
         } else {
@@ -312,9 +312,9 @@ class PresentationViewModel: ObservableObject {
             }
         }
     }
-    
+
     // MARK: - Actions
-    
+
     // MARK: - Step Navigation
 
     func nextStep() {
@@ -341,11 +341,11 @@ class PresentationViewModel: ObservableObject {
     func previousSlide() {
         tobogganClient.sendCommand(command: .previous)
     }
-    
+
     func firstSlide() {
         tobogganClient.sendCommand(command: .first)
     }
-    
+
     func lastSlide() {
         tobogganClient.sendCommand(command: .last)
     }
@@ -353,7 +353,7 @@ class PresentationViewModel: ObservableObject {
     func blink() {
         tobogganClient.sendCommand(command: .blink)
     }
-    
+
     deinit {
         // Client will be cleaned up automatically when deallocated
     }

@@ -563,6 +563,14 @@
           }
         ]
       },
+      "RenderTarget": {
+        "type": "string",
+        "description": "Rendering targets for per-slide visibility control.\n\nUsed with `hidden_in` on a slide to exclude it from specific outputs.\nAn empty list means the slide is visible in all targets.",
+        "enum": [
+          "web",
+          "pdf"
+        ]
+      },
       "Slide": {
         "type": "object",
         "properties": {
@@ -783,6 +791,38 @@
             }
           }
         }
+      },
+      "TerminalConfig": {
+        "type": "object",
+        "description": "Configuration for an embedded terminal in a slide.\n\nParsed from `<!-- term: path/to/cwd -->`, `<!-- term: path/to/cwd :light -->`,\n`<!-- term: path/to/cwd | command -->`, or `<!-- term: path/to/cwd :light | command -->`.\nMultiple terminals per slide are supported (rendered side by side).",
+        "required": [
+          "cwd"
+        ],
+        "properties": {
+          "cmd": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional command to run instead of the default shell"
+          },
+          "cwd": {
+            "type": "string",
+            "description": "Working directory for the terminal session"
+          },
+          "theme": {
+            "$ref": "#/components/schemas/Theme",
+            "description": "Terminal color theme, defaults to dark"
+          }
+        }
+      },
+      "Theme": {
+        "type": "string",
+        "description": "Terminal color theme.",
+        "enum": [
+          "dark",
+          "light"
+        ]
       },
       "Timestamp": {
         "type": "string",

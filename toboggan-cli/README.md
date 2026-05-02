@@ -171,19 +171,24 @@ This will be replaced with the contents of src/main.rs
 The CLI provides comprehensive statistics about your presentation:
 
 ### Overview Metrics
+
 - Total slides and parts
 - Word count (body + optional notes)
 - Bullet points and images
 - Estimated duration at your speaking rate
 
 ### Part Breakdown
+
 Shows distribution of content across sections:
+
 - Slides per part
 - Words and percentage of total
 - Estimated duration per part
 
 ### Duration Scenarios
+
 Calculates presentation length for different speaking rates:
+
 - Slow (110 WPM)
 - Normal (150 WPM)
 - Fast (170 WPM)
@@ -263,7 +268,7 @@ toboggan-cli slides/ -f yaml -o output.txt
 
 ### Basic Presentation
 
-```bash
+````bash
 # Create structure
 mkdir -p my-talk/01-intro
 
@@ -289,15 +294,18 @@ cat > my-talk/01-intro/hello.md << 'EOF'
 fn main() {
     println!("Hello, world!");
 }
-```
+````
 
 <!-- notes -->
+
 Explain that println! is a macro, not a function
 EOF
 
 # Convert
+
 toboggan-cli my-talk/ -o presentation.toml
-```
+
+````
 
 ### Batch Processing
 
@@ -312,7 +320,7 @@ for dir in presentations/*/; do
     --wpm 130 \
     -o "output/${name}.toml"
 done
-```
+````
 
 ### CI/CD Integration
 
@@ -330,14 +338,17 @@ done
 ### Common Issues
 
 **Missing syntax highlighting**
+
 - Use `--list-themes` to see available themes
-- Specify language in code blocks: ` ```rust`
+- Specify language in code blocks: ````  ```rust ````
 
 **Incorrect duration estimates**
+
 - Adjust `--wpm` to match your speaking pace
 - Use `--exclude-notes-from-duration` if notes are just reminders
 
 **Files processed in wrong order**
+
 - Prefix with numbers: `01-intro.md`, `02-main.md`
 - Use folders for logical grouping
 

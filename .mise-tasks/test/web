@@ -9,10 +9,10 @@ echo "🌐 Running web tests..."
 echo "🔧 Checking for web tests..."
 cd toboggan-web
 if npm run | grep -q "test"; then
-    echo "🧪 Running web tests..."
-    npm run test
+  echo "🧪 Running web tests..."
+  npm run test
 else
-    echo "ℹ️  No test script found in toboggan-web package.json, skipping web tests"
+  echo "ℹ️  No test script found in toboggan-web package.json, skipping web tests"
 fi
 cd ..
 

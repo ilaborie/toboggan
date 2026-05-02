@@ -8,22 +8,22 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-toboggan-core = {path = "../toboggan-core", features = ["openapi"]}
-toboggan-stats = {path = "../toboggan-stats"}
+toboggan-core = { path = "../toboggan-core", features = ["openapi"] }
+toboggan-stats = { path = "../toboggan-stats" }
 
 axum = { workspace = true, features = ["ws"] }
 tokio = { workspace = true, features = ["full"] }
-toml = {workspace = true}
-tracing = {workspace = true}
+toml = { workspace = true }
+tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 clap = { workspace = true, features = ["env", "derive"] }
-anyhow = {workspace = true}
+anyhow = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-serde_json = {workspace = true}
+serde_json = { workspace = true }
 tower-http = { workspace = true, features = ["trace", "cors", "fs"] }
 futures = { workspace = true }
 slotmap = { workspace = true, features = ["serde"] }
-derive_more = { workspace = true, features = ["display",  "error"]}
+derive_more = { workspace = true, features = ["display", "error"] }
 utoipa = { workspace = true }
 utoipa-scalar = { workspace = true, features = ["axum"] }
 rust-embed = { workspace = true }
@@ -32,10 +32,16 @@ notify = { workspace = true }
 portable-pty = "0.9.0"
 
 [dev-dependencies]
-toboggan-core = { path = "../toboggan-core", features = ["openapi", "test-utils"] }
+toboggan-core = { path = "../toboggan-core", features = [
+  "openapi",
+  "test-utils",
+] }
 clawspec-core = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-tokio-tungstenite = { workspace = true, features = ["connect", "rustls-tls-native-roots"] }
+tokio-tungstenite = { workspace = true, features = [
+  "connect",
+  "rustls-tls-native-roots",
+] }
 
 [[test]]
 name = "multi_client_sync"

@@ -9,7 +9,7 @@ echo "🚀 Running comprehensive auto-fixes for all platforms..."
 echo "==================== RUST FIXES ====================="
 mise fix:rust
 
-# Run web fixes  
+# Run web fixes
 echo "==================== WEB FIXES ======================"
 mise fix:web
 
