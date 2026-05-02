@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter};
 
 use serde::{Deserialize, Serialize};
@@ -65,7 +66,8 @@ impl From<SlideId> for usize {
 /// Rendering targets for per-slide visibility control.
 ///
 /// Used with `hidden_in` on a slide to exclude it from specific outputs.
-/// An empty list means the slide is visible in all targets.
+/// An empty set means the slide is visible in all targets.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "lowercase")]
@@ -91,11 +93,11 @@ pub struct Slide {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub terminals: Vec<TerminalConfig>,
     /// Raw markdown source of the slide body, used by non-HTML exporters.
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub body_source: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body_source: Option<String>,
     /// Targets this slide should be excluded from. Empty means visible everywhere.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub hidden_in: Vec<RenderTarget>,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub hidden_in: BTreeSet<RenderTarget>,
 }
 
 impl Slide {
@@ -147,6 +149,18 @@ impl Slide {
     pub fn with_terminal(mut self, terminal: TerminalConfig) -> Self {
         self.terminals.push(terminal);
         self
+    }
+
+    #[must_use]
+    pub fn with_hidden_in(mut self, targets: impl IntoIterator<Item = RenderTarget>) -> Self {
+        self.hidden_in = targets.into_iter().collect();
+        self
+    }
+
+    /// Returns `true` if the slide should be excluded from the given render target.
+    #[must_use]
+    pub fn is_hidden_from(&self, target: RenderTarget) -> bool {
+        self.hidden_in.contains(&target)
     }
 }
 

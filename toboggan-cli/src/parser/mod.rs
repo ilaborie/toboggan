@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -49,8 +50,8 @@ pub struct FrontMatter {
     )]
     pub duration: Option<Duration>,
 
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub hidden_in: Vec<RenderTarget>,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub hidden_in: BTreeSet<RenderTarget>,
 }
 
 impl FrontMatter {
@@ -446,21 +447,24 @@ mod hidden_in_tests {
     fn test_hidden_in_pdf() {
         let toml = r#"hidden_in = ["pdf"]"#;
         let fm: FrontMatter = toml::from_str(toml).expect("parse");
-        assert_eq!(fm.hidden_in, vec![RenderTarget::Pdf]);
+        assert_eq!(fm.hidden_in, BTreeSet::from([RenderTarget::Pdf]));
     }
 
     #[test]
     fn test_hidden_in_web() {
         let toml = r#"hidden_in = ["web"]"#;
         let fm: FrontMatter = toml::from_str(toml).expect("parse");
-        assert_eq!(fm.hidden_in, vec![RenderTarget::Web]);
+        assert_eq!(fm.hidden_in, BTreeSet::from([RenderTarget::Web]));
     }
 
     #[test]
     fn test_hidden_in_both() {
         let toml = r#"hidden_in = ["web", "pdf"]"#;
         let fm: FrontMatter = toml::from_str(toml).expect("parse");
-        assert_eq!(fm.hidden_in, vec![RenderTarget::Web, RenderTarget::Pdf]);
+        assert_eq!(
+            fm.hidden_in,
+            BTreeSet::from([RenderTarget::Web, RenderTarget::Pdf])
+        );
     }
 
     #[test]

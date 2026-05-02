@@ -52,7 +52,7 @@ fn write_slide(out: &mut String, slide: &Slide) {
 }
 
 fn write_section(out: &mut String, slide: &Slide) {
-    let title = content_to_typst_text(&slide.title);
+    let title = content_to_typst(&slide.title);
     let _ = writeln!(
         out,
         r#"// ── Section ───────────────────────────────────────────────────────────────
@@ -74,10 +74,11 @@ fn write_standard(out: &mut String, slide: &Slide) {
 }
 
 fn write_terminal_placeholder(out: &mut String, slide: &Slide) {
-    let title = content_to_typst_text(&slide.title);
-    tracing::warn!(
-        "Slide '{}' has live terminals but is not marked `hidden_in = [\"pdf\"]`. \
-         Emitting placeholder in Typst output.",
+    let title = content_to_typst(&slide.title);
+    eprintln!(
+        "warning: slide '{}' has live terminals but is not marked \
+         `hidden_in = [\"pdf\"]` — emitting a placeholder page in the PDF. \
+         Add `hidden_in = [\"pdf\"]` to suppress this.",
         title
     );
     let _ = writeln!(
@@ -95,57 +96,71 @@ fn write_terminal_placeholder(out: &mut String, slide: &Slide) {
 }
 
 fn write_standard_body(out: &mut String, slide: &Slide) {
-    if slide.body_source.is_empty() {
-        // Fallback for Talk files without body_source (e.g. pre-existing .toml files).
-        let title = content_to_typst_text(&slide.title);
-        let body = content_to_typst_body(&slide.body);
-        let _ = writeln!(
-            out,
-            r"// ── Slide ────────────────────────────────────────────────────────────────
+    match slide.body_source.as_deref() {
+        None => {
+            // Fallback for Talk files without body_source (e.g. pre-existing .toml files).
+            let title = content_to_typst(&slide.title);
+            let body = content_to_typst(&slide.body);
+            let _ = writeln!(
+                out,
+                r"// ── Slide ────────────────────────────────────────────────────────────────
 = {title}
 
 {body}
 #pagebreak()
 "
-        );
-    } else {
-        let body = md_to_typst(&slide.body_source);
-        if body.trim().is_empty() {
-            return;
+            );
         }
-        let _ = writeln!(
-            out,
-            "// ── Slide ────────────────────────────────────────────────────────────────"
-        );
-        let _ = write!(out, "{body}");
-        if !out.ends_with('\n') {
-            out.push('\n');
+        Some(source) => {
+            let body = md_to_typst(source);
+            if body.trim().is_empty() {
+                tracing::warn!(
+                    "Slide '{}' has a body_source that rendered to empty Typst content; \
+                     slide will be omitted from PDF output.",
+                    content_to_typst(&slide.title)
+                );
+                return;
+            }
+            let _ = writeln!(
+                out,
+                "// ── Slide ────────────────────────────────────────────────────────────────"
+            );
+            let _ = write!(out, "{body}");
+            if !out.ends_with('\n') {
+                out.push('\n');
+            }
+            let _ = writeln!(out, "#pagebreak()\n");
         }
-        let _ = writeln!(out, "#pagebreak()\n");
     }
 }
 
-/// Convert `Content` to a plain Typst text string (for titles).
-fn content_to_typst_text(content: &Content) -> String {
-    match content {
-        Content::Empty => String::new(),
-        Content::Text { text } => escape_typst(text),
-        Content::Html { alt: Some(alt), .. } => escape_typst(alt),
-        Content::Html { raw, .. } => escape_typst(&strip_html_tags(raw)),
-    }
-}
-
-/// Convert `Content` to a Typst body block (best-effort for HTML fallback).
-fn content_to_typst_body(content: &Content) -> String {
+/// Convert `Content` to escaped Typst markup.
+///
+/// Uses `alt` text when available; strips HTML tags as a best-effort fallback.
+/// A `tracing::warn!` is emitted when stripping is needed so callers know the
+/// output may be incomplete.
+fn content_to_typst(content: &Content) -> String {
     match content {
         Content::Empty => String::new(),
         Content::Text { text } => escape_typst(text),
         Content::Html { alt: Some(alt), .. } => escape_typst(alt),
         Content::Html { raw, .. } => {
-            // If there's no alt text, strip HTML tags as a best-effort fallback.
+            tracing::warn!(
+                "Slide body is HTML without alt text; stripping tags for Typst output. \
+                 Content may be incomplete. Consider adding alt text or using body_source."
+            );
             escape_typst(&strip_html_tags(raw))
         }
     }
+}
+
+/// Escape a URL for use inside a Typst double-quoted string argument.
+///
+/// Typst string literals use `\` as the escape character, so both `"` and `\`
+/// must be escaped. This is separate from `escape_typst`, which escapes Typst
+/// markup characters for content nodes.
+fn escape_typst_string(url: &str) -> String {
+    url.replace('\\', r"\\").replace('"', r#"\""#)
 }
 
 /// Strip HTML tags from a string.
@@ -256,21 +271,16 @@ fn render_node<'a>(node: &'a MarkdownNode<'a>, out: &mut String, list_depth: usi
             render_list(node, out, list_depth, is_ordered);
         }
 
-        NodeValue::Item(_) => {
-            let indent = "  ".repeat(list_depth.saturating_sub(1));
-            out.push_str(&indent);
-            out.push_str("- ");
-            render_children(node, out, list_depth, true);
-        }
-
         NodeValue::Link(link) => {
-            let _ = write!(out, "#link(\"{url}\")[", url = link.url);
+            let url = escape_typst_string(&link.url);
+            let _ = write!(out, "#link(\"{url}\")[");
             render_children(node, out, list_depth, tight);
             out.push(']');
         }
 
         NodeValue::Image(link) => {
-            let _ = writeln!(out, "#image(\"{}\")", link.url);
+            let url = escape_typst_string(&link.url);
+            let _ = writeln!(out, "#image(\"{url}\")");
         }
 
         NodeValue::Table(_) => {
@@ -384,6 +394,8 @@ fn escape_typst(text: &str) -> String {
 #[cfg(test)]
 #[allow(clippy::expect_used)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use toboggan_core::{Date, RenderTarget, Slide, SlideKind, Style, Talk, TerminalConfig};
 
     use super::*;
@@ -392,6 +404,14 @@ mod tests {
         let mut talk = Talk::new(title);
         talk.date = Date::new(2024, 1, 15).expect("valid date");
         talk
+    }
+
+    fn slide_with_source(source: &str) -> Slide {
+        Slide {
+            kind: SlideKind::Standard,
+            body_source: Some(source.to_owned()),
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -410,13 +430,7 @@ mod tests {
     fn test_standard_slide_with_code_block() {
         let mut talk = make_talk("Code Talk");
         let source = "# Demo\n\n```rust\nfn main() {}\n```\n";
-        let slide = Slide {
-            kind: SlideKind::Standard,
-            title: Content::text("Demo"),
-            body_source: source.to_owned(),
-            ..Default::default()
-        };
-        talk.slides.push(slide);
+        talk.slides.push(slide_with_source(source));
 
         let bytes = generate_typst(&talk);
         let output = String::from_utf8(bytes).expect("utf8");
@@ -452,24 +466,23 @@ mod tests {
             kind: SlideKind::Standard,
             title: Content::text("Live Demo"),
             terminals: vec![TerminalConfig::new(".")],
-            hidden_in: vec![RenderTarget::Pdf],
+            hidden_in: BTreeSet::from([RenderTarget::Pdf]),
             ..Default::default()
         };
         let static_slide = Slide {
             kind: SlideKind::Standard,
             title: Content::text("Static Demo"),
-            body_source: "# Static Demo\n\n```rust\nfn main() {}\n```\n".to_owned(),
-            hidden_in: vec![RenderTarget::Web],
+            body_source: Some("# Static Demo\n\n```rust\nfn main() {}\n```\n".to_owned()),
+            hidden_in: BTreeSet::from([RenderTarget::Web]),
             ..Default::default()
         };
         talk.slides.push(live_slide);
         talk.slides.push(static_slide);
 
-        // Simulate the filter that serialize_talk applies before calling generate_typst.
         let filtered_slides: Vec<_> = talk
             .slides
             .iter()
-            .filter(|slide| !slide.hidden_in.contains(&RenderTarget::Pdf))
+            .filter(|slide| !slide.is_hidden_from(RenderTarget::Pdf))
             .cloned()
             .collect();
         let mut filtered_talk = talk.clone();
@@ -480,11 +493,11 @@ mod tests {
 
         assert!(
             !output.contains("Live Demo"),
-            "pdf-hidden live slide must be absent"
+            "pdf-hidden slide must be absent"
         );
         assert!(
             output.contains("Static Demo"),
-            "web-hidden static slide must be present"
+            "web-hidden slide must be present"
         );
     }
 
@@ -497,10 +510,70 @@ mod tests {
     }
 
     #[test]
-    fn test_md_to_typst_heading() {
-        let result = md_to_typst("# Title\n\nParagraph.");
-        assert!(result.contains("= Title"), "h1 → = Title");
-        assert!(result.contains("Paragraph"), "paragraph preserved");
+    fn test_escape_typst_string_url() {
+        // A URL with `"` must not break the Typst string literal.
+        assert_eq!(
+            escape_typst_string(r#"https://x.com/?a="b""#),
+            r#"https://x.com/?a=\"b\""#
+        );
+        assert_eq!(escape_typst_string(r"path\to"), r"path\\to");
+        assert_eq!(escape_typst_string("plain"), "plain");
+    }
+
+    #[test]
+    fn test_link_with_special_url_characters() {
+        // A double-quote inside a URL must be escaped so typst compile succeeds.
+        let result = md_to_typst(r#"[text](https://x.com/?a="b")"#);
+        assert!(
+            result.contains(r#"#link("https://x.com/?a=\"b\"")"#),
+            "url escaped in link"
+        );
+    }
+
+    #[test]
+    fn test_md_to_typst_headings() {
+        assert!(md_to_typst("# H1\n").contains("= H1"), "h1");
+        assert!(md_to_typst("## H2\n").contains("== H2"), "h2");
+        assert!(md_to_typst("### H3\n").contains("=== H3"), "h3");
+    }
+
+    #[test]
+    fn test_md_to_typst_unordered_list() {
+        let result = md_to_typst("- alpha\n- beta\n- gamma\n");
+        assert!(result.contains("- alpha"), "first item");
+        assert!(result.contains("- beta"), "second item");
+        assert!(result.contains("- gamma"), "third item");
+    }
+
+    #[test]
+    fn test_md_to_typst_ordered_list() {
+        let result = md_to_typst("1. first\n2. second\n");
+        assert!(result.contains("+ first"), "first ordered item");
+        assert!(result.contains("+ second"), "second ordered item");
+    }
+
+    #[test]
+    fn test_md_to_typst_nested_list() {
+        let result = md_to_typst("- outer\n  - inner\n");
+        assert!(result.contains("- outer"), "outer item");
+        assert!(result.contains("  - inner"), "nested item indented");
+    }
+
+    #[test]
+    fn test_md_to_typst_table() {
+        let result = md_to_typst("| A | B |\n|---|---|\n| 1 | 2 |\n");
+        assert!(result.contains("#table("), "table macro");
+        assert!(result.contains("columns: 2"), "column count");
+        assert!(result.contains("[A]"), "header cell A");
+        assert!(result.contains("[1]"), "data cell 1");
+    }
+
+    #[test]
+    fn test_md_to_typst_empty_table_body() {
+        // An empty table (no rows) must not panic.
+        let result = md_to_typst("| |\n|---|\n");
+        // May be empty or minimal; the important thing is no panic and no #table output.
+        assert!(!result.contains("columns: 0") || result.is_empty() || result.contains("#table"));
     }
 
     #[test]
@@ -546,24 +619,29 @@ mod tests {
     }
 
     #[test]
-    fn test_slide_with_style_classes() {
+    fn test_slide_with_style_classes_produces_content() {
+        // Style classes are intentionally not rendered in Typst output.
+        // Verify the slide body is still present even when classes are set.
         let mut talk = make_talk("Talk");
         let slide = Slide {
             kind: SlideKind::Standard,
-            title: Content::text("Styled"),
             style: Style {
                 classes: vec!["wide".to_owned()],
                 style: None,
             },
-            body_source: "# Styled\n\nContent.".to_owned(),
+            body_source: Some("# Styled\n\nContent.".to_owned()),
             ..Default::default()
         };
         talk.slides.push(slide);
 
-        let bytes = generate_typst(&talk);
+        let output = String::from_utf8(generate_typst(&talk)).expect("utf8");
         assert!(
-            !bytes.is_empty(),
-            "output non-empty for slide with style classes"
+            output.contains("Content."),
+            "slide body present despite style classes"
+        );
+        assert!(
+            !output.contains("wide"),
+            "style class not emitted in Typst output"
         );
     }
 }

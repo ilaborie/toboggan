@@ -76,6 +76,7 @@ mod tests {
     }
 
     fn talk_with_hidden_slides() -> anyhow::Result<Talk> {
+        use std::collections::BTreeSet;
         let mut talk = create_test_talk()?;
         // slide 1: visible everywhere
         talk.slides.push(Slide::new("Always Visible"));
@@ -83,15 +84,15 @@ mod tests {
         talk.slides.push(Slide {
             kind: SlideKind::Standard,
             title: Content::text("Live Slide"),
-            hidden_in: vec![RenderTarget::Pdf],
+            hidden_in: BTreeSet::from([RenderTarget::Pdf]),
             ..Default::default()
         });
         // slide 3: hidden in web (static equivalent)
         talk.slides.push(Slide {
             kind: SlideKind::Standard,
             title: Content::text("Static Slide"),
-            body_source: "# Static Slide\n\nCode here.".to_owned(),
-            hidden_in: vec![RenderTarget::Web],
+            body_source: Some("# Static Slide\n\nCode here.".to_owned()),
+            hidden_in: BTreeSet::from([RenderTarget::Web]),
             ..Default::default()
         });
         Ok(talk)
@@ -154,8 +155,8 @@ mod tests {
         let typ = String::from_utf8(bytes).expect("utf8");
 
         assert!(
-            typ.contains("Always Visible") || typ.contains("Static Slide"),
-            "non-pdf-hidden slide in Typst"
+            typ.contains("Always Visible"),
+            "always-visible slide present in Typst"
         );
         assert!(
             !typ.contains("Live Slide"),

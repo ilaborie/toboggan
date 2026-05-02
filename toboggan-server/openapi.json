@@ -565,7 +565,7 @@
       },
       "RenderTarget": {
         "type": "string",
-        "description": "Rendering targets for per-slide visibility control.\n\nUsed with `hidden_in` on a slide to exclude it from specific outputs.\nAn empty list means the slide is visible in all targets.",
+        "description": "Rendering targets for per-slide visibility control.\n\nUsed with `hidden_in` on a slide to exclude it from specific outputs.\nAn empty set means the slide is visible in all targets.",
         "enum": [
           "web",
           "pdf"
@@ -585,9 +585,12 @@
             }
           },
           "body_source": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Raw markdown source of the slide body, used by non-HTML exporters.",
-            "default": ""
+            "default": null
           },
           "hidden_in": {
             "type": "array",
@@ -595,7 +598,8 @@
               "$ref": "#/components/schemas/RenderTarget"
             },
             "description": "Targets this slide should be excluded from. Empty means visible everywhere.",
-            "default": []
+            "default": [],
+            "uniqueItems": true
           },
           "kind": {
             "oneOf": [

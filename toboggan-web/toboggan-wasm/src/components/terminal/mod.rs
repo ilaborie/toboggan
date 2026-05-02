@@ -57,20 +57,33 @@ impl TobogganTerminalElement {
             create_element_with_class(&document, "div", "terminal-btn terminal-btn-minimize");
         let btn_maximize =
             create_element_with_class(&document, "div", "terminal-btn terminal-btn-maximize");
-        let _ = buttons.append_child(&btn_close);
-        let _ = buttons.append_child(&btn_minimize);
-        let _ = buttons.append_child(&btn_maximize);
-        let _ = titlebar.append_child(&buttons);
+        if buttons.append_child(&btn_close).is_err() {
+            error!("Failed to append close button to terminal titlebar");
+        }
+        if buttons.append_child(&btn_minimize).is_err() {
+            error!("Failed to append minimize button to terminal titlebar");
+        }
+        if buttons.append_child(&btn_maximize).is_err() {
+            error!("Failed to append maximize button to terminal titlebar");
+        }
+        if titlebar.append_child(&buttons).is_err() {
+            error!("Failed to append buttons to titlebar");
+        }
 
         let title_text = create_element_with_class(&document, "span", "terminal-title");
+        let cwd_str = config.cwd.to_string_lossy();
         let title = config
             .cmd
             .as_deref()
-            .or_else(|| config.cwd.rsplit('/').find(|segment| !segment.is_empty()))
-            .unwrap_or(&config.cwd);
+            .or_else(|| config.cwd.file_name().and_then(|n| n.to_str()))
+            .unwrap_or(&cwd_str);
         title_text.set_text_content(Some(title));
-        let _ = titlebar.append_child(&title_text);
-        let _ = window_el.append_child(&titlebar);
+        if titlebar.append_child(&title_text).is_err() {
+            error!("Failed to append title text to titlebar");
+        }
+        if window_el.append_child(&titlebar).is_err() {
+            error!("Failed to append titlebar to terminal window");
+        }
 
         let body = create_element_with_class(&document, "div", "terminal-body");
 
@@ -83,17 +96,32 @@ impl TobogganTerminalElement {
             return;
         };
         canvas.set_class_name("terminal-canvas");
-        canvas.set_attribute("tabindex", "0").unwrap_throw();
+        if canvas.set_attribute("tabindex", "0").is_err() {
+            error!("Failed to make terminal canvas focusable");
+        }
 
-        let _ = body.append_child(&canvas);
-        let _ = window_el.append_child(&body);
-        let _ = container.append_child(&window_el);
+        if body.append_child(&canvas).is_err() {
+            error!("Failed to append canvas to terminal body");
+        }
+        if window_el.append_child(&body).is_err() {
+            error!("Failed to append body to terminal window");
+        }
+        if container.append_child(&window_el).is_err() {
+            error!("Failed to append terminal window to container");
+        }
 
-        canvas.focus().unwrap_throw();
+        // focus() failure is non-critical (e.g. element not yet visible)
+        let _ = canvas.focus();
 
         let theme = config.theme;
-        let title_el = title_text.dyn_into::<HtmlElement>().ok();
-        let window_html = window_el.dyn_into::<HtmlElement>().ok();
+        let title_el = title_text
+            .dyn_into::<HtmlElement>()
+            .map_err(|_| error!("Failed to cast title element to HtmlElement"))
+            .ok();
+        let window_html = window_el
+            .dyn_into::<HtmlElement>()
+            .map_err(|_| error!("Failed to cast window element to HtmlElement"))
+            .ok();
         let initial_rows = compute_terminal_size(window_html.as_ref(), DEFAULT_FONT_SIZE).1;
         let ws_url = build_terminal_ws_url(api_base_url, config, initial_rows);
 
@@ -143,11 +171,9 @@ impl WasmElement for TobogganTerminalElement {
 }
 
 fn create_element_with_class(document: &web_sys::Document, tag: &str, class: &str) -> Element {
-    let Ok(el) = document.create_element(tag) else {
-        return document
-            .create_element("div")
-            .unwrap_or_else(|_| unreachable!("could not create div element"));
-    };
+    let el = document
+        .create_element(tag)
+        .unwrap_or_else(|err| panic!("Failed to create <{tag}> element: {err:?}"));
     el.set_class_name(class);
     el
 }
@@ -164,9 +190,16 @@ enum KeyAction {
 
 fn setup_button_click(btn: &Element, tx: mpsc::UnboundedSender<KeyAction>, action: KeyAction) {
     let closure = Closure::<dyn FnMut()>::new(move || {
-        let _ = tx.unbounded_send(action.clone());
+        if tx.unbounded_send(action.clone()).is_err() {
+            // Session has ended; handlers are still registered but input is dropped.
+        }
     });
-    let _ = btn.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
+    if btn
+        .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())
+        .is_err()
+    {
+        error!("Failed to register button click handler");
+    }
     closure.forget();
 }
 
@@ -309,12 +342,16 @@ fn setup_keyboard_handler(canvas: &HtmlCanvasElement, tx: mpsc::UnboundedSender<
         // Cmd+/Cmd- for font size (don't send to terminal)
         if meta && (key == "=" || key == "+") {
             event.prevent_default();
-            let _ = tx.unbounded_send(KeyAction::FontIncrease);
+            if tx.unbounded_send(KeyAction::FontIncrease).is_err() {
+                return;
+            }
             return;
         }
         if meta && key == "-" {
             event.prevent_default();
-            let _ = tx.unbounded_send(KeyAction::FontDecrease);
+            if tx.unbounded_send(KeyAction::FontDecrease).is_err() {
+                return;
+            }
             return;
         }
 
@@ -323,13 +360,17 @@ fn setup_keyboard_handler(canvas: &HtmlCanvasElement, tx: mpsc::UnboundedSender<
 
         let input = translate_key(&event);
         if !input.is_empty() {
+            // Ignore send errors: session may have ended while handlers are still registered.
             let _ = tx.unbounded_send(KeyAction::Input(input));
         }
     });
 
-    canvas
+    if canvas
         .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())
-        .unwrap_throw();
+        .is_err()
+    {
+        error!("Failed to register keyboard handler on canvas");
+    }
     closure.forget();
 }
 
@@ -445,7 +486,8 @@ fn build_terminal_ws_url(api_base_url: &str, config: &TerminalConfig, rows: u16)
         .replace("https://", "wss://")
         .replace("http://", "ws://");
 
-    let encoded_cwd = String::from(js_sys::encode_uri_component(&config.cwd));
+    let cwd_str = config.cwd.to_string_lossy();
+    let encoded_cwd = String::from(js_sys::encode_uri_component(&*cwd_str));
     let mut url =
         format!("{ws_base}/api/terminal?cwd={encoded_cwd}&cols={DEFAULT_COLS}&rows={rows}");
 
