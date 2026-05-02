@@ -8,6 +8,10 @@ authors = ["Igor Laborie <ilaborie@gmail.com>"]
 description = "WebAssembly client for Toboggan presentation system"
 repository = "https://github.com/ilaborie/toboggan"
 
+[package.metadata.cargo-machete]
+# Enables web_sys canvas features (CanvasRenderingContext2d) used by vterm.rs
+ignored = ["beamterm-renderer"]
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
