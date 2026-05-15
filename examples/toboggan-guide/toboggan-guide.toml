@@ -1104,6 +1104,139 @@ classes = [
 ]
 
 [[slides]]
+kind = "Standard"
+body_source = '''
+# LaTeX math
+
+Write LaTeX between dollar signs — `$…$` inline, `$$…$$` on its own line:
+
+```markdown
+Euler's identity is $e^{i\pi} + 1 = 0$.
+
+$$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$$
+```
+
+Euler's identity is $e^{i\pi} + 1 = 0$, and the quadratic formula:
+
+$$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$$
+
+| Where | How it renders |
+| --- | --- |
+| Web, `/run`, exported HTML | MathML, generated while the deck builds |
+| PDF and thumbnails | MiTeX, generated while typst compiles |
+
+> [!NOTE]
+> There is no JavaScript and no web font behind this — the math is part of the
+> document, so an exported deck renders it with no network.
+'''
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "2.6 Math"
+
+[slides.body]
+type = "Html"
+raw = '''
+<h1>LaTeX math</h1>
+<p>Write LaTeX between dollar signs — <code>$…$</code> inline, <code>$$…$$</code> on its own line:</p>
+<pre style="background-color:#eff1f5;"><code class="language-markdown"><span style="color:#4f5b66;">Euler&#39;s identity is $e^{i\pi} + 1 = 0$.
+</span><span style="color:#4f5b66;">
+</span><span style="color:#4f5b66;">$$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$$
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<p>Euler's identity is <math><msup><mi>e</mi><mrow><mi>i</mi><mi>π</mi></mrow></msup><mo>+</mo><mn>1</mn><mo>=</mo><mn>0</mn></math>, and the quadratic formula:</p>
+<p><math display="block"><mi>x</mi><mo>=</mo><mfrac><mrow><mo lspace="0" rspace="0">−</mo><mi>b</mi><mo>±</mo><msqrt><mrow><msup><mi>b</mi><mn>2</mn></msup><mo>−</mo><mn>4</mn><mi>a</mi><mi>c</mi></mrow></msqrt></mrow><mrow><mn>2</mn><mi>a</mi></mrow></mfrac></math></p>
+</div><!-- end step -->
+
+<div class="step step-1"><!-- begin step -->
+<table>
+<thead>
+<tr>
+<th>Where</th>
+<th>How it renders</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Web, <code>/run</code>, exported HTML</td>
+<td>MathML, generated while the deck builds</td>
+</tr>
+<tr>
+<td>PDF and thumbnails</td>
+<td>MiTeX, generated while typst compiles</td>
+</tr>
+</tbody>
+</table>
+<div class="markdown-alert markdown-alert-note">
+<p class="markdown-alert-title">Note</p>
+<p>There is no JavaScript and no web font behind this — the math is part of the
+document, so an exported deck renders it with no network.</p>
+</div>
+</div><!-- end step -->
+'''
+alt = '''
+# LaTeX math
+
+Write LaTeX between dollar signs — `$…$` inline, `$$…$$` on its own line:
+
+```markdown
+Euler's identity is $e^{i\pi} + 1 = 0$.
+
+$$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$$
+```
+
+Euler's identity is $e^{i\pi} + 1 = 0$, and the quadratic formula:
+
+$$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$$
+
+| Where | How it renders |
+| --- | --- |
+| Web, `/run`, exported HTML | MathML, generated while the deck builds |
+| PDF and thumbnails | MiTeX, generated while typst compiles |
+
+> [!NOTE]
+> There is no JavaScript and no web font behind this — the math is part of the
+> document, so an exported deck renders it with no network.
+'''
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>A bad expression stops the build and names the file, rather than rendering as
+nothing in front of an audience. That is the whole reason the conversion happens
+here instead of in the browser.</p>
+<p>MathML needs Chrome 109+, Firefox, or Safari — all current browsers render it
+natively.</p>
+"""
+alt = """
+A bad expression stops the build and names the file, rather than rendering as
+nothing in front of an audience. That is the whole reason the conversion happens
+here instead of in the browser.
+
+MathML needs Chrome 109+, Firefox, or Safari — all current browsers render it
+natively.
+"""
+
+[slides.notes.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
 kind = "Part"
 body_source = """
 # Styling
