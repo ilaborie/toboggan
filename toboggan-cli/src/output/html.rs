@@ -112,9 +112,6 @@ pub(super) fn generate_html(talk: &Talk, custom_head_html: Option<&str>) -> Resu
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{title}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet">
     <style>
 {reset_css}
     </style>
@@ -232,6 +229,19 @@ mod tests {
         assert!(html.contains("<h2>Welcome</h2>"));
         assert!(html.contains("<p>Hello World</p>"));
 
+        // An exported deck is handed around as a file and shown from a lectern
+        // with no guarantee of network, so it must not fetch anything
+        // off-origin: no CDN, no web font, no script. Inline `data:` SVGs carry
+        // an `xmlns="http://www.w3.org/..."` namespace, which names a spec
+        // rather than something the browser requests, so match on the
+        // attributes that actually cause a fetch.
+        for attribute in [r#"href="http"#, r#"src="http"#, "url(http", "url(\"http"] {
+            assert!(
+                !html.contains(attribute),
+                "exported HTML must be self-contained, found `{attribute}`"
+            );
+        }
+
         Ok(())
     }
 
@@ -257,6 +267,15 @@ mod tests {
             .find("Test Author")
             .ok_or_else(|| anyhow::anyhow!("Should have custom content"))?;
         assert!(custom_pos < head_close_pos, "Custom HTML should be in head");
+
+        // The custom head comes last so a deck can override the bundled styles.
+        let styles_pos = html
+            .find("<style>")
+            .ok_or_else(|| anyhow::anyhow!("Should have bundled styles"))?;
+        assert!(
+            styles_pos < custom_pos,
+            "custom head must come after the bundled styles so a deck can override them"
+        );
 
         Ok(())
     }

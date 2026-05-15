@@ -23,6 +23,7 @@ pub(crate) fn default_options() -> Options<'static> {
     options.extension.spoiler = true;
     options.extension.greentext = true;
     options.extension.highlight = true;
+    options.extension.math_dollars = true;
 
     options.render.r#unsafe = true;
 
@@ -48,6 +49,7 @@ mod tests {
         let options = default_options();
         assert!(options.extension.strikethrough);
         assert!(options.extension.table);
+        assert!(options.extension.math_dollars);
         assert_eq!(
             options.extension.front_matter_delimiter,
             Some(FRONT_MATTER_DELIMITER.to_owned())

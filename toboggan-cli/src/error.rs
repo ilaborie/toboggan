@@ -93,6 +93,22 @@ pub enum TobogganCliError {
         message: String,
     },
 
+    #[display("Invalid LaTeX math in {file}: {message}")]
+    #[diagnostic(
+        code(toboggan_cli::invalid_math),
+        help(
+            "`$…$` and `$$…$$` are converted to MathML while the deck builds, so a bad \
+             expression is caught here rather than silently rendering as nothing in \
+             front of an audience. Fix the expression, or escape the dollar sign (`\\$`) \
+             if it was not meant to be math."
+        )
+    )]
+    InvalidMath {
+        file: String,
+        latex: String,
+        message: String,
+    },
+
     #[display("Invalid date format: '{input}'")]
     #[diagnostic(
         code(toboggan_cli::invalid_date_format),
