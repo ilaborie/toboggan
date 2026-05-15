@@ -23,7 +23,7 @@ crate-type = ["cdylib", "rlib"]
 toboggan-core = { path = "../../toboggan-core", features = ["js"] }
 
 wasm-bindgen = "0.2.117"
-gloo = { version = "0.11.0", default-features = false, features = [
+gloo = { version = "0.12.0", default-features = false, features = [
   "timers",
   "events",
   "console",
