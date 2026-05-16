@@ -25,7 +25,7 @@ pub fn render_content(content: &Content, wrapper: Option<&str>) -> String {
     };
 
     if let Some(wrapper) = wrapper {
-        format!("<{wrapper}>{inner}</{wrapper}>",)
+        format!("<{wrapper}>{inner}</{wrapper}>")
     } else {
         inner
     }

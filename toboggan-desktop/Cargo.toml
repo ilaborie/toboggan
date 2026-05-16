@@ -7,11 +7,23 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 
+[package.metadata.cargo-machete]
+# naga is pulled in only to force its `termcolor` feature on a transitive
+# dependency of iced/wgpu (see https://github.com/gfx-rs/wgpu/pull/7482);
+# we never `use` the crate ourselves.
+ignored = ["naga"]
+
 [dependencies]
 toboggan-core = { path = "../toboggan-core", features = ["std"] }
 toboggan-client = { path = "../toboggan-client" }
 
-iced = { workspace = true, features = ["tokio", "advanced", "markdown", "highlighter", "image"] }
+iced = { workspace = true, features = [
+  "tokio",
+  "advanced",
+  "markdown",
+  "highlighter",
+  "image",
+] }
 # Force naga termcolor feature - see https://github.com/gfx-rs/wgpu/pull/7482
 naga = { version = "27", features = ["termcolor"] }
 lucide-icons = { workspace = true }

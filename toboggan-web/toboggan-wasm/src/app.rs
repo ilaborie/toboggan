@@ -12,9 +12,9 @@ use web_sys::HtmlElement;
 
 use crate::{
     AppConfig, CommunicationMessage, CommunicationService, ConnectionStatus, KeyboardService,
-    StateClassMapper, ToastType, TobogganApi, TobogganFooterElement, TobogganQuakeTerminalElement,
-    TobogganSlideElement, TobogganToastElement, WasmElement, create_html_element,
-    inject_head_html, play_tada,
+    StateClassMapper, ToastType, TobogganApi, TobogganFooterElement, TobogganHelpElement,
+    TobogganQuakeTerminalElement, TobogganSlideElement, TobogganToastElement, WasmElement,
+    create_html_element, inject_head_html, play_tada,
 };
 
 /// Holds metadata about the presentation
@@ -39,6 +39,7 @@ struct TobogganElements {
     footer: TobogganFooterElement,
     toast: TobogganToastElement,
     quake: TobogganQuakeTerminalElement,
+    help: TobogganHelpElement,
 }
 
 pub(crate) struct App {
@@ -65,7 +66,10 @@ impl App {
         let (tx_msg, rx_msg) = unbounded();
         let (tx_action, rx_action) = unbounded();
 
-        let kbd = KeyboardService::new(tx_action, keymap.unwrap_or_default());
+        let keymap = keymap.unwrap_or_default();
+        let mut elements = TobogganElements::default();
+        elements.help.set_mapping(keymap.clone());
+        let kbd = KeyboardService::new(tx_action, keymap);
         let com =
             CommunicationService::new("Web Client", websocket, tx_msg, tx_cmd.clone(), rx_cmd);
         let com = Rc::new(RefCell::new(com));
@@ -74,7 +78,7 @@ impl App {
             api,
             kbd,
             com,
-            elements: Rc::new(RefCell::new(TobogganElements::default())),
+            elements: Rc::new(RefCell::new(elements)),
             rx_msg: Some(rx_msg),
             rx_action: Some(rx_action),
             tx_cmd: Some(tx_cmd),
@@ -132,6 +136,10 @@ impl WasmElement for App {
             let placeholder = create_html_element("div");
             elements.quake.render(&placeholder);
             elements.quake.set_api_base_url(self.api.base_url());
+
+            // The help dialog also mounts under <body>; the host is unused.
+            let placeholder = create_html_element("div");
+            elements.help.render(&placeholder);
         }
 
         self.kbd.start();

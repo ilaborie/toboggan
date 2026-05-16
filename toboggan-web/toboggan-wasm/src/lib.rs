@@ -13,8 +13,8 @@ use crate::app::App;
 
 mod components;
 pub(crate) use crate::components::{
-    ToastType, TobogganFooterElement, TobogganQuakeTerminalElement, TobogganSlideElement,
-    TobogganToastElement, WasmElement,
+    ToastType, TobogganFooterElement, TobogganHelpElement, TobogganQuakeTerminalElement,
+    TobogganSlideElement, TobogganToastElement, WasmElement,
 };
 
 mod config;

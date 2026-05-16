@@ -108,7 +108,9 @@ fn inject_quake_style() {
         return;
     }
     let style = create_html_element("style");
-    style.set_attribute(STYLE_MARKER_ATTR, "true").unwrap_throw();
+    style
+        .set_attribute(STYLE_MARKER_ATTR, "true")
+        .unwrap_throw();
     style.set_text_content(Some(CSS));
     head.append_child(&style).unwrap_throw();
 }
@@ -148,8 +150,8 @@ fn toggle(state_rc: &Rc<RefCell<QuakeState>>) {
     let (will_open, needs_start) = {
         let state = state_rc.borrow();
         let will_open = !state.is_open;
-        let needs_start = will_open
-            && (state.active_cwd.is_none() || state.active_cwd != state.pending_cwd);
+        let needs_start =
+            will_open && (state.active_cwd.is_none() || state.active_cwd != state.pending_cwd);
         (will_open, needs_start)
     };
 
