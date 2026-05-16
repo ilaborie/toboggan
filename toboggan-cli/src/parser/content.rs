@@ -276,7 +276,7 @@ impl SlideContentParser {
             title: Content::Text {
                 text: self
                     .title()
-                    .or_else(|| name.map(ToString::to_string))
+                    .or_else(|| name.map(str::to_owned))
                     .unwrap_or_else(|| DEFAULT_SLIDE_TITLE.to_owned()),
             },
             body,
@@ -294,6 +294,7 @@ impl SlideContentParser {
                     tc
                 })
                 .collect(),
+            quake_terminal_cwd: front_matter.quake_cwd.clone(),
         };
 
         Ok((result, front_matter))

@@ -88,14 +88,12 @@ impl App {
 
             Message::SlideLoaded(id, slide) => {
                 debug!("Slide loaded: {}", id);
+                let slide = *slide;
                 if let Some(existing_slide) = self.state.slides.get_mut(id) {
                     *existing_slide = slide;
                 } else {
                     // Extend the Vec if needed
-                    self.state.slides.resize(id + 1, slide.clone());
-                    if let Some(target_slide) = self.state.slides.get_mut(id) {
-                        *target_slide = slide;
-                    }
+                    self.state.slides.resize(id + 1, slide);
                 }
                 Task::none()
             }
@@ -219,6 +217,8 @@ impl App {
             date: talk_response.date,
             footer: talk_response.footer.clone(),
             head: talk_response.head.clone(),
+            default_terminal_cwd: None,
+            source_dir: None,
             slides: vec![], // We'll load slides separately
         };
         self.state.talk = Some(talk);
@@ -245,6 +245,8 @@ impl App {
             date: talk_response.date,
             footer: talk_response.footer.clone(),
             head: talk_response.head.clone(),
+            default_terminal_cwd: None,
+            source_dir: None,
             slides: slides_response.slides.clone(),
         };
         self.state.talk = Some(talk);
@@ -281,6 +283,8 @@ impl App {
             date: talk_response.date,
             footer: talk_response.footer.clone(),
             head: talk_response.head.clone(),
+            default_terminal_cwd: None,
+            source_dir: None,
             slides: slides_response.slides.clone(),
         };
         self.state.talk = Some(talk);

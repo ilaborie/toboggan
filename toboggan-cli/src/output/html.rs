@@ -217,6 +217,7 @@ mod tests {
             notes: Content::Empty,
             style: Style::default(),
             terminals: Vec::new(),
+            quake_terminal_cwd: None,
         };
         talk.slides.push(slide);
 

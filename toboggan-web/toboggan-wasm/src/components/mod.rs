@@ -9,6 +9,9 @@ pub(crate) use self::slide::*;
 mod terminal;
 pub(crate) use self::terminal::*;
 
+mod quake_terminal;
+pub(crate) use self::quake_terminal::*;
+
 mod toast;
 pub(crate) use self::toast::*;
 

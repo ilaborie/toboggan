@@ -10,6 +10,13 @@ pub struct Talk {
     pub footer: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub head: Option<String>,
+    /// Default working directory for the `QuakeTerminal` overlay, used when a slide
+    /// does not declare its own. Relative paths resolve against [`Talk::source_dir`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_terminal_cwd: Option<String>,
+    /// Directory of the talk's source file(s). Populated by the loader; not serialized.
+    #[serde(default, skip_serializing, skip_deserializing)]
+    pub source_dir: Option<String>,
     pub slides: Vec<Slide>,
 }
 
@@ -26,6 +33,8 @@ impl Talk {
             date,
             footer,
             head,
+            default_terminal_cwd: None,
+            source_dir: None,
             slides,
         }
     }
@@ -45,6 +54,18 @@ impl Talk {
     #[must_use]
     pub fn with_head(mut self, head: impl Into<String>) -> Self {
         self.head = Some(head.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_default_terminal_cwd(mut self, cwd: impl Into<String>) -> Self {
+        self.default_terminal_cwd = Some(cwd.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_source_dir(mut self, dir: impl Into<String>) -> Self {
+        self.source_dir = Some(dir.into());
         self
     }
 
@@ -90,6 +111,8 @@ impl From<Talk> for TalkResponse {
             date,
             footer,
             head,
+            default_terminal_cwd: _,
+            source_dir: _,
             slides,
         } = value;
         let titles = slides.iter().map(|it| it.title.to_string()).collect();

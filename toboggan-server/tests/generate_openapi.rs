@@ -7,7 +7,7 @@ use clawspec_core::{ApiClient, register_schemas};
 use serde_json::{Value, json};
 use toboggan_core::{
     ClientId, Command, Content, Date, Duration, Notification, Slide, SlideId, SlideKind,
-    SlidesResponse, State, Style, Talk, TalkResponse, Timestamp,
+    SlidesResponse, State, Style, Talk, TalkResponse, TerminalConfig, Theme, Timestamp,
 };
 use toboggan_server::{
     ClientService, HealthResponse, HealthResponseStatus, TalkService, TobogganState, routes,
@@ -116,6 +116,8 @@ async fn should_generate_openapi() -> anyhow::Result<()> {
         State,
         Style,
         TalkResponse,
+        TerminalConfig,
+        Theme,
         Timestamp,
         ClientId,
     )

@@ -12,8 +12,9 @@ use web_sys::HtmlElement;
 
 use crate::{
     AppConfig, CommunicationMessage, CommunicationService, ConnectionStatus, KeyboardService,
-    StateClassMapper, ToastType, TobogganApi, TobogganFooterElement, TobogganSlideElement,
-    TobogganToastElement, WasmElement, create_html_element, inject_head_html, play_tada,
+    StateClassMapper, ToastType, TobogganApi, TobogganFooterElement, TobogganQuakeTerminalElement,
+    TobogganSlideElement, TobogganToastElement, WasmElement, create_html_element,
+    inject_head_html, play_tada,
 };
 
 /// Holds metadata about the presentation
@@ -37,6 +38,7 @@ struct TobogganElements {
     slide: TobogganSlideElement,
     footer: TobogganFooterElement,
     toast: TobogganToastElement,
+    quake: TobogganQuakeTerminalElement,
 }
 
 pub(crate) struct App {
@@ -123,6 +125,13 @@ impl WasmElement for App {
             el.set_class_name("toboggan-footer");
             elements.footer.render(&el);
             host.append_child(&el).unwrap_throw();
+
+            // The quake terminal mounts itself directly under <body>; the host
+            // element passed here is unused. render() must run before
+            // set_api_base_url since the latter writes into the rendered state.
+            let placeholder = create_html_element("div");
+            elements.quake.render(&placeholder);
+            elements.quake.set_api_base_url(self.api.base_url());
         }
 
         self.kbd.start();
@@ -499,10 +508,10 @@ async fn update_slide_display(
         return;
     };
 
-    elements
-        .borrow_mut()
-        .slide
-        .set_slide(Some(slide), current_step);
+    let quake_cwd = slide.quake_terminal_cwd.clone();
+    let mut elems = elements.borrow_mut();
+    elems.slide.set_slide(Some(slide), current_step);
+    elems.quake.set_slide_cwd(quake_cwd);
 }
 
 /// Shows completion toast if presentation is done

@@ -20,7 +20,7 @@ pub const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
 pub const PING_PERIOD: Duration = Duration::from_secs(10);
 
 /// Maximum time to wait for a connection response
-pub const CONNECTION_TIMEOUT: Duration = Duration::from_secs(60);
+pub const CONNECTION_TIMEOUT: Duration = Duration::from_mins(1);
 
 /// Interval for cleanup tasks
 ///
