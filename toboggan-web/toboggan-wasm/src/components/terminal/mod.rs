@@ -10,7 +10,7 @@ use gloo::net::websocket::Message;
 use gloo::net::websocket::futures::WebSocket;
 use toboggan_core::{TerminalConfig, Theme};
 use wasm_bindgen::closure::Closure;
-use wasm_bindgen::{JsCast, UnwrapThrowExt};
+use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{Element, HtmlCanvasElement, HtmlElement, KeyboardEvent};
 
@@ -270,8 +270,10 @@ async fn run_terminal_session(
                     .await;
                 }
                 KeyAction::Expand => {
-                    if let Some(ref win) = window_el_kbd {
-                        let _ = win.class_list().add_1("terminal-fullscreen");
+                    if let Some(ref win) = window_el_kbd
+                        && win.class_list().add_1("terminal-fullscreen").is_err()
+                    {
+                        error!("Failed to add terminal-fullscreen class on expand");
                     }
                     let size = *font_size_kbd.borrow();
                     let (new_cols, new_rows) = compute_terminal_size(window_el_kbd.as_ref(), size);
@@ -287,8 +289,10 @@ async fn run_terminal_session(
                     let _ = canvas_kbd.focus();
                 }
                 KeyAction::Restore => {
-                    if let Some(ref win) = window_el_kbd {
-                        let _ = win.class_list().remove_1("terminal-fullscreen");
+                    if let Some(ref win) = window_el_kbd
+                        && win.class_list().remove_1("terminal-fullscreen").is_err()
+                    {
+                        error!("Failed to remove terminal-fullscreen class on restore");
                     }
                     let size = *font_size_kbd.borrow();
                     let (new_cols, new_rows) = compute_terminal_size(window_el_kbd.as_ref(), size);
@@ -487,7 +491,7 @@ fn build_terminal_ws_url(api_base_url: &str, config: &TerminalConfig, rows: u16)
         .replace("http://", "ws://");
 
     let cwd_str = config.cwd.to_string_lossy();
-    let encoded_cwd = String::from(js_sys::encode_uri_component(&*cwd_str));
+    let encoded_cwd = String::from(js_sys::encode_uri_component(&cwd_str));
     let mut url =
         format!("{ws_base}/api/terminal?cwd={encoded_cwd}&cols={DEFAULT_COLS}&rows={rows}");
 
