@@ -131,10 +131,36 @@ async fn should_generate_openapi() -> anyhow::Result<()> {
 
     // Generate and save OpenAPI specification
     // Using JSON format for safer deserialization in the server
-    app.write_openapi("./openapi.json")
+    let path = "./openapi.json";
+    app.write_openapi(path)
         .await
         .context("writing openapi.json file")?;
+    ensure_trailing_newline(path).context("normalising openapi.json line ending")?;
 
+    Ok(())
+}
+
+/// Append a trailing newline to `path` if it does not already end with one.
+///
+/// `clawspec::write_openapi` does not terminate the JSON file with a newline,
+/// which trips the `end-of-file-fixer` pre-commit hook every time the schema
+/// is regenerated. Normalising here keeps the snapshot well-formed and the
+/// hook silent.
+fn ensure_trailing_newline(path: &str) -> std::io::Result<()> {
+    use std::fs::OpenOptions;
+    use std::io::{Read, Seek, SeekFrom, Write};
+
+    let mut file = OpenOptions::new().read(true).append(true).open(path)?;
+    let len = file.metadata()?.len();
+    if len == 0 {
+        return Ok(());
+    }
+    file.seek(SeekFrom::Start(len - 1))?;
+    let mut last = [0u8; 1];
+    file.read_exact(&mut last)?;
+    if last[0] != b'\n' {
+        file.write_all(b"\n")?;
+    }
     Ok(())
 }
 
