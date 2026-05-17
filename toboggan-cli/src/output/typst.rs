@@ -1,6 +1,6 @@
 use std::fmt::Write as _;
 
-use comrak::nodes::{AstNode, ListType, NodeValue};
+use comrak::nodes::{AlertType, AstNode, ListType, NodeValue};
 use comrak::{Arena, parse_document};
 use toboggan_core::{Content, Slide, SlideKind, Talk};
 
@@ -53,15 +53,49 @@ fn write_slide(out: &mut String, slide: &Slide) {
 
 fn write_section(out: &mut String, slide: &Slide) {
     let title = content_to_typst(&slide.title);
+    let body = section_body(slide);
     let _ = writeln!(
         out,
         r#"// ── Section ───────────────────────────────────────────────────────────────
 #align(center + horizon)[
   #text(size: 30pt, weight: "semibold")[{title}]
+
+  {body}
 ]
 #pagebreak()
 "#
     );
+}
+
+/// Render the body of a Part slide.
+///
+/// Mirrors `write_standard_body`: prefer the markdown `body_source` when present
+/// (the parser populates it for slides loaded from `.md` / `_part.md`), and fall
+/// back to the rendered `Content` for programmatically-constructed slides.
+fn section_body(slide: &Slide) -> String {
+    match slide.body_source.as_deref() {
+        Some(source) => {
+            let typ = md_to_typst(source);
+            strip_leading_heading(&typ)
+        }
+        None => content_to_typst(&slide.body),
+    }
+}
+
+/// Drop the leading `= heading` produced by `md_to_typst` for `_part.md` files
+/// (whose markdown source starts with the part title).
+///
+/// Without this, the section block would render the title twice — once via the
+/// outer `#text(...)[{title}]` and once via the `= H1` from `body_source`.
+fn strip_leading_heading(typst: &str) -> String {
+    let trimmed = typst.trim_start();
+    let Some(rest) = trimmed.strip_prefix("= ") else {
+        return typst.to_owned();
+    };
+    let Some(nl) = rest.find('\n') else {
+        return String::new();
+    };
+    rest[nl + 1..].trim_start().to_owned()
 }
 
 fn write_standard(out: &mut String, slide: &Slide) {
@@ -286,7 +320,51 @@ fn render_node<'a>(node: &'a MarkdownNode<'a>, out: &mut String, list_depth: usi
             render_table(node, out);
         }
 
+        NodeValue::Alert(alert) => {
+            render_alert(
+                node,
+                out,
+                list_depth,
+                alert.alert_type,
+                alert.title.as_deref(),
+            );
+        }
+
         _ => render_children(node, out, list_depth, tight),
+    }
+}
+
+/// Render a GFM alert block as a Typst block with a visible label.
+///
+/// The label uses comrak's default title (`Note`, `Tip`, `Important`, `Warning`,
+/// `Caution`) unless the markdown overrode it with `> [!NOTE] Custom title`.
+fn render_alert<'a>(
+    node: &'a MarkdownNode<'a>,
+    out: &mut String,
+    list_depth: usize,
+    kind: AlertType,
+    title_override: Option<&str>,
+) {
+    let label = title_override.unwrap_or_else(|| kind.default_title());
+    let accent = alert_accent(kind);
+    let _ = writeln!(
+        out,
+        "#block(stroke: (left: 4pt + {accent}), inset: 10pt, width: 100%)[",
+    );
+    let _ = writeln!(out, "  #text(weight: \"bold\", fill: {accent})[{label}]");
+    out.push('\n');
+    render_children(node, out, list_depth, false);
+    out.push_str("]\n\n");
+}
+
+/// Accent colour used for the left border + label of each alert kind.
+const fn alert_accent(kind: AlertType) -> &'static str {
+    match kind {
+        AlertType::Note => "rgb(\"#0969da\")",
+        AlertType::Tip => "rgb(\"#1a7f37\")",
+        AlertType::Important => "rgb(\"#8250df\")",
+        AlertType::Warning => "rgb(\"#9a6700\")",
+        AlertType::Caution => "rgb(\"#cf222e\")",
     }
 }
 
