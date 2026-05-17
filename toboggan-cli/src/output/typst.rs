@@ -641,6 +641,17 @@ mod tests {
     }
 
     #[test]
+    fn test_image_url_is_escaped() {
+        // Same `"` quote-in-URL hazard applies to images — pin it so we don't
+        // regress on the symmetric arm.
+        let result = md_to_typst(r#"![alt](https://x.com/a"b.png)"#);
+        assert!(
+            result.contains(r#"#image("https://x.com/a\"b.png")"#),
+            "image url escaped, got: {result}"
+        );
+    }
+
+    #[test]
     fn test_md_to_typst_headings() {
         assert!(md_to_typst("# H1\n").contains("= H1"), "h1");
         assert!(md_to_typst("## H2\n").contains("== H2"), "h2");

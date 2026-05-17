@@ -183,6 +183,36 @@ mod tests {
     }
 
     #[test]
+    fn test_important_alert() {
+        let content = "> [!IMPORTANT]\n> Crucial detail";
+        let lines = format_content_lines(content);
+        assert_eq!(lines.len(), 2);
+        let label_span = lines
+            .first()
+            .expect("label line")
+            .spans
+            .first()
+            .expect("label span");
+        assert_eq!(label_span.content, "❗ IMPORTANT");
+        assert_eq!(label_span.style.fg, Some(Color::Magenta));
+    }
+
+    #[test]
+    fn test_caution_alert() {
+        let content = "> [!CAUTION]\n> Risk warning";
+        let lines = format_content_lines(content);
+        assert_eq!(lines.len(), 2);
+        let label_span = lines
+            .first()
+            .expect("label line")
+            .spans
+            .first()
+            .expect("label span");
+        assert_eq!(label_span.content, "⛔ CAUTION");
+        assert_eq!(label_span.style.fg, Some(Color::Red));
+    }
+
+    #[test]
     fn test_mixed_content_preserves_order() {
         let content = "intro\n\n> [!TIP]\n> A tip\n\noutro";
         let lines = format_content_lines(content);
