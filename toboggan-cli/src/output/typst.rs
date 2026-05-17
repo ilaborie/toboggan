@@ -618,6 +618,82 @@ mod tests {
     }
 
     #[test]
+    fn test_part_slide_body_is_preserved() {
+        // Regression: Part slides loaded from `_part.md` carry prose in body_source
+        // (e.g. examples/riir-folder/02-success-stories/_part.md). The Typst section
+        // writer was discarding the body — only the title was emitted.
+        let mut talk = make_talk("Talk");
+        let slide = Slide {
+            kind: SlideKind::Part,
+            title: Content::text("Success Stories"),
+            body_source: Some("# Success Stories\n\nIntro prose for the part.".to_owned()),
+            ..Default::default()
+        };
+        talk.slides.push(slide);
+
+        let output = String::from_utf8(generate_typst(&talk)).expect("utf8");
+
+        assert!(output.contains("Success Stories"), "part title present");
+        assert!(
+            output.contains("Intro prose for the part"),
+            "part body preserved in Typst output"
+        );
+    }
+
+    #[test]
+    fn test_gfm_alert_note_renders_as_callout() {
+        let result = md_to_typst("> [!NOTE]\n> Useful information.\n");
+        assert!(
+            result.contains("Useful information"),
+            "alert body preserved"
+        );
+        assert!(
+            result.contains("Note") || result.contains("NOTE") || result.contains("#info"),
+            "NOTE label or info clue surfaced in Typst output, got: {result}"
+        );
+    }
+
+    #[test]
+    fn test_gfm_alert_tip_renders_as_callout() {
+        let result = md_to_typst("> [!TIP]\n> Useful tip.\n");
+        assert!(result.contains("Useful tip"), "tip body preserved");
+        assert!(
+            result.contains("Tip") || result.contains("TIP") || result.contains("#tip"),
+            "TIP label or tip clue surfaced, got: {result}"
+        );
+    }
+
+    #[test]
+    fn test_gfm_alert_important_renders_as_callout() {
+        let result = md_to_typst("> [!IMPORTANT]\n> Critical info.\n");
+        assert!(result.contains("Critical info"), "important body preserved");
+        assert!(
+            result.contains("Important") || result.contains("IMPORTANT"),
+            "IMPORTANT label surfaced, got: {result}"
+        );
+    }
+
+    #[test]
+    fn test_gfm_alert_warning_renders_as_callout() {
+        let result = md_to_typst("> [!WARNING]\n> Beware.\n");
+        assert!(result.contains("Beware"), "warning body preserved");
+        assert!(
+            result.contains("Warning") || result.contains("WARNING") || result.contains("#warning"),
+            "WARNING label or warning clue surfaced, got: {result}"
+        );
+    }
+
+    #[test]
+    fn test_gfm_alert_caution_renders_as_callout() {
+        let result = md_to_typst("> [!CAUTION]\n> Danger ahead.\n");
+        assert!(result.contains("Danger ahead"), "caution body preserved");
+        assert!(
+            result.contains("Caution") || result.contains("CAUTION"),
+            "CAUTION label surfaced, got: {result}"
+        );
+    }
+
+    #[test]
     fn test_slide_with_style_classes_produces_content() {
         // Style classes are intentionally not rendered in Typst output.
         // Verify the slide body is still present even when classes are set.
