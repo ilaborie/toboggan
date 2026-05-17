@@ -2,7 +2,7 @@ use std::fmt::Write as _;
 
 use comrak::nodes::{AlertType, AstNode, ListType, NodeValue};
 use comrak::{Arena, parse_document};
-use toboggan_core::{Content, Slide, SlideKind, Talk};
+use toboggan_core::{Content, Slide, SlideBody, SlideKind, Talk};
 
 use crate::parser::default_options;
 
@@ -70,16 +70,12 @@ fn write_section(out: &mut String, slide: &Slide) {
 
 /// Render the body of a Part slide.
 ///
-/// Mirrors `write_standard_body`: prefer the markdown `body_source` when present
-/// (the parser populates it for slides loaded from `.md` / `_part.md`), and fall
-/// back to the rendered `Content` for programmatically-constructed slides.
+/// Routes on the `SlideBody` view so the three meaningful states are explicit.
 fn section_body(slide: &Slide) -> String {
-    match slide.body_source.as_deref() {
-        Some(source) => {
-            let typ = md_to_typst(source);
-            strip_leading_heading(&typ)
-        }
-        None => content_to_typst(&slide.body),
+    match slide.body_view() {
+        SlideBody::Empty => String::new(),
+        SlideBody::Rendered(content) => content_to_typst(content),
+        SlideBody::FromMarkdown { source, .. } => strip_leading_heading(&md_to_typst(source)),
     }
 }
 
@@ -150,17 +146,16 @@ fn write_standard_body(out: &mut String, slide: &Slide) {
     let _ = writeln!(out, "#slide[\n{title_block}{body_block}\n]");
 }
 
-/// Render the body of a Standard slide, preferring the markdown `body_source`.
+/// Render the body of a Standard slide.
 ///
-/// The leading H1 from the markdown source is stripped because the slide
-/// title is emitted separately via `==` inside `#slide[...]`.
+/// Routes on the `SlideBody` view. The leading H1 from a markdown source is
+/// stripped because the slide title is emitted separately via `==` inside
+/// `#slide[..]`.
 fn standard_body(slide: &Slide) -> String {
-    match slide.body_source.as_deref() {
-        Some(source) => {
-            let typ = md_to_typst(source);
-            strip_leading_heading(&typ)
-        }
-        None => content_to_typst(&slide.body),
+    match slide.body_view() {
+        SlideBody::Empty => String::new(),
+        SlideBody::Rendered(content) => content_to_typst(content),
+        SlideBody::FromMarkdown { source, .. } => strip_leading_heading(&md_to_typst(source)),
     }
 }
 

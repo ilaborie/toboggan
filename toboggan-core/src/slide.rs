@@ -93,11 +93,33 @@ pub struct Slide {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub terminals: Vec<TerminalConfig>,
     /// Raw markdown source of the slide body, used by non-HTML exporters.
+    ///
+    /// When `Some`, `body` is expected to be the rendered projection of this
+    /// source — `Slide::from_markdown` is the constructor that pairs them
+    /// consistently; ad-hoc construction must uphold that invariant.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body_source: Option<String>,
     /// Targets this slide should be excluded from. Empty means visible everywhere.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub hidden_in: BTreeSet<RenderTarget>,
+}
+
+/// Borrowed view over a slide's body content.
+///
+/// Returned by [`Slide::body_view`]. Makes the three meaningful body states
+/// explicit so callers do not have to inspect both `body` and `body_source`
+/// fields and reason about whether they agree.
+#[derive(Debug)]
+pub enum SlideBody<'a> {
+    /// No body content.
+    Empty,
+    /// Pre-rendered content, no markdown source available.
+    Rendered(&'a Content),
+    /// Body produced from markdown — both the source and its rendered form.
+    FromMarkdown {
+        source: &'a str,
+        rendered: &'a Content,
+    },
 }
 
 impl Slide {
@@ -123,6 +145,20 @@ impl Slide {
         Self {
             kind: SlideKind::Part,
             title,
+            ..Default::default()
+        }
+    }
+
+    /// Build a slide from a markdown source and its rendered projection.
+    ///
+    /// This is the blessed constructor for parser-produced slides: it pairs
+    /// `body_source` and `body` so `body_view` returns the consistent
+    /// `FromMarkdown` variant.
+    #[must_use]
+    pub fn from_markdown(source: impl Into<String>, rendered: impl Into<Content>) -> Self {
+        Self {
+            body: rendered.into(),
+            body_source: Some(source.into()),
             ..Default::default()
         }
     }
@@ -161,6 +197,19 @@ impl Slide {
     #[must_use]
     pub fn is_hidden_from(&self, target: RenderTarget) -> bool {
         self.hidden_in.contains(&target)
+    }
+
+    /// Returns a view classifying the body as `Empty` / `Rendered` / `FromMarkdown`.
+    ///
+    /// Prefer this over inspecting `body` and `body_source` directly — the
+    /// view encodes the only three combinations that should ever appear.
+    #[must_use]
+    pub fn body_view(&self) -> SlideBody<'_> {
+        match (self.body_source.as_deref(), &self.body) {
+            (Some(source), rendered) => SlideBody::FromMarkdown { source, rendered },
+            (None, Content::Empty) => SlideBody::Empty,
+            (None, rendered) => SlideBody::Rendered(rendered),
+        }
     }
 }
 
@@ -289,5 +338,41 @@ mod tests {
         assert_eq!(SlideId::FIRST.display_number(), 1);
         assert_eq!(SlideId::new(0).display_number(), 1);
         assert_eq!(SlideId::new(9).display_number(), 10);
+    }
+
+    #[test]
+    fn test_body_view_empty() {
+        let slide = Slide::default();
+        assert!(matches!(slide.body_view(), SlideBody::Empty));
+    }
+
+    #[test]
+    fn test_body_view_rendered() {
+        let slide = Slide::new(Content::text("Title")).with_body(Content::text("Hello"));
+        match slide.body_view() {
+            SlideBody::Rendered(Content::Text { text }) => assert_eq!(text, "Hello"),
+            other => panic!("expected Rendered, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_body_view_from_markdown() {
+        let slide = Slide::from_markdown("# Hi\n\nbody", Content::text("rendered"));
+        match slide.body_view() {
+            SlideBody::FromMarkdown { source, rendered } => {
+                assert_eq!(source, "# Hi\n\nbody");
+                assert!(matches!(rendered, Content::Text { text } if text == "rendered"));
+            }
+            other => panic!("expected FromMarkdown, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_from_markdown_pairs_body_and_source() {
+        // The smart constructor must set both fields so direct field access
+        // and body_view agree.
+        let slide = Slide::from_markdown("source text", Content::text("rendered text"));
+        assert_eq!(slide.body_source.as_deref(), Some("source text"));
+        assert!(matches!(slide.body, Content::Text { ref text } if text == "rendered text"));
     }
 }
