@@ -589,7 +589,7 @@
               "string",
               "null"
             ],
-            "description": "Raw markdown source of the slide body, used by non-HTML exporters.",
+            "description": "Raw markdown source of the slide body, used by non-HTML exporters.\n\nWhen `Some`, `body` is expected to be the rendered projection of this\nsource — `Slide::from_markdown` is the constructor that pairs them\nconsistently; ad-hoc construction must uphold that invariant.",
             "default": null
           },
           "hidden_in": {
