@@ -43,6 +43,22 @@ pub struct Settings {
     /// Enable watch mode to automatically reload the talk file when it changes
     #[clap(long, env = "TOBOGGAN_WATCH")]
     pub watch: bool,
+
+    /// Shell to spawn for embedded terminals (e.g. `/opt/homebrew/bin/fish`).
+    /// Defaults to the `SHELL` environment variable, then `sh`.
+    #[clap(long, env = "TOBOGGAN_SHELL")]
+    pub shell: Option<String>,
+}
+
+impl Settings {
+    /// Resolves the shell for embedded terminals: explicit `--shell`, else `$SHELL`, else `sh`.
+    #[must_use]
+    pub fn resolve_shell(&self) -> String {
+        self.shell
+            .clone()
+            .or_else(|| std::env::var("SHELL").ok())
+            .unwrap_or_else(|| "sh".to_owned())
+    }
 }
 
 impl Settings {

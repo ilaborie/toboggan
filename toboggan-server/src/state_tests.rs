@@ -17,7 +17,7 @@ mod tests {
     fn create_test_state(talk: Talk) -> TobogganState {
         let talk_service = TalkService::new(talk).unwrap();
         let client_service = ClientService::new(100);
-        TobogganState::new(talk_service, client_service)
+        TobogganState::new(talk_service, client_service, "sh".into())
     }
 
     #[tokio::test]

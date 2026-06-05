@@ -34,7 +34,7 @@ impl TobogganTestServer {
 
         let talk_service = TalkService::new(talk).unwrap();
         let client_service = ClientService::new(100);
-        let state = TobogganState::new(talk_service, client_service);
+        let state = TobogganState::new(talk_service, client_service, "sh".into());
         let router = routes(None, OpenApi::default()).with_state(state);
 
         Self { router }

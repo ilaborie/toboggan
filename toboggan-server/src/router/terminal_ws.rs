@@ -2,14 +2,16 @@ use std::io::{Read, Write};
 use std::thread;
 use std::time::Duration;
 
-use axum::extract::Query;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::{Query, State};
 use axum::response::Response;
 use futures::{SinkExt, StreamExt};
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 use serde::Deserialize;
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
+
+use crate::TobogganState;
 
 #[derive(Debug, Deserialize)]
 pub(super) struct TerminalParams {
@@ -31,16 +33,19 @@ fn default_rows() -> u16 {
 
 pub(super) async fn terminal_websocket_handler(
     ws: WebSocketUpgrade,
+    State(state): State<TobogganState>,
     Query(params): Query<TerminalParams>,
 ) -> Response {
     let cwd = params.cwd.unwrap_or_else(|| ".".to_owned());
     let cmd = params.cmd;
-    info!(%cwd, ?cmd, cols = params.cols, rows = params.rows, "Terminal WebSocket upgrade requested");
-    ws.on_upgrade(move |socket| handle_terminal(socket, cwd, cmd, params.cols, params.rows))
+    let shell = state.terminal_shell().to_owned();
+    info!(%cwd, ?cmd, %shell, cols = params.cols, rows = params.rows, "Terminal WebSocket upgrade requested");
+    ws.on_upgrade(move |socket| handle_terminal(socket, shell, cwd, cmd, params.cols, params.rows))
 }
 
 async fn handle_terminal(
     socket: WebSocket,
+    shell: String,
     cwd: String,
     cmd: Option<String>,
     cols: u16,
@@ -77,7 +82,12 @@ async fn handle_terminal(
         }
     };
 
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "sh".to_owned());
+    // fish probes Device Attributes (DA1) on startup and blocks ~10s waiting for the
+    // reply; other shells (zsh, bash, sh) don't, so an unsolicited reply would land at
+    // their prompt as literal input. We only pre-send for fish (see DA1 pre-send below).
+    let shell_is_fish = std::path::Path::new(&shell)
+        .file_name()
+        .is_some_and(|name| name == "fish");
     let mut command = CommandBuilder::new(&shell);
     command.cwd(&abs_cwd);
     command.env("TERM", "xterm-256color");
@@ -107,9 +117,12 @@ async fn handle_terminal(
     tokio::time::sleep(Duration::from_millis(20)).await;
     spawn_pty_writer(pair.master.take_writer(), rx_pty);
 
-    // Pre-send DA1 response so fish doesn't wait 10s (only for interactive shells,
-    // not for commands — command shells exit quickly and the response would echo as text)
-    if cmd.is_none() && tx_pty.send(DA1_RESPONSE.to_vec()).is_err() {
+    // Pre-send DA1 response so fish doesn't wait 10s. Restricted to interactive fish
+    // sessions: command shells exit quickly (the response would echo as text), and
+    // non-fish shells never query at startup so the reply would be typed at the prompt
+    // (`^[[?62;4c`). Real DA1/DSR queries from any shell are still answered reactively
+    // in spawn_pty_reader.
+    if shell_is_fish && cmd.is_none() && tx_pty.send(DA1_RESPONSE.to_vec()).is_err() {
         warn!("Failed to send DA1 response to PTY");
     }
 

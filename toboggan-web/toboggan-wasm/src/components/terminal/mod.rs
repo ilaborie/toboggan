@@ -9,10 +9,10 @@ use gloo::console::{error, info};
 use gloo::net::websocket::Message;
 use gloo::net::websocket::futures::WebSocket;
 use toboggan_core::{TerminalConfig, Theme};
-use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
+use wasm_bindgen::closure::Closure;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{Element, HtmlCanvasElement, HtmlElement, KeyboardEvent};
+use web_sys::{Element, HtmlCanvasElement, HtmlElement, KeyboardEvent, Node, ShadowRoot};
 
 use self::vterm::VirtualTerminal;
 use crate::components::WasmElement;
@@ -178,6 +178,18 @@ fn create_element_with_class(document: &web_sys::Document, tag: &str, class: &st
     el
 }
 
+/// Resolve the shadow-DOM host element for a node living inside the terminal's shadow root.
+///
+/// Used to lift the whole terminal (host + its scoped styles) out of the slide on
+/// fullscreen, since the slide's `overflow`/`transform` would otherwise clip or trap the
+/// `position: fixed` terminal.
+fn shadow_host(el: &HtmlElement) -> Option<Element> {
+    el.get_root_node()
+        .dyn_into::<ShadowRoot>()
+        .ok()
+        .map(|root| root.host())
+}
+
 /// Message from keyboard/button handler to terminal session
 #[derive(Clone)]
 enum KeyAction {
@@ -239,6 +251,11 @@ async fn run_terminal_session(
 
     spawn_local(async move {
         let mut rx_key = rx_key;
+        // The terminal's styles live in a shadow root, so on fullscreen we move the whole
+        // host (not the inner window) to `<body>` to escape the slide's clipping/transform,
+        // then restore it to its original position on collapse.
+        let host_el = window_el_kbd.as_ref().and_then(shadow_host);
+        let mut fullscreen_origin: Option<(Node, Option<Node>)> = None;
         while let Some(action) = rx_key.next().await {
             match action {
                 KeyAction::Input(input) => {
@@ -275,6 +292,20 @@ async fn run_terminal_session(
                     {
                         error!("Failed to add terminal-fullscreen class on expand");
                     }
+                    // Lift the host out of the slide so `position: fixed` resolves against
+                    // the viewport (the slide's overflow/transform would otherwise clip it).
+                    if let Some(ref host) = host_el {
+                        if fullscreen_origin.is_none()
+                            && let Some(parent) = host.parent_node()
+                        {
+                            fullscreen_origin = Some((parent, host.next_sibling()));
+                        }
+                        if let Some(body) = gloo::utils::document().body()
+                            && body.append_child(host).is_err()
+                        {
+                            error!("Failed to move terminal host to <body> on expand");
+                        }
+                    }
                     let size = *font_size_kbd.borrow();
                     let (new_cols, new_rows) = compute_terminal_size(window_el_kbd.as_ref(), size);
                     resize_and_render(
@@ -293,6 +324,13 @@ async fn run_terminal_session(
                         && win.class_list().remove_1("terminal-fullscreen").is_err()
                     {
                         error!("Failed to remove terminal-fullscreen class on restore");
+                    }
+                    // Return the host to its original spot in the slide.
+                    if let Some(ref host) = host_el
+                        && let Some((parent, next)) = fullscreen_origin.take()
+                        && parent.insert_before(host, next.as_ref()).is_err()
+                    {
+                        error!("Failed to restore terminal host into slide on collapse");
                     }
                     let size = *font_size_kbd.borrow();
                     let (new_cols, new_rows) = compute_terminal_size(window_el_kbd.as_ref(), size);
@@ -455,9 +493,7 @@ fn compute_terminal_size(window_el: Option<&HtmlElement>, font_size: f64) -> (u1
 async fn resize_and_render(
     vterm: &Rc<RefCell<VirtualTerminal>>,
     canvas: &HtmlCanvasElement,
-    ws_write: &Rc<
-        RefCell<futures::stream::SplitSink<WebSocket, Message>>,
-    >,
+    ws_write: &Rc<RefCell<futures::stream::SplitSink<WebSocket, Message>>>,
     cols: u16,
     rows: u16,
     font_size: f64,

@@ -26,7 +26,7 @@ async fn create_test_server() -> (String, TobogganState) {
     let talk = create_multi_slide_talk();
     let talk_service = TalkService::new(talk).unwrap();
     let client_service = ClientService::new(100);
-    let state = TobogganState::new(talk_service, client_service);
+    let state = TobogganState::new(talk_service, client_service, "sh".into());
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
