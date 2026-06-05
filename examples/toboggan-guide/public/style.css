@@ -1,0 +1,128 @@
+/* Toboggan Guide — "Frost" theme.
+ *
+ * Loaded via slides/_head.html. The toboggan web frontend reads these CSS
+ * custom properties (see toboggan-web/src/main.css :root), so overriding them
+ * here re-skins the whole deck. Per-slide component styling lives in each
+ * slide's own <style> block; this file only sets the palette + base rhythm. */
+
+:root {
+	--bg: #0d1b2a; /* deep navy */
+	--fg: #e6edf5; /* soft snow white */
+	--accent: #4cc9f0; /* ice cyan */
+	--accent2: #ff8c42; /* sled orange */
+	--accent3: #ffd166; /* gold */
+
+	--font-slide-title: "Space Grotesk", system-ui, -apple-system, sans-serif;
+	--font-slide-body: "Space Grotesk", system-ui, -apple-system, sans-serif;
+	--font-slide-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* Subtle frosted backdrop behind every slide. */
+main {
+	background:
+		radial-gradient(120vw 80vh at 80% -10%, rgba(76, 201, 240, 0.16), transparent 60%),
+		radial-gradient(90vw 70vh at -10% 110%, rgba(255, 140, 66, 0.12), transparent 55%),
+		var(--bg);
+}
+
+.toboggan-slide {
+	color: var(--fg);
+}
+
+/* Headings ride the accent. */
+.toboggan-slide h1,
+.toboggan-slide h2,
+.toboggan-slide h3 {
+	font-family: var(--font-slide-title);
+	letter-spacing: -0.02em;
+}
+.toboggan-slide h1 {
+	color: var(--accent);
+}
+.toboggan-slide h2 {
+	color: var(--fg);
+}
+.toboggan-slide h3 {
+	color: var(--accent3);
+}
+
+/* Inline code + fenced blocks: frosted glass cards. */
+.toboggan-slide :not(pre) > code {
+	font-family: var(--font-slide-mono);
+	font-size: 0.85em;
+	padding: 0.1em 0.35em;
+	border-radius: var(--radius-sm, 0.25em);
+	background: rgba(76, 201, 240, 0.14);
+	color: var(--accent);
+}
+.toboggan-slide pre {
+	border: 1px solid rgba(230, 237, 245, 0.12);
+	border-radius: 0.5em;
+	box-shadow: 0 0.4em 1.2em rgba(0, 0, 0, 0.35);
+}
+
+/* This deck teaches copyable directive syntax, so disable ligatures —
+ * otherwise JetBrains Mono fuses `<!--` / `-->` into arrow glyphs.
+ * Slide bodies live in a shadow root, so we set these *inherited*
+ * properties on the host (`.toboggan-slide`); they cross the boundary
+ * where ordinary selectors cannot. */
+.toboggan-slide {
+	font-variant-ligatures: none;
+	font-feature-settings: "liga" 0, "calt" 0;
+}
+
+/* Links + emphasis. */
+.toboggan-slide a {
+	color: var(--accent);
+	text-decoration-color: rgba(76, 201, 240, 0.4);
+}
+.toboggan-slide strong {
+	color: var(--accent3);
+}
+
+/* Tables: readable on dark. */
+.toboggan-slide table {
+	border-collapse: collapse;
+	margin: 0.5em auto;
+	font-size: 0.9em;
+}
+.toboggan-slide th,
+.toboggan-slide td {
+	border: 1px solid rgba(230, 237, 245, 0.15);
+	padding: 0.35em 0.7em;
+	text-align: left;
+}
+.toboggan-slide th {
+	background: rgba(76, 201, 240, 0.12);
+	color: var(--accent);
+}
+
+/* "line-through previous steps" reads better with a coloured rule. */
+.toboggan-slide .step-line-through .step:not(:last-child) {
+	opacity: 0.55;
+	text-decoration: line-through 0.12em var(--accent2);
+}
+
+/* Reusable lead-in / keycap helpers used by a few slides. */
+.lead {
+	font-size: 1.15em;
+	color: rgba(230, 237, 245, 0.8);
+}
+kbd {
+	font-family: var(--font-slide-mono);
+	font-size: 0.8em;
+	padding: 0.1em 0.4em;
+	border-radius: 0.3em;
+	border: 1px solid rgba(230, 237, 245, 0.3);
+	border-bottom-width: 0.18em;
+	background: rgba(230, 237, 245, 0.08);
+}
+
+@media print {
+	main {
+		background: white;
+	}
+	.toboggan-slide {
+		color: black;
+	}
+}

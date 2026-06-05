@@ -1,0 +1,18 @@
+# Continuous rebuild of the guide while editing slides/.
+# Run `bacon` (default job) to regenerate toboggan-guide.toml on every save;
+# pair it with `mise run dev` for live reload in the browser.
+default_job = "toml"
+
+[jobs.toml]
+command = ["toboggan-cli", "--output", "toboggan-guide.toml", "./slides/"]
+need_stdout = true
+allow_warnings = true
+default_watch = false
+watch = ["slides"]
+
+[jobs.html]
+command = ["toboggan-cli", "--output", "toboggan-guide.html", "./slides/"]
+need_stdout = true
+allow_warnings = true
+default_watch = false
+watch = ["slides"]

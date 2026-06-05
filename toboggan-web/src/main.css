@@ -1,3 +1,37 @@
+/* Bundled Nerd Font (Mono variant) for the live terminal.
+   The "Mono" build forces every icon glyph to a single cell width, which the
+   fixed-cell canvas renderer (toboggan-wasm terminal) requires for powerline /
+   icon glyphs to stay on the grid. Icons are only carried in the Regular face;
+   Bold/Italic keep Latin + Powerline (command output rarely uses Nerd icons). */
+@font-face {
+	font-family: "JetBrainsMono Nerd Font Mono";
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url("/fonts/JetBrainsMonoNerdFontMono-Regular.woff2") format("woff2");
+}
+@font-face {
+	font-family: "JetBrainsMono Nerd Font Mono";
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url("/fonts/JetBrainsMonoNerdFontMono-Bold.woff2") format("woff2");
+}
+@font-face {
+	font-family: "JetBrainsMono Nerd Font Mono";
+	font-style: italic;
+	font-weight: 400;
+	font-display: swap;
+	src: url("/fonts/JetBrainsMonoNerdFontMono-Italic.woff2") format("woff2");
+}
+@font-face {
+	font-family: "JetBrainsMono Nerd Font Mono";
+	font-style: italic;
+	font-weight: 700;
+	font-display: swap;
+	src: url("/fonts/JetBrainsMonoNerdFontMono-BoldItalic.woff2") format("woff2");
+}
+
 :root {
 	/* Typography */
 	--font-slide-title: system-ui, -apple-system, sans-serif;
@@ -16,6 +50,17 @@
 	--color-info: #3b82f6;
 	--color-warning: #d97706;
 	--color-error: #dc2626;
+
+	/* Keyboard keys (<kbd>) */
+	--kbd-fg: #333;
+	--kbd-face-near: #ddd; /* top-right corner of the key face */
+	--kbd-face-far: white; /* opposite corner of the key face */
+	--kbd-side: #aaa; /* key body / side wall */
+	--kbd-side-edge: #ccc; /* outer rim of the side wall */
+	--kbd-border: gray; /* thin outline around the key body */
+	--kbd-shine: rgba(255, 255, 255, 0.7); /* glossy highlight */
+	--kbd-radius: 0.3em;
+	--kbd-font-size: 0.8em;
 
 	/* Transparency */
 	--color-border-transparent: rgba(255, 255, 255, 0.3);

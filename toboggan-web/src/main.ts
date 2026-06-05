@@ -12,6 +12,11 @@ import "./state.css";
 document.addEventListener("DOMContentLoaded", async () => {
 	await init();
 
+	// The terminal renders to a <canvas>, which silently falls back to a system
+	// font if the web font isn't loaded yet. Fetch the faces up front so the
+	// first render measures and draws with the bundled Nerd Font.
+	await ensureTerminalFontLoaded();
+
 	const elt = document.querySelector("main");
 	if (!elt) {
 		console.error("🚨 Missing <main> element");
@@ -35,6 +40,24 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 	start_app(config, elt);
 });
+
+/**
+ * Preload the bundled terminal Nerd Font (all four faces the renderer uses) so
+ * the canvas renderer measures cell width and draws glyphs with the right font.
+ */
+const ensureTerminalFontLoaded = async (): Promise<void> => {
+	if (!("fonts" in document)) {
+		return;
+	}
+	const family = '"JetBrainsMono Nerd Font Mono"';
+	const faces = [
+		`16px ${family}`,
+		`bold 16px ${family}`,
+		`italic 16px ${family}`,
+		`bold italic 16px ${family}`,
+	];
+	await Promise.allSettled(faces.map((face) => document.fonts.load(face)));
+};
 
 /**
  * Get environment variable with fallback
