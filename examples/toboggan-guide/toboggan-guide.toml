@@ -1,0 +1,2775 @@
+title = "Toboggan — User Guide"
+date = "2026-06-05"
+footer = """
+<style>
+  /* Rendered inside the footer's shadow root, so styles are scoped to :host.
+   * The runtime injects --current-slide and --total-slides; we derive a
+   * progress percentage from them (same technique as the riir deck). */
+  :host {
+    --pct: calc((var(--current-slide) / var(--total-slides)) * 100%);
+    --frost: #4cc9f0;
+    --orange: #ff8c42;
+    display: block;
+    width: 100%;
+    position: relative;
+    font-family: "Space Grotesk", system-ui, sans-serif;
+    color: #e6edf5;
+    background: #0a1420;
+    border-top: 1px solid rgba(230, 237, 245, 0.1);
+  }
+
+  /* Thin progress rail across the very top of the footer. */
+  .rail {
+    height: 4px;
+    width: 100%;
+    background: linear-gradient(
+      90deg,
+      var(--frost),
+      var(--orange) var(--pct),
+      rgba(230, 237, 245, 0.12) var(--pct)
+    );
+  }
+
+  /* A little sled that rides the progress, demonstrating a
+   * slide-number-driven decoration without any image assets. */
+  .sled {
+    position: absolute;
+    top: -0.35em;
+    left: clamp(0%, var(--pct), 100%);
+    transform: translateX(-50%);
+    font-size: 0.8em;
+    transition: left 0.4s ease;
+    pointer-events: none;
+  }
+
+  .txt {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.3em 1.2em;
+    font-size: 0.7em;
+    letter-spacing: 0.02em;
+  }
+  .txt .title {
+    color: var(--frost);
+    font-weight: 600;
+  }
+  .txt .count {
+    counter-set: total var(--total-slides) cur var(--current-slide);
+    color: rgba(230, 237, 245, 0.7);
+  }
+  .txt .count::after {
+    content: counter(cur) " / " counter(total);
+  }
+</style>
+
+<div class="rail"></div>
+<div class="sled">🛷</div>
+<div class="txt">
+  <span class="title">Toboggan · User Guide</span>
+  <span class="count"></span>
+</div>
+"""
+head = """
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=JetBrains+Mono:wght@400..700&display=swap"
+  rel="stylesheet"
+/>
+<link href="./public/style.css" rel="stylesheet" />
+"""
+
+[[slides]]
+kind = "Cover"
+body_source = """
+<style>
+  .hero {
+    text-align: center;
+    line-height: 1.1;
+  }
+  .hero .sled {
+    font-size: 4rem;
+    display: block;
+    margin-bottom: 0.2em;
+    filter: drop-shadow(0 0.1em 0.3em rgba(0, 0, 0, 0.5));
+  }
+  .hero h1 {
+    font-size: 4rem;
+    margin: 0;
+    background: linear-gradient(100deg, var(--accent), var(--accent3));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .hero .tag {
+    font-size: 1.15rem;
+    color: rgba(230, 237, 245, 0.85);
+    margin-top: 0.4em;
+  }
+  .hero .hint {
+    margin-top: 2.5em;
+    font-size: 0.85rem;
+    color: rgba(230, 237, 245, 0.55);
+  }
+</style>
+
+<div class="hero">
+  <span class="sled">🛷</span>
+
+# Toboggan
+
+  <p class="tag">The terminal-first presentation system — author once, present anywhere.</p>
+  <p class="hint">Press <kbd>→</kbd> to start · built <em>with</em> Toboggan</p>
+</div>
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "cover",
+]
+style = """
+min-height: 100%;
+width: 100%;
+overflow: hidden;
+background:
+  radial-gradient(60vw 60vw at 78% 18%, rgba(76, 201, 240, 0.22), transparent 60%),
+  radial-gradient(50vw 50vw at 18% 88%, rgba(255, 140, 66, 0.18), transparent 60%);
+"""
+
+[slides.title]
+type = "Text"
+text = "Toboggan — User Guide"
+
+[slides.body]
+type = "Html"
+raw = """
+<style>
+  .hero {
+    text-align: center;
+    line-height: 1.1;
+  }
+  .hero .sled {
+    font-size: 4rem;
+    display: block;
+    margin-bottom: 0.2em;
+    filter: drop-shadow(0 0.1em 0.3em rgba(0, 0, 0, 0.5));
+  }
+  .hero h1 {
+    font-size: 4rem;
+    margin: 0;
+    background: linear-gradient(100deg, var(--accent), var(--accent3));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .hero .tag {
+    font-size: 1.15rem;
+    color: rgba(230, 237, 245, 0.85);
+    margin-top: 0.4em;
+  }
+  .hero .hint {
+    margin-top: 2.5em;
+    font-size: 0.85rem;
+    color: rgba(230, 237, 245, 0.55);
+  }
+</style>
+<div class="hero">
+  <span class="sled">🛷</span>
+<h1>Toboggan</h1>
+  <p class="tag">The terminal-first presentation system — author once, present anywhere.</p>
+  <p class="hint">Press <kbd>→</kbd> to start · built <em>with</em> Toboggan</p>
+</div>
+"""
+alt = """
+<style>
+  .hero {
+    text-align: center;
+    line-height: 1.1;
+  }
+  .hero .sled {
+    font-size: 4rem;
+    display: block;
+    margin-bottom: 0.2em;
+    filter: drop-shadow(0 0.1em 0.3em rgba(0, 0, 0, 0.5));
+  }
+  .hero h1 {
+    font-size: 4rem;
+    margin: 0;
+    background: linear-gradient(100deg, var(--accent), var(--accent3));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .hero .tag {
+    font-size: 1.15rem;
+    color: rgba(230, 237, 245, 0.85);
+    margin-top: 0.4em;
+  }
+  .hero .hint {
+    margin-top: 2.5em;
+    font-size: 0.85rem;
+    color: rgba(230, 237, 245, 0.55);
+  }
+</style>
+
+<div class="hero">
+  <span class="sled">🛷</span>
+
+# Toboggan
+
+  <p class="tag">The terminal-first presentation system — author once, present anywhere.</p>
+  <p class="hint">Press <kbd>→</kbd> to start · built <em>with</em> Toboggan</p>
+</div>
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "cover",
+]
+style = """
+min-height: 100%;
+width: 100%;
+overflow: hidden;
+background:
+  radial-gradient(60vw 60vw at 78% 18%, rgba(76, 201, 240, 0.22), transparent 60%),
+  radial-gradient(50vw 50vw at 18% 88%, rgba(255, 140, 66, 0.18), transparent 60%);
+"""
+
+[[slides]]
+kind = "Part"
+body_source = """
+# Authoring
+
+How a Toboggan presentation is laid out on disk.
+"""
+
+[slides.title]
+type = "Text"
+text = "1. Authoring"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Authoring</h1>
+<p>How a Toboggan presentation is laid out on disk.</p>
+"""
+alt = """
+# Authoring
+
+How a Toboggan presentation is laid out on disk.
+"""
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# What is Toboggan?
+
+A **terminal-first** presentation system written in Rust.
+
+You write slides as plain **Markdown**, compile them with `toboggan-cli`,
+and serve them with `toboggan-server` — then present from a browser, a
+terminal, or any synced client.
+
+### Why it's different
+
+|  |  |
+| --- | --- |
+| 🖥️ **Live terminals** | Embed real PTYs in a slide — demo code for real |
+| 🔄 **Multi-client sync** | Presenter + audience stay on the same slide |
+| 📦 **One source, many outputs** | TOML, JSON, YAML, static HTML, Typst/PDF |
+| 🎨 **Plain CSS styling** | No bespoke DSL — just frontmatter and stylesheets |
+"""
+
+[slides.style]
+classes = ["no_title"]
+
+[slides.title]
+type = "Text"
+text = "1.1 What is Toboggan?"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>What is Toboggan?</h1>
+<p>A <strong>terminal-first</strong> presentation system written in Rust.</p>
+
+<div class="step step-0"><!-- begin step -->
+<p>You write slides as plain <strong>Markdown</strong>, compile them with <code>toboggan-cli</code>,
+and serve them with <code>toboggan-server</code> — then present from a browser, a
+terminal, or any synced client.</p>
+</div><!-- end step -->
+
+<div class="step step-1"><!-- begin step -->
+<h3>Why it's different</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>🖥️ <strong>Live terminals</strong></td>
+<td>Embed real PTYs in a slide — demo code for real</td>
+</tr>
+<tr>
+<td>🔄 <strong>Multi-client sync</strong></td>
+<td>Presenter + audience stay on the same slide</td>
+</tr>
+<tr>
+<td>📦 <strong>One source, many outputs</strong></td>
+<td>TOML, JSON, YAML, static HTML, Typst/PDF</td>
+</tr>
+<tr>
+<td>🎨 <strong>Plain CSS styling</strong></td>
+<td>No bespoke DSL — just frontmatter and stylesheets</td>
+</tr>
+</tbody>
+</table>
+</div><!-- end step -->
+"""
+alt = """
+# What is Toboggan?
+
+A **terminal-first** presentation system written in Rust.
+
+You write slides as plain **Markdown**, compile them with `toboggan-cli`,
+and serve them with `toboggan-server` — then present from a browser, a
+terminal, or any synced client.
+
+### Why it's different
+
+|  |  |
+| --- | --- |
+| 🖥️ **Live terminals** | Embed real PTYs in a slide — demo code for real |
+| 🔄 **Multi-client sync** | Presenter + audience stay on the same slide |
+| 📦 **One source, many outputs** | TOML, JSON, YAML, static HTML, Typst/PDF |
+| 🎨 **Plain CSS styling** | No bespoke DSL — just frontmatter and stylesheets |
+"""
+
+[slides.body.style]
+classes = ["no_title"]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>This guide is itself a Toboggan deck — everything you see is produced by the
+same tools it documents.</p>
+"""
+alt = """
+This guide is itself a Toboggan deck — everything you see is produced by the
+same tools it documents.
+"""
+
+[slides.notes.style]
+classes = ["no_title"]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# A deck is a folder
+
+`toboggan-cli` reads a **directory** of Markdown/HTML files. Order comes from
+filenames; sections come from sub-folders.
+
+```text
+my-talk/
+├── _head.html          # injected into <head> (fonts, stylesheet)
+├── _footer.html        # footer component (progress bar, etc.)
+├── _cover.md           # the cover / title slide
+├── 1_intro/
+│   ├── _part.md        # section divider slide
+│   ├── 1-hello.md
+│   └── 2-agenda.md
+└── 2_deep-dive/
+    ├── _part.md
+    └── 1-details.md
+```
+
+> [!NOTE]
+> Only these names are special (exact match): `_cover.md`, `_part.md`,
+> `_head.html`, `_footer.html`. Everything else is a slide, sorted
+> alphabetically — so prefix files with `1-`, `2-`, … to control order.
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "1.2 Folder structure"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>A deck is a folder</h1>
+<p><code>toboggan-cli</code> reads a <strong>directory</strong> of Markdown/HTML files. Order comes from
+filenames; sections come from sub-folders.</p>
+<pre style="background-color:#eff1f5;"><code class="language-text"><span style="color:#4f5b66;">my-talk/
+</span><span style="color:#4f5b66;">├── _head.html          # injected into &lt;head&gt; (fonts, stylesheet)
+</span><span style="color:#4f5b66;">├── _footer.html        # footer component (progress bar, etc.)
+</span><span style="color:#4f5b66;">├── _cover.md           # the cover / title slide
+</span><span style="color:#4f5b66;">├── 1_intro/
+</span><span style="color:#4f5b66;">│   ├── _part.md        # section divider slide
+</span><span style="color:#4f5b66;">│   ├── 1-hello.md
+</span><span style="color:#4f5b66;">│   └── 2-agenda.md
+</span><span style="color:#4f5b66;">└── 2_deep-dive/
+</span><span style="color:#4f5b66;">    ├── _part.md
+</span><span style="color:#4f5b66;">    └── 1-details.md
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<div class="markdown-alert markdown-alert-note">
+<p class="markdown-alert-title">Note</p>
+<p>Only these names are special (exact match): <code>_cover.md</code>, <code>_part.md</code>,
+<code>_head.html</code>, <code>_footer.html</code>. Everything else is a slide, sorted
+alphabetically — so prefix files with <code>1-</code>, <code>2-</code>, … to control order.</p>
+</div>
+</div><!-- end step -->
+"""
+alt = """
+# A deck is a folder
+
+`toboggan-cli` reads a **directory** of Markdown/HTML files. Order comes from
+filenames; sections come from sub-folders.
+
+```text
+my-talk/
+├── _head.html          # injected into <head> (fonts, stylesheet)
+├── _footer.html        # footer component (progress bar, etc.)
+├── _cover.md           # the cover / title slide
+├── 1_intro/
+│   ├── _part.md        # section divider slide
+│   ├── 1-hello.md
+│   └── 2-agenda.md
+└── 2_deep-dive/
+    ├── _part.md
+    └── 1-details.md
+```
+
+> [!NOTE]
+> Only these names are special (exact match): `_cover.md`, `_part.md`,
+> `_head.html`, `_footer.html`. Everything else is a slide, sorted
+> alphabetically — so prefix files with `1-`, `2-`, … to control order.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Per-slide frontmatter
+
+Each slide may open with a TOML block between `+++` delimiters:
+
+```toml
++++
+title = "Custom Title"
+classes = ["no_title", "wide"]
+style = "background: #112; color: gold;"
+skip = false
+duration = "2m"
+hidden_in = ["pdf"]
++++
+```
+
+| Field | Type | Effect |
+| --- | --- | --- |
+| `title` | string | Override the auto-detected slide title |
+| `classes` | list | Layout classes (`no_title`, `wide`, `center`, …) |
+| `style` | string | Inline CSS on the slide container |
+| `skip` | bool | Exclude this slide from the build |
+| `duration` | string | Time hint (`30s`, `2m`) for the stats report |
+| `hidden_in` | list | Drop from a target: `"web"` or `"pdf"` |
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "1.3 Frontmatter"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Per-slide frontmatter</h1>
+<p>Each slide may open with a TOML block between <code>+++</code> delimiters:</p>
+<pre style="background-color:#eff1f5;"><code class="language-toml"><span style="color:#4f5b66;">+++
+</span><span style="color:#4f5b66;">title = &quot;Custom Title&quot;
+</span><span style="color:#4f5b66;">classes = [&quot;no_title&quot;, &quot;wide&quot;]
+</span><span style="color:#4f5b66;">style = &quot;background: #112; color: gold;&quot;
+</span><span style="color:#4f5b66;">skip = false
+</span><span style="color:#4f5b66;">duration = &quot;2m&quot;
+</span><span style="color:#4f5b66;">hidden_in = [&quot;pdf&quot;]
+</span><span style="color:#4f5b66;">+++
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>title</code></td>
+<td>string</td>
+<td>Override the auto-detected slide title</td>
+</tr>
+<tr>
+<td><code>classes</code></td>
+<td>list</td>
+<td>Layout classes (<code>no_title</code>, <code>wide</code>, <code>center</code>, …)</td>
+</tr>
+<tr>
+<td><code>style</code></td>
+<td>string</td>
+<td>Inline CSS on the slide container</td>
+</tr>
+<tr>
+<td><code>skip</code></td>
+<td>bool</td>
+<td>Exclude this slide from the build</td>
+</tr>
+<tr>
+<td><code>duration</code></td>
+<td>string</td>
+<td>Time hint (<code>30s</code>, <code>2m</code>) for the stats report</td>
+</tr>
+<tr>
+<td><code>hidden_in</code></td>
+<td>list</td>
+<td>Drop from a target: <code>&quot;web&quot;</code> or <code>&quot;pdf&quot;</code></td>
+</tr>
+</tbody>
+</table>
+</div><!-- end step -->
+"""
+alt = """
+# Per-slide frontmatter
+
+Each slide may open with a TOML block between `+++` delimiters:
+
+```toml
++++
+title = "Custom Title"
+classes = ["no_title", "wide"]
+style = "background: #112; color: gold;"
+skip = false
+duration = "2m"
+hidden_in = ["pdf"]
++++
+```
+
+| Field | Type | Effect |
+| --- | --- | --- |
+| `title` | string | Override the auto-detected slide title |
+| `classes` | list | Layout classes (`no_title`, `wide`, `center`, …) |
+| `style` | string | Inline CSS on the slide container |
+| `skip` | bool | Exclude this slide from the build |
+| `duration` | string | Time hint (`30s`, `2m`) for the stats report |
+| `hidden_in` | list | Drop from a target: `"web"` or `"pdf"` |
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>Frontmatter is optional — a bare Markdown file is a perfectly valid slide.</p>
+"""
+alt = """
+Frontmatter is optional — a bare Markdown file is a perfectly valid slide.
+"""
+
+[slides.notes.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Part"
+body_source = """
+# Directives
+
+HTML comments that Toboggan turns into behaviour:
+steps, notes, live terminals, embedded code.
+"""
+
+[slides.title]
+type = "Text"
+text = "2. Directives"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Directives</h1>
+<p>HTML comments that Toboggan turns into behaviour:
+steps, notes, live terminals, embedded code.</p>
+"""
+alt = """
+# Directives
+
+HTML comments that Toboggan turns into behaviour:
+steps, notes, live terminals, embedded code.
+"""
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Stepped reveals
+
+Split a slide into steps with a `pause` comment:
+
+```markdown
+First point.
+
+<!-- pause -->
+
+Second point — revealed on the next arrow.
+
+<!-- pause :highlight -->
+
+Add CSS classes to a step after a colon.
+```
+
+This paragraph is step 2 — it appeared when you pressed <kbd>→</kbd>.
+
+…and this is step 3.
+"""
+
+[slides.style]
+classes = ["no_title"]
+
+[slides.title]
+type = "Text"
+text = "2.1 pause — stepped reveals"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Stepped reveals</h1>
+<p>Split a slide into steps with a <code>pause</code> comment:</p>
+<pre style="background-color:#eff1f5;"><code class="language-markdown"><span style="color:#4f5b66;">First point.
+</span><span style="color:#4f5b66;">
+</span><span style="color:#a7adba;">&lt;!-- pause --&gt;
+</span><span style="color:#4f5b66;">
+</span><span style="color:#4f5b66;">Second point — revealed on the next arrow.
+</span><span style="color:#4f5b66;">
+</span><span style="color:#a7adba;">&lt;!-- pause :highlight --&gt;
+</span><span style="color:#4f5b66;">
+</span><span style="color:#4f5b66;">Add CSS classes to a step after a colon.
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<p>This paragraph is step 2 — it appeared when you pressed <kbd>→</kbd>.</p>
+</div><!-- end step -->
+
+<div class="step step-1"><!-- begin step -->
+<p>…and this is step 3.</p>
+</div><!-- end step -->
+"""
+alt = """
+# Stepped reveals
+
+Split a slide into steps with a `pause` comment:
+
+```markdown
+First point.
+
+<!-- pause -->
+
+Second point — revealed on the next arrow.
+
+<!-- pause :highlight -->
+
+Add CSS classes to a step after a colon.
+```
+
+This paragraph is step 2 — it appeared when you pressed <kbd>→</kbd>.
+
+…and this is step 3.
+"""
+
+[slides.body.style]
+classes = ["no_title"]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>The fenced block above shows the syntax verbatim; the bare <code>&lt;!-- pause --&gt;</code>
+comments below it actually create the steps on this very slide.</p>
+"""
+alt = """
+The fenced block above shows the syntax verbatim; the bare `<!-- pause -->`
+comments below it actually create the steps on this very slide.
+"""
+
+[slides.notes.style]
+classes = ["no_title"]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Speaker notes
+
+Everything after a `notes` comment is hidden from the slide and kept for the
+presenter view:
+
+```markdown
+# Visible heading
+
+Audience sees this.
+
+<!-- notes -->
+
+Only the presenter sees this reminder.
+```
+
+> [!TIP]
+> Notes are excluded from the slide but still counted in the duration
+> estimate — unless you pass `--exclude-notes-from-duration` to the CLI.
+"""
+
+[slides.style]
+classes = ["no_title"]
+
+[slides.title]
+type = "Text"
+text = "2.2 notes — speaker notes"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Speaker notes</h1>
+<p>Everything after a <code>notes</code> comment is hidden from the slide and kept for the
+presenter view:</p>
+<pre style="background-color:#eff1f5;"><code class="language-markdown"><span style="color:#8fa1b3;"># Visible heading
+</span><span style="color:#4f5b66;">
+</span><span style="color:#4f5b66;">Audience sees this.
+</span><span style="color:#4f5b66;">
+</span><span style="color:#a7adba;">&lt;!-- notes --&gt;
+</span><span style="color:#4f5b66;">
+</span><span style="color:#4f5b66;">Only the presenter sees this reminder.
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<div class="markdown-alert markdown-alert-tip">
+<p class="markdown-alert-title">Tip</p>
+<p>Notes are excluded from the slide but still counted in the duration
+estimate — unless you pass <code>--exclude-notes-from-duration</code> to the CLI.</p>
+</div>
+</div><!-- end step -->
+"""
+alt = """
+# Speaker notes
+
+Everything after a `notes` comment is hidden from the slide and kept for the
+presenter view:
+
+```markdown
+# Visible heading
+
+Audience sees this.
+
+<!-- notes -->
+
+Only the presenter sees this reminder.
+```
+
+> [!TIP]
+> Notes are excluded from the slide but still counted in the duration
+> estimate — unless you pass `--exclude-notes-from-duration` to the CLI.
+"""
+
+[slides.body.style]
+classes = ["no_title"]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>This slide has real notes too: you are reading them in the presenter view.</p>
+"""
+alt = """
+This slide has real notes too: you are reading them in the presenter view.
+"""
+
+[slides.notes.style]
+classes = ["no_title"]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Live terminals
+
+Embed a real PTY in a slide. Syntax:
+
+```markdown
+<!-- term: . -->                      # shell in the current dir
+<!-- term: ./src :light -->           # light theme
+<!-- term: . | bacon test -->         # run a command on connect
+```
+
+The terminal below is **live** — click it and type:
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "2.3 term — live terminals"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Live terminals</h1>
+<p>Embed a real PTY in a slide. Syntax:</p>
+<pre style="background-color:#eff1f5;"><code class="language-markdown"><span style="color:#a7adba;">&lt;!-- term: . --&gt;</span><span style="color:#4f5b66;">                      # shell in the current dir
+</span><span style="color:#a7adba;">&lt;!-- term: ./src :light --&gt;</span><span style="color:#4f5b66;">           # light theme
+</span><span style="color:#4f5b66;">&lt;!-- term: . | bacon test --&gt;         # run a command on connect
+</span></code></pre>
+<p>The terminal below is <strong>live</strong> — click it and type:</p>
+"""
+alt = """
+# Live terminals
+
+Embed a real PTY in a slide. Syntax:
+
+```markdown
+<!-- term: . -->                      # shell in the current dir
+<!-- term: ./src :light -->           # light theme
+<!-- term: . | bacon test -->         # run a command on connect
+```
+
+The terminal below is **live** — click it and type:
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>Multiple <code>term</code> comments on one slide render side by side. The shell is chosen
+by the server's --shell flag. The fenced examples above stay as text; the bare
+one below is a working terminal.</p>
+"""
+alt = """
+Multiple `term` comments on one slide render side by side. The shell is chosen
+by the server's --shell flag. The fenced examples above stay as text; the bare
+one below is a working terminal.
+"""
+
+[slides.notes.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides.terminals]]
+cwd = "slides/2_directives"
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Embed a source file
+
+Pull an external file in as a fenced code block — no copy-paste drift:
+
+```markdown
+<!-- code:rust:snippets/hello.rs -->
+```
+
+…which renders, live from disk, as:
+
+```rust
+fn main() {
+    // Embedded into a slide by `<!-- code:rust:snippets/hello.rs -->`.
+    // The file stays the single source of truth — edit it once, the
+    // slide updates on the next build.
+    println!("Hello from a Toboggan code embed!");
+}
+
+```
+
+> [!IMPORTANT]
+> The path is resolved from **where you run `toboggan-cli`** (the deck folder),
+> not from the slide file. Keep snippets beside your build command.
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "2.4 code — embed a file"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Embed a source file</h1>
+<p>Pull an external file in as a fenced code block — no copy-paste drift:</p>
+<pre style="background-color:#eff1f5;"><code class="language-markdown"><span style="color:#a7adba;">&lt;!-- code:rust:snippets/hello.rs --&gt;
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<p>…which renders, live from disk, as:</p>
+<pre style="background-color:#eff1f5;"><code class="language-rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">main</span><span style="color:#4f5b66;">() {
+</span><span style="color:#4f5b66;">    </span><span style="color:#a7adba;">// Embedded into a slide by `&lt;!-- code:rust:snippets/hello.rs --&gt;`.
+</span><span style="color:#4f5b66;">    </span><span style="color:#a7adba;">// The file stays the single source of truth — edit it once, the
+</span><span style="color:#4f5b66;">    </span><span style="color:#a7adba;">// slide updates on the next build.
+</span><span style="color:#4f5b66;">    println!(&quot;</span><span style="color:#a3be8c;">Hello from a Toboggan code embed!</span><span style="color:#4f5b66;">&quot;);
+</span><span style="color:#4f5b66;">}
+</span><span style="color:#4f5b66;">
+</span></code></pre>
+<div class="markdown-alert markdown-alert-important">
+<p class="markdown-alert-title">Important</p>
+<p>The path is resolved from <strong>where you run <code>toboggan-cli</code></strong> (the deck folder),
+not from the slide file. Keep snippets beside your build command.</p>
+</div>
+</div><!-- end step -->
+"""
+alt = """
+# Embed a source file
+
+Pull an external file in as a fenced code block — no copy-paste drift:
+
+```markdown
+<!-- code:rust:snippets/hello.rs -->
+```
+
+…which renders, live from disk, as:
+
+```rust
+fn main() {
+    // Embedded into a slide by `<!-- code:rust:snippets/hello.rs -->`.
+    // The file stays the single source of truth — edit it once, the
+    // slide updates on the next build.
+    println!("Hello from a Toboggan code embed!");
+}
+
+```
+
+> [!IMPORTANT]
+> The path is resolved from **where you run `toboggan-cli`** (the deck folder),
+> not from the slide file. Keep snippets beside your build command.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Rich Markdown
+
+Tables, task lists, footnotes, strikethrough, `==highlight==`, and
+GitHub-style **alerts** all work out of the box:
+
+```markdown
+> [!TIP]
+> Optional advice that helps the reader.
+```
+
+> [!NOTE]
+> A neutral aside.
+
+> [!TIP]
+> A helpful suggestion.
+
+> [!WARNING]
+> Something to watch out for.
+
+> [!CAUTION]
+> A potentially destructive action.
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "2.5 Markdown & alerts"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Rich Markdown</h1>
+<p>Tables, task lists, footnotes, strikethrough, <code>==highlight==</code>, and
+GitHub-style <strong>alerts</strong> all work out of the box:</p>
+<pre style="background-color:#eff1f5;"><code class="language-markdown"><span style="color:#d08770;">&gt; [!TIP]
+</span><span style="color:#d08770;">&gt; Optional advice that helps the reader.
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<div class="markdown-alert markdown-alert-note">
+<p class="markdown-alert-title">Note</p>
+<p>A neutral aside.</p>
+</div>
+<div class="markdown-alert markdown-alert-tip">
+<p class="markdown-alert-title">Tip</p>
+<p>A helpful suggestion.</p>
+</div>
+<div class="markdown-alert markdown-alert-warning">
+<p class="markdown-alert-title">Warning</p>
+<p>Something to watch out for.</p>
+</div>
+<div class="markdown-alert markdown-alert-caution">
+<p class="markdown-alert-title">Caution</p>
+<p>A potentially destructive action.</p>
+</div>
+</div><!-- end step -->
+"""
+alt = """
+# Rich Markdown
+
+Tables, task lists, footnotes, strikethrough, `==highlight==`, and
+GitHub-style **alerts** all work out of the box:
+
+```markdown
+> [!TIP]
+> Optional advice that helps the reader.
+```
+
+> [!NOTE]
+> A neutral aside.
+
+> [!TIP]
+> A helpful suggestion.
+
+> [!WARNING]
+> Something to watch out for.
+
+> [!CAUTION]
+> A potentially destructive action.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Part"
+body_source = """
+# Styling
+
+Layout classes, per-slide CSS, custom fonts, and render targets —
+all with plain HTML & CSS.
+"""
+
+[slides.title]
+type = "Text"
+text = "3. Styling"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Styling</h1>
+<p>Layout classes, per-slide CSS, custom fonts, and render targets —
+all with plain HTML &amp; CSS.</p>
+"""
+alt = """
+# Styling
+
+Layout classes, per-slide CSS, custom fonts, and render targets —
+all with plain HTML & CSS.
+"""
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Layout classes
+
+Set `classes` in frontmatter to change a slide's layout:
+
+| Class | Effect |
+| --- | --- |
+| `no_title` | Hide the auto-generated title bar |
+| `wide` | Use 95% of the viewport width |
+| `center` | Vertically + horizontally center content |
+| `cover` | Cover/title styling |
+| `spread-steps` | Distribute steps evenly down the slide |
+| `step-line-through` | Strike out earlier steps as you advance |
+
+This slide uses `step-line-through`…
+
+…so the previous line is now struck out.
+
+Handy for "before / after" or countdown reveals.
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+    "step-line-through",
+]
+
+[slides.title]
+type = "Text"
+text = "3.1 Layout classes"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Layout classes</h1>
+<p>Set <code>classes</code> in frontmatter to change a slide's layout:</p>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>no_title</code></td>
+<td>Hide the auto-generated title bar</td>
+</tr>
+<tr>
+<td><code>wide</code></td>
+<td>Use 95% of the viewport width</td>
+</tr>
+<tr>
+<td><code>center</code></td>
+<td>Vertically + horizontally center content</td>
+</tr>
+<tr>
+<td><code>cover</code></td>
+<td>Cover/title styling</td>
+</tr>
+<tr>
+<td><code>spread-steps</code></td>
+<td>Distribute steps evenly down the slide</td>
+</tr>
+<tr>
+<td><code>step-line-through</code></td>
+<td>Strike out earlier steps as you advance</td>
+</tr>
+</tbody>
+</table>
+
+<div class="step step-0"><!-- begin step -->
+<p>This slide uses <code>step-line-through</code>…</p>
+</div><!-- end step -->
+
+<div class="step step-1"><!-- begin step -->
+<p>…so the previous line is now struck out.</p>
+</div><!-- end step -->
+
+<div class="step step-2"><!-- begin step -->
+<p>Handy for &quot;before / after&quot; or countdown reveals.</p>
+</div><!-- end step -->
+"""
+alt = """
+# Layout classes
+
+Set `classes` in frontmatter to change a slide's layout:
+
+| Class | Effect |
+| --- | --- |
+| `no_title` | Hide the auto-generated title bar |
+| `wide` | Use 95% of the viewport width |
+| `center` | Vertically + horizontally center content |
+| `cover` | Cover/title styling |
+| `spread-steps` | Distribute steps evenly down the slide |
+| `step-line-through` | Strike out earlier steps as you advance |
+
+This slide uses `step-line-through`…
+
+…so the previous line is now struck out.
+
+Handy for "before / after" or countdown reveals.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+    "step-line-through",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+<style>
+  .card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1em;
+    margin-top: 0.5em;
+  }
+  .card {
+    border: 1px solid rgba(76, 201, 240, 0.35);
+    border-radius: 0.6em;
+    padding: 0.8em 1em;
+    background: rgba(76, 201, 240, 0.08);
+  }
+  .card h3 { margin: 0 0 0.2em; }
+</style>
+
+# Per-slide CSS
+
+The `style` frontmatter paints the slide background; a `<style>` block scopes
+component CSS to this slide only.
+
+<div class="card-grid">
+  <div class="card">
+
+### Frontmatter `style`
+
+A full-bleed gradient, set right in the TOML header.
+
+  </div>
+  <div class="card">
+
+### Inline `<style>`
+
+These two cards — laid out with a local CSS grid.
+
+  </div>
+</div>
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+style = """
+background:
+  radial-gradient(40vw 40vw at 85% 20%, rgba(255, 209, 102, 0.22), transparent 60%),
+  linear-gradient(160deg, #0d1b2a, #15314a);
+"""
+
+[slides.title]
+type = "Text"
+text = "3.2 Per-slide style"
+
+[slides.body]
+type = "Html"
+raw = """
+<style>
+  .card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1em;
+    margin-top: 0.5em;
+  }
+  .card {
+    border: 1px solid rgba(76, 201, 240, 0.35);
+    border-radius: 0.6em;
+    padding: 0.8em 1em;
+    background: rgba(76, 201, 240, 0.08);
+  }
+  .card h3 { margin: 0 0 0.2em; }
+</style>
+<h1>Per-slide CSS</h1>
+<p>The <code>style</code> frontmatter paints the slide background; a <code>&lt;style&gt;</code> block scopes
+component CSS to this slide only.</p>
+<div class="card-grid">
+  <div class="card">
+<h3>Frontmatter <code>style</code></h3>
+<p>A full-bleed gradient, set right in the TOML header.</p>
+  </div>
+  <div class="card">
+<h3>Inline <code>&lt;style&gt;</code></h3>
+<p>These two cards — laid out with a local CSS grid.</p>
+  </div>
+</div>
+"""
+alt = """
+<style>
+  .card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1em;
+    margin-top: 0.5em;
+  }
+  .card {
+    border: 1px solid rgba(76, 201, 240, 0.35);
+    border-radius: 0.6em;
+    padding: 0.8em 1em;
+    background: rgba(76, 201, 240, 0.08);
+  }
+  .card h3 { margin: 0 0 0.2em; }
+</style>
+
+# Per-slide CSS
+
+The `style` frontmatter paints the slide background; a `<style>` block scopes
+component CSS to this slide only.
+
+<div class="card-grid">
+  <div class="card">
+
+### Frontmatter `style`
+
+A full-bleed gradient, set right in the TOML header.
+
+  </div>
+  <div class="card">
+
+### Inline `<style>`
+
+These two cards — laid out with a local CSS grid.
+
+  </div>
+</div>
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+style = """
+background:
+  radial-gradient(40vw 40vw at 85% 20%, rgba(255, 209, 102, 0.22), transparent 60%),
+  linear-gradient(160deg, #0d1b2a, #15314a);
+"""
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>Theme variables like var(--accent) are available here, so per-slide CSS stays
+consistent with the global palette in public/style.css.</p>
+"""
+alt = """
+Theme variables like var(--accent) are available here, so per-slide CSS stays
+consistent with the global palette in public/style.css.
+"""
+
+[slides.notes.style]
+classes = [
+    "no_title",
+    "wide",
+]
+style = """
+background:
+  radial-gradient(40vw 40vw at 85% 20%, rgba(255, 209, 102, 0.22), transparent 60%),
+  linear-gradient(160deg, #0d1b2a, #15314a);
+"""
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# One deck, two outputs
+
+`hidden_in` drops a slide from a specific render target:
+
+```toml
++++
+hidden_in = ["pdf"]   # web only — e.g. a live terminal
++++
+```
+
+```toml
++++
+hidden_in = ["web"]   # pdf only — a static screenshot twin
++++
+```
+
+> [!TIP]
+> Pattern: keep a **live `term`** slide for the web (`hidden_in = ["pdf"]`),
+> paired with a **static code** twin for the PDF (`hidden_in = ["web"]`).
+> The audience sees the demo; the handout still has the output.
+
+You'll see this exact pair in the **Server** section →
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "3.3 Render targets"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>One deck, two outputs</h1>
+<p><code>hidden_in</code> drops a slide from a specific render target:</p>
+<pre style="background-color:#eff1f5;"><code class="language-toml"><span style="color:#4f5b66;">+++
+</span><span style="color:#4f5b66;">hidden_in = [&quot;pdf&quot;]   # web only — e.g. a live terminal
+</span><span style="color:#4f5b66;">+++
+</span></code></pre>
+<pre style="background-color:#eff1f5;"><code class="language-toml"><span style="color:#4f5b66;">+++
+</span><span style="color:#4f5b66;">hidden_in = [&quot;web&quot;]   # pdf only — a static screenshot twin
+</span><span style="color:#4f5b66;">+++
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<div class="markdown-alert markdown-alert-tip">
+<p class="markdown-alert-title">Tip</p>
+<p>Pattern: keep a <strong>live <code>term</code></strong> slide for the web (<code>hidden_in = [&quot;pdf&quot;]</code>),
+paired with a <strong>static code</strong> twin for the PDF (<code>hidden_in = [&quot;web&quot;]</code>).
+The audience sees the demo; the handout still has the output.</p>
+</div>
+<p>You'll see this exact pair in the <strong>Server</strong> section →</p>
+</div><!-- end step -->
+"""
+alt = """
+# One deck, two outputs
+
+`hidden_in` drops a slide from a specific render target:
+
+```toml
++++
+hidden_in = ["pdf"]   # web only — e.g. a live terminal
++++
+```
+
+```toml
++++
+hidden_in = ["web"]   # pdf only — a static screenshot twin
++++
+```
+
+> [!TIP]
+> Pattern: keep a **live `term`** slide for the web (`hidden_in = ["pdf"]`),
+> paired with a **static code** twin for the PDF (`hidden_in = ["web"]`).
+> The audience sees the demo; the handout still has the output.
+
+You'll see this exact pair in the **Server** section →
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Part"
+body_source = """
+# `toboggan-cli`
+
+Compile a folder of Markdown into a presentation —
+in the format you need.
+"""
+
+[slides.title]
+type = "Text"
+text = "4. The CLI"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1><code>toboggan-cli</code></h1>
+<p>Compile a folder of Markdown into a presentation —
+in the format you need.</p>
+"""
+alt = """
+# `toboggan-cli`
+
+Compile a folder of Markdown into a presentation —
+in the format you need.
+"""
+
+[[slides]]
+kind = "Standard"
+body_source = '''
+# Convert a folder
+
+```console
+$ toboggan-cli ./slides/ -o my-talk.toml
+✅ Successfully wrote 12 slides to my-talk.toml
+```
+
+Override metadata without touching the files:
+
+```console
+$ toboggan-cli ./slides/ \
+    --title "My Conference Talk" \
+    --date 2026-09-15 \
+    -o my-talk.toml
+```
+
+| Flag | Purpose |
+| --- | --- |
+| `-o, --output` | Output file (extension picks the format) |
+| `-t, --title` | Override the title |
+| `-d, --date` | Override the date (`YYYY-MM-DD`) |
+
+> [!NOTE]
+> The input must be a **folder** — a single flat `.md` file is not accepted.
+'''
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "4.1 Convert a folder"
+
+[slides.body]
+type = "Html"
+raw = '''
+<h1>Convert a folder</h1>
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan-cli ./slides/ -o my-talk.toml
+</span><span style="color:#4f5b66;">✅ Successfully wrote 12 slides to my-talk.toml
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<p>Override metadata without touching the files:</p>
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan-cli ./slides/ \
+</span><span style="color:#4f5b66;">    --title &quot;My Conference Talk&quot; \
+</span><span style="color:#4f5b66;">    --date 2026-09-15 \
+</span><span style="color:#4f5b66;">    -o my-talk.toml
+</span></code></pre>
+</div><!-- end step -->
+
+<div class="step step-1"><!-- begin step -->
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-o, --output</code></td>
+<td>Output file (extension picks the format)</td>
+</tr>
+<tr>
+<td><code>-t, --title</code></td>
+<td>Override the title</td>
+</tr>
+<tr>
+<td><code>-d, --date</code></td>
+<td>Override the date (<code>YYYY-MM-DD</code>)</td>
+</tr>
+</tbody>
+</table>
+<div class="markdown-alert markdown-alert-note">
+<p class="markdown-alert-title">Note</p>
+<p>The input must be a <strong>folder</strong> — a single flat <code>.md</code> file is not accepted.</p>
+</div>
+</div><!-- end step -->
+'''
+alt = '''
+# Convert a folder
+
+```console
+$ toboggan-cli ./slides/ -o my-talk.toml
+✅ Successfully wrote 12 slides to my-talk.toml
+```
+
+Override metadata without touching the files:
+
+```console
+$ toboggan-cli ./slides/ \
+    --title "My Conference Talk" \
+    --date 2026-09-15 \
+    -o my-talk.toml
+```
+
+| Flag | Purpose |
+| --- | --- |
+| `-o, --output` | Output file (extension picks the format) |
+| `-t, --title` | Override the title |
+| `-d, --date` | Override the date (`YYYY-MM-DD`) |
+
+> [!NOTE]
+> The input must be a **folder** — a single flat `.md` file is not accepted.
+'''
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Five output formats
+
+The extension is auto-detected, or force it with `-f`:
+
+```console
+$ toboggan-cli ./slides/ -o talk.toml      # default — served by the server
+$ toboggan-cli ./slides/ -o talk.json
+$ toboggan-cli ./slides/ -o talk.yaml
+$ toboggan-cli ./slides/ -o talk.html      # single self-contained file
+$ toboggan-cli ./slides/ -f typst -o talk.typ
+```
+
+| Format | Use it for |
+| --- | --- |
+| `toml` | The artifact `toboggan-server` serves |
+| `json` / `yaml` | Pipelines, tooling, inspection |
+| `html` | A standalone file you can email or host |
+| `typst` | `typst compile talk.typ` → a **PDF** handout |
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "4.2 Output formats"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Five output formats</h1>
+<p>The extension is auto-detected, or force it with <code>-f</code>:</p>
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan-cli ./slides/ -o talk.toml      # default — served by the server
+</span><span style="color:#4f5b66;">$ toboggan-cli ./slides/ -o talk.json
+</span><span style="color:#4f5b66;">$ toboggan-cli ./slides/ -o talk.yaml
+</span><span style="color:#4f5b66;">$ toboggan-cli ./slides/ -o talk.html      # single self-contained file
+</span><span style="color:#4f5b66;">$ toboggan-cli ./slides/ -f typst -o talk.typ
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<table>
+<thead>
+<tr>
+<th>Format</th>
+<th>Use it for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>toml</code></td>
+<td>The artifact <code>toboggan-server</code> serves</td>
+</tr>
+<tr>
+<td><code>json</code> / <code>yaml</code></td>
+<td>Pipelines, tooling, inspection</td>
+</tr>
+<tr>
+<td><code>html</code></td>
+<td>A standalone file you can email or host</td>
+</tr>
+<tr>
+<td><code>typst</code></td>
+<td><code>typst compile talk.typ</code> → a <strong>PDF</strong> handout</td>
+</tr>
+</tbody>
+</table>
+</div><!-- end step -->
+"""
+alt = """
+# Five output formats
+
+The extension is auto-detected, or force it with `-f`:
+
+```console
+$ toboggan-cli ./slides/ -o talk.toml      # default — served by the server
+$ toboggan-cli ./slides/ -o talk.json
+$ toboggan-cli ./slides/ -o talk.yaml
+$ toboggan-cli ./slides/ -o talk.html      # single self-contained file
+$ toboggan-cli ./slides/ -f typst -o talk.typ
+```
+
+| Format | Use it for |
+| --- | --- |
+| `toml` | The artifact `toboggan-server` serves |
+| `json` / `yaml` | Pipelines, tooling, inspection |
+| `html` | A standalone file you can email or host |
+| `typst` | `typst compile talk.typ` → a **PDF** handout |
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Handy options
+
+```console
+$ toboggan-cli --list-themes            # syntax-highlight themes
+$ toboggan-cli ./slides/ --theme Monokai -o talk.toml
+$ toboggan-cli ./slides/ --no-counter   # don't auto-number parts/slides
+$ toboggan-cli ./slides/ --wpm 130      # tune the duration estimate
+```
+
+Every build prints a **stats report** — word counts, per-part breakdown, and
+duration scenarios for slow/normal/fast speakers:
+
+```text
+ Part             Slides   Words   Percentage   Duration
+ 1. Authoring          3     210        18.4%       1:24
+ 2. Directives         5     330        28.9%       2:12
+ ...
+```
+
+> [!TIP]
+> Add `--exclude-notes-from-duration` to time only what the audience sees.
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "4.3 Handy options"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Handy options</h1>
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan-cli --list-themes            # syntax-highlight themes
+</span><span style="color:#4f5b66;">$ toboggan-cli ./slides/ --theme Monokai -o talk.toml
+</span><span style="color:#4f5b66;">$ toboggan-cli ./slides/ --no-counter   # don&#39;t auto-number parts/slides
+</span><span style="color:#4f5b66;">$ toboggan-cli ./slides/ --wpm 130      # tune the duration estimate
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<p>Every build prints a <strong>stats report</strong> — word counts, per-part breakdown, and
+duration scenarios for slow/normal/fast speakers:</p>
+<pre style="background-color:#eff1f5;"><code class="language-text"><span style="color:#4f5b66;"> Part             Slides   Words   Percentage   Duration
+</span><span style="color:#4f5b66;"> 1. Authoring          3     210        18.4%       1:24
+</span><span style="color:#4f5b66;"> 2. Directives         5     330        28.9%       2:12
+</span><span style="color:#4f5b66;"> ...
+</span></code></pre>
+<div class="markdown-alert markdown-alert-tip">
+<p class="markdown-alert-title">Tip</p>
+<p>Add <code>--exclude-notes-from-duration</code> to time only what the audience sees.</p>
+</div>
+</div><!-- end step -->
+"""
+alt = """
+# Handy options
+
+```console
+$ toboggan-cli --list-themes            # syntax-highlight themes
+$ toboggan-cli ./slides/ --theme Monokai -o talk.toml
+$ toboggan-cli ./slides/ --no-counter   # don't auto-number parts/slides
+$ toboggan-cli ./slides/ --wpm 130      # tune the duration estimate
+```
+
+Every build prints a **stats report** — word counts, per-part breakdown, and
+duration scenarios for slow/normal/fast speakers:
+
+```text
+ Part             Slides   Words   Percentage   Duration
+ 1. Authoring          3     210        18.4%       1:24
+ 2. Directives         5     330        28.9%       2:12
+ ...
+```
+
+> [!TIP]
+> Add `--exclude-notes-from-duration` to time only what the audience sees.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Part"
+body_source = """
+# `toboggan-server`
+
+Serve the deck, sync every client, and power the live terminals.
+"""
+
+[slides.title]
+type = "Text"
+text = "5. The Server"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1><code>toboggan-server</code></h1>
+<p>Serve the deck, sync every client, and power the live terminals.</p>
+"""
+alt = """
+# `toboggan-server`
+
+Serve the deck, sync every client, and power the live terminals.
+"""
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Serve it
+
+```console
+$ toboggan-server ./my-talk.toml
+# → http://127.0.0.1:8080
+```
+
+Bind elsewhere for the room to join from their laptops:
+
+```console
+$ toboggan-server --host 0.0.0.0 --port 9000 ./my-talk.toml
+```
+
+> [!NOTE]
+> The server takes the compiled **`.toml`** (not the slides folder). Build
+> first with `toboggan-cli`, then serve — or let `--watch` rebuild for you.
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "5.1 Serve it"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Serve it</h1>
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan-server ./my-talk.toml
+</span><span style="color:#4f5b66;"># → http://127.0.0.1:8080
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<p>Bind elsewhere for the room to join from their laptops:</p>
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan-server --host 0.0.0.0 --port 9000 ./my-talk.toml
+</span></code></pre>
+</div><!-- end step -->
+
+<div class="step step-1"><!-- begin step -->
+<div class="markdown-alert markdown-alert-note">
+<p class="markdown-alert-title">Note</p>
+<p>The server takes the compiled <strong><code>.toml</code></strong> (not the slides folder). Build
+first with <code>toboggan-cli</code>, then serve — or let <code>--watch</code> rebuild for you.</p>
+</div>
+</div><!-- end step -->
+"""
+alt = """
+# Serve it
+
+```console
+$ toboggan-server ./my-talk.toml
+# → http://127.0.0.1:8080
+```
+
+Bind elsewhere for the room to join from their laptops:
+
+```console
+$ toboggan-server --host 0.0.0.0 --port 9000 ./my-talk.toml
+```
+
+> [!NOTE]
+> The server takes the compiled **`.toml`** (not the slides folder). Build
+> first with `toboggan-cli`, then serve — or let `--watch` rebuild for you.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = '''
+# Server flags
+
+| Flag | Env var | What it does |
+| --- | --- | --- |
+| `--host` | `TOBOGGAN_HOST` | Bind address (default `127.0.0.1`) |
+| `--port` | `TOBOGGAN_PORT` | Port (default `8080`) |
+| `--watch` | `TOBOGGAN_WATCH` | Live-reload when the `.toml` changes |
+| `--public-dir` | `TOBOGGAN_PUBLIC_DIR` | Serve assets at `/public/` |
+| `--shell` | `TOBOGGAN_SHELL` | Shell for embedded terminals |
+| `--allowed-origins` | `TOBOGGAN_CORS_ORIGINS` | Comma-separated CORS origins |
+| `--max-clients` | `TOBOGGAN_MAX_CLIENTS` | Concurrent client cap |
+
+```console
+$ toboggan-server \
+    --public-dir ./public/ \
+    --shell /opt/homebrew/bin/fish \
+    --watch \
+    ./my-talk.toml
+```
+
+> [!TIP]
+> `--shell` picks which shell the live terminals spawn — point it at `fish`
+> to show off your real prompt, or `sh` for a clean, portable demo.
+'''
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "5.2 Server flags"
+
+[slides.body]
+type = "Html"
+raw = '''
+<h1>Server flags</h1>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Env var</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--host</code></td>
+<td><code>TOBOGGAN_HOST</code></td>
+<td>Bind address (default <code>127.0.0.1</code>)</td>
+</tr>
+<tr>
+<td><code>--port</code></td>
+<td><code>TOBOGGAN_PORT</code></td>
+<td>Port (default <code>8080</code>)</td>
+</tr>
+<tr>
+<td><code>--watch</code></td>
+<td><code>TOBOGGAN_WATCH</code></td>
+<td>Live-reload when the <code>.toml</code> changes</td>
+</tr>
+<tr>
+<td><code>--public-dir</code></td>
+<td><code>TOBOGGAN_PUBLIC_DIR</code></td>
+<td>Serve assets at <code>/public/</code></td>
+</tr>
+<tr>
+<td><code>--shell</code></td>
+<td><code>TOBOGGAN_SHELL</code></td>
+<td>Shell for embedded terminals</td>
+</tr>
+<tr>
+<td><code>--allowed-origins</code></td>
+<td><code>TOBOGGAN_CORS_ORIGINS</code></td>
+<td>Comma-separated CORS origins</td>
+</tr>
+<tr>
+<td><code>--max-clients</code></td>
+<td><code>TOBOGGAN_MAX_CLIENTS</code></td>
+<td>Concurrent client cap</td>
+</tr>
+</tbody>
+</table>
+
+<div class="step step-0"><!-- begin step -->
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan-server \
+</span><span style="color:#4f5b66;">    --public-dir ./public/ \
+</span><span style="color:#4f5b66;">    --shell /opt/homebrew/bin/fish \
+</span><span style="color:#4f5b66;">    --watch \
+</span><span style="color:#4f5b66;">    ./my-talk.toml
+</span></code></pre>
+<div class="markdown-alert markdown-alert-tip">
+<p class="markdown-alert-title">Tip</p>
+<p><code>--shell</code> picks which shell the live terminals spawn — point it at <code>fish</code>
+to show off your real prompt, or <code>sh</code> for a clean, portable demo.</p>
+</div>
+</div><!-- end step -->
+'''
+alt = '''
+# Server flags
+
+| Flag | Env var | What it does |
+| --- | --- | --- |
+| `--host` | `TOBOGGAN_HOST` | Bind address (default `127.0.0.1`) |
+| `--port` | `TOBOGGAN_PORT` | Port (default `8080`) |
+| `--watch` | `TOBOGGAN_WATCH` | Live-reload when the `.toml` changes |
+| `--public-dir` | `TOBOGGAN_PUBLIC_DIR` | Serve assets at `/public/` |
+| `--shell` | `TOBOGGAN_SHELL` | Shell for embedded terminals |
+| `--allowed-origins` | `TOBOGGAN_CORS_ORIGINS` | Comma-separated CORS origins |
+| `--max-clients` | `TOBOGGAN_MAX_CLIENTS` | Concurrent client cap |
+
+```console
+$ toboggan-server \
+    --public-dir ./public/ \
+    --shell /opt/homebrew/bin/fish \
+    --watch \
+    ./my-talk.toml
+```
+
+> [!TIP]
+> `--shell` picks which shell the live terminals spawn — point it at `fish`
+> to show off your real prompt, or `sh` for a clean, portable demo.
+'''
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Everyone on the same slide
+
+The server keeps a single presentation **state machine** and pushes it to every
+connected client over a WebSocket.
+
+- Navigate on one device → all clients follow, instantly
+- Late joiners receive the **current** slide on connect
+- Reconnects re-sync automatically
+
+### Endpoints worth knowing
+
+| Path | Purpose |
+| --- | --- |
+| `/` | The web client (this UI) |
+| `/api/ws` | Presentation sync WebSocket |
+| `/api/terminal` | Embedded-terminal WebSocket |
+| `/api/talk`, `/api/slides` | REST views of the deck |
+| `/doc` | Interactive OpenAPI docs |
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "5.3 Multi-client sync"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Everyone on the same slide</h1>
+<p>The server keeps a single presentation <strong>state machine</strong> and pushes it to every
+connected client over a WebSocket.</p>
+
+<div class="step step-0"><!-- begin step -->
+<ul>
+<li>Navigate on one device → all clients follow, instantly</li>
+<li>Late joiners receive the <strong>current</strong> slide on connect</li>
+<li>Reconnects re-sync automatically</li>
+</ul>
+</div><!-- end step -->
+
+<div class="step step-1"><!-- begin step -->
+<h3>Endpoints worth knowing</h3>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/</code></td>
+<td>The web client (this UI)</td>
+</tr>
+<tr>
+<td><code>/api/ws</code></td>
+<td>Presentation sync WebSocket</td>
+</tr>
+<tr>
+<td><code>/api/terminal</code></td>
+<td>Embedded-terminal WebSocket</td>
+</tr>
+<tr>
+<td><code>/api/talk</code>, <code>/api/slides</code></td>
+<td>REST views of the deck</td>
+</tr>
+<tr>
+<td><code>/doc</code></td>
+<td>Interactive OpenAPI docs</td>
+</tr>
+</tbody>
+</table>
+</div><!-- end step -->
+"""
+alt = """
+# Everyone on the same slide
+
+The server keeps a single presentation **state machine** and pushes it to every
+connected client over a WebSocket.
+
+- Navigate on one device → all clients follow, instantly
+- Late joiners receive the **current** slide on connect
+- Reconnects re-sync automatically
+
+### Endpoints worth knowing
+
+| Path | Purpose |
+| --- | --- |
+| `/` | The web client (this UI) |
+| `/api/ws` | Presentation sync WebSocket |
+| `/api/terminal` | Embedded-terminal WebSocket |
+| `/api/talk`, `/api/slides` | REST views of the deck |
+| `/doc` | Interactive OpenAPI docs |
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>State transitions: Init → Running ⇄ Paused → Done. Commands (Next, Previous,
+GoTo, …) arrive over /api/ws and the new state is broadcast to all clients.</p>
+"""
+alt = """
+State transitions: Init → Running ⇄ Paused → Done. Commands (Next, Previous,
+GoTo, …) arrive over /api/ws and the new state is broadcast to all clients.
+"""
+
+[slides.notes.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Live demo — web
+
+This slide is **web-only** (`hidden_in = ["pdf"]`). Type a command:
+"""
+hidden_in = ["pdf"]
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "5.4 Live demo (web)"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Live demo — web</h1>
+<p>This slide is <strong>web-only</strong> (<code>hidden_in = [&quot;pdf&quot;]</code>). Type a command:</p>
+"""
+alt = """
+# Live demo — web
+
+This slide is **web-only** (`hidden_in = ["pdf"]`). Type a command:
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>On the projector this is a real shell. In the printed/PDF handout it is
+replaced by the static twin on the next slide.</p>
+"""
+alt = """
+On the projector this is a real shell. In the printed/PDF handout it is
+replaced by the static twin on the next slide.
+"""
+
+[slides.notes.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides.terminals]]
+cwd = "slides/5_server"
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Live demo — handout
+
+This slide is **pdf-only** (`hidden_in = ["web"]`). A live terminal can't print,
+so the handout shows a captured transcript instead:
+
+```console
+$ toboggan-cli --version
+toboggan-cli 0.1.0
+
+$ ls slides/
+1_authoring  2_directives  3_styling  4_cli  5_server  6_workflow  7_conclusion
+```
+
+> [!NOTE]
+> You're reading this on the web, where it would normally be hidden — it's
+> shown here only to document the pattern.
+"""
+hidden_in = ["web"]
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "5.5 Static twin (pdf)"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Live demo — handout</h1>
+<p>This slide is <strong>pdf-only</strong> (<code>hidden_in = [&quot;web&quot;]</code>). A live terminal can't print,
+so the handout shows a captured transcript instead:</p>
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan-cli --version
+</span><span style="color:#4f5b66;">toboggan-cli 0.1.0
+</span><span style="color:#4f5b66;">
+</span><span style="color:#4f5b66;">$ ls slides/
+</span><span style="color:#4f5b66;">1_authoring  2_directives  3_styling  4_cli  5_server  6_workflow  7_conclusion
+</span></code></pre>
+<div class="markdown-alert markdown-alert-note">
+<p class="markdown-alert-title">Note</p>
+<p>You're reading this on the web, where it would normally be hidden — it's
+shown here only to document the pattern.</p>
+</div>
+"""
+alt = """
+# Live demo — handout
+
+This slide is **pdf-only** (`hidden_in = ["web"]`). A live terminal can't print,
+so the handout shows a captured transcript instead:
+
+```console
+$ toboggan-cli --version
+toboggan-cli 0.1.0
+
+$ ls slides/
+1_authoring  2_directives  3_styling  4_cli  5_server  6_workflow  7_conclusion
+```
+
+> [!NOTE]
+> You're reading this on the web, where it would normally be hidden — it's
+> shown here only to document the pattern.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Part"
+body_source = """
+# Workflow & Tricks
+
+A tight edit loop, and the techniques that make a deck shine.
+"""
+
+[slides.title]
+type = "Text"
+text = "6. Workflow & Tricks"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Workflow &amp; Tricks</h1>
+<p>A tight edit loop, and the techniques that make a deck shine.</p>
+"""
+alt = """
+# Workflow & Tricks
+
+A tight edit loop, and the techniques that make a deck shine.
+"""
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# The edit loop
+
+Two terminals, instant feedback:
+
+```console
+# 1 — rebuild the .toml whenever a slide changes
+$ bacon                # uses bacon.toml in the deck folder
+
+# 2 — serve with live reload
+$ toboggan-server --public-dir ./public/ --watch ./my-talk.toml
+```
+
+Or wrap both in `mise` tasks (see this deck's `mise.toml`):
+
+```console
+$ mise run build       # slides/ → my-talk.toml
+$ mise run dev          # serve + --watch
+$ mise run pdf          # typst export → PDF
+```
+
+> [!TIP]
+> Save a slide → `bacon` regenerates the `.toml` → `--watch` reloads the
+> browser. No manual rebuild, no refresh.
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "6.1 The dev loop"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>The edit loop</h1>
+<p>Two terminals, instant feedback:</p>
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;"># 1 — rebuild the .toml whenever a slide changes
+</span><span style="color:#4f5b66;">$ bacon                # uses bacon.toml in the deck folder
+</span><span style="color:#4f5b66;">
+</span><span style="color:#4f5b66;"># 2 — serve with live reload
+</span><span style="color:#4f5b66;">$ toboggan-server --public-dir ./public/ --watch ./my-talk.toml
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<p>Or wrap both in <code>mise</code> tasks (see this deck's <code>mise.toml</code>):</p>
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ mise run build       # slides/ → my-talk.toml
+</span><span style="color:#4f5b66;">$ mise run dev          # serve + --watch
+</span><span style="color:#4f5b66;">$ mise run pdf          # typst export → PDF
+</span></code></pre>
+<div class="markdown-alert markdown-alert-tip">
+<p class="markdown-alert-title">Tip</p>
+<p>Save a slide → <code>bacon</code> regenerates the <code>.toml</code> → <code>--watch</code> reloads the
+browser. No manual rebuild, no refresh.</p>
+</div>
+</div><!-- end step -->
+"""
+alt = """
+# The edit loop
+
+Two terminals, instant feedback:
+
+```console
+# 1 — rebuild the .toml whenever a slide changes
+$ bacon                # uses bacon.toml in the deck folder
+
+# 2 — serve with live reload
+$ toboggan-server --public-dir ./public/ --watch ./my-talk.toml
+```
+
+Or wrap both in `mise` tasks (see this deck's `mise.toml`):
+
+```console
+$ mise run build       # slides/ → my-talk.toml
+$ mise run dev          # serve + --watch
+$ mise run pdf          # typst export → PDF
+```
+
+> [!TIP]
+> Save a slide → `bacon` regenerates the `.toml` → `--watch` reloads the
+> browser. No manual rebuild, no refresh.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Tricks of the trade
+
+<div class="tricks">
+
+### 🔤 Custom fonts
+
+Drop `<link>` tags in `_head.html` and point `--font-slide-*` at them in your
+stylesheet — exactly how this deck loads Space Grotesk.
+
+### 📊 Live footer
+
+The footer reads `--current-slide` / `--total-slides`; this guide's 🛷 rides the
+progress bar with pure CSS, no assets.
+
+### 🖼️ Pre-render diagrams
+
+Compile D2 / Mermaid / Graphviz to `.webp` in `public/`, embed with `<img>`.
+Keeps the `.toml` small and the render fast.
+
+### 📐 `spread-steps`
+
+Combine with `<!-- pause -->` to space reveals evenly down a tall slide.
+
+</div>
+
+<style>
+  .tricks {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8em 1.6em;
+    text-align: left;
+    margin-top: 0.4em;
+  }
+  .tricks h3 { margin: 0; }
+  .tricks p { margin: 0.15em 0 0; font-size: 0.9em; }
+</style>
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "6.2 Tricks of the trade"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Tricks of the trade</h1>
+<div class="tricks">
+<h3>🔤 Custom fonts</h3>
+<p>Drop <code>&lt;link&gt;</code> tags in <code>_head.html</code> and point <code>--font-slide-*</code> at them in your
+stylesheet — exactly how this deck loads Space Grotesk.</p>
+<h3>📊 Live footer</h3>
+<p>The footer reads <code>--current-slide</code> / <code>--total-slides</code>; this guide's 🛷 rides the
+progress bar with pure CSS, no assets.</p>
+<h3>🖼️ Pre-render diagrams</h3>
+<p>Compile D2 / Mermaid / Graphviz to <code>.webp</code> in <code>public/</code>, embed with <code>&lt;img&gt;</code>.
+Keeps the <code>.toml</code> small and the render fast.</p>
+<h3>📐 <code>spread-steps</code></h3>
+<p>Combine with <code>&lt;!-- pause --&gt;</code> to space reveals evenly down a tall slide.</p>
+</div>
+<style>
+  .tricks {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8em 1.6em;
+    text-align: left;
+    margin-top: 0.4em;
+  }
+  .tricks h3 { margin: 0; }
+  .tricks p { margin: 0.15em 0 0; font-size: 0.9em; }
+</style>
+"""
+alt = """
+# Tricks of the trade
+
+<div class="tricks">
+
+### 🔤 Custom fonts
+
+Drop `<link>` tags in `_head.html` and point `--font-slide-*` at them in your
+stylesheet — exactly how this deck loads Space Grotesk.
+
+### 📊 Live footer
+
+The footer reads `--current-slide` / `--total-slides`; this guide's 🛷 rides the
+progress bar with pure CSS, no assets.
+
+### 🖼️ Pre-render diagrams
+
+Compile D2 / Mermaid / Graphviz to `.webp` in `public/`, embed with `<img>`.
+Keeps the `.toml` small and the render fast.
+
+### 📐 `spread-steps`
+
+Combine with `<!-- pause -->` to space reveals evenly down a tall slide.
+
+</div>
+
+<style>
+  .tricks {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8em 1.6em;
+    text-align: left;
+    margin-top: 0.4em;
+  }
+  .tricks h3 { margin: 0; }
+  .tricks p { margin: 0.15em 0 0; font-size: 0.9em; }
+</style>
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Part"
+body_source = """
+# Wrap-up
+"""
+
+[slides.title]
+type = "Text"
+text = "7. Wrap-up"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Wrap-up</h1>
+"""
+alt = """
+# Wrap-up
+"""
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# You now know how to…
+
+- ✍️ **Author** a deck as a folder of Markdown + frontmatter
+
+- 🎬 **Direct** it with `pause`, `notes`, `term`, and `code`
+
+- 🎨 **Style** it with classes, inline CSS, and a custom theme
+
+- 🛠️ **Build** it to TOML / HTML / PDF with `toboggan-cli`
+
+- 📡 **Serve & sync** it live with `toboggan-server`
+
+### …and this guide was built with every one of them.
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "center",
+]
+
+[slides.title]
+type = "Text"
+text = "7.1 Recap"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>You now know how to…</h1>
+
+<div class="step step-0"><!-- begin step -->
+<ul>
+<li>✍️ <strong>Author</strong> a deck as a folder of Markdown + frontmatter</li>
+</ul>
+</div><!-- end step -->
+
+<div class="step step-1"><!-- begin step -->
+<ul>
+<li>🎬 <strong>Direct</strong> it with <code>pause</code>, <code>notes</code>, <code>term</code>, and <code>code</code></li>
+</ul>
+</div><!-- end step -->
+
+<div class="step step-2"><!-- begin step -->
+<ul>
+<li>🎨 <strong>Style</strong> it with classes, inline CSS, and a custom theme</li>
+</ul>
+</div><!-- end step -->
+
+<div class="step step-3"><!-- begin step -->
+<ul>
+<li>🛠️ <strong>Build</strong> it to TOML / HTML / PDF with <code>toboggan-cli</code></li>
+</ul>
+</div><!-- end step -->
+
+<div class="step step-4"><!-- begin step -->
+<ul>
+<li>📡 <strong>Serve &amp; sync</strong> it live with <code>toboggan-server</code></li>
+</ul>
+</div><!-- end step -->
+
+<div class="step step-5"><!-- begin step -->
+<h3>…and this guide was built with every one of them.</h3>
+</div><!-- end step -->
+"""
+alt = """
+# You now know how to…
+
+- ✍️ **Author** a deck as a folder of Markdown + frontmatter
+
+- 🎬 **Direct** it with `pause`, `notes`, `term`, and `code`
+
+- 🎨 **Style** it with classes, inline CSS, and a custom theme
+
+- 🛠️ **Build** it to TOML / HTML / PDF with `toboggan-cli`
+
+- 📡 **Serve & sync** it live with `toboggan-server`
+
+### …and this guide was built with every one of them.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "center",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+<style>
+  .next-steps { text-align: left; display: inline-block; }
+  .next-steps code { font-size: 0.85em; }
+</style>
+
+# Go build a deck
+
+<div class="next-steps">
+
+```console
+$ git clone https://github.com/ilaborie/toboggan
+$ cd toboggan/examples/toboggan-guide
+$ cargo install --path ../../toboggan-cli
+$ cargo install --path ../../toboggan-server
+$ toboggan-cli slides/ -o toboggan-guide.toml
+$ toboggan-server --public-dir public/ toboggan-guide.toml
+```
+
+</div>
+
+- 📂 This deck's source: `examples/toboggan-guide/`
+- 🧪 Feature reference: `examples/demo-terminal/`
+- 📖 API docs: `/doc` on a running server
+
+### Happy sledding 🛷
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "center",
+]
+style = """
+background: radial-gradient(60vw 60vw at 50% 30%, rgba(76, 201, 240, 0.16), transparent 60%);
+"""
+
+[slides.title]
+type = "Text"
+text = "7.2 Resources"
+
+[slides.body]
+type = "Html"
+raw = """
+<style>
+  .next-steps { text-align: left; display: inline-block; }
+  .next-steps code { font-size: 0.85em; }
+</style>
+<h1>Go build a deck</h1>
+<div class="next-steps">
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ git clone https://github.com/ilaborie/toboggan
+</span><span style="color:#4f5b66;">$ cd toboggan/examples/toboggan-guide
+</span><span style="color:#4f5b66;">$ cargo install --path ../../toboggan-cli
+</span><span style="color:#4f5b66;">$ cargo install --path ../../toboggan-server
+</span><span style="color:#4f5b66;">$ toboggan-cli slides/ -o toboggan-guide.toml
+</span><span style="color:#4f5b66;">$ toboggan-server --public-dir public/ toboggan-guide.toml
+</span></code></pre>
+</div>
+
+<div class="step step-0"><!-- begin step -->
+<ul>
+<li>📂 This deck's source: <code>examples/toboggan-guide/</code></li>
+<li>🧪 Feature reference: <code>examples/demo-terminal/</code></li>
+<li>📖 API docs: <code>/doc</code> on a running server</li>
+</ul>
+<h3>Happy sledding 🛷</h3>
+</div><!-- end step -->
+"""
+alt = """
+<style>
+  .next-steps { text-align: left; display: inline-block; }
+  .next-steps code { font-size: 0.85em; }
+</style>
+
+# Go build a deck
+
+<div class="next-steps">
+
+```console
+$ git clone https://github.com/ilaborie/toboggan
+$ cd toboggan/examples/toboggan-guide
+$ cargo install --path ../../toboggan-cli
+$ cargo install --path ../../toboggan-server
+$ toboggan-cli slides/ -o toboggan-guide.toml
+$ toboggan-server --public-dir public/ toboggan-guide.toml
+```
+
+</div>
+
+- 📂 This deck's source: `examples/toboggan-guide/`
+- 🧪 Feature reference: `examples/demo-terminal/`
+- 📖 API docs: `/doc` on a running server
+
+### Happy sledding 🛷
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "center",
+]
+style = """
+background: radial-gradient(60vw 60vw at 50% 30%, rgba(76, 201, 240, 0.16), transparent 60%);
+"""

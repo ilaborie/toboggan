@@ -1,0 +1,68 @@
+<style>
+  /* Rendered inside the footer's shadow root, so styles are scoped to :host.
+   * The runtime injects --current-slide and --total-slides; we derive a
+   * progress percentage from them (same technique as the riir deck). */
+  :host {
+    --pct: calc((var(--current-slide) / var(--total-slides)) * 100%);
+    --frost: #4cc9f0;
+    --orange: #ff8c42;
+    display: block;
+    width: 100%;
+    position: relative;
+    font-family: "Space Grotesk", system-ui, sans-serif;
+    color: #e6edf5;
+    background: #0a1420;
+    border-top: 1px solid rgba(230, 237, 245, 0.1);
+  }
+
+  /* Thin progress rail across the very top of the footer. */
+  .rail {
+    height: 4px;
+    width: 100%;
+    background: linear-gradient(
+      90deg,
+      var(--frost),
+      var(--orange) var(--pct),
+      rgba(230, 237, 245, 0.12) var(--pct)
+    );
+  }
+
+  /* A little sled that rides the progress, demonstrating a
+   * slide-number-driven decoration without any image assets. */
+  .sled {
+    position: absolute;
+    top: -0.35em;
+    left: clamp(0%, var(--pct), 100%);
+    transform: translateX(-50%);
+    font-size: 0.8em;
+    transition: left 0.4s ease;
+    pointer-events: none;
+  }
+
+  .txt {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.3em 1.2em;
+    font-size: 0.7em;
+    letter-spacing: 0.02em;
+  }
+  .txt .title {
+    color: var(--frost);
+    font-weight: 600;
+  }
+  .txt .count {
+    counter-set: total var(--total-slides) cur var(--current-slide);
+    color: rgba(230, 237, 245, 0.7);
+  }
+  .txt .count::after {
+    content: counter(cur) " / " counter(total);
+  }
+</style>
+
+<div class="rail"></div>
+<div class="sled">🛷</div>
+<div class="txt">
+  <span class="title">Toboggan · User Guide</span>
+  <span class="count"></span>
+</div>
