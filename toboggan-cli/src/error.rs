@@ -134,6 +134,13 @@ pub enum TobogganCliError {
         help("Ensure the `typst` binary is installed and on PATH")
     )]
     Typst { message: String },
+
+    #[display("Failed to scaffold presentation: {message}")]
+    #[diagnostic(
+        code(toboggan_cli::scaffold),
+        help("Choose an empty or non-existent target directory")
+    )]
+    Scaffold { message: String },
 }
 
 impl TobogganCliError {
@@ -204,6 +211,11 @@ impl TobogganCliError {
     #[must_use]
     pub fn write_file(path: PathBuf, source: io::Error) -> Self {
         Self::WriteFile { path, source }
+    }
+
+    #[must_use]
+    pub fn scaffold(message: String) -> Self {
+        Self::Scaffold { message }
     }
 
     #[must_use]

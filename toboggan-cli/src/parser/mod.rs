@@ -29,7 +29,8 @@ type MarkdownNode<'a> = Node<'a, RefCell<Ast>>;
 
 type CssClasses = Vec<String>;
 
-const FRONT_MATTER_DELIMITER: &str = "+++";
+/// Delimiter line that fences TOML front matter at the top of a slide file.
+pub const FRONT_MATTER_DELIMITER: &str = "+++";
 
 const DEFAULT_SLIDE_TITLE: &str = "<No Title>";
 const DEFAULT_PART_TITLE: &str = "Untitled Part";

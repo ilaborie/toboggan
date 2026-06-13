@@ -15,6 +15,8 @@ use parser::FolderParser;
 
 pub mod output;
 
+pub mod scaffold;
+
 mod settings;
 pub use self::settings::*;
 
