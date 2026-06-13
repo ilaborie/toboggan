@@ -8,7 +8,7 @@ use tracing_subscriber::EnvFilter;
 mod cli;
 mod commands;
 
-use cli::{Cli, Commands};
+use cli::{Cli, Commands, McpAction};
 
 fn main() -> miette::Result<()> {
     let cli = match Cli::try_parse() {
@@ -38,6 +38,13 @@ fn init_logging(command: Option<&Commands>) {
         Some(Commands::Desktop(_)) => {
             tracing_subscriber::fmt::init();
         }
+        // The MCP server uses stdout for its protocol; logs must go to stderr.
+        Some(Commands::Mcp(_)) => {
+            tracing_subscriber::fmt()
+                .with_writer(std::io::stderr)
+                .with_env_filter(EnvFilter::from_default_env())
+                .init();
+        }
         _ => {
             tracing_subscriber::fmt()
                 .with_env_filter(EnvFilter::from_default_env())
@@ -66,7 +73,13 @@ fn dispatch(cli: Cli) -> miette::Result<()> {
         Some(Commands::Pdf(args)) => to_miette(commands::pdf::build_pdf(args)),
         Some(Commands::Lint(args)) => to_miette(commands::lint::run_lint(args)),
         Some(Commands::Thumbnails(args)) => to_miette(commands::thumbnails::generate(args)),
-        Some(Commands::Mcp(_)) => commands::stub::coming_soon("mcp"),
+        Some(Commands::Mcp(args)) => {
+            let dir = args.dir.unwrap_or_else(|| std::path::PathBuf::from("."));
+            match args.action {
+                Some(McpAction::Init { client: _ }) => to_miette(toboggan_mcp::mcp_init(&dir)),
+                _ => block_on(toboggan_mcp::serve_stdio(dir)),
+            }
+        }
     }
 }
 

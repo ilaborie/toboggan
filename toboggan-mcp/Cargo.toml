@@ -1,0 +1,29 @@
+[package]
+name = "toboggan-mcp"
+version = "0.1.0"
+description = "MCP server exposing Toboggan authoring tools (outline, stats, lint, scaffold)"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository = "https://github.com/ilaborie/toboggan"
+keywords = ["presentation", "mcp", "llm"]
+categories = ["development-tools"]
+
+[dependencies]
+toboggan-core = { path = "../toboggan-core", features = ["std"] }
+toboggan-cli = { path = "../toboggan-cli" }
+toboggan-stats = { path = "../toboggan-stats" }
+toboggan-lint = { path = "../toboggan-lint" }
+
+rmcp = { version = "1.7.0", features = ["server", "macros", "transport-io"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-std"] }
+anyhow = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+schemars = "1"
+tracing = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

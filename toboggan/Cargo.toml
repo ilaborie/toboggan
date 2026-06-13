@@ -23,6 +23,7 @@ toboggan-desktop = { path = "../toboggan-desktop" }
 toboggan-client = { path = "../toboggan-client" }
 toboggan-stats = { path = "../toboggan-stats" }
 toboggan-lint = { path = "../toboggan-lint", features = ["spell"] }
+toboggan-mcp = { path = "../toboggan-mcp" }
 
 clap = { workspace = true, features = ["env", "derive"] }
 miette = { workspace = true, features = ["fancy"] }
