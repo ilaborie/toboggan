@@ -1,0 +1,87 @@
+.toboggan-help {
+    background: #1e1e1e;
+    color: #f0f0f0;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 1.5rem 2rem;
+    min-width: min(28rem, 90vw);
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    font-family: system-ui, sans-serif;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.toboggan-help::backdrop {
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(2px);
+}
+
+.toboggan-help header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0 0 1rem;
+    border-bottom: 1px solid #333;
+    padding-bottom: 0.5rem;
+    gap: 1rem;
+}
+
+.toboggan-help header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+.toboggan-help button.close {
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0 0.5rem;
+    line-height: 1;
+}
+
+.toboggan-help button.close:hover {
+    color: #ff6b6b;
+}
+
+.toboggan-help h3 {
+    margin: 1.25rem 0 0.5rem;
+    font-size: 0.85rem;
+    color: #9cdcfe;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.toboggan-help h3:first-of-type {
+    margin-top: 0;
+}
+
+.toboggan-help dl {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.5rem 1.25rem;
+    margin: 0;
+}
+
+.toboggan-help dt {
+    text-align: right;
+    align-self: center;
+}
+
+.toboggan-help dd {
+    margin: 0;
+    align-self: center;
+}
+
+.toboggan-help kbd {
+    background: #2d2d2d;
+    border: 1px solid #555;
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 0.15rem 0.5rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85em;
+    margin: 0 0.15rem;
+}

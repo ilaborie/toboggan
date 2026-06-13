@@ -1,9 +1,10 @@
 use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter};
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Content, TerminalConfig};
+use crate::{Content, Talk, TerminalConfig};
 
 /// A type-safe identifier for slides in a presentation.
 ///
@@ -102,6 +103,11 @@ pub struct Slide {
     /// Targets this slide should be excluded from. Empty means visible everywhere.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub hidden_in: BTreeSet<RenderTarget>,
+    /// Working directory for the `QuakeTerminal` overlay when this slide is active.
+    /// If unset, falls back to [`Talk::default_terminal_cwd`], then to the server cwd.
+    /// Resolved against [`Talk::source_dir`] when relative.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quake_terminal_cwd: Option<String>,
 }
 
 /// Borrowed view over a slide's body content.
@@ -209,6 +215,35 @@ impl Slide {
             (Some(source), rendered) => SlideBody::FromMarkdown { source, rendered },
             (None, Content::Empty) => SlideBody::Empty,
             (None, rendered) => SlideBody::Rendered(rendered),
+        }
+    }
+
+    #[must_use]
+    pub fn with_quake_terminal_cwd(mut self, cwd: impl Into<String>) -> Self {
+        self.quake_terminal_cwd = Some(cwd.into());
+        self
+    }
+
+    /// Resolve the working directory for the `QuakeTerminal` overlay on this slide.
+    ///
+    /// Picks the first defined value among: this slide's `quake_terminal_cwd`,
+    /// then `talk.default_terminal_cwd`. Relative paths are joined with
+    /// `talk.source_dir` when available; absolute paths are returned unchanged.
+    /// Returns `None` if no cwd is configured at any level (the server then uses its own cwd).
+    #[must_use]
+    pub fn resolved_quake_cwd(&self, talk: &Talk) -> Option<String> {
+        let raw = self
+            .quake_terminal_cwd
+            .as_deref()
+            .or(talk.default_terminal_cwd.as_deref())?;
+
+        let path = PathBuf::from(raw);
+        if path.is_absolute() {
+            return Some(raw.to_owned());
+        }
+        match talk.source_dir.as_deref() {
+            Some(dir) => Some(Path::new(dir).join(&path).to_string_lossy().into_owned()),
+            None => Some(raw.to_owned()),
         }
     }
 }
@@ -374,5 +409,58 @@ mod tests {
         let slide = Slide::from_markdown("source text", Content::text("rendered text"));
         assert_eq!(slide.body_source.as_deref(), Some("source text"));
         assert!(matches!(slide.body, Content::Text { ref text } if text == "rendered text"));
+    }
+
+    #[test]
+    fn resolved_quake_cwd_returns_none_when_unset() {
+        let talk = Talk::new("t");
+        let slide = Slide::new("s");
+        assert_eq!(slide.resolved_quake_cwd(&talk), None);
+    }
+
+    #[test]
+    fn resolved_quake_cwd_uses_talk_default_when_slide_unset() {
+        let talk = Talk::new("t").with_default_terminal_cwd("/tmp/foo");
+        let slide = Slide::new("s");
+        assert_eq!(slide.resolved_quake_cwd(&talk), Some("/tmp/foo".to_owned()));
+    }
+
+    #[test]
+    fn resolved_quake_cwd_slide_overrides_talk_default() {
+        let talk = Talk::new("t").with_default_terminal_cwd("/tmp/default");
+        let slide = Slide::new("s").with_quake_terminal_cwd("/tmp/slide");
+        assert_eq!(
+            slide.resolved_quake_cwd(&talk),
+            Some("/tmp/slide".to_owned())
+        );
+    }
+
+    #[test]
+    fn resolved_quake_cwd_joins_relative_with_source_dir() {
+        let talk = Talk::new("t").with_source_dir("/talks/demo");
+        let slide = Slide::new("s").with_quake_terminal_cwd("examples/api");
+        let resolved = slide.resolved_quake_cwd(&talk).expect("some");
+        // Use Path equality to keep the test cross-platform.
+        assert_eq!(
+            PathBuf::from(resolved),
+            PathBuf::from("/talks/demo/examples/api")
+        );
+    }
+
+    #[test]
+    fn resolved_quake_cwd_keeps_absolute_path_unchanged_with_source_dir() {
+        let talk = Talk::new("t").with_source_dir("/talks/demo");
+        let slide = Slide::new("s").with_quake_terminal_cwd("/etc");
+        assert_eq!(slide.resolved_quake_cwd(&talk), Some("/etc".to_owned()));
+    }
+
+    #[test]
+    fn resolved_quake_cwd_returns_relative_unchanged_without_source_dir() {
+        let talk = Talk::new("t");
+        let slide = Slide::new("s").with_quake_terminal_cwd("examples/api");
+        assert_eq!(
+            slide.resolved_quake_cwd(&talk),
+            Some("examples/api".to_owned())
+        );
     }
 }

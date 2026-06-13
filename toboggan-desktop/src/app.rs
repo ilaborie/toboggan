@@ -205,6 +205,8 @@ impl App {
             date: talk_response.date,
             footer: talk_response.footer.clone(),
             head: talk_response.head.clone(),
+            default_terminal_cwd: None,
+            source_dir: None,
             slides: vec![], // We'll load slides separately
         };
         self.state.talk = Some(talk);
@@ -231,6 +233,8 @@ impl App {
             date: talk_response.date,
             footer: talk_response.footer.clone(),
             head: talk_response.head.clone(),
+            default_terminal_cwd: None,
+            source_dir: None,
             slides: slides_response.slides.clone(),
         };
         self.state.talk = Some(talk);
@@ -267,6 +271,8 @@ impl App {
             date: talk_response.date,
             footer: talk_response.footer.clone(),
             head: talk_response.head.clone(),
+            default_terminal_cwd: None,
+            source_dir: None,
             slides: slides_response.slides.clone(),
         };
         self.state.talk = Some(talk);

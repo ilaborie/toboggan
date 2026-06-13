@@ -8,12 +8,13 @@ authors = ["Igor Laborie <ilaborie@gmail.com>"]
 description = "WebAssembly client for Toboggan presentation system"
 repository = "https://github.com/ilaborie/toboggan"
 
-[package.metadata.cargo-machete]
-# Enables web_sys canvas features (CanvasRenderingContext2d) used by vterm.rs
-ignored = ["beamterm-renderer"]
-
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[package.metadata.cargo-machete]
+# beamterm-renderer is consumed via its js-api feature (registers JS bindings
+# at link time); cargo-machete misses that because there's no `use` statement.
+ignored = ["beamterm-renderer"]
 
 [workspace]
 # This empty workspace table prevents the package from inheriting workspace settings
@@ -33,6 +34,7 @@ gloo = { version = "0.12.0", default-features = false, features = [
 web-sys = { version = "0.3.94", features = [
   "BeforeUnloadEvent",
   "HtmlElement",
+  "HtmlDialogElement",
   "KeyboardEvent",
   "Element",
   "HtmlElement",

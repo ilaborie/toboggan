@@ -286,6 +286,8 @@ mod tests {
             date: toboggan_core::Date::today(),
             footer: None,
             head: None,
+            default_terminal_cwd: None,
+            source_dir: None,
         };
 
         let slides = vec![

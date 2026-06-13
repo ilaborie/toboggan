@@ -12,8 +12,9 @@ use web_sys::HtmlElement;
 
 use crate::{
     AppConfig, CommunicationMessage, CommunicationService, ConnectionStatus, KeyboardService,
-    StateClassMapper, ToastType, TobogganApi, TobogganFooterElement, TobogganSlideElement,
-    TobogganToastElement, WasmElement, create_html_element, inject_head_html, play_tada,
+    StateClassMapper, ToastType, TobogganApi, TobogganFooterElement, TobogganHelpElement,
+    TobogganQuakeTerminalElement, TobogganSlideElement, TobogganToastElement, WasmElement,
+    create_html_element, inject_head_html, play_tada,
 };
 
 /// Holds metadata about the presentation
@@ -37,6 +38,8 @@ struct TobogganElements {
     slide: TobogganSlideElement,
     footer: TobogganFooterElement,
     toast: TobogganToastElement,
+    quake: TobogganQuakeTerminalElement,
+    help: TobogganHelpElement,
 }
 
 pub(crate) struct App {
@@ -63,7 +66,10 @@ impl App {
         let (tx_msg, rx_msg) = unbounded();
         let (tx_action, rx_action) = unbounded();
 
-        let kbd = KeyboardService::new(tx_action, keymap.unwrap_or_default());
+        let keymap = keymap.unwrap_or_default();
+        let mut elements = TobogganElements::default();
+        elements.help.set_mapping(keymap.clone());
+        let kbd = KeyboardService::new(tx_action, keymap);
         let com =
             CommunicationService::new("Web Client", websocket, tx_msg, tx_cmd.clone(), rx_cmd);
         let com = Rc::new(RefCell::new(com));
@@ -72,7 +78,7 @@ impl App {
             api,
             kbd,
             com,
-            elements: Rc::new(RefCell::new(TobogganElements::default())),
+            elements: Rc::new(RefCell::new(elements)),
             rx_msg: Some(rx_msg),
             rx_action: Some(rx_action),
             tx_cmd: Some(tx_cmd),
@@ -123,6 +129,17 @@ impl WasmElement for App {
             el.set_class_name("toboggan-footer");
             elements.footer.render(&el);
             host.append_child(&el).unwrap_throw();
+
+            // The quake terminal mounts itself directly under <body>; the host
+            // element passed here is unused. render() must run before
+            // set_api_base_url since the latter writes into the rendered state.
+            let placeholder = create_html_element("div");
+            elements.quake.render(&placeholder);
+            elements.quake.set_api_base_url(self.api.base_url());
+
+            // The help dialog also mounts under <body>; the host is unused.
+            let placeholder = create_html_element("div");
+            elements.help.render(&placeholder);
         }
 
         self.kbd.start();
@@ -499,10 +516,10 @@ async fn update_slide_display(
         return;
     };
 
-    elements
-        .borrow_mut()
-        .slide
-        .set_slide(Some(slide), current_step);
+    let quake_cwd = slide.quake_terminal_cwd.clone();
+    let mut elems = elements.borrow_mut();
+    elems.slide.set_slide(Some(slide), current_step);
+    elems.quake.set_slide_cwd(quake_cwd);
 }
 
 /// Shows completion toast if presentation is done

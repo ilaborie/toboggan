@@ -619,6 +619,14 @@
               "type": "Empty"
             }
           },
+          "quake_terminal_cwd": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Working directory for the `QuakeTerminal` overlay when this slide is active.\nIf unset, falls back to [`Talk::default_terminal_cwd`], then to the server cwd.\nResolved against [`Talk::source_dir`] when relative.",
+            "default": null
+          },
           "style": {
             "oneOf": [
               {

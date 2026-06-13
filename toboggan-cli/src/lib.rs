@@ -36,6 +36,10 @@ pub struct TalkMetadata {
     pub date: Date,
     pub footer: Option<String>,
     pub head: Option<String>,
+    /// Default working directory for the `QuakeTerminal` overlay (talk-level fallback).
+    pub default_terminal_cwd: Option<String>,
+    /// Source directory of the talk; used to resolve relative quake cwds.
+    pub source_dir: Option<PathBuf>,
 }
 
 impl Default for TalkMetadata {
@@ -45,6 +49,8 @@ impl Default for TalkMetadata {
             date: Date::today(),
             footer: None,
             head: None,
+            default_terminal_cwd: None,
+            source_dir: None,
         }
     }
 }
@@ -62,11 +68,29 @@ impl ParseResult {
         talk.date = self.talk_metadata.date;
         talk.footer.clone_from(&self.talk_metadata.footer);
         talk.head.clone_from(&self.talk_metadata.head);
+        talk.default_terminal_cwd
+            .clone_from(&self.talk_metadata.default_terminal_cwd);
+        talk.source_dir = self
+            .talk_metadata
+            .source_dir
+            .as_ref()
+            .map(|path| path.to_string_lossy().into_owned());
 
         for slide_result in &self.slides {
             if let SlideProcessingResult::Processed(slide) = slide_result {
                 talk.slides.push(slide.clone());
             }
+        }
+
+        // Bake resolved (absolute) quake cwds into each slide so consumers (server,
+        // wasm frontend) don't need access to talk.source_dir, which is not serialized.
+        let resolved = talk
+            .slides
+            .iter()
+            .map(|slide| slide.resolved_quake_cwd(&talk))
+            .collect::<Vec<_>>();
+        for (slide, cwd) in talk.slides.iter_mut().zip(resolved) {
+            slide.quake_terminal_cwd = cwd;
         }
 
         talk
@@ -275,6 +299,8 @@ mod tests {
             date: Date::today(),
             footer: None,
             head: None,
+            default_terminal_cwd: None,
+            source_dir: None,
         };
 
         let slides = vec![
@@ -331,6 +357,8 @@ mod tests {
             date: Date::today(),
             footer: None,
             head: None,
+            default_terminal_cwd: None,
+            source_dir: None,
         };
 
         let slides = vec![

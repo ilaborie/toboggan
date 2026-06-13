@@ -324,6 +324,7 @@ impl SlideContentParser {
                     tc
                 })
                 .collect(),
+            quake_terminal_cwd: front_matter.quake_cwd.clone(),
         };
 
         Ok((result, front_matter))

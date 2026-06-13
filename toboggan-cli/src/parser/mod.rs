@@ -52,6 +52,11 @@ pub struct FrontMatter {
 
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub hidden_in: BTreeSet<RenderTarget>,
+
+    /// Working directory for the `QuakeTerminal` overlay when this slide is active.
+    /// Falls back to the talk-level default. Relative paths resolve against the talk dir.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quake_cwd: Option<String>,
 }
 
 impl FrontMatter {
@@ -359,6 +364,9 @@ where
 
 #[cfg(test)]
 #[allow(clippy::expect_used)]
+// Test values are intentionally expressed in seconds to mirror the parsed input strings
+// ("30s", "1h 30m" -> 5400s). Rewriting them with from_mins/from_hours would obscure that.
+#[allow(clippy::duration_suboptimal_units)]
 mod duration_tests {
     use super::*;
 
