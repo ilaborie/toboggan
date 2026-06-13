@@ -22,10 +22,13 @@ toboggan-tui = { path = "../toboggan-tui" }
 toboggan-desktop = { path = "../toboggan-desktop" }
 toboggan-client = { path = "../toboggan-client" }
 toboggan-stats = { path = "../toboggan-stats" }
+toboggan-lint = { path = "../toboggan-lint", features = ["spell"] }
 
 clap = { workspace = true, features = ["env", "derive"] }
 miette = { workspace = true, features = ["fancy"] }
 anyhow = { workspace = true }
+serde_json = { workspace = true }
+owo-colors = { workspace = true, features = ["supports-colors"] }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }

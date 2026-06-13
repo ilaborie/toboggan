@@ -6398,10 +6398,13 @@ dependencies = [
  "anyhow",
  "clap",
  "miette",
+ "owo-colors",
+ "serde_json",
  "toboggan-cli",
  "toboggan-client",
  "toboggan-core",
  "toboggan-desktop",
+ "toboggan-lint",
  "toboggan-server",
  "toboggan-stats",
  "toboggan-tui",
@@ -6478,6 +6481,16 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "toboggan-lint"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "toboggan-core",
+ "toboggan-stats",
 ]
 
 [[package]]

@@ -1,0 +1,27 @@
+[package]
+name = "toboggan-lint"
+version = "0.1.0"
+description = "Lints for Toboggan presentations (bad HTML, misused pause/terminal, structure, content)"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository = "https://github.com/ilaborie/toboggan"
+keywords = ["presentation", "slides", "lint"]
+categories = ["development-tools"]
+
+[features]
+# Optional spell-checking via the `typos` CLI (honors the repo's typos.toml).
+spell = []
+
+[dependencies]
+toboggan-core = { path = "../toboggan-core", features = ["std"] }
+toboggan-stats = { path = "../toboggan-stats" }
+
+serde = { workspace = true, features = ["derive"] }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

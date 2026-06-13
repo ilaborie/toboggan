@@ -90,7 +90,11 @@ pub(crate) struct BuildOptions {
 impl BuildOptions {
     /// Builds a [`toboggan_cli::Settings`] for `input`, suppressing the stats
     /// output by default (the server/serve flow does not want it on stdout).
-    fn into_cli_settings(self, input: PathBuf, no_stats: bool) -> toboggan_cli::Settings {
+    pub(crate) fn into_cli_settings(
+        self,
+        input: PathBuf,
+        no_stats: bool,
+    ) -> toboggan_cli::Settings {
         toboggan_cli::Settings {
             output: None,
             title: self.title,
@@ -341,6 +345,31 @@ impl PdfArgs {
 pub(crate) struct LintArgs {
     /// Input folder to lint
     pub(crate) input: PathBuf,
+
+    /// Severity at or above which lint exits non-zero
+    #[arg(long, value_enum, default_value_t = DenyLevel::Error)]
+    pub(crate) deny: DenyLevel,
+
+    /// Output the report as JSON
+    #[arg(long)]
+    pub(crate) json: bool,
+
+    /// Also run spell checking via the `typos` CLI
+    #[arg(long)]
+    pub(crate) spell: bool,
+
+    #[command(flatten)]
+    pub(crate) build: BuildOptions,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub(crate) enum DenyLevel {
+    /// Exit non-zero on any info, warning, or error
+    Info,
+    /// Exit non-zero on any warning or error
+    Warning,
+    /// Exit non-zero only on errors
+    Error,
 }
 
 #[derive(Debug, Args)]

@@ -27,6 +27,11 @@ static FIGURE_SELECTOR: LazyLock<Selector> =
 static LIST_ITEM_SELECTOR: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("li").expect("li selector should be valid"));
 
+/// Pre-compiled selector for nested steps (`.step` inside another `.step`)
+#[allow(clippy::expect_used)]
+static NESTED_STEP_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse(".step .step").expect("nested step selector should be valid"));
+
 /// Tags whose content should be excluded from text extraction
 const EXCLUDED_TAGS: &[&str] = &["style", "script", "svg", "figure"];
 
@@ -64,6 +69,45 @@ impl HtmlDocument {
     #[must_use]
     pub fn count_list_items(&self) -> usize {
         self.document.select(&LIST_ITEM_SELECTOR).count()
+    }
+
+    /// Count `.step` elements nested inside another `.step`.
+    ///
+    /// Nested steps break the frontend reveal logic, so any non-zero count is a
+    /// lint error.
+    #[must_use]
+    pub fn count_nested_steps(&self) -> usize {
+        self.document.select(&NESTED_STEP_SELECTOR).count()
+    }
+
+    /// Count `.step` elements with neither text content nor child elements.
+    ///
+    /// A genuinely empty step (e.g. a stray `<!-- pause -->`) reveals nothing.
+    #[must_use]
+    pub fn count_empty_steps(&self) -> usize {
+        self.document
+            .select(&STEP_SELECTOR)
+            .filter(|step| {
+                let no_text = step.text().collect::<String>().trim().is_empty();
+                let no_children = step.children().find_map(ElementRef::wrap).is_none();
+                no_text && no_children
+            })
+            .count()
+    }
+
+    /// Count `<img>` elements that are missing a non-empty `alt` attribute.
+    ///
+    /// Missing alt text hurts accessibility and the Typst/PDF export.
+    #[must_use]
+    pub fn count_images_without_alt(&self) -> usize {
+        self.document
+            .select(&IMG_SELECTOR)
+            .filter(|img| {
+                img.value()
+                    .attr("alt")
+                    .is_none_or(|alt| alt.trim().is_empty())
+            })
+            .count()
     }
 
     /// Extract text content, excluding content from style, script, svg, and figure tags
@@ -237,5 +281,28 @@ mod tests {
         let doc = HtmlDocument::parse_fragment(html);
         let text = doc.extract_text();
         assert_eq!(text, "Hello World");
+    }
+
+    #[test]
+    fn test_count_nested_steps() {
+        let html = r#"<div class="step">outer<div class="step">inner</div></div><div class="step">flat</div>"#;
+        let doc = HtmlDocument::parse_fragment(html);
+        assert_eq!(doc.count_nested_steps(), 1);
+    }
+
+    #[test]
+    fn test_count_empty_steps() {
+        let html = r#"<div class="step"></div><div class="step">  </div><div class="step">content</div><div class="step"><img src="a.png"></div>"#;
+        let doc = HtmlDocument::parse_fragment(html);
+        // First two are empty; the content one and the image one are not.
+        assert_eq!(doc.count_empty_steps(), 2);
+    }
+
+    #[test]
+    fn test_count_images_without_alt() {
+        let html = r#"<img src="a.png"><img src="b.png" alt="">< img src="c.png" alt="ok">"#;
+        let doc = HtmlDocument::parse_fragment(html);
+        // `a` has no alt, `b` has empty alt; the malformed `< img` is not parsed as img.
+        assert_eq!(doc.count_images_without_alt(), 2);
     }
 }

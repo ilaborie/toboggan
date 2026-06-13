@@ -64,7 +64,7 @@ fn dispatch(cli: Cli) -> miette::Result<()> {
         Some(Commands::Stats(args)) => to_miette(commands::misc::show_stats(args)),
         Some(Commands::Openapi(args)) => to_miette(commands::misc::emit_openapi(args)),
         Some(Commands::Pdf(args)) => to_miette(commands::pdf::build_pdf(args)),
-        Some(Commands::Lint(_)) => commands::stub::coming_soon("lint"),
+        Some(Commands::Lint(args)) => to_miette(commands::lint::run_lint(args)),
         Some(Commands::Thumbnails(_)) => commands::stub::coming_soon("thumbnails"),
         Some(Commands::Mcp(_)) => commands::stub::coming_soon("mcp"),
     }
