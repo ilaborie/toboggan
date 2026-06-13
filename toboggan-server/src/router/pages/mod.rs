@@ -1,13 +1,13 @@
 //! Server-rendered HTML pages: the landing page (`/`), the run/present app
-//! (`/run`), and the packaged guide (`/guide`). The slide-overview page (`/slides`)
-//! is served from `--thumbnails-dir` by the router when configured.
+//! (`/run`), and the packaged guide (`/guide`). The slide-overview page
+//! (`/slides`) lives in [`overview`].
 
 pub(super) mod overview;
 pub(super) mod pdf;
 
 use std::sync::OnceLock;
 
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::http::{StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
 use toboggan_cli::OutputFormat;
@@ -43,13 +43,36 @@ pub(super) async fn guide() -> Response {
     Html(html.clone()).into_response()
 }
 
+/// Serves the guide's bundled `public/` assets (CSS, fonts, images) at
+/// `/guide/public/{path}`.
+pub(super) async fn guide_asset(Path(path): Path<String>) -> Response {
+    match super::static_assets::GuideAssets::get(&path) {
+        Some(content) => {
+            let mime = mime_guess::from_path(&path).first_or_octet_stream();
+            (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, mime.as_ref().to_owned())],
+                content.data,
+            )
+                .into_response()
+        }
+        None => (StatusCode::NOT_FOUND, "guide asset not found").into_response(),
+    }
+}
+
 const GUIDE_TOML: &str = include_str!("../../../../examples/toboggan-guide/toboggan-guide.toml");
 
 fn render_guide() -> anyhow::Result<String> {
     let talk = toml::from_str::<Talk>(GUIDE_TOML)?;
     let bytes = toboggan_cli::output::serialize_talk(&talk, OutputFormat::Html)
         .map_err(|err| anyhow::anyhow!("{err}"))?;
-    Ok(String::from_utf8(bytes)?)
+    let html = String::from_utf8(bytes)?;
+    // The guide's `_head.html` links assets relative to the deck root (e.g.
+    // `./public/style.css`); rebase them onto the `/guide/public/` route so they
+    // resolve when the guide is served at `/guide` rather than `/public`.
+    Ok(html
+        .replace("./public/", "/guide/public/")
+        .replace("\"public/", "\"/guide/public/"))
 }
 
 fn render_homepage(talk: &Talk) -> String {

@@ -50,6 +50,7 @@ pub fn routes_with_cors(
         .route("/", get(pages::homepage))
         .route("/run", get(pages::run_app))
         .route("/guide", get(pages::guide))
+        .route("/guide/public/{*path}", get(pages::guide_asset))
         .route("/download.pdf", get(pages::pdf::download_pdf))
         // Slide overview: lazily generated on first hit, served from the cache.
         .route("/slides", get(pages::overview::slides_page))
