@@ -237,15 +237,14 @@ impl Workspace {
             }
         }
         self.edit_frontmatter(rel, dry_run, |doc| {
-            if targets.is_empty() {
-                doc.as_table_mut().remove("hidden_in");
-            } else {
+            let value = (!targets.is_empty()).then(|| {
                 let mut array = Array::new();
                 for target in targets {
                     array.push(target.as_str());
                 }
-                assign(doc, "hidden_in", Value::Array(array));
-            }
+                Value::Array(array)
+            });
+            assign_or_remove(doc, "hidden_in", value);
             Ok(())
         })
     }
@@ -259,11 +258,7 @@ impl Workspace {
         dry_run: bool,
     ) -> anyhow::Result<ChangeSet> {
         self.edit_frontmatter(rel, dry_run, |doc| {
-            if skip {
-                assign(doc, "skip", Value::from(true));
-            } else {
-                doc.as_table_mut().remove("skip");
-            }
+            assign_or_remove(doc, "skip", skip.then(|| Value::from(true)));
             Ok(())
         })
     }
@@ -342,75 +337,54 @@ impl Workspace {
             anyhow::bail!("slide is already in the target section; use `reorder` instead");
         }
 
-        let mut changes = ChangeSet::new(dry_run);
-
         // The moved file lands in the target dir with a guaranteed-free number.
         let slug = strip_leading_number(&file_name);
         let parked = format!("{:02}-{slug}", Self::next_number(&target_dir)?);
-        let index = |len: usize| position.map_or(len, |pos| pos.saturating_sub(1).min(len));
 
-        if dry_run {
-            changes.renamed.push(self.rename_label(
-                &target_dir,
-                &file_name,
-                &parked,
-                Some(&source_dir),
-            ));
-            // Target: current entries with the parked file inserted at `position`.
-            let mut target_present = numbered_entries(&target_dir)?;
-            target_present.push(parked.clone());
-            let mut order = numbered_entries(&target_dir)?;
-            order.insert(index(order.len()), parked);
-            self.record_renames(
-                &mut changes,
-                &target_dir,
-                &plan_renumber(&target_present, &order)?,
-            );
-            // Source: the gap left by the moved file.
-            let source_after = numbered_entries(&source_dir)?
-                .into_iter()
-                .filter(|name| name != &file_name)
-                .collect::<Vec<_>>();
-            self.record_renames(
-                &mut changes,
-                &source_dir,
-                &plan_renumber(&source_after, &source_after)?,
-            );
-            return Ok(changes);
-        }
+        // Derive the full plan from the *pre-move* directory snapshots so the
+        // dry-run preview and the real apply share one source of truth (the move
+        // itself plus the simulated post-move state of each directory).
+        let target_before = numbered_entries(&target_dir)?;
+        let insert_at = position.map_or(target_before.len(), |pos| {
+            pos.saturating_sub(1).min(target_before.len())
+        });
+        let source_after = numbered_entries(&source_dir)?
+            .into_iter()
+            .filter(|name| name != &file_name)
+            .collect::<Vec<_>>();
+        let mut target_present = target_before.clone();
+        target_present.push(parked.clone());
+        let mut target_order = target_before;
+        target_order.insert(insert_at, parked.clone());
 
-        fs::rename(&source, target_dir.join(&parked))?;
+        let mut changes = ChangeSet::new(dry_run);
+        // Step 1: the move into the target directory.
         changes.renamed.push(self.rename_label(
             &target_dir,
             &file_name,
             &parked,
             Some(&source_dir),
         ));
-
-        // Renumber the NESTED directory before its ancestor: renumbering a parent
-        // renames the child's folder, which would invalidate the child's path.
-        // Read each directory's entries immediately before its own renumber.
-        let renumber_source = |this: &Self| -> anyhow::Result<Vec<String>> {
-            let order = numbered_entries(&source_dir)?;
-            Ok(this.renumber(&source_dir, &order, false)?.renamed)
-        };
-        let renumber_target = |this: &Self| -> anyhow::Result<Vec<String>> {
-            let mut order = numbered_entries(&target_dir)?;
-            order.retain(|name| name != &parked);
-            order.insert(index(order.len()), parked.clone());
-            Ok(this.renumber(&target_dir, &order, false)?.renamed)
-        };
-
-        if source_dir.starts_with(&target_dir) {
-            // target is the ancestor of source → renumber source (child) first.
-            changes.renamed.extend(renumber_source(self)?);
-            changes.renamed.extend(renumber_target(self)?);
-        } else {
-            // source is the ancestor (or a sibling) → renumber target first.
-            changes.renamed.extend(renumber_target(self)?);
-            changes.renamed.extend(renumber_source(self)?);
+        if !dry_run {
+            fs::rename(&source, target_dir.join(&parked))?;
         }
 
+        // Steps 2 & 3: renumber both directories. Renumber the NESTED directory
+        // before its ancestor — renumbering a parent renames the child's folder,
+        // invalidating its path. The same ordering drives the dry-run preview, so
+        // the previewed renames match what the apply produces.
+        let renumber_source =
+            |this: &Self| this.renumber_entries(&source_dir, &source_after, &source_after, dry_run);
+        let renumber_target = |this: &Self| {
+            this.renumber_entries(&target_dir, &target_present, &target_order, dry_run)
+        };
+        let (first, second) = if source_dir.starts_with(&target_dir) {
+            (renumber_source(self)?, renumber_target(self)?)
+        } else {
+            (renumber_target(self)?, renumber_source(self)?)
+        };
+        changes.renamed.extend(first.renamed);
+        changes.renamed.extend(second.renamed);
         Ok(changes)
     }
 
@@ -453,12 +427,26 @@ impl Workspace {
         Ok(self.modified(&path, dry_run))
     }
 
-    /// Two-phase renumber of a directory's entries into `order` (1-based `NN-`
-    /// prefixes), preserving each entry's slug. Routes every entry through a
-    /// temporary name first so swaps never collide.
+    /// Renumbers a directory's currently-numbered entries into `order`. Thin
+    /// wrapper over [`Self::renumber_entries`] that reads the present entries.
     fn renumber(&self, dir: &Path, order: &[String], dry_run: bool) -> anyhow::Result<ChangeSet> {
         let present = numbered_entries(dir)?;
-        let renames = plan_renumber(&present, order)?;
+        self.renumber_entries(dir, &present, order, dry_run)
+    }
+
+    /// Two-phase renumber of `present` into `order` (1-based `NN-` prefixes),
+    /// preserving each entry's slug. `present` is supplied explicitly so callers
+    /// can describe a simulated post-move directory (see [`Self::move_slide`])
+    /// without the on-disk listing having to match yet on a dry run. Routes every
+    /// entry through a temporary name first so swaps never collide.
+    fn renumber_entries(
+        &self,
+        dir: &Path,
+        present: &[String],
+        order: &[String],
+        dry_run: bool,
+    ) -> anyhow::Result<ChangeSet> {
+        let renames = plan_renumber(present, order)?;
 
         let mut changes = ChangeSet::new(dry_run);
         self.record_renames(&mut changes, dir, &renames);
@@ -493,27 +481,44 @@ impl Workspace {
         format!("{} -> {}", self.rel(&from_path), self.rel(&dir.join(to)))
     }
 
-    /// Resolves `path` and asserts it stays within the workspace root.
+    /// Resolves `path` (always `self.root.join(rel)`) and asserts it stays within
+    /// the workspace root, performing *every* check before any filesystem
+    /// mutation so a hostile input can never create or write files outside the
+    /// root.
     ///
-    /// Rejects any `..` component *before* touching the filesystem, so a hostile
-    /// relative path can never create directories outside the root.
+    /// Three escape vectors are rejected up front: an absolute `rel` (whose
+    /// `join` discards the root, leaving a path outside it), a `..` component, and
+    /// a symlinked ancestor or final component that points out of the root.
     fn confine(&self, path: &Path) -> anyhow::Result<PathBuf> {
+        if !path.starts_with(&self.root) {
+            anyhow::bail!("path escapes the presentation folder: {}", path.display());
+        }
         if path
             .components()
             .any(|component| matches!(component, std::path::Component::ParentDir))
         {
             anyhow::bail!("path must not contain `..`: {}", path.display());
         }
-        let parent = path.parent().unwrap_or(&self.root);
-        let name = path
-            .file_name()
+        path.file_name()
             .ok_or_else(|| anyhow::anyhow!("invalid path: {}", path.display()))?;
-        fs::create_dir_all(parent)?;
-        let parent = parent.canonicalize()?;
-        if !parent.starts_with(&self.root) {
+        let parent = path.parent().unwrap_or(&self.root);
+
+        // Resolve the nearest existing ancestor and confirm it stays in the root
+        // *before* creating anything — guards against a symlinked ancestor.
+        let anchor = nearest_existing(parent).canonicalize()?;
+        if !anchor.starts_with(&self.root) {
             anyhow::bail!("path escapes the presentation folder: {}", path.display());
         }
-        Ok(parent.join(name))
+        // Refuse to write through a pre-existing symlink as the final component.
+        if path
+            .symlink_metadata()
+            .is_ok_and(|meta| meta.file_type().is_symlink())
+        {
+            anyhow::bail!("refusing to write through a symlink: {}", path.display());
+        }
+
+        fs::create_dir_all(parent)?;
+        Ok(path.to_path_buf())
     }
 
     /// Path relative to the workspace root, as a forward-slash string.
@@ -532,16 +537,14 @@ impl Workspace {
 
     /// Returns the next `NN` number for a directory: max existing prefix + 1.
     fn next_number(dir: &Path) -> anyhow::Result<usize> {
-        let mut max = 0;
-        if dir.is_dir() {
-            for entry in fs::read_dir(dir)? {
-                let entry = entry?;
-                let name = entry.file_name();
-                if let Some(number) = leading_number(&name.to_string_lossy()) {
-                    max = max.max(number);
-                }
-            }
+        if !dir.is_dir() {
+            return Ok(1);
         }
+        let max = numbered_entries(dir)?
+            .iter()
+            .filter_map(|name| leading_number(name))
+            .max()
+            .unwrap_or(0);
         Ok(max + 1)
     }
 }
@@ -580,6 +583,21 @@ fn strip_leading_number(name: &str) -> &str {
     rest.strip_prefix(['-', '_']).unwrap_or(rest)
 }
 
+/// Walks up from `path` to the first ancestor that exists on disk (so it can be
+/// canonicalized to resolve any symlinks before we create the rest).
+fn nearest_existing(path: &Path) -> PathBuf {
+    let mut current = path;
+    loop {
+        if current.exists() {
+            return current.to_path_buf();
+        }
+        match current.parent() {
+            Some(parent) => current = parent,
+            None => return current.to_path_buf(),
+        }
+    }
+}
+
 /// Assigns `new` to `key`, preserving the existing value's surrounding
 /// formatting and comments (decor) when the key already holds a value.
 fn assign(doc: &mut DocumentMut, key: &str, mut new: Value) {
@@ -588,6 +606,16 @@ fn assign(doc: &mut DocumentMut, key: &str, mut new: Value) {
         *existing = new;
     } else {
         doc.insert(key, Item::Value(new));
+    }
+}
+
+/// Assigns `value` to `key` (preserving decor), or removes `key` when `None`.
+fn assign_or_remove(doc: &mut DocumentMut, key: &str, value: Option<Value>) {
+    match value {
+        Some(value) => assign(doc, key, value),
+        None => {
+            doc.as_table_mut().remove(key);
+        }
     }
 }
 
@@ -673,11 +701,21 @@ fn slide_node(rel: &str, path: &Path) -> OutlineNode {
         hidden_in: fm
             .hidden_in
             .iter()
-            .map(|target| format!("{target:?}").to_lowercase())
+            .filter_map(|target| render_target_str(*target))
             .collect(),
         skip: fm.skip,
         slides: Vec::new(),
     }
+}
+
+/// The serialized name of a render target (`"web"` / `"pdf"`). Derived from the
+/// type's own `Serialize` impl so it stays correct as `RenderTarget`
+/// (a `#[non_exhaustive]` enum) gains variants or changes its serde casing.
+fn render_target_str(target: toboggan_core::RenderTarget) -> Option<String> {
+    serde_json::to_value(target)
+        .ok()?
+        .as_str()
+        .map(str::to_owned)
 }
 
 /// Whether `name` is a markdown file (case-insensitive extension).
@@ -713,26 +751,27 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
 }
 
 fn part_template(title: &str) -> String {
-    format!(
-        "{FRONT_MATTER_DELIMITER}\ntitle = \"{}\"\n{FRONT_MATTER_DELIMITER}\n\n# {title}\n",
-        escape_toml(title)
-    )
+    let fm = title_front_matter(title);
+    format!("{FRONT_MATTER_DELIMITER}\n{fm}{FRONT_MATTER_DELIMITER}\n\n# {title}\n")
 }
 
 fn slide_template(title: &str, body: &str) -> String {
     let body = body.trim_end();
-    format!(
-        "{FRONT_MATTER_DELIMITER}\ntitle = \"{}\"\n{FRONT_MATTER_DELIMITER}\n\n{body}\n",
-        escape_toml(title)
-    )
+    let fm = title_front_matter(title);
+    format!("{FRONT_MATTER_DELIMITER}\n{fm}{FRONT_MATTER_DELIMITER}\n\n{body}\n")
+}
+
+/// Renders a `title = "..."` front-matter block (with trailing newline) via
+/// `toml_edit`, so titles with quotes, backslashes, or control characters are
+/// escaped into valid TOML instead of corrupting the file.
+fn title_front_matter(title: &str) -> String {
+    let mut doc = DocumentMut::new();
+    doc.insert("title", Item::Value(Value::from(title)));
+    doc.to_string()
 }
 
 fn slugify(title: &str) -> String {
     toboggan_cli::scaffold::slugify(title)
-}
-
-fn escape_toml(text: &str) -> String {
-    text.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 #[cfg(test)]
@@ -986,6 +1025,74 @@ mod tests {
                 .expect("parent")
                 .join("evil.md")
                 .exists()
+        );
+    }
+
+    #[test]
+    fn confine_rejects_absolute_path_without_side_effects() {
+        let (_dir, workspace) = workspace();
+        let escape = std::env::temp_dir().join("toboggan-confine-escape");
+        let target = escape.join("evil.md");
+        // An absolute `rel` would replace the root in `join`; it must be rejected
+        // before any directory is created.
+        let result = workspace.set_slide_title(&target.to_string_lossy(), "x", false);
+        assert!(result.is_err());
+        assert!(!escape.exists(), "no directory created outside the root");
+    }
+
+    #[test]
+    fn move_slide_dry_run_matches_apply() {
+        // The to-top-level case (source nested under target) is where the preview
+        // and apply orderings used to diverge.
+        let build = |dir: &Path| {
+            let part = dir.join("01-intro");
+            fs::create_dir_all(&part).expect("mkdir");
+            for name in ["01-a.md", "02-b.md"] {
+                fs::write(part.join(name), "+++\ntitle=\"x\"\n+++\n\nb\n").expect("write");
+            }
+        };
+
+        let preview_dir = tempfile::tempdir().expect("tempdir");
+        let preview_ws = Workspace::new(preview_dir.path()).expect("workspace");
+        build(preview_dir.path());
+        let preview = preview_ws
+            .move_slide("01-intro/02-b.md", None, Some(1), true)
+            .expect("dry run");
+
+        let apply_dir = tempfile::tempdir().expect("tempdir");
+        let apply_ws = Workspace::new(apply_dir.path()).expect("workspace");
+        build(apply_dir.path());
+        let applied = apply_ws
+            .move_slide("01-intro/02-b.md", None, Some(1), false)
+            .expect("apply");
+
+        assert!(preview.dry_run && !applied.dry_run);
+        assert_eq!(
+            preview.renamed, applied.renamed,
+            "dry-run preview must match the applied renames"
+        );
+    }
+
+    #[test]
+    fn add_slide_title_with_control_chars_stays_valid_toml() {
+        let (dir, workspace) = workspace();
+        // A title with a quote, backslash, and newline would break a hand-built
+        // TOML string; toml_edit must escape it so the file re-parses.
+        workspace
+            .add_slide(None, "Tricky \"q\" \\ \n line", Some("body"))
+            .expect("add slide");
+        let created = numbered_entries(dir.path()).expect("list");
+        let slide = created.first().expect("a slide");
+        let content = fs::read_to_string(dir.path().join(slide)).expect("read");
+        let (fm, _) = split_front_matter(&content);
+        let fm = fm.expect("front matter");
+        let parsed = fm
+            .parse::<DocumentMut>()
+            .expect("front matter must be valid TOML");
+        assert_eq!(
+            parsed.get("title").and_then(Item::as_str),
+            Some("Tricky \"q\" \\ \n line"),
+            "title round-trips through escaping"
         );
     }
 }

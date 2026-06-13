@@ -6,7 +6,6 @@
 //! of a server error.
 
 use axum::extract::{Path, State};
-use axum::http::{StatusCode, header};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 
 use crate::TobogganState;
@@ -30,15 +29,7 @@ pub(crate) async fn overview_asset(
     Path(rel): Path<String>,
 ) -> Response {
     match state.thumbnail_asset(&rel).await {
-        Some(bytes) => {
-            let mime = mime_guess::from_path(&rel).first_or_octet_stream();
-            (
-                StatusCode::OK,
-                [(header::CONTENT_TYPE, mime.as_ref().to_owned())],
-                bytes,
-            )
-                .into_response()
-        }
+        Some(bytes) => super::super::static_assets::asset_response(&rel, bytes),
         None => Redirect::to("/slides").into_response(),
     }
 }

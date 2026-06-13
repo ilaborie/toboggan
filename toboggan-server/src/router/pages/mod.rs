@@ -8,7 +8,7 @@ pub(super) mod pdf;
 use std::sync::OnceLock;
 
 use axum::extract::{Path, State};
-use axum::http::{StatusCode, header};
+use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Response};
 use toboggan_cli::OutputFormat;
 use toboggan_core::{SlideKind, Talk};
@@ -24,12 +24,9 @@ pub(super) async fn homepage(State(talk_service): State<TalkService>) -> Html<St
 /// Serves the embedded present/run single-page app at `/run`.
 pub(super) async fn run_app() -> Response {
     match super::static_assets::WebAppAssets::get("index.html") {
-        Some(content) => (
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, "text/html")],
-            content.data,
-        )
-            .into_response(),
+        Some(content) => {
+            super::static_assets::asset_response("index.html", content.data.into_owned())
+        }
         None => (StatusCode::NOT_FOUND, "web app not built").into_response(),
     }
 }
@@ -47,15 +44,7 @@ pub(super) async fn guide() -> Response {
 /// `/guide/public/{path}`.
 pub(super) async fn guide_asset(Path(path): Path<String>) -> Response {
     match super::static_assets::GuideAssets::get(&path) {
-        Some(content) => {
-            let mime = mime_guess::from_path(&path).first_or_octet_stream();
-            (
-                StatusCode::OK,
-                [(header::CONTENT_TYPE, mime.as_ref().to_owned())],
-                content.data,
-            )
-                .into_response()
-        }
+        Some(content) => super::static_assets::asset_response(&path, content.data.into_owned()),
         None => (StatusCode::NOT_FOUND, "guide asset not found").into_response(),
     }
 }
@@ -68,11 +57,14 @@ fn render_guide() -> anyhow::Result<String> {
         .map_err(|err| anyhow::anyhow!("{err}"))?;
     let html = String::from_utf8(bytes)?;
     // The guide's `_head.html` links assets relative to the deck root (e.g.
-    // `./public/style.css`); rebase them onto the `/guide/public/` route so they
-    // resolve when the guide is served at `/guide` rather than `/public`.
+    // `<link href="./public/style.css">`); rebase those `href`/`src` attributes
+    // onto the `/guide/public/` route so they resolve when the guide is served at
+    // `/guide` rather than `/public`. Anchor on the attribute (not a bare
+    // `./public/`) so the guide's own documentation — which shows commands like
+    // `--public-dir ./public/` in code blocks — is left untouched.
     Ok(html
-        .replace("./public/", "/guide/public/")
-        .replace("\"public/", "\"/guide/public/"))
+        .replace("href=\"./public/", "href=\"/guide/public/")
+        .replace("src=\"./public/", "src=\"/guide/public/"))
 }
 
 fn render_homepage(talk: &Talk) -> String {

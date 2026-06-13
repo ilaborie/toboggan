@@ -20,7 +20,18 @@ use super::TalkService;
 /// Lazily-generated slide-overview thumbnails, regenerated after each reload.
 #[derive(Clone)]
 pub(crate) struct ThumbnailService {
-    state: Arc<RwLock<ThumbState>>,
+    inner: Arc<RwLock<Inner>>,
+}
+
+/// The service state plus an `epoch` that is bumped on every [`invalidate`]
+/// (a reload). A generation captures the epoch at its start and only commits its
+/// result if the epoch is still current, so a reload mid-generation can never
+/// publish stale thumbnails or discard the fresh render.
+///
+/// [`invalidate`]: ThumbnailService::invalidate
+struct Inner {
+    state: ThumbState,
+    epoch: u64,
 }
 
 enum ThumbState {
@@ -63,23 +74,31 @@ pub(crate) enum ThumbStatus {
 impl ThumbnailService {
     pub(crate) fn new() -> Self {
         Self {
-            state: Arc::new(RwLock::new(ThumbState::Idle)),
+            inner: Arc::new(RwLock::new(Inner {
+                state: ThumbState::Idle,
+                epoch: 0,
+            })),
         }
     }
 
     /// Pre-seeds a ready, externally-generated thumbnails directory.
+    ///
+    /// Intended for bootstrap (before any request); it overwrites the state
+    /// unconditionally and does not coordinate with an in-flight generation.
     pub(crate) async fn seed_external(&self, dir: PathBuf) {
-        *self.state.write().await = ThumbState::Ready(Source::External(dir));
+        self.inner.write().await.state = ThumbState::Ready(Source::External(dir));
     }
 
     /// Resets to [`ThumbState::Idle`] so the next request regenerates after a
-    /// talk reload. An externally-supplied directory is kept as the source.
+    /// talk reload, and bumps the epoch so any in-flight generation discards its
+    /// (now stale) result. An externally-supplied directory is kept as the source.
     pub(crate) async fn invalidate(&self) {
-        let mut state = self.state.write().await;
-        if matches!(&*state, ThumbState::Ready(Source::External(_))) {
+        let mut inner = self.inner.write().await;
+        if matches!(&inner.state, ThumbState::Ready(Source::External(_))) {
             return;
         }
-        *state = ThumbState::Idle;
+        inner.state = ThumbState::Idle;
+        inner.epoch = inner.epoch.wrapping_add(1);
     }
 
     /// Ensures generation is underway (using `talk_service`) and reports status.
@@ -88,19 +107,23 @@ impl ThumbnailService {
             return status;
         }
         // Transition Idle -> Generating, re-checking under the write lock to
-        // avoid spawning two generators on concurrent first requests.
-        {
-            let mut state = self.state.write().await;
-            match &*state {
-                ThumbState::Idle => *state = ThumbState::Generating,
+        // avoid spawning two generators on concurrent first requests. Capture the
+        // epoch so the spawned task can detect a reload that happens mid-flight.
+        let epoch = {
+            let mut inner = self.inner.write().await;
+            match &inner.state {
+                ThumbState::Idle => {
+                    inner.state = ThumbState::Generating;
+                    inner.epoch
+                }
                 ThumbState::Generating => return ThumbStatus::Pending,
                 ThumbState::Ready(_) => return ThumbStatus::Ready,
                 ThumbState::Unavailable(reason) => {
                     return ThumbStatus::Unavailable(reason.clone());
                 }
             }
-        }
-        self.spawn(talk_service);
+        };
+        self.spawn(talk_service, epoch);
         ThumbStatus::Pending
     }
 
@@ -114,17 +137,17 @@ impl ThumbnailService {
         {
             return None;
         }
-        let state = self.state.read().await;
-        match &*state {
-            ThumbState::Ready(source) => std::fs::read(source.path().join(rel)).ok(),
+        let inner = self.inner.read().await;
+        match &inner.state {
+            ThumbState::Ready(source) => tokio::fs::read(source.path().join(rel)).await.ok(),
             _ => None,
         }
     }
 
     /// Returns a status snapshot without transitioning out of `Idle`.
     async fn snapshot(&self) -> Option<ThumbStatus> {
-        let state = self.state.read().await;
-        match &*state {
+        let inner = self.inner.read().await;
+        match &inner.state {
             ThumbState::Ready(_) => Some(ThumbStatus::Ready),
             ThumbState::Generating => Some(ThumbStatus::Pending),
             ThumbState::Unavailable(reason) => Some(ThumbStatus::Unavailable(reason.clone())),
@@ -132,19 +155,20 @@ impl ThumbnailService {
         }
     }
 
-    fn spawn(&self, talk_service: TalkService) {
-        let state = self.state.clone();
+    fn spawn(&self, talk_service: TalkService, epoch: u64) {
+        let inner = self.inner.clone();
         tokio::spawn(async move {
             let talk = talk_service.talk().await;
             let result = tokio::task::spawn_blocking(move || generate(&talk)).await;
 
-            let mut guard = state.write().await;
-            // A reload may have reset us to Idle mid-flight; leave it alone so the
-            // next request regenerates against the new talk.
-            if !matches!(&*guard, ThumbState::Generating) {
+            let mut guard = inner.write().await;
+            // A reload (invalidate) bumps the epoch; if ours is stale, a newer
+            // generation owns the slot — drop this result and leave the state for
+            // the next request to regenerate against the current talk.
+            if guard.epoch != epoch || !matches!(&guard.state, ThumbState::Generating) {
                 return;
             }
-            *guard = match result {
+            guard.state = match result {
                 Ok(Ok(dir)) => {
                     info!("generated slide-overview thumbnails");
                     ThumbState::Ready(Source::Owned(Arc::new(dir)))

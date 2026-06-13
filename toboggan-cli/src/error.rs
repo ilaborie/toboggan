@@ -1,5 +1,3 @@
-#![allow(unused_assignments)]
-
 use std::io;
 use std::path::PathBuf;
 
@@ -144,11 +142,6 @@ pub enum TobogganCliError {
 }
 
 impl TobogganCliError {
-    /// Helper to create a `NamedSource` with consistent naming
-    fn create_named_source(file_path: &str, content: String) -> NamedSource<String> {
-        NamedSource::new(file_path, content)
-    }
-
     #[must_use]
     pub fn parse_markdown(
         file_path: &str,
@@ -157,7 +150,7 @@ impl TobogganCliError {
         message: String,
     ) -> Self {
         Self::ParseMarkdown {
-            src: Self::create_named_source(file_path, content),
+            src: NamedSource::new(file_path, content),
             span,
             message,
         }
@@ -171,7 +164,7 @@ impl TobogganCliError {
         source: toml::de::Error,
     ) -> Self {
         Self::ParseFrontmatter {
-            src: Self::create_named_source(file_path, content),
+            src: NamedSource::new(file_path, content),
             span,
             source,
         }
@@ -185,7 +178,7 @@ impl TobogganCliError {
         message: String,
     ) -> Self {
         Self::FormatCommonmark {
-            src: Self::create_named_source(file_path, content),
+            src: NamedSource::new(file_path, content),
             span,
             message,
         }

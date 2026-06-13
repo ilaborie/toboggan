@@ -78,18 +78,10 @@ pub fn routes_with_cors(
 /// HTML entry points, so unmatched paths return `404`.
 async fn serve_embedded_web_assets(uri: Uri) -> Response {
     let path = uri.path().trim_start_matches('/');
-
-    if let Some(content) = static_assets::WebAppAssets::get(path) {
-        let mime = mime_guess::from_path(path).first_or_octet_stream();
-        return (
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, mime.as_ref())],
-            content.data,
-        )
-            .into_response();
+    match static_assets::WebAppAssets::get(path) {
+        Some(content) => static_assets::asset_response(path, content.data.into_owned()),
+        None => (StatusCode::NOT_FOUND, "Not found").into_response(),
     }
-
-    (StatusCode::NOT_FOUND, "Not found").into_response()
 }
 
 async fn health(State(state): State<TobogganState>) -> impl IntoResponse {
