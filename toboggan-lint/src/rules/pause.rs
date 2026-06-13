@@ -13,7 +13,7 @@ impl Rule for PauseInPart {
     }
 
     fn default_severity(&self) -> Severity {
-        Severity::Error
+        Severity::Warning
     }
 
     fn check_slide(&self, context: &RuleContext<'_>, out: &mut Vec<LintDiagnostic>) {

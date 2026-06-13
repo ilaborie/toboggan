@@ -6,10 +6,9 @@ classes = ["no_title", "wide"]
 # Handy options
 
 ```console
-$ toboggan-cli --list-themes            # syntax-highlight themes
-$ toboggan-cli ./slides/ --theme Monokai -o talk.toml
-$ toboggan-cli ./slides/ --no-counter   # don't auto-number parts/slides
-$ toboggan-cli ./slides/ --wpm 130      # tune the duration estimate
+$ toboggan build ./slides/ --theme Monokai -o talk.toml
+$ toboggan build ./slides/ --no-counter   # don't auto-number parts/slides
+$ toboggan build ./slides/ --wpm 130      # tune the duration estimate
 ```
 
 <!-- pause -->

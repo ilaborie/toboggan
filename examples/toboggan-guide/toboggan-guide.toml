@@ -1481,9 +1481,10 @@ classes = [
 [[slides]]
 kind = "Part"
 body_source = """
-# `toboggan-cli`
+# The `toboggan` CLI
 
-Compile a folder of Markdown into a presentation — in the format you need.
+One command builds, serves, lints, and authors — compile a folder of Markdown
+into a presentation, in the format you need.
 """
 
 [slides.style]
@@ -1496,13 +1497,15 @@ text = "4. The CLI"
 [slides.body]
 type = "Html"
 raw = """
-<h1><code>toboggan-cli</code></h1>
-<p>Compile a folder of Markdown into a presentation — in the format you need.</p>
+<h1>The <code>toboggan</code> CLI</h1>
+<p>One command builds, serves, lints, and authors — compile a folder of Markdown
+into a presentation, in the format you need.</p>
 """
 alt = """
-# `toboggan-cli`
+# The `toboggan` CLI
 
-Compile a folder of Markdown into a presentation — in the format you need.
+One command builds, serves, lints, and authors — compile a folder of Markdown
+into a presentation, in the format you need.
 """
 
 [slides.body.style]
@@ -1514,14 +1517,14 @@ body_source = '''
 # Convert a folder
 
 ```console
-$ toboggan-cli ./slides/ -o my-talk.toml
+$ toboggan build ./slides/ -o my-talk.toml
 ✅ Successfully wrote 12 slides to my-talk.toml
 ```
 
 Override metadata without touching the files:
 
 ```console
-$ toboggan-cli ./slides/ \
+$ toboggan build ./slides/ \
     --title "My Conference Talk" \
     --date 2026-09-15 \
     -o my-talk.toml
@@ -1551,13 +1554,13 @@ text = "4.1 Convert a folder"
 type = "Html"
 raw = '''
 <h1>Convert a folder</h1>
-<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan-cli ./slides/ -o my-talk.toml
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan build ./slides/ -o my-talk.toml
 </span><span style="color:#4f5b66;">✅ Successfully wrote 12 slides to my-talk.toml
 </span></code></pre>
 
 <div class="step step-0"><!-- begin step -->
 <p>Override metadata without touching the files:</p>
-<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan-cli ./slides/ \
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan build ./slides/ \
 </span><span style="color:#4f5b66;">    --title &quot;My Conference Talk&quot; \
 </span><span style="color:#4f5b66;">    --date 2026-09-15 \
 </span><span style="color:#4f5b66;">    -o my-talk.toml
@@ -1597,14 +1600,14 @@ alt = '''
 # Convert a folder
 
 ```console
-$ toboggan-cli ./slides/ -o my-talk.toml
+$ toboggan build ./slides/ -o my-talk.toml
 ✅ Successfully wrote 12 slides to my-talk.toml
 ```
 
 Override metadata without touching the files:
 
 ```console
-$ toboggan-cli ./slides/ \
+$ toboggan build ./slides/ \
     --title "My Conference Talk" \
     --date 2026-09-15 \
     -o my-talk.toml
@@ -1634,16 +1637,16 @@ body_source = """
 The extension is auto-detected, or force it with `-f`:
 
 ```console
-$ toboggan-cli ./slides/ -o talk.toml      # default — served by the server
-$ toboggan-cli ./slides/ -o talk.json
-$ toboggan-cli ./slides/ -o talk.yaml
-$ toboggan-cli ./slides/ -o talk.html      # single self-contained file
-$ toboggan-cli ./slides/ -f typst -o talk.typ
+$ toboggan build ./slides/ -o talk.toml      # default — served by the server
+$ toboggan build ./slides/ -o talk.json
+$ toboggan build ./slides/ -o talk.yaml
+$ toboggan build ./slides/ -o talk.html      # single self-contained file
+$ toboggan build ./slides/ -f typst -o talk.typ
 ```
 
 | Format | Use it for |
 | --- | --- |
-| `toml` | The artifact `toboggan-server` serves |
+| `toml` | The artifact `toboggan serve` reads |
 | `json` / `yaml` | Pipelines, tooling, inspection |
 | `html` | A standalone file you can email or host |
 | `typst` | `typst compile talk.typ` → a **PDF** handout |
@@ -1664,11 +1667,11 @@ type = "Html"
 raw = """
 <h1>Five output formats</h1>
 <p>The extension is auto-detected, or force it with <code>-f</code>:</p>
-<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan-cli ./slides/ -o talk.toml      # default — served by the server
-</span><span style="color:#4f5b66;">$ toboggan-cli ./slides/ -o talk.json
-</span><span style="color:#4f5b66;">$ toboggan-cli ./slides/ -o talk.yaml
-</span><span style="color:#4f5b66;">$ toboggan-cli ./slides/ -o talk.html      # single self-contained file
-</span><span style="color:#4f5b66;">$ toboggan-cli ./slides/ -f typst -o talk.typ
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan build ./slides/ -o talk.toml      # default — served by the server
+</span><span style="color:#4f5b66;">$ toboggan build ./slides/ -o talk.json
+</span><span style="color:#4f5b66;">$ toboggan build ./slides/ -o talk.yaml
+</span><span style="color:#4f5b66;">$ toboggan build ./slides/ -o talk.html      # single self-contained file
+</span><span style="color:#4f5b66;">$ toboggan build ./slides/ -f typst -o talk.typ
 </span></code></pre>
 
 <div class="step step-0"><!-- begin step -->
@@ -1682,7 +1685,7 @@ raw = """
 <tbody>
 <tr>
 <td><code>toml</code></td>
-<td>The artifact <code>toboggan-server</code> serves</td>
+<td>The artifact <code>toboggan serve</code> reads</td>
 </tr>
 <tr>
 <td><code>json</code> / <code>yaml</code></td>
@@ -1706,16 +1709,16 @@ alt = """
 The extension is auto-detected, or force it with `-f`:
 
 ```console
-$ toboggan-cli ./slides/ -o talk.toml      # default — served by the server
-$ toboggan-cli ./slides/ -o talk.json
-$ toboggan-cli ./slides/ -o talk.yaml
-$ toboggan-cli ./slides/ -o talk.html      # single self-contained file
-$ toboggan-cli ./slides/ -f typst -o talk.typ
+$ toboggan build ./slides/ -o talk.toml      # default — served by the server
+$ toboggan build ./slides/ -o talk.json
+$ toboggan build ./slides/ -o talk.yaml
+$ toboggan build ./slides/ -o talk.html      # single self-contained file
+$ toboggan build ./slides/ -f typst -o talk.typ
 ```
 
 | Format | Use it for |
 | --- | --- |
-| `toml` | The artifact `toboggan-server` serves |
+| `toml` | The artifact `toboggan serve` reads |
 | `json` / `yaml` | Pipelines, tooling, inspection |
 | `html` | A standalone file you can email or host |
 | `typst` | `typst compile talk.typ` → a **PDF** handout |
@@ -1733,10 +1736,9 @@ body_source = """
 # Handy options
 
 ```console
-$ toboggan-cli --list-themes            # syntax-highlight themes
-$ toboggan-cli ./slides/ --theme Monokai -o talk.toml
-$ toboggan-cli ./slides/ --no-counter   # don't auto-number parts/slides
-$ toboggan-cli ./slides/ --wpm 130      # tune the duration estimate
+$ toboggan build ./slides/ --theme Monokai -o talk.toml
+$ toboggan build ./slides/ --no-counter   # don't auto-number parts/slides
+$ toboggan build ./slides/ --wpm 130      # tune the duration estimate
 ```
 
 Every build prints a **stats report** — word counts, per-part breakdown, and
@@ -1767,10 +1769,9 @@ text = "4.3 Handy options"
 type = "Html"
 raw = """
 <h1>Handy options</h1>
-<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan-cli --list-themes            # syntax-highlight themes
-</span><span style="color:#4f5b66;">$ toboggan-cli ./slides/ --theme Monokai -o talk.toml
-</span><span style="color:#4f5b66;">$ toboggan-cli ./slides/ --no-counter   # don&#39;t auto-number parts/slides
-</span><span style="color:#4f5b66;">$ toboggan-cli ./slides/ --wpm 130      # tune the duration estimate
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan build ./slides/ --theme Monokai -o talk.toml
+</span><span style="color:#4f5b66;">$ toboggan build ./slides/ --no-counter   # don&#39;t auto-number parts/slides
+</span><span style="color:#4f5b66;">$ toboggan build ./slides/ --wpm 130      # tune the duration estimate
 </span></code></pre>
 
 <div class="step step-0"><!-- begin step -->
@@ -1791,10 +1792,9 @@ alt = """
 # Handy options
 
 ```console
-$ toboggan-cli --list-themes            # syntax-highlight themes
-$ toboggan-cli ./slides/ --theme Monokai -o talk.toml
-$ toboggan-cli ./slides/ --no-counter   # don't auto-number parts/slides
-$ toboggan-cli ./slides/ --wpm 130      # tune the duration estimate
+$ toboggan build ./slides/ --theme Monokai -o talk.toml
+$ toboggan build ./slides/ --no-counter   # don't auto-number parts/slides
+$ toboggan build ./slides/ --wpm 130      # tune the duration estimate
 ```
 
 Every build prints a **stats report** — word counts, per-part breakdown, and
@@ -1809,6 +1809,224 @@ duration scenarios for slow/normal/fast speakers:
 
 > [!TIP]
 > Add `--exclude-notes-from-duration` to time only what the audience sees.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# One command for everything
+
+Point `toboggan` at a folder and it **builds in memory and serves** — with live
+reload as you edit. No intermediate file, no second process:
+
+```console
+$ toboggan ./slides/
+   build + serve  http://localhost:8080
+```
+
+The homepage at `/` links every view of the deck:
+
+| Path | What you get |
+| --- | --- |
+| `/run` | The live presentation (synced to every client) |
+| `/slides` | The thumbnail overview (search + click-to-run) |
+| `/guide` | This guide, bundled in |
+| `/download.pdf` | A PDF handout, rendered on demand |
+
+> [!TIP]
+> Scaffold a fresh deck with `toboggan new my-talk` — it lays out the folder and
+> initializes a `jj` repo.
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "4.4 One command"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>One command for everything</h1>
+<p>Point <code>toboggan</code> at a folder and it <strong>builds in memory and serves</strong> — with live
+reload as you edit. No intermediate file, no second process:</p>
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan ./slides/
+</span><span style="color:#4f5b66;">   build + serve  http://localhost:8080
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<p>The homepage at <code>/</code> links every view of the deck:</p>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>What you get</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/run</code></td>
+<td>The live presentation (synced to every client)</td>
+</tr>
+<tr>
+<td><code>/slides</code></td>
+<td>The thumbnail overview (search + click-to-run)</td>
+</tr>
+<tr>
+<td><code>/guide</code></td>
+<td>This guide, bundled in</td>
+</tr>
+<tr>
+<td><code>/download.pdf</code></td>
+<td>A PDF handout, rendered on demand</td>
+</tr>
+</tbody>
+</table>
+<div class="markdown-alert markdown-alert-tip">
+<p class="markdown-alert-title">Tip</p>
+<p>Scaffold a fresh deck with <code>toboggan new my-talk</code> — it lays out the folder and
+initializes a <code>jj</code> repo.</p>
+</div>
+</div><!-- end step -->
+"""
+alt = """
+# One command for everything
+
+Point `toboggan` at a folder and it **builds in memory and serves** — with live
+reload as you edit. No intermediate file, no second process:
+
+```console
+$ toboggan ./slides/
+   build + serve  http://localhost:8080
+```
+
+The homepage at `/` links every view of the deck:
+
+| Path | What you get |
+| --- | --- |
+| `/run` | The live presentation (synced to every client) |
+| `/slides` | The thumbnail overview (search + click-to-run) |
+| `/guide` | This guide, bundled in |
+| `/download.pdf` | A PDF handout, rendered on demand |
+
+> [!TIP]
+> Scaffold a fresh deck with `toboggan new my-talk` — it lays out the folder and
+> initializes a `jj` repo.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Lint the deck
+
+`toboggan lint` runs a set of rules over the parsed talk — catching pauses in
+section dividers, nested steps, images without `alt`, oversized slides, and more:
+
+```console
+$ toboggan lint ./slides/
+  warning  content/excessive-words   slide 7 — 142 words (max 120)
+  error    html/nested-step          slide 12 — nested `.step`
+```
+
+| Flag | Purpose |
+| --- | --- |
+| `--deny <level>` | Exit non-zero at/above `info`/`warning`/`error` (CI gates) |
+| `--json` | Emit a machine-readable `LintReport` |
+| `--spell` | Also spell-check via the `typos` binary |
+
+> [!TIP]
+> The linter is a library (`toboggan-lint`) — the same rules power the MCP
+> `lint` tool, so an LLM editing the deck sees exactly what CI sees.
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "4.5 Lint the deck"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Lint the deck</h1>
+<p><code>toboggan lint</code> runs a set of rules over the parsed talk — catching pauses in
+section dividers, nested steps, images without <code>alt</code>, oversized slides, and more:</p>
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan lint ./slides/
+</span><span style="color:#4f5b66;">  warning  content/excessive-words   slide 7 — 142 words (max 120)
+</span><span style="color:#4f5b66;">  error    html/nested-step          slide 12 — nested `.step`
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--deny &lt;level&gt;</code></td>
+<td>Exit non-zero at/above <code>info</code>/<code>warning</code>/<code>error</code> (CI gates)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Emit a machine-readable <code>LintReport</code></td>
+</tr>
+<tr>
+<td><code>--spell</code></td>
+<td>Also spell-check via the <code>typos</code> binary</td>
+</tr>
+</tbody>
+</table>
+<div class="markdown-alert markdown-alert-tip">
+<p class="markdown-alert-title">Tip</p>
+<p>The linter is a library (<code>toboggan-lint</code>) — the same rules power the MCP
+<code>lint</code> tool, so an LLM editing the deck sees exactly what CI sees.</p>
+</div>
+</div><!-- end step -->
+"""
+alt = """
+# Lint the deck
+
+`toboggan lint` runs a set of rules over the parsed talk — catching pauses in
+section dividers, nested steps, images without `alt`, oversized slides, and more:
+
+```console
+$ toboggan lint ./slides/
+  warning  content/excessive-words   slide 7 — 142 words (max 120)
+  error    html/nested-step          slide 12 — nested `.step`
+```
+
+| Flag | Purpose |
+| --- | --- |
+| `--deny <level>` | Exit non-zero at/above `info`/`warning`/`error` (CI gates) |
+| `--json` | Emit a machine-readable `LintReport` |
+| `--spell` | Also spell-check via the `typos` binary |
+
+> [!TIP]
+> The linter is a library (`toboggan-lint`) — the same rules power the MCP
+> `lint` tool, so an LLM editing the deck sees exactly what CI sees.
 """
 
 [slides.body.style]
@@ -2560,6 +2778,207 @@ Combine with `<!-- pause -->` to space reveals evenly down a tall slide.
   .tricks h3 { margin: 0; }
   .tricks p { margin: 0.15em 0 0; font-size: 0.9em; }
 </style>
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Author with an LLM
+
+Two complementary ways to bring an assistant into your deck:
+
+```console
+$ toboggan mcp init     # register the MCP authoring server with Claude Code
+$ toboggan skills       # install the passive authoring skill
+```
+
+The **MCP server** exposes safe, structured tools over your slides folder:
+
+| Tool | What it does |
+| --- | --- |
+| `talk_outline` / `stats` / `lint` | Inspect structure and quality |
+| `add_part` / `add_slide` | Create sections and slides |
+| `set_slide_body` / `set_hidden_in` | Edit content and visibility |
+| `reorder` / `move_slide` | Reorganize (renumbers files for you) |
+
+> [!TIP]
+> Mutating tools take `dry_run: true` to preview the change set first, and
+> front-matter edits preserve your comments — the model edits files the same way
+> you would.
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "6.3 Author with an LLM"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Author with an LLM</h1>
+<p>Two complementary ways to bring an assistant into your deck:</p>
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan mcp init     # register the MCP authoring server with Claude Code
+</span><span style="color:#4f5b66;">$ toboggan skills       # install the passive authoring skill
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<p>The <strong>MCP server</strong> exposes safe, structured tools over your slides folder:</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>talk_outline</code> / <code>stats</code> / <code>lint</code></td>
+<td>Inspect structure and quality</td>
+</tr>
+<tr>
+<td><code>add_part</code> / <code>add_slide</code></td>
+<td>Create sections and slides</td>
+</tr>
+<tr>
+<td><code>set_slide_body</code> / <code>set_hidden_in</code></td>
+<td>Edit content and visibility</td>
+</tr>
+<tr>
+<td><code>reorder</code> / <code>move_slide</code></td>
+<td>Reorganize (renumbers files for you)</td>
+</tr>
+</tbody>
+</table>
+</div><!-- end step -->
+
+<div class="step step-1"><!-- begin step -->
+<div class="markdown-alert markdown-alert-tip">
+<p class="markdown-alert-title">Tip</p>
+<p>Mutating tools take <code>dry_run: true</code> to preview the change set first, and
+front-matter edits preserve your comments — the model edits files the same way
+you would.</p>
+</div>
+</div><!-- end step -->
+"""
+alt = """
+# Author with an LLM
+
+Two complementary ways to bring an assistant into your deck:
+
+```console
+$ toboggan mcp init     # register the MCP authoring server with Claude Code
+$ toboggan skills       # install the passive authoring skill
+```
+
+The **MCP server** exposes safe, structured tools over your slides folder:
+
+| Tool | What it does |
+| --- | --- |
+| `talk_outline` / `stats` / `lint` | Inspect structure and quality |
+| `add_part` / `add_slide` | Create sections and slides |
+| `set_slide_body` / `set_hidden_in` | Edit content and visibility |
+| `reorder` / `move_slide` | Reorganize (renumbers files for you) |
+
+> [!TIP]
+> Mutating tools take `dry_run: true` to preview the change set first, and
+> front-matter edits preserve your comments — the model edits files the same way
+> you would.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Publish to the web
+
+A composite **GitHub Action** builds your deck and ships it to GitHub Pages —
+single-file HTML, a PDF handout, and the searchable thumbnail overview:
+
+```yaml
+- uses: ilaborie/toboggan@v1
+  with:
+    folder: ./slides
+    outputs: html,pdf,thumbnails
+    deploy-pages: true
+```
+
+It installs `toboggan` (prebuilt binary, falling back to `cargo install`) and
+`typst`, then runs the same commands you use locally — so what you preview is
+what your audience gets.
+
+> [!NOTE]
+> A ready-to-copy consumer workflow lives in `examples/github-pages/pages.yml`.
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "6.4 Publish to the web"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Publish to the web</h1>
+<p>A composite <strong>GitHub Action</strong> builds your deck and ships it to GitHub Pages —
+single-file HTML, a PDF handout, and the searchable thumbnail overview:</p>
+<pre style="background-color:#eff1f5;"><code class="language-yaml"><span style="color:#4f5b66;">- </span><span style="color:#bf616a;">uses</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">ilaborie/toboggan@v1
+</span><span style="color:#4f5b66;">  </span><span style="color:#bf616a;">with</span><span style="color:#4f5b66;">:
+</span><span style="color:#4f5b66;">    </span><span style="color:#bf616a;">folder</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">./slides
+</span><span style="color:#4f5b66;">    </span><span style="color:#bf616a;">outputs</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">html,pdf,thumbnails
+</span><span style="color:#4f5b66;">    </span><span style="color:#bf616a;">deploy-pages</span><span style="color:#4f5b66;">: </span><span style="color:#d08770;">true
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<p>It installs <code>toboggan</code> (prebuilt binary, falling back to <code>cargo install</code>) and
+<code>typst</code>, then runs the same commands you use locally — so what you preview is
+what your audience gets.</p>
+<div class="markdown-alert markdown-alert-note">
+<p class="markdown-alert-title">Note</p>
+<p>A ready-to-copy consumer workflow lives in <code>examples/github-pages/pages.yml</code>.</p>
+</div>
+</div><!-- end step -->
+"""
+alt = """
+# Publish to the web
+
+A composite **GitHub Action** builds your deck and ships it to GitHub Pages —
+single-file HTML, a PDF handout, and the searchable thumbnail overview:
+
+```yaml
+- uses: ilaborie/toboggan@v1
+  with:
+    folder: ./slides
+    outputs: html,pdf,thumbnails
+    deploy-pages: true
+```
+
+It installs `toboggan` (prebuilt binary, falling back to `cargo install`) and
+`typst`, then runs the same commands you use locally — so what you preview is
+what your audience gets.
+
+> [!NOTE]
+> A ready-to-copy consumer workflow lives in `examples/github-pages/pages.yml`.
 """
 
 [slides.body.style]

@@ -10,17 +10,15 @@ mod report;
 mod rule;
 mod rules;
 
+use toboggan_core::Talk;
+
+use self::diagnostic::SlideRef as Ref;
 pub use self::diagnostic::{LintDiagnostic, RuleId, Severity, SlideRef};
 pub use self::report::LintReport;
 pub use self::rule::{LintConfig, Rule, RuleContext};
 pub use self::rules::all_rules;
-
 #[cfg(feature = "spell")]
 pub use self::rules::spelling::spell_check;
-
-use toboggan_core::Talk;
-
-use self::diagnostic::SlideRef as Ref;
 
 /// Lints `talk` with the given configuration and returns a [`LintReport`].
 #[must_use]
@@ -89,15 +87,14 @@ mod tests {
             ..Default::default()
         };
         let report = lint(&talk_with(vec![part]), &LintConfig::default());
-        assert!(
-            report
-                .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.rule.as_str() == "pause/in-part"),
-            "expected pause/in-part, got {:?}",
-            report.diagnostics
-        );
-        assert_eq!(report.errors, 1);
+        let diagnostic = report
+            .diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.rule.as_str() == "pause/in-part")
+            .unwrap_or_else(|| panic!("expected pause/in-part, got {:?}", report.diagnostics));
+        assert_eq!(diagnostic.severity, Severity::Warning);
+        assert_eq!(report.warnings, 1);
+        assert_eq!(report.errors, 0);
     }
 
     #[test]
