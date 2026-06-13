@@ -24,6 +24,8 @@ serde_json = { workspace = true }
 schemars = "1"
 tracing = { workspace = true }
 tempfile = { workspace = true }
+toml_edit = "0.25.12"
+toml.workspace = true
 
 [lints]
 workspace = true

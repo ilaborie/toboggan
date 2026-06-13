@@ -61,6 +61,7 @@ pub fn lint(talk: &Talk, config: &LintConfig) -> LintReport {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
     use toboggan_core::{Content, Slide, SlideKind, Talk};
 

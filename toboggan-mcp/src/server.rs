@@ -9,7 +9,7 @@ use toboggan_core::{SlideKind, Talk};
 use toboggan_lint::LintConfig;
 use toboggan_stats::SlideStats;
 
-use crate::workspace::Workspace;
+use crate::workspace::{ChangeSet, OutlineNode, Workspace};
 
 /// MCP server exposing Toboggan authoring tools over a presentation folder.
 ///
@@ -39,27 +39,20 @@ impl TobogganServer {
 #[tool_router]
 impl TobogganServer {
     #[tool(
-        description = "List the parts and slides of the presentation with their indices, \
-                          kinds, titles, and web-hidden flags."
+        description = "Outline the presentation: the cover, parts, and slides as they exist on \
+                          disk, each with the relative `path` that the editing tools address, \
+                          plus titles, hidden-in targets, and skip flags."
     )]
     fn talk_outline(&self) -> Result<Json<Outline>, ErrorData> {
         let talk = self.load_talk()?;
-        let slides = talk
-            .slides
-            .iter()
-            .enumerate()
-            .map(|(index, slide)| OutlineSlide {
-                index,
-                display_number: index + 1,
-                kind: format!("{:?}", slide.kind),
-                title: slide.title.to_string(),
-                hidden_in_web: slide.hidden_in.contains(&toboggan_core::RenderTarget::Web),
-            })
-            .collect();
+        let nodes = self
+            .workspace()?
+            .outline()
+            .map_err(|err| ErrorData::internal_error(err.to_string(), None))?;
         Ok(Json(Outline {
             title: talk.title.clone(),
             date: talk.date.to_string(),
-            slides,
+            nodes,
         }))
     }
 
@@ -106,13 +99,11 @@ impl TobogganServer {
         Parameters(params): Parameters<AddPart>,
     ) -> Result<Json<ChangeResult>, ErrorData> {
         let workspace = self.workspace()?;
-        let created = workspace
-            .add_part(&params.title)
-            .map_err(|err| ErrorData::invalid_params(err.to_string(), None))?;
-        Ok(Json(ChangeResult {
-            message: format!("added part \"{}\"", params.title),
-            created,
-        }))
+        let change = workspace.add_part(&params.title).map_err(invalid_params)?;
+        Ok(ChangeResult::json(
+            format!("added part \"{}\"", params.title),
+            change,
+        ))
     }
 
     #[tool(
@@ -124,17 +115,197 @@ impl TobogganServer {
         Parameters(params): Parameters<AddSlide>,
     ) -> Result<Json<ChangeResult>, ErrorData> {
         let workspace = self.workspace()?;
-        let created = workspace
+        let change = workspace
             .add_slide(
                 params.part.as_deref(),
                 &params.title,
                 params.body.as_deref(),
             )
-            .map_err(|err| ErrorData::invalid_params(err.to_string(), None))?;
-        Ok(Json(ChangeResult {
-            message: format!("added slide \"{}\"", params.title),
-            created,
-        }))
+            .map_err(invalid_params)?;
+        Ok(ChangeResult::json(
+            format!("added slide \"{}\"", params.title),
+            change,
+        ))
+    }
+
+    #[tool(
+        description = "Scaffold a complete new deck folder (its own slides/, public/, mise.toml) \
+                          at the subdirectory `dir`, relative to the server's root."
+    )]
+    fn new_presentation(
+        &self,
+        Parameters(params): Parameters<NewPresentation>,
+    ) -> Result<Json<ChangeResult>, ErrorData> {
+        let date = match params.date {
+            Some(date) => date
+                .parse::<toboggan_core::Date>()
+                .map_err(|_| ErrorData::invalid_params("date must be YYYY-MM-DD", None))?,
+            None => toboggan_core::Date::today(),
+        };
+        let change = self
+            .workspace()?
+            .new_presentation(&params.dir, &params.title, date)
+            .map_err(invalid_params)?;
+        Ok(ChangeResult::json(
+            format!("scaffolded presentation \"{}\"", params.title),
+            change,
+        ))
+    }
+
+    #[tool(description = "Set a slide's front-matter title. Pass `dry_run` to preview.")]
+    fn set_slide_title(
+        &self,
+        Parameters(params): Parameters<SetTitle>,
+    ) -> Result<Json<ChangeResult>, ErrorData> {
+        let change = self
+            .workspace()?
+            .set_slide_title(&params.path, &params.title, params.dry_run)
+            .map_err(invalid_params)?;
+        Ok(ChangeResult::json(
+            format!("set title of {}", params.path),
+            change,
+        ))
+    }
+
+    #[tool(
+        description = "Set a section's title by editing its _part.md. Pass `dry_run` to preview."
+    )]
+    fn set_part_title(
+        &self,
+        Parameters(params): Parameters<SetPartTitle>,
+    ) -> Result<Json<ChangeResult>, ErrorData> {
+        let change = self
+            .workspace()?
+            .set_part_title(&params.folder, &params.title, params.dry_run)
+            .map_err(invalid_params)?;
+        Ok(ChangeResult::json(
+            format!("set title of {}", params.folder),
+            change,
+        ))
+    }
+
+    #[tool(
+        description = "Replace a slide's markdown body, preserving its front matter. Pass `dry_run` to preview."
+    )]
+    fn set_slide_body(
+        &self,
+        Parameters(params): Parameters<SetBody>,
+    ) -> Result<Json<ChangeResult>, ErrorData> {
+        let change = self
+            .workspace()?
+            .set_slide_body(&params.path, &params.body, params.dry_run)
+            .map_err(invalid_params)?;
+        Ok(ChangeResult::json(
+            format!("set body of {}", params.path),
+            change,
+        ))
+    }
+
+    #[tool(
+        description = "Set the render targets a slide is hidden in (each must be \"web\" or \
+                          \"pdf\"; an empty list makes it visible everywhere). Pass `dry_run` \
+                          to preview."
+    )]
+    fn set_hidden_in(
+        &self,
+        Parameters(params): Parameters<SetHiddenIn>,
+    ) -> Result<Json<ChangeResult>, ErrorData> {
+        let change = self
+            .workspace()?
+            .set_hidden_in(&params.path, &params.targets, params.dry_run)
+            .map_err(invalid_params)?;
+        Ok(ChangeResult::json(
+            format!("set hidden_in of {}", params.path),
+            change,
+        ))
+    }
+
+    #[tool(
+        description = "Toggle a slide's `skip` flag (a skipped slide is omitted from the built \
+                          talk). Pass `dry_run` to preview."
+    )]
+    fn skip_slide(
+        &self,
+        Parameters(params): Parameters<SkipSlide>,
+    ) -> Result<Json<ChangeResult>, ErrorData> {
+        let change = self
+            .workspace()?
+            .skip_slide(&params.path, params.skip, params.dry_run)
+            .map_err(invalid_params)?;
+        Ok(ChangeResult::json(
+            format!("set skip of {}", params.path),
+            change,
+        ))
+    }
+
+    #[tool(description = "Delete a slide file. Pass `dry_run` to preview.")]
+    fn remove_slide(
+        &self,
+        Parameters(params): Parameters<RemovePath>,
+    ) -> Result<Json<ChangeResult>, ErrorData> {
+        let change = self
+            .workspace()?
+            .remove_slide(&params.path, params.dry_run)
+            .map_err(invalid_params)?;
+        Ok(ChangeResult::json(
+            format!("removed {}", params.path),
+            change,
+        ))
+    }
+
+    #[tool(
+        description = "Delete a section folder and all of its slides. Pass `dry_run` to preview."
+    )]
+    fn remove_part(
+        &self,
+        Parameters(params): Parameters<RemoveFolder>,
+    ) -> Result<Json<ChangeResult>, ErrorData> {
+        let change = self
+            .workspace()?
+            .remove_part(&params.folder, params.dry_run)
+            .map_err(invalid_params)?;
+        Ok(ChangeResult::json(
+            format!("removed {}", params.folder),
+            change,
+        ))
+    }
+
+    #[tool(
+        description = "Reorder entries by renumbering them. With `part`, reorders that section's \
+                          slides; without it, reorders top-level parts and slides. `order` must \
+                          list the directory's current numbered names in the desired sequence. \
+                          Pass `dry_run` to preview."
+    )]
+    fn reorder(
+        &self,
+        Parameters(params): Parameters<Reorder>,
+    ) -> Result<Json<ChangeResult>, ErrorData> {
+        let change = self
+            .workspace()?
+            .reorder(params.part.as_deref(), &params.order, params.dry_run)
+            .map_err(invalid_params)?;
+        Ok(ChangeResult::json("reordered".to_owned(), change))
+    }
+
+    #[tool(
+        description = "Move a slide to another section (or the top level with no `to_part`) at an \
+                          optional 1-based `position`, renumbering both directories. Pass \
+                          `dry_run` to preview."
+    )]
+    fn move_slide(
+        &self,
+        Parameters(params): Parameters<MoveSlide>,
+    ) -> Result<Json<ChangeResult>, ErrorData> {
+        let change = self
+            .workspace()?
+            .move_slide(
+                &params.from,
+                params.to_part.as_deref(),
+                params.position,
+                params.dry_run,
+            )
+            .map_err(invalid_params)?;
+        Ok(ChangeResult::json(format!("moved {}", params.from), change))
     }
 
     #[tool(
@@ -153,9 +324,14 @@ impl TobogganServer {
 impl ServerHandler for TobogganServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(
-            "Authoring tools for a Toboggan presentation. Use `talk_outline` to inspect \
-             structure, `stats`/`lint` to check quality, and `add_part`/`add_slide` to edit \
-             the folder. Prefer these tools over editing files directly.",
+            "Authoring tools for a Toboggan presentation folder (the server's root is the \
+             slides folder). Start with `talk_outline`: it lists the cover, parts, and slides \
+             with the relative `path` every editing tool addresses. Inspect quality with \
+             `stats`/`lint` and read `advice` for conventions. Edit with `add_part`/`add_slide`, \
+             `set_slide_title`/`set_part_title`/`set_slide_body`, `set_hidden_in`/`skip_slide`, \
+             `remove_slide`/`remove_part`, and reorganize with `reorder`/`move_slide`. \
+             Mutating tools accept `dry_run` to preview the change set first — use it before \
+             `reorder`/`move_slide`. Prefer these tools over editing files directly.",
         )
     }
 }
@@ -184,20 +360,17 @@ fn default_settings(root: &Path) -> toboggan_cli::Settings {
     }
 }
 
+/// Maps a workspace mutation error to an MCP invalid-params error.
+fn invalid_params(err: impl std::fmt::Display) -> ErrorData {
+    ErrorData::invalid_params(err.to_string(), None)
+}
+
 #[derive(Debug, Serialize, JsonSchema)]
 pub(crate) struct Outline {
     pub(crate) title: String,
     pub(crate) date: String,
-    pub(crate) slides: Vec<OutlineSlide>,
-}
-
-#[derive(Debug, Serialize, JsonSchema)]
-pub(crate) struct OutlineSlide {
-    pub(crate) index: usize,
-    pub(crate) display_number: usize,
-    pub(crate) kind: String,
-    pub(crate) title: String,
-    pub(crate) hidden_in_web: bool,
+    /// The cover, parts, and slides as they exist on disk.
+    pub(crate) nodes: Vec<OutlineNode>,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
@@ -211,7 +384,13 @@ pub(crate) struct StatsSummary {
 #[derive(Debug, Serialize, JsonSchema)]
 pub(crate) struct ChangeResult {
     pub(crate) message: String,
-    pub(crate) created: Vec<String>,
+    pub(crate) change: ChangeSet,
+}
+
+impl ChangeResult {
+    fn json(message: String, change: ChangeSet) -> Json<Self> {
+        Json(Self { message, change })
+    }
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
@@ -239,4 +418,111 @@ pub(crate) struct AddSlide {
     pub(crate) part: Option<String>,
     /// Optional markdown body for the slide.
     pub(crate) body: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub(crate) struct NewPresentation {
+    /// Directory (relative to the server root) to scaffold the presentation in.
+    pub(crate) dir: String,
+    /// Presentation title.
+    pub(crate) title: String,
+    /// Optional date (YYYY-MM-DD; defaults to today).
+    pub(crate) date: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub(crate) struct SetTitle {
+    /// Relative path of the slide file (from `talk_outline`).
+    pub(crate) path: String,
+    /// New title.
+    pub(crate) title: String,
+    /// Preview without writing.
+    #[serde(default)]
+    pub(crate) dry_run: bool,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub(crate) struct SetPartTitle {
+    /// Folder name of the section.
+    pub(crate) folder: String,
+    /// New title.
+    pub(crate) title: String,
+    /// Preview without writing.
+    #[serde(default)]
+    pub(crate) dry_run: bool,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub(crate) struct SetBody {
+    /// Relative path of the slide file.
+    pub(crate) path: String,
+    /// New markdown body.
+    pub(crate) body: String,
+    /// Preview without writing.
+    #[serde(default)]
+    pub(crate) dry_run: bool,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub(crate) struct SetHiddenIn {
+    /// Relative path of the slide file.
+    pub(crate) path: String,
+    /// Render targets to hide the slide in (`"web"` and/or `"pdf"`; empty = visible).
+    pub(crate) targets: Vec<String>,
+    /// Preview without writing.
+    #[serde(default)]
+    pub(crate) dry_run: bool,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub(crate) struct SkipSlide {
+    /// Relative path of the slide file.
+    pub(crate) path: String,
+    /// Whether to skip (exclude) the slide.
+    pub(crate) skip: bool,
+    /// Preview without writing.
+    #[serde(default)]
+    pub(crate) dry_run: bool,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub(crate) struct RemovePath {
+    /// Relative path of the slide file.
+    pub(crate) path: String,
+    /// Preview without writing.
+    #[serde(default)]
+    pub(crate) dry_run: bool,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub(crate) struct RemoveFolder {
+    /// Folder name of the section.
+    pub(crate) folder: String,
+    /// Preview without writing.
+    #[serde(default)]
+    pub(crate) dry_run: bool,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub(crate) struct Reorder {
+    /// Section folder to reorder within; omit to reorder top-level parts/slides.
+    pub(crate) part: Option<String>,
+    /// The directory's current numbered names, in the desired order.
+    pub(crate) order: Vec<String>,
+    /// Preview without writing.
+    #[serde(default)]
+    pub(crate) dry_run: bool,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub(crate) struct MoveSlide {
+    /// Relative path of the slide to move.
+    pub(crate) from: String,
+    /// Target section folder; omit to move to the top level.
+    pub(crate) to_part: Option<String>,
+    /// 1-based position in the target; omit to append.
+    pub(crate) position: Option<usize>,
+    /// Preview without writing.
+    #[serde(default)]
+    pub(crate) dry_run: bool,
 }

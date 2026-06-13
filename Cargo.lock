@@ -6649,6 +6649,8 @@ dependencies = [
  "toboggan-lint",
  "toboggan-stats",
  "tokio",
+ "toml 1.1.2+spec-1.1.0",
+ "toml_edit",
  "tracing",
 ]
 
@@ -6844,6 +6846,7 @@ dependencies = [
  "indexmap",
  "toml_datetime 1.1.1+spec-1.1.0",
  "toml_parser",
+ "toml_writer",
  "winnow 1.0.3",
 ]
 

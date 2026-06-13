@@ -6,15 +6,32 @@ an LLM client can inspect and edit a presentation folder.
 
 ## Tools
 
-- `talk_outline` — list parts/slides with indices, kinds, titles, hidden flags.
+Inspection:
+
+- `talk_outline` — the cover, parts, and slides as they exist on disk, each with
+  the relative `path` the editing tools address, plus titles, `hidden_in`, and
+  `skip` flags.
 - `stats` — slide counts and total word count.
 - `lint` — the full lint report (from `toboggan-lint`).
-- `add_part` — create a numbered section folder with a `_part.md`.
-- `add_slide` — create a slide (top level or inside a section).
 - `advice` — embedded authoring guidance.
 
+Editing (each returns a `ChangeSet`; mutating tools accept `dry_run` to preview):
+
+- `add_part` / `add_slide` — create a numbered section or slide.
+- `new_presentation` — scaffold a complete new deck folder at a subpath.
+- `set_slide_title` / `set_part_title` / `set_slide_body` — edit content.
+- `set_hidden_in` — set the render targets a slide is hidden in (`web`/`pdf`).
+- `skip_slide` — toggle the `skip` flag.
+- `remove_slide` / `remove_part` — delete a slide or section.
+- `reorder` — renumber a section's slides (or top-level parts/slides).
+- `move_slide` — move a slide to another section/top level at a position.
+
 Mutations go through a safe `Workspace`: paths are confined to the presentation
-root, writes are atomic, and new files are numbered deterministically.
+root, writes are atomic, new files are numbered deterministically, and
+front-matter edits use `toml_edit` so comments and unknown keys survive.
+
+Tools assume **sequential** calls (one tool result awaited before the next) — the
+intended LLM-client usage. Issuing concurrent mutations can race on numbering.
 
 ## Usage
 
