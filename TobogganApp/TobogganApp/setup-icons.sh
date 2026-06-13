@@ -67,7 +67,7 @@ case $choice in
     1)
         echo ""
         echo "🎯 Setting up single size icon..."
-        
+
         # Look for 1024x1024 icon
         if [ -f "$LOGO_DIR/icon-1024.png" ]; then
             cp "$LOGO_DIR/icon-1024.png" "$APPICON_DIR/AppIcon.png"
@@ -83,7 +83,7 @@ case $choice in
             echo "Looking for: icon-1024.png, AppIcon-1024.png, or icon.png"
             exit 1
         fi
-        
+
         # Copy single-size Contents.json
         if [ -f "AppIcon-SingleSize-Contents-Template.json" ]; then
             cp "AppIcon-SingleSize-Contents-Template.json" "$APPICON_DIR/Contents.json"
@@ -108,14 +108,14 @@ case $choice in
 EOF
         fi
         ;;
-        
+
     2)
         echo ""
         echo "🎯 Setting up multiple size icons..."
-        
+
         # Array of required sizes
         declare -a sizes=("40" "60" "58" "87" "80" "120" "180" "1024")
-        
+
         for size in "${sizes[@]}"; do
             if [ -f "$LOGO_DIR/icon-${size}.png" ]; then
                 cp "$LOGO_DIR/icon-${size}.png" "$APPICON_DIR/AppIcon-${size}.png"
@@ -127,24 +127,24 @@ EOF
                 echo -e "${YELLOW}⚠${NC} Missing icon-${size}.png (you may need to generate this)"
             fi
         done
-        
+
         # Copy multi-size Contents.json
         if [ -f "AppIcon-Contents-Template.json" ]; then
             cp "AppIcon-Contents-Template.json" "$APPICON_DIR/Contents.json"
             echo -e "${GREEN}✓${NC} Created Contents.json (multiple sizes)"
         fi
         ;;
-        
+
     3)
         echo ""
         echo "🎯 Auto-detecting and copying all icon files..."
-        
+
         # Copy all PNG files from logo directory
         find "$LOGO_DIR" -name "*.png" -exec cp {} "$APPICON_DIR/" \;
-        
+
         count=$(find "$APPICON_DIR" -name "*.png" | wc -l)
         echo -e "${GREEN}✓${NC} Copied $count icon files"
-        
+
         # Try to determine which Contents.json to use
         if [ -f "$APPICON_DIR/icon-1024.png" ] || [ -f "$APPICON_DIR/AppIcon-1024.png" ]; then
             if [ -f "AppIcon-Contents-Template.json" ]; then
@@ -152,11 +152,11 @@ EOF
                 echo -e "${GREEN}✓${NC} Created Contents.json"
             fi
         fi
-        
+
         echo ""
         echo -e "${YELLOW}Note: You may need to manually adjust Contents.json in Xcode${NC}"
         ;;
-        
+
     *)
         echo -e "${RED}Invalid choice${NC}"
         exit 1

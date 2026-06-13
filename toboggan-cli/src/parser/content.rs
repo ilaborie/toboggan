@@ -72,9 +72,9 @@ impl InnerContent {
         };
 
         if let Some((next, _)) = &mut self.next_step {
-            next.push_str(&md);
+            append_md_block(next, &md);
         } else {
-            self.before_steps.push_str(&md);
+            append_md_block(&mut self.before_steps, &md);
         }
 
         Ok(())
@@ -89,6 +89,25 @@ impl InnerContent {
             .collect();
         renderer.render_steps(&self.before_steps, &all_steps)
     }
+
+    fn source(&self) -> String {
+        let mut result = self.before_steps.clone();
+        for (step, _) in self.steps.iter().chain(self.next_step.iter()) {
+            append_md_block(&mut result, step);
+        }
+        result
+    }
+}
+
+/// Appends a markdown block to `dest`, ensuring a blank-line separator when
+/// `dest` already has content. This is necessary because `format_commonmark`
+/// on individual AST nodes emits a single trailing `\n`, so consecutive
+/// blockquote blocks would otherwise merge into one on re-parse.
+fn append_md_block(dest: &mut String, block: &str) {
+    if !dest.is_empty() && !block.is_empty() {
+        dest.push('\n');
+    }
+    dest.push_str(block);
 }
 
 #[derive(Debug, Clone)]
@@ -244,6 +263,16 @@ impl SlideContentParser {
         }
     }
 
+    fn body_source(&self) -> Option<String> {
+        match self {
+            Self::Init => None,
+            Self::Base { inner, .. } | Self::Notes { inner, .. } => {
+                let src = inner.source();
+                if src.is_empty() { None } else { Some(src) }
+            }
+        }
+    }
+
     pub fn parse<'a, I>(
         mut self,
         iterator: I,
@@ -276,11 +305,13 @@ impl SlideContentParser {
             title: Content::Text {
                 text: self
                     .title()
-                    .or_else(|| name.map(ToString::to_string))
+                    .or_else(|| name.map(str::to_owned))
                     .unwrap_or_else(|| DEFAULT_SLIDE_TITLE.to_owned()),
             },
             body,
             notes: self.notes(&renderer),
+            body_source: self.body_source(),
+            hidden_in: front_matter.hidden_in.clone(),
             terminals: self
                 .terminals()
                 .into_iter()
@@ -288,12 +319,12 @@ impl SlideContentParser {
                     // Resolve cwd relative to the slide file's parent directory
                     if let Some(base_dir) = path.and_then(Path::parent) {
                         let resolved = base_dir.join(&tc.cwd);
-                        let normalized: std::path::PathBuf = resolved.components().collect();
-                        tc.cwd = normalized.to_string_lossy().to_string();
+                        tc.cwd = resolved.components().collect();
                     }
                     tc
                 })
                 .collect(),
+            quake_terminal_cwd: front_matter.quake_cwd.clone(),
         };
 
         Ok((result, front_matter))
@@ -323,7 +354,10 @@ impl Default for SlideContentParser {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use comrak::{Arena, parse_document};
     use toboggan_core::Content;
 
@@ -678,6 +712,43 @@ End of notes."
             panic!("Expected HTML content in slide notes");
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_body_source_populated() -> Result<()> {
+        let markdown = "# Title\n\nSome content.\n\n```rust\nlet x = 1;\n```\n";
+        let (slide, _) = parse_markdown_content(markdown)?;
+
+        let src = slide
+            .body_source
+            .as_deref()
+            .expect("body_source should be populated");
+        assert!(
+            src.contains("Some content"),
+            "body_source contains paragraph"
+        );
+        assert!(src.contains("let x = 1"), "body_source contains code block");
+        Ok(())
+    }
+
+    #[test]
+    fn test_hidden_in_propagated_from_frontmatter() -> Result<()> {
+        use toboggan_core::RenderTarget;
+
+        let markdown = "+++\nhidden_in = [\"pdf\"]\n+++\n\n# Title\n\nContent.";
+        let (slide, _) = parse_markdown_content(markdown)?;
+
+        assert_eq!(slide.hidden_in, BTreeSet::from([RenderTarget::Pdf]));
+        Ok(())
+    }
+
+    #[test]
+    fn test_hidden_in_default_empty() -> Result<()> {
+        let markdown = "# Title\n\nContent.";
+        let (slide, _) = parse_markdown_content(markdown)?;
+
+        assert!(slide.hidden_in.is_empty(), "hidden_in defaults to empty");
         Ok(())
     }
 }

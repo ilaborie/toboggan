@@ -9,7 +9,7 @@ import SwiftUI
 
 struct NavigationControlsView: View {
     @EnvironmentObject var viewModel: PresentationViewModel
-    
+
     var body: some View {
         VStack(spacing: 20) {
             // Blink control with modern glass button
@@ -21,7 +21,7 @@ struct NavigationControlsView: View {
             }
             .tobogganButton(style: .secondary)
             .accessibilityHint("Send blink effect to presentation")
-            
+
             // Next slide preview with enhanced glass styling
             VStack(alignment: .leading, spacing: 10) {
                 Label {
@@ -34,7 +34,7 @@ struct NavigationControlsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                
+
                 Text(viewModel.nextSlideTitle)
                     .font(.body)
                     .fontWeight(.medium)
@@ -46,7 +46,7 @@ struct NavigationControlsView: View {
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .glassEffect(.regular, in: .rect(cornerRadius: 16))
-            
+
             // Smart step/slide navigation controls
             HStack(spacing: 16) {
                 // Previous button: Step or Slide depending on position

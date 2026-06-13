@@ -117,7 +117,7 @@ toboggan-core = { version = "0.1.0", default-features = false, features = ["allo
 
 ## Content Types
 
-Toboggan supports rich content through the [`Content`] enum, designed for accessibility and multi-platform rendering:
+Toboggan supports rich content through the \[`Content`\] enum, designed for accessibility and multi-platform rendering:
 
 ```rust
 use toboggan_core::Content;

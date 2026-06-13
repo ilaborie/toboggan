@@ -1,0 +1,24 @@
+[files]
+extend-exclude = [
+  # Binary image assets
+  "**/*.png",
+  "**/*.jpg",
+  "**/*.jpeg",
+  "**/*.gif",
+  "**/*.ico",
+  "**/*.webp",
+  "**/*.ttf",
+  "**/*.woff",
+  "**/*.woff2",
+  # Lock files contain hashes that look like typos
+  "Cargo.lock",
+  "pnpm-lock.yaml",
+  "package-lock.json",
+]
+
+[default.extend-words]
+# French words used in the RIIR example presentation slides
+limite = "limite"
+Moteur = "Moteur"
+# ratatui is a Rust TUI crate name, not a misspelling of ratatouille
+ratatui = "ratatui"

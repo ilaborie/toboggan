@@ -92,34 +92,34 @@ raw = """
 alt = """
 Des réécritures qui ont fait leurs preuves
 Pourquoi ces réécritures réussissent ?
-- 
+-
 **ripgrep** (`rg`) : grep réécrit en Rust
   - 10x plus rapide que grep classique
   - Recherche récursive native
   - Support Unicode complet
 
-- 
+-
 **fd** : find réécrit en Rust
   - Interface plus intuitive
   - Performances supérieures
   - Respect des .gitignore par défaut
 
-- 
+-
 **Fish Shell** : Shell moderne
   - Autocomplétion intelligente
   - Sécurité mémoire
   - Configuration simple
 
-- 
+-
 **Performance** : Compilation native + optimisations
 
-- 
+-
 **Sécurité** : Zéro segfault, gestion mémoire automatique
 
-- 
+-
 **Ergonomie** : APIs modernes et intuitives
 
-- 
+-
 **Fiabilité** : System de types expressif"""
 
 [slides.notes]
@@ -330,28 +330,28 @@ impl UserService {
     }
 }
 ```
-- 
+-
 Code partagé iOS/Android
 
-- 
+-
 Bindings automatiques Swift/Kotlin
 
-- 
+-
 Utilisé par Mozilla Firefox
 
-- 
+-
 **Node.js** : NAPI-RS
 
-- 
+-
 **Ruby** : magnus, rutie
 
-- 
+-
 **C/C++** : FFI direct
 
-- 
+-
 **Java** : JNI
 
-- 
+-
 **Go** : CGO"""
 
 [slides.notes]

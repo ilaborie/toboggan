@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::extract::FromRef;
 use toboggan_core::{Command, Notification, Talk, Timestamp};
 
@@ -22,17 +24,31 @@ pub struct TobogganState {
     started_at: Timestamp,
     talk_service: TalkService,
     client_service: ClientService,
+    /// Shell spawned for embedded terminals. `Arc<str>` keeps state clones cheap,
+    /// since the whole state is cloned on every request extraction.
+    terminal_shell: Arc<str>,
 }
 
 impl TobogganState {
-    /// Creates a new `TobogganState` with the given services
+    /// Creates a new `TobogganState` with the given services and embedded-terminal shell
     #[must_use]
-    pub fn new(talk_service: TalkService, client_service: ClientService) -> Self {
+    pub fn new(
+        talk_service: TalkService,
+        client_service: ClientService,
+        terminal_shell: Arc<str>,
+    ) -> Self {
         Self {
             started_at: Timestamp::now(),
             talk_service,
             client_service,
+            terminal_shell,
         }
+    }
+
+    /// Returns the shell to spawn for embedded terminals
+    #[must_use]
+    pub(crate) fn terminal_shell(&self) -> &str {
+        &self.terminal_shell
     }
 
     /// Returns the health status of the server

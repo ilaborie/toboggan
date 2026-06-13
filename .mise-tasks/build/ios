@@ -24,5 +24,4 @@ cargo build -p toboggan-mobile --release --target aarch64-apple-ios-sim
 echo "🛠️ Building the uniffi-bindgen helper..."
 cargo build -p toboggan-mobile --release --bin uniffi-bindgen
 
-
 echo "🍎 Now you can build in XCode the iOS application"

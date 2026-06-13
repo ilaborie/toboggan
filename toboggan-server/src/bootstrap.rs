@@ -34,7 +34,9 @@ pub async fn launch(settings: Settings) -> anyhow::Result<()> {
     let talk_service = TalkService::new(talk).context("build talk service")?;
     let client_service = ClientService::new(max_clients);
     let cleanup_service = client_service.clone();
-    let state = TobogganState::new(talk_service, client_service);
+    let terminal_shell = settings.resolve_shell();
+    info!(%terminal_shell, "Embedded terminals will use this shell");
+    let state = TobogganState::new(talk_service, client_service, terminal_shell.into());
 
     let cleanup_interval = settings.cleanup_interval();
     tokio::spawn(async move {

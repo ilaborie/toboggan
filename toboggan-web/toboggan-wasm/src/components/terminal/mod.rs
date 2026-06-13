@@ -9,10 +9,10 @@ use gloo::console::{error, info};
 use gloo::net::websocket::Message;
 use gloo::net::websocket::futures::WebSocket;
 use toboggan_core::{TerminalConfig, Theme};
+use wasm_bindgen::JsCast;
 use wasm_bindgen::closure::Closure;
-use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{Element, HtmlCanvasElement, HtmlElement, KeyboardEvent};
+use web_sys::{Element, HtmlCanvasElement, HtmlElement, KeyboardEvent, Node, ShadowRoot};
 
 use self::vterm::VirtualTerminal;
 use crate::components::WasmElement;
@@ -57,20 +57,33 @@ impl TobogganTerminalElement {
             create_element_with_class(&document, "div", "terminal-btn terminal-btn-minimize");
         let btn_maximize =
             create_element_with_class(&document, "div", "terminal-btn terminal-btn-maximize");
-        let _ = buttons.append_child(&btn_close);
-        let _ = buttons.append_child(&btn_minimize);
-        let _ = buttons.append_child(&btn_maximize);
-        let _ = titlebar.append_child(&buttons);
+        if buttons.append_child(&btn_close).is_err() {
+            error!("Failed to append close button to terminal titlebar");
+        }
+        if buttons.append_child(&btn_minimize).is_err() {
+            error!("Failed to append minimize button to terminal titlebar");
+        }
+        if buttons.append_child(&btn_maximize).is_err() {
+            error!("Failed to append maximize button to terminal titlebar");
+        }
+        if titlebar.append_child(&buttons).is_err() {
+            error!("Failed to append buttons to titlebar");
+        }
 
         let title_text = create_element_with_class(&document, "span", "terminal-title");
+        let cwd_str = config.cwd.to_string_lossy();
         let title = config
             .cmd
             .as_deref()
-            .or_else(|| config.cwd.rsplit('/').find(|segment| !segment.is_empty()))
-            .unwrap_or(&config.cwd);
+            .or_else(|| config.cwd.file_name().and_then(|n| n.to_str()))
+            .unwrap_or(&cwd_str);
         title_text.set_text_content(Some(title));
-        let _ = titlebar.append_child(&title_text);
-        let _ = window_el.append_child(&titlebar);
+        if titlebar.append_child(&title_text).is_err() {
+            error!("Failed to append title text to titlebar");
+        }
+        if window_el.append_child(&titlebar).is_err() {
+            error!("Failed to append titlebar to terminal window");
+        }
 
         let body = create_element_with_class(&document, "div", "terminal-body");
 
@@ -83,17 +96,32 @@ impl TobogganTerminalElement {
             return;
         };
         canvas.set_class_name("terminal-canvas");
-        canvas.set_attribute("tabindex", "0").unwrap_throw();
+        if canvas.set_attribute("tabindex", "0").is_err() {
+            error!("Failed to make terminal canvas focusable");
+        }
 
-        let _ = body.append_child(&canvas);
-        let _ = window_el.append_child(&body);
-        let _ = container.append_child(&window_el);
+        if body.append_child(&canvas).is_err() {
+            error!("Failed to append canvas to terminal body");
+        }
+        if window_el.append_child(&body).is_err() {
+            error!("Failed to append body to terminal window");
+        }
+        if container.append_child(&window_el).is_err() {
+            error!("Failed to append terminal window to container");
+        }
 
-        canvas.focus().unwrap_throw();
+        // focus() failure is non-critical (e.g. element not yet visible)
+        let _ = canvas.focus();
 
         let theme = config.theme;
-        let title_el = title_text.dyn_into::<HtmlElement>().ok();
-        let window_html = window_el.dyn_into::<HtmlElement>().ok();
+        let title_el = title_text
+            .dyn_into::<HtmlElement>()
+            .map_err(|_| error!("Failed to cast title element to HtmlElement"))
+            .ok();
+        let window_html = window_el
+            .dyn_into::<HtmlElement>()
+            .map_err(|_| error!("Failed to cast window element to HtmlElement"))
+            .ok();
         let initial_rows = compute_terminal_size(window_html.as_ref(), DEFAULT_FONT_SIZE).1;
         let ws_url = build_terminal_ws_url(api_base_url, config, initial_rows);
 
@@ -143,13 +171,23 @@ impl WasmElement for TobogganTerminalElement {
 }
 
 fn create_element_with_class(document: &web_sys::Document, tag: &str, class: &str) -> Element {
-    let Ok(el) = document.create_element(tag) else {
-        return document
-            .create_element("div")
-            .unwrap_or_else(|_| unreachable!("could not create div element"));
-    };
+    let el = document
+        .create_element(tag)
+        .unwrap_or_else(|err| panic!("Failed to create <{tag}> element: {err:?}"));
     el.set_class_name(class);
     el
+}
+
+/// Resolve the shadow-DOM host element for a node living inside the terminal's shadow root.
+///
+/// Used to lift the whole terminal (host + its scoped styles) out of the slide on
+/// fullscreen, since the slide's `overflow`/`transform` would otherwise clip or trap the
+/// `position: fixed` terminal.
+fn shadow_host(el: &HtmlElement) -> Option<Element> {
+    el.get_root_node()
+        .dyn_into::<ShadowRoot>()
+        .ok()
+        .map(|root| root.host())
 }
 
 /// Message from keyboard/button handler to terminal session
@@ -164,9 +202,16 @@ enum KeyAction {
 
 fn setup_button_click(btn: &Element, tx: mpsc::UnboundedSender<KeyAction>, action: KeyAction) {
     let closure = Closure::<dyn FnMut()>::new(move || {
-        let _ = tx.unbounded_send(action.clone());
+        if tx.unbounded_send(action.clone()).is_err() {
+            // Session has ended; handlers are still registered but input is dropped.
+        }
     });
-    let _ = btn.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
+    if btn
+        .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())
+        .is_err()
+    {
+        error!("Failed to register button click handler");
+    }
     closure.forget();
 }
 
@@ -206,6 +251,11 @@ async fn run_terminal_session(
 
     spawn_local(async move {
         let mut rx_key = rx_key;
+        // The terminal's styles live in a shadow root, so on fullscreen we move the whole
+        // host (not the inner window) to `<body>` to escape the slide's clipping/transform,
+        // then restore it to its original position on collapse.
+        let host_el = window_el_kbd.as_ref().and_then(shadow_host);
+        let mut fullscreen_origin: Option<(Node, Option<Node>)> = None;
         while let Some(action) = rx_key.next().await {
             match action {
                 KeyAction::Input(input) => {
@@ -237,8 +287,24 @@ async fn run_terminal_session(
                     .await;
                 }
                 KeyAction::Expand => {
-                    if let Some(ref win) = window_el_kbd {
-                        let _ = win.class_list().add_1("terminal-fullscreen");
+                    if let Some(ref win) = window_el_kbd
+                        && win.class_list().add_1("terminal-fullscreen").is_err()
+                    {
+                        error!("Failed to add terminal-fullscreen class on expand");
+                    }
+                    // Lift the host out of the slide so `position: fixed` resolves against
+                    // the viewport (the slide's overflow/transform would otherwise clip it).
+                    if let Some(ref host) = host_el {
+                        if fullscreen_origin.is_none()
+                            && let Some(parent) = host.parent_node()
+                        {
+                            fullscreen_origin = Some((parent, host.next_sibling()));
+                        }
+                        if let Some(body) = gloo::utils::document().body()
+                            && body.append_child(host).is_err()
+                        {
+                            error!("Failed to move terminal host to <body> on expand");
+                        }
                     }
                     let size = *font_size_kbd.borrow();
                     let (new_cols, new_rows) = compute_terminal_size(window_el_kbd.as_ref(), size);
@@ -254,8 +320,17 @@ async fn run_terminal_session(
                     let _ = canvas_kbd.focus();
                 }
                 KeyAction::Restore => {
-                    if let Some(ref win) = window_el_kbd {
-                        let _ = win.class_list().remove_1("terminal-fullscreen");
+                    if let Some(ref win) = window_el_kbd
+                        && win.class_list().remove_1("terminal-fullscreen").is_err()
+                    {
+                        error!("Failed to remove terminal-fullscreen class on restore");
+                    }
+                    // Return the host to its original spot in the slide.
+                    if let Some(ref host) = host_el
+                        && let Some((parent, next)) = fullscreen_origin.take()
+                        && parent.insert_before(host, next.as_ref()).is_err()
+                    {
+                        error!("Failed to restore terminal host into slide on collapse");
                     }
                     let size = *font_size_kbd.borrow();
                     let (new_cols, new_rows) = compute_terminal_size(window_el_kbd.as_ref(), size);
@@ -309,12 +384,16 @@ fn setup_keyboard_handler(canvas: &HtmlCanvasElement, tx: mpsc::UnboundedSender<
         // Cmd+/Cmd- for font size (don't send to terminal)
         if meta && (key == "=" || key == "+") {
             event.prevent_default();
-            let _ = tx.unbounded_send(KeyAction::FontIncrease);
+            if tx.unbounded_send(KeyAction::FontIncrease).is_err() {
+                return;
+            }
             return;
         }
         if meta && key == "-" {
             event.prevent_default();
-            let _ = tx.unbounded_send(KeyAction::FontDecrease);
+            if tx.unbounded_send(KeyAction::FontDecrease).is_err() {
+                return;
+            }
             return;
         }
 
@@ -323,13 +402,17 @@ fn setup_keyboard_handler(canvas: &HtmlCanvasElement, tx: mpsc::UnboundedSender<
 
         let input = translate_key(&event);
         if !input.is_empty() {
+            // Ignore send errors: session may have ended while handlers are still registered.
             let _ = tx.unbounded_send(KeyAction::Input(input));
         }
     });
 
-    canvas
+    if canvas
         .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())
-        .unwrap_throw();
+        .is_err()
+    {
+        error!("Failed to register keyboard handler on canvas");
+    }
     closure.forget();
 }
 
@@ -410,9 +493,7 @@ fn compute_terminal_size(window_el: Option<&HtmlElement>, font_size: f64) -> (u1
 async fn resize_and_render(
     vterm: &Rc<RefCell<VirtualTerminal>>,
     canvas: &HtmlCanvasElement,
-    ws_write: &Rc<
-        RefCell<futures::stream::SplitSink<WebSocket, Message>>,
-    >,
+    ws_write: &Rc<RefCell<futures::stream::SplitSink<WebSocket, Message>>>,
     cols: u16,
     rows: u16,
     font_size: f64,
@@ -445,9 +526,10 @@ fn build_terminal_ws_url(api_base_url: &str, config: &TerminalConfig, rows: u16)
         .replace("https://", "wss://")
         .replace("http://", "ws://");
 
-    let encoded_cwd = String::from(js_sys::encode_uri_component(&config.cwd));
+    let cwd_str = config.cwd.to_string_lossy();
+    let encoded_cwd = String::from(js_sys::encode_uri_component(&cwd_str));
     let mut url =
-        format!("{ws_base}/api/terminal?cwd={encoded_cwd}&cols={DEFAULT_COLS}&rows={rows}",);
+        format!("{ws_base}/api/terminal?cwd={encoded_cwd}&cols={DEFAULT_COLS}&rows={rows}");
 
     if let Some(cmd) = &config.cmd {
         url.push_str("&cmd=");

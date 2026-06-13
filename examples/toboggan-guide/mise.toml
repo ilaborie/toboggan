@@ -1,0 +1,27 @@
+#:schema https://mise.jdx.dev/schema/mise.json
+# Build + serve tasks for the Toboggan user guide.
+# Requires `toboggan-cli` and `toboggan-server` on PATH
+# (cargo install --path toboggan-cli && cargo install --path toboggan-server).
+
+[tasks.build]
+description = "Compile slides/ into toboggan-guide.toml (the served artifact)"
+run = "toboggan-cli --output toboggan-guide.toml ./slides/"
+
+[tasks.html]
+description = "Export a single-file static HTML version"
+run = "toboggan-cli --output toboggan-guide.html ./slides/"
+
+[tasks.pdf]
+description = "Export Typst markup, then compile to PDF (needs `typst`)"
+run = [
+  "toboggan-cli --output toboggan-guide.typ ./slides/",
+  "typst compile toboggan-guide.typ",
+]
+
+[tasks.dev]
+description = "Serve with live reload while editing toboggan-guide.toml"
+run = "RUST_LOG=info toboggan-server --public-dir ./public/ --watch ./toboggan-guide.toml"
+
+[tasks.run]
+description = "Serve the compiled guide"
+run = "toboggan-server --public-dir ./public/ ./toboggan-guide.toml"

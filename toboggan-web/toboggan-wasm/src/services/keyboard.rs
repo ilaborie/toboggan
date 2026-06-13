@@ -32,6 +32,10 @@ impl KeyboardMapping {
     pub(crate) fn get(&self, key: &str) -> Option<Command> {
         self.0.get(key).cloned()
     }
+
+    pub(crate) fn entries(&self) -> impl Iterator<Item = (&'static str, &Command)> {
+        self.0.iter().map(|(key, cmd)| (*key, cmd))
+    }
 }
 
 pub(crate) struct KeyboardService {

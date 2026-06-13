@@ -6,8 +6,8 @@ use clawspec_core::test_client::{TestClient, TestServer, TestServerConfig};
 use clawspec_core::{ApiClient, register_schemas};
 use serde_json::{Value, json};
 use toboggan_core::{
-    ClientId, Command, Content, Date, Duration, Notification, Slide, SlideId, SlideKind,
-    SlidesResponse, State, Style, Talk, TalkResponse, Timestamp,
+    ClientId, Command, Content, Date, Duration, Notification, RenderTarget, Slide, SlideId,
+    SlideKind, SlidesResponse, State, Style, Talk, TalkResponse, TerminalConfig, Theme, Timestamp,
 };
 use toboggan_server::{
     ClientService, HealthResponse, HealthResponseStatus, TalkService, TobogganState, routes,
@@ -34,7 +34,7 @@ impl TobogganTestServer {
 
         let talk_service = TalkService::new(talk).unwrap();
         let client_service = ClientService::new(100);
-        let state = TobogganState::new(talk_service, client_service);
+        let state = TobogganState::new(talk_service, client_service, "sh".into());
         let router = routes(None, OpenApi::default()).with_state(state);
 
         Self { router }
@@ -103,12 +103,14 @@ async fn should_generate_openapi() -> anyhow::Result<()> {
     // Register all schemas that have ToSchema implemented
     register_schemas!(
         app,
+        ClientId,
         Content,
         Date,
         Duration,
         HealthResponse,
         HealthResponseStatus,
         Notification,
+        RenderTarget,
         Slide,
         SlideId,
         SlideKind,
@@ -116,8 +118,9 @@ async fn should_generate_openapi() -> anyhow::Result<()> {
         State,
         Style,
         TalkResponse,
+        TerminalConfig,
+        Theme,
         Timestamp,
-        ClientId,
     )
     .await;
 
@@ -128,10 +131,36 @@ async fn should_generate_openapi() -> anyhow::Result<()> {
 
     // Generate and save OpenAPI specification
     // Using JSON format for safer deserialization in the server
-    app.write_openapi("./openapi.json")
+    let path = "./openapi.json";
+    app.write_openapi(path)
         .await
         .context("writing openapi.json file")?;
+    ensure_trailing_newline(path).context("normalising openapi.json line ending")?;
 
+    Ok(())
+}
+
+/// Append a trailing newline to `path` if it does not already end with one.
+///
+/// `clawspec::write_openapi` does not terminate the JSON file with a newline,
+/// which trips the `end-of-file-fixer` pre-commit hook every time the schema
+/// is regenerated. Normalising here keeps the snapshot well-formed and the
+/// hook silent.
+fn ensure_trailing_newline(path: &str) -> std::io::Result<()> {
+    use std::fs::OpenOptions;
+    use std::io::{Read, Seek, SeekFrom, Write};
+
+    let mut file = OpenOptions::new().read(true).append(true).open(path)?;
+    let len = file.metadata()?.len();
+    if len == 0 {
+        return Ok(());
+    }
+    file.seek(SeekFrom::Start(len - 1))?;
+    let mut last = [0u8; 1];
+    file.read_exact(&mut last)?;
+    if last[0] != b'\n' {
+        file.write_all(b"\n")?;
+    }
     Ok(())
 }
 

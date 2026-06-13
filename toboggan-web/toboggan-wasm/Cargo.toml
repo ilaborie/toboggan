@@ -11,6 +11,11 @@ repository = "https://github.com/ilaborie/toboggan"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[package.metadata.cargo-machete]
+# beamterm-renderer is consumed via its js-api feature (registers JS bindings
+# at link time); cargo-machete misses that because there's no `use` statement.
+ignored = ["beamterm-renderer"]
+
 [workspace]
 # This empty workspace table prevents the package from inheriting workspace settings
 
@@ -18,40 +23,41 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 toboggan-core = { path = "../../toboggan-core", features = ["js"] }
 
-wasm-bindgen = "0.2.117"
-gloo = { version = "0.11.0", default-features = false, features = [
-    "timers",
-    "events",
-    "console",
-    "utils",
-    "net",
+wasm-bindgen = "0.2.125"
+gloo = { version = "0.12.0", default-features = false, features = [
+  "timers",
+  "events",
+  "console",
+  "utils",
+  "net",
 ] }
-web-sys = { version = "0.3.94", features = [
-    "BeforeUnloadEvent",
-    "HtmlElement",
-    "KeyboardEvent",
-    "Element",
-    "HtmlElement",
-    "CssStyleDeclaration",
-    "Document",
-    "Node",
-    "NodeList",
-    "ShadowRoot",
-    "ShadowRootInit",
-    "ShadowRootMode",
-    "AudioContext",
-    "AudioDestinationNode",
-    "AudioParam",
-    "OscillatorNode",
-    "GainNode",
-    "OscillatorType",
-    "Window",
-    "HtmlCanvasElement",
-    "DomTokenList",
+web-sys = { version = "0.3.102", features = [
+  "BeforeUnloadEvent",
+  "HtmlElement",
+  "HtmlDialogElement",
+  "KeyboardEvent",
+  "Element",
+  "HtmlElement",
+  "CssStyleDeclaration",
+  "Document",
+  "Node",
+  "NodeList",
+  "ShadowRoot",
+  "ShadowRootInit",
+  "ShadowRootMode",
+  "AudioContext",
+  "AudioDestinationNode",
+  "AudioParam",
+  "OscillatorNode",
+  "GainNode",
+  "OscillatorType",
+  "Window",
+  "HtmlCanvasElement",
+  "DomTokenList",
 ] }
-js-sys = "0.3.94"
+js-sys = "0.3.102"
 serde-wasm-bindgen = "0.6.5"
-wasm-bindgen-futures = "0.4.67"
+wasm-bindgen-futures = "0.4.75"
 futures = "0.3.32"
 serde = "1.0.228"
 console_error_panic_hook = "0.1.7"

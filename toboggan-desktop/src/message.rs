@@ -1,7 +1,7 @@
 use iced::keyboard::{Key, Modifiers};
 use iced::widget::markdown;
 use toboggan_client::CommunicationMessage;
-use toboggan_core::{Command as TobogganCommand, Slide, SlidesResponse, State, TalkResponse};
+use toboggan_core::{Command as TobogganCommand, SlidesResponse, State, TalkResponse};
 
 // All WebSocket commands are now unified under SendCommand variant
 #[derive(Debug, Clone)]
@@ -17,7 +17,6 @@ pub enum Message {
     TalkLoaded(TalkResponse),
     TalkAndSlidesLoaded(TalkResponse, SlidesResponse),
     TalkChangeComplete(TalkResponse, SlidesResponse, State),
-    SlideLoaded(usize, Slide),
     LoadError(String),
 
     // WebSocket message handling

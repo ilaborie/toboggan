@@ -17,11 +17,11 @@ struct TobogganAppTests {
             maxRetries: 3,
             retryDelay: 1000
         )
-        
+
         let testHandler = TestNotificationHandler()
         // This should not crash with UniFFI checksum mismatch
         let client = TobogganClient(config: config, clientName: "iOS Test", handler: testHandler)
-        
+
         // Verify client was created successfully
         #expect(client.isConnected() == false) // Should be false initially
     }

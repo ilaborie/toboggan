@@ -1,11 +1,12 @@
 use std::cell::RefCell;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use comrak::arena_tree::Node;
 use comrak::nodes::Ast;
 use serde::{Deserialize, Deserializer, Serialize};
-use toboggan_core::{Date, Style};
+use toboggan_core::{Date, RenderTarget, Style};
 
 use crate::ParseResult;
 use crate::error::Result;
@@ -17,7 +18,8 @@ mod renderer;
 use self::renderer::{ContentRenderer, HtmlRenderer};
 
 mod config;
-use self::config::{create_syntax_highlighter, default_options, default_plugins};
+pub(crate) use self::config::default_options;
+use self::config::{create_syntax_highlighter, default_plugins};
 
 mod comments;
 mod directory;
@@ -47,6 +49,14 @@ pub struct FrontMatter {
         deserialize_with = "deserialize_duration"
     )]
     pub duration: Option<Duration>,
+
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub hidden_in: BTreeSet<RenderTarget>,
+
+    /// Working directory for the `QuakeTerminal` overlay when this slide is active.
+    /// Falls back to the talk-level default. Relative paths resolve against the talk dir.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quake_cwd: Option<String>,
 }
 
 impl FrontMatter {
@@ -354,6 +364,9 @@ where
 
 #[cfg(test)]
 #[allow(clippy::expect_used)]
+// Test values are intentionally expressed in seconds to mirror the parsed input strings
+// ("30s", "1h 30m" -> 5400s). Rewriting them with from_mins/from_hours would obscure that.
+#[allow(clippy::duration_suboptimal_units)]
 mod duration_tests {
     use super::*;
 
@@ -366,7 +379,7 @@ mod duration_tests {
         );
         assert_eq!(
             humantime::parse_duration("2m").expect("2m should parse"),
-            Duration::from_secs(120)
+            Duration::from_mins(2)
         );
         assert_eq!(
             humantime::parse_duration("1m 30s").expect("1m 30s should parse"),
@@ -374,11 +387,11 @@ mod duration_tests {
         );
         assert_eq!(
             humantime::parse_duration("1h").expect("1h should parse"),
-            Duration::from_secs(3600)
+            Duration::from_hours(1)
         );
         assert_eq!(
             humantime::parse_duration("1h 30m").expect("1h 30m should parse"),
-            Duration::from_secs(5400)
+            Duration::from_mins(90)
         );
         assert_eq!(
             humantime::parse_duration("1h 30m 45s").expect("1h 30m 45s should parse"),
@@ -388,11 +401,11 @@ mod duration_tests {
         // Test additional formats supported by humantime
         assert_eq!(
             humantime::parse_duration("1hour").expect("1hour should parse"),
-            Duration::from_secs(3600)
+            Duration::from_hours(1)
         );
         assert_eq!(
             humantime::parse_duration("2 minutes").expect("2 minutes should parse"),
-            Duration::from_secs(120)
+            Duration::from_mins(2)
         );
         assert_eq!(
             humantime::parse_duration("30 seconds").expect("30 seconds should parse"),
@@ -421,12 +434,51 @@ title = "Test Slide"
 duration = "1 hour 30 minutes"
 "#;
         let frontmatter: FrontMatter = toml::from_str(toml_content).expect("TOML should parse");
-        assert_eq!(frontmatter.duration, Some(Duration::from_secs(5400)));
+        assert_eq!(frontmatter.duration, Some(Duration::from_mins(90)));
 
         let toml_content = r#"
 title = "Test Slide"
 "#;
         let frontmatter: FrontMatter = toml::from_str(toml_content).expect("TOML should parse");
         assert_eq!(frontmatter.duration, None);
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod hidden_in_tests {
+    use toboggan_core::RenderTarget;
+
+    use super::*;
+
+    #[test]
+    fn test_hidden_in_pdf() {
+        let toml = r#"hidden_in = ["pdf"]"#;
+        let fm: FrontMatter = toml::from_str(toml).expect("parse");
+        assert_eq!(fm.hidden_in, BTreeSet::from([RenderTarget::Pdf]));
+    }
+
+    #[test]
+    fn test_hidden_in_web() {
+        let toml = r#"hidden_in = ["web"]"#;
+        let fm: FrontMatter = toml::from_str(toml).expect("parse");
+        assert_eq!(fm.hidden_in, BTreeSet::from([RenderTarget::Web]));
+    }
+
+    #[test]
+    fn test_hidden_in_both() {
+        let toml = r#"hidden_in = ["web", "pdf"]"#;
+        let fm: FrontMatter = toml::from_str(toml).expect("parse");
+        assert_eq!(
+            fm.hidden_in,
+            BTreeSet::from([RenderTarget::Web, RenderTarget::Pdf])
+        );
+    }
+
+    #[test]
+    fn test_hidden_in_default_empty() {
+        let toml = r#"title = "Test""#;
+        let fm: FrontMatter = toml::from_str(toml).expect("parse");
+        assert!(fm.hidden_in.is_empty());
     }
 }

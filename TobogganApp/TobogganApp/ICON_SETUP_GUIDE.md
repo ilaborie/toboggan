@@ -1,9 +1,11 @@
 # App Icon Setup Guide for TobogganApp
 
 ## Current Issue
+
 The AppIcon asset is empty or missing required icon files.
 
 ## Location of Icon Files
+
 Your icon files should be in: `../logo/AppIcons/`
 
 ## Quick Fix Steps
@@ -45,11 +47,13 @@ iOS 18 and later can automatically generate all required sizes from a single 102
 ## Required Icon Sizes
 
 ### For iOS 18+ (Recommended - Single Size)
+
 - **1024×1024** - Universal size (Xcode generates all other sizes)
 
 ### For iOS 17 and earlier (Multiple Sizes)
 
 #### iPhone
+
 - 20×20 @ 2x (40×40 pixels)
 - 20×20 @ 3x (60×60 pixels)
 - 29×29 @ 2x (58×58 pixels)
@@ -60,6 +64,7 @@ iOS 18 and later can automatically generate all required sizes from a single 102
 - 60×60 @ 3x (180×180 pixels)
 
 #### App Store
+
 - 1024×1024 (1 image, no alpha channel)
 
 ## Icon File Naming Convention
@@ -80,12 +85,14 @@ If your icons in `../logo/AppIcons/` follow a naming pattern, here's how they ma
 ## Icon Design Requirements
 
 ✅ **Must have:**
+
 - Square shape (width = height)
 - PNG format
 - RGB color space
 - No transparency (no alpha channel)
 
 ❌ **Avoid:**
+
 - Rounded corners (iOS adds these automatically)
 - Text that's too small to read
 - Alpha channel in the 1024×1024 App Store icon
@@ -93,20 +100,25 @@ If your icons in `../logo/AppIcons/` follow a naming pattern, here's how they ma
 ## Troubleshooting
 
 ### If you see "no applicable content"
+
 This means the AppIcon asset is completely empty. You need to add at least one icon file.
 
 ### If you get "alpha channel" errors
+
 Save your 1024×1024 icon without transparency. In most image editors:
+
 - Flatten all layers
 - Remove alpha channel
 - Save as PNG with RGB color mode only
 
 ### If icons appear blurry
+
 Make sure you're providing the exact pixel dimensions required (not upscaled or downscaled).
 
 ## Quick Test
 
 After adding icons:
+
 1. Clean build folder: Shift+Cmd+K in Xcode
 2. Build and run: Cmd+R
 3. Check the simulator/device home screen for your app icon
@@ -116,6 +128,7 @@ After adding icons:
 If you only have one large icon, you can use tools to generate all sizes:
 
 ### Using sips (built-in macOS tool)
+
 ```bash
 # From your 1024×1024 icon, generate other sizes
 cd ../logo/AppIcons
@@ -129,6 +142,7 @@ sips -z 40 40 icon-1024.png --out icon-40.png
 ```
 
 ### Online Tools
+
 - [AppIcon.co](https://appicon.co) - Upload one image, download all sizes
 - [MakeAppIcon](https://makeappicon.com) - Similar service
 - [App Icon Generator](https://www.appicon.build) - Another option
@@ -136,6 +150,7 @@ sips -z 40 40 icon-1024.png --out icon-40.png
 ## Need Help?
 
 If you're still having issues, please provide:
+
 1. List of files in `../logo/AppIcons/` directory
 2. Output of: `ls -la ../logo/AppIcons/`
 3. Any specific error messages from Xcode

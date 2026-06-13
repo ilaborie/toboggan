@@ -1,0 +1,5 @@
+# Derived build outputs — regenerate with `mise run build` / `mise run html` / `mise run pdf`.
+# The served artifact (toboggan-guide.toml) is committed; these are not.
+toboggan-guide.html
+toboggan-guide.typ
+toboggan-guide.pdf

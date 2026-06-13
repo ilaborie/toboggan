@@ -432,7 +432,7 @@ impl TermScreen {
     )]
     fn render_to_canvas(&self, canvas: &HtmlCanvasElement, font_size: f64) {
         let font_family =
-            "'MonaspiceNe Nerd Font', 'JetBrainsMono Nerd Font', 'Inconsolata', monospace";
+            "'JetBrainsMono Nerd Font Mono', 'MonaspiceNe Nerd Font', 'JetBrainsMono Nerd Font', 'Inconsolata', monospace";
         let font = format!("{font_size}px {font_family}");
 
         // Measure actual character width and ceil to avoid sub-pixel gaps

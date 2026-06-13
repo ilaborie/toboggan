@@ -65,7 +65,7 @@ fn parse_classes(html: &str) -> CssClasses {
     trimmed
         .trim_start_matches(':')
         .split_whitespace()
-        .map(ToString::to_string)
+        .map(str::to_owned)
         .collect()
 }
 

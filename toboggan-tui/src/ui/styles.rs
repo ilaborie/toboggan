@@ -97,6 +97,57 @@ pub(crate) mod ui {
         Style::new().fg(colors::GRAY).add_modifier(Modifier::ITALIC);
 }
 
+/// Alert kind and styles matching GFM alert types
+pub(crate) mod alert {
+    use super::{Modifier, Style, colors};
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub(crate) enum Kind {
+        Note,
+        Tip,
+        Important,
+        Warning,
+        Caution,
+    }
+
+    impl Kind {
+        pub(crate) fn from_marker(marker: &str) -> Option<Self> {
+            match marker {
+                "NOTE" => Some(Self::Note),
+                "TIP" => Some(Self::Tip),
+                "IMPORTANT" => Some(Self::Important),
+                "WARNING" => Some(Self::Warning),
+                "CAUTION" => Some(Self::Caution),
+                _ => None,
+            }
+        }
+
+        pub(crate) fn label(self) -> &'static str {
+            match self {
+                Self::Note => "ⓘ NOTE",
+                Self::Tip => "✔ TIP",
+                Self::Important => "❗ IMPORTANT",
+                Self::Warning => "⚠ WARNING",
+                Self::Caution => "⛔ CAUTION",
+            }
+        }
+
+        pub(crate) fn label_style(self) -> Style {
+            self.body_style().add_modifier(Modifier::BOLD)
+        }
+
+        pub(crate) fn body_style(self) -> Style {
+            match self {
+                Self::Note => Style::new().fg(colors::BLUE),
+                Self::Tip => Style::new().fg(colors::GREEN),
+                Self::Important => Style::new().fg(colors::MAGENTA),
+                Self::Warning => Style::new().fg(colors::YELLOW),
+                Self::Caution => Style::new().fg(colors::RED),
+            }
+        }
+    }
+}
+
 /// Layout constraints commonly used
 pub(crate) mod layout {
     use ratatui::layout::Constraint;

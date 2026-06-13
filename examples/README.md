@@ -5,6 +5,7 @@ This directory contains comprehensive examples demonstrating different approache
 ## Overview
 
 The examples demonstrate two primary authoring approaches:
+
 1. **Flat Markdown Files** - Single file with slide separators
 2. **Structured Folders** - Hierarchical organization with modular content
 
@@ -17,12 +18,14 @@ The "Peut-on RIIR de tout ?" (Can we RIIR everything?) talk is provided in two d
 ### Flat File Format: `riir-flat.md`
 
 A single Markdown file containing the entire presentation. This format is ideal for:
+
 - Simple presentations
 - Quick prototyping
 - Version control (single file to track)
 - Easy sharing
 
 **Structure:**
+
 - `# Title` - Talk title
 - `> Notes` - Speaker notes for the cover slide
 - `---` - Slide separators
@@ -30,6 +33,7 @@ A single Markdown file containing the entire presentation. This format is ideal 
 - `### Heading` - Regular slide titles
 
 **Usage:**
+
 ```bash
 # Basic usage
 cargo run --package toboggan-cli -- examples/riir-flat.md -o examples/riir-flat-output.toml
@@ -41,12 +45,14 @@ cargo run --package toboggan-cli -- examples/riir-flat.md --date 2024-12-25 -o e
 ### Folder-Based Format: `riir-folder/`
 
 A directory structure where each folder represents a section and each file represents a slide. This format is ideal for:
+
 - Complex presentations
 - Team collaboration
 - Modular content management
 - Rich media integration
 
 **Structure:**
+
 ```
 riir-folder/
 ├── title.md              # Talk title (or use folder name)
@@ -62,12 +68,14 @@ riir-folder/
 ```
 
 **Special Files:**
+
 - `title.md` / `title.txt` - Talk title (fallback to folder name)
 - `_cover.md` - Cover slide (special styling)
 - `_part.md` - Part slide within a folder (section divider)
 - `*.md` / `*.html` - Regular slides (sorted by filename)
 
 **Usage:**
+
 ```bash
 # Basic usage (uses today's date)
 cargo run --package toboggan-cli -- examples/riir-folder -o examples/riir-folder-output.toml
@@ -88,21 +96,25 @@ Both approaches generate equivalent TOML files that can be served by the Tobogga
 The folder-based approach provides additional capabilities:
 
 ### 1. **Hierarchical Organization**
+
 - Folders automatically become Part slides
 - Contents are processed in alphabetical order
 - Clear separation of concerns
 
 ### 2. **Flexible Content Types**
+
 - `.md` files - Markdown content (converted to HTML)
 - `.html` files - Raw HTML content
 - Mixed content types in the same presentation
 
 ### 3. **Special File Handling**
+
 - `_cover.md` - Creates a Cover slide
 - `_part.md` - Customizes the Part slide for a folder
 - Date management via `--date` CLI argument
 
 ### 4. **Team Collaboration**
+
 - Different team members can work on different sections
 - Easy to reorganize content by renaming folders/files
 - Git-friendly structure with granular change tracking
@@ -118,11 +130,13 @@ You can use the CLI to convert between formats:
 ## Best Practices
 
 ### Flat File Format
+
 - Use clear section breaks with `---`
 - Keep speaker notes in blockquotes `>`
 - Use heading levels consistently (H2 for parts, H3 for slides)
 
 ### Folder-Based Format
+
 - Use numbered prefixes for ordering (01-, 02-, etc.)
 - Keep folder names descriptive but concise
 - Place shared resources in a dedicated folder
@@ -166,6 +180,7 @@ cargo run -p toboggan-tui
 ## Workflow Integration
 
 ### Development Workflow
+
 1. **Create Content**: Write slides in Markdown or organize in folders
 2. **Convert**: Use `toboggan-cli` to generate TOML
 3. **Preview**: Serve with `toboggan-server` and view in browser/TUI
@@ -173,6 +188,7 @@ cargo run -p toboggan-tui
 5. **Present**: Use any Toboggan client for final presentation
 
 ### Content Management Strategies
+
 - **Single Author**: Use flat Markdown for simple presentations
 - **Team Collaboration**: Use folder structure for distributed development
 - **Version Control**: Both formats work well with Git
@@ -181,6 +197,7 @@ cargo run -p toboggan-tui
 ## Advanced Usage Examples
 
 ### Custom Date and Metadata
+
 ```bash
 # Generate talk for specific conference date
 toboggan-cli keynote/ \
@@ -190,6 +207,7 @@ toboggan-cli keynote/ \
 ```
 
 ### Batch Processing
+
 ```bash
 # Convert multiple presentations
 for dir in presentations/*/; do
@@ -201,6 +219,7 @@ done
 ```
 
 ### CI/CD Integration
+
 ```yaml
 # GitHub Actions example
 - name: Build Presentations

@@ -3,7 +3,7 @@
 
 set -eu
 
-RUST_LOG="info,wasm_pack=warn"
+export RUST_LOG="info,wasm_pack=warn"
 WASM_PROJECT="toboggan-web/toboggan-wasm"
 
 # Build WASM

@@ -15,6 +15,8 @@ pub enum OutputFormat {
     Yaml,
     /// Static HTML file (single file with inlined CSS)
     Html,
+    /// Typst file for PDF compilation (`typst compile output.typ`)
+    Typst,
 }
 
 /// Command-line settings for the Toboggan CLI.
@@ -26,10 +28,10 @@ pub enum OutputFormat {
 )]
 #[allow(clippy::struct_excessive_bools)]
 pub struct Settings {
-    /// Output file path for the generated TOML.
+    /// Output file path for the generated presentation.
     ///
-    /// If not specified, the output is written to stdout. This allows for easy
-    /// piping and integration with other tools.
+    /// If not specified, output is written to stdout. The file extension drives
+    /// the default format (`.toml`, `.json`, `.yaml`, `.html`, `.typ`).
     #[clap(short, long, help = "Output file (default: stdout)")]
     pub output: Option<PathBuf>,
 
@@ -79,7 +81,7 @@ pub struct Settings {
     #[clap(
         short = 'f',
         long,
-        help = "Output format: text (toml, json, yaml) or binary (cbor, msgpack, bincode). Auto-detected from output file extension if not specified."
+        help = "Output format (toml, json, yaml, html, typst). Auto-detected from the output file extension when omitted."
     )]
     pub format: Option<OutputFormat>,
 
@@ -144,6 +146,7 @@ impl Settings {
                 "json" => return OutputFormat::Json,
                 "yaml" | "yml" => return OutputFormat::Yaml,
                 "html" | "htm" => return OutputFormat::Html,
+                "typ" => return OutputFormat::Typst,
                 _ => {} // Fall through to default
             }
         }

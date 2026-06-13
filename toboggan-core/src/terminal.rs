@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 
 /// Terminal color theme.
@@ -26,7 +28,8 @@ fn is_dark_theme(theme: &Theme) -> bool {
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TerminalConfig {
     /// Working directory for the terminal session
-    pub cwd: String,
+    #[cfg_attr(feature = "openapi", schema(value_type = String))]
+    pub cwd: PathBuf,
     /// Terminal color theme, defaults to dark
     #[serde(default, skip_serializing_if = "is_dark_theme")]
     pub theme: Theme,
@@ -37,7 +40,7 @@ pub struct TerminalConfig {
 
 impl TerminalConfig {
     #[must_use]
-    pub fn new(cwd: impl Into<String>) -> Self {
+    pub fn new(cwd: impl Into<PathBuf>) -> Self {
         Self {
             cwd: cwd.into(),
             theme: Theme::default(),

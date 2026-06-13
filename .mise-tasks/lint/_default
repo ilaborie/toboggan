@@ -9,7 +9,7 @@ echo "🚀 Running comprehensive linting for all platforms..."
 echo "==================== RUST LINTING ==================="
 mise lint:rust
 
-# Run web linting  
+# Run web linting
 echo "==================== WEB LINTING ===================="
 mise lint:web
 

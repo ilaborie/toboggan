@@ -96,7 +96,7 @@
     left: 0;
     right: 0;
     text-align: center;
-    font-family: 'MonaspiceNe Nerd Font', 'JetBrainsMono Nerd Font', 'Inconsolata', system-ui, monospace;
+    font-family: 'JetBrainsMono Nerd Font Mono', 'MonaspiceNe Nerd Font', 'JetBrainsMono Nerd Font', 'Inconsolata', system-ui, monospace;
     font-size: 13px;
     pointer-events: none;
 }

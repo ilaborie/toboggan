@@ -263,7 +263,7 @@ def generate_all_sizes(logo_dir, appicon_dir, icon_sizes):
     # Open source image
     try:
         img = Image.open(source_file)
-        
+
         # Check if image is 1024x1024
         if img.size != (1024, 1024):
             print_warning(f"Source image is {img.width}x{img.height}, expected 1024x1024")

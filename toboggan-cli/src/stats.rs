@@ -528,8 +528,8 @@ impl PresentationStats {
         }
 
         // Content density recommendations
-        if self.core.total_slides > 0 {
-            let avg_words_per_slide = self.core.total_words / self.core.total_slides;
+        if let Some(avg_words_per_slide) = self.core.total_words.checked_div(self.core.total_slides)
+        {
             if avg_words_per_slide > 100 {
                 recommendations.push(
                     "High word density - consider more slides with less text each".to_owned(),
@@ -563,6 +563,8 @@ mod tests {
             date: toboggan_core::Date::today(),
             footer: None,
             head: None,
+            default_terminal_cwd: None,
+            source_dir: None,
         };
 
         let intro_slide = Slide::new("Introduction").with_body(Content::Text {
@@ -603,6 +605,8 @@ mod tests {
             date: toboggan_core::Date::today(),
             footer: None,
             head: None,
+            default_terminal_cwd: None,
+            source_dir: None,
         };
 
         // Simulate a diagram slide with counter: title="3.5 Diagram" body=SVG
@@ -644,6 +648,8 @@ mod tests {
             date: toboggan_core::Date::today(),
             footer: None,
             head: None,
+            default_terminal_cwd: None,
+            source_dir: None,
         };
 
         // Create a slide with content words (2 in title + 6 in body = 8 total) and 4 notes words
@@ -704,6 +710,8 @@ mod tests {
             date: toboggan_core::Date::today(),
             footer: None,
             head: None,
+            default_terminal_cwd: None,
+            source_dir: None,
         };
 
         let slide = Slide::new("Title").with_body(Content::Html {
@@ -730,6 +738,8 @@ mod tests {
             date: toboggan_core::Date::today(),
             footer: None,
             head: None,
+            default_terminal_cwd: None,
+            source_dir: None,
         };
 
         let slide = Slide::new("Title").with_body(Content::Html {

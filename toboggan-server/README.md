@@ -29,6 +29,7 @@ cargo run -p toboggan-server -- --host 0.0.0.0 --port 3000 presentation.toml
 ### Client Connections
 
 Once running, clients can connect via:
+
 - **Web Interface**: http://localhost:8080
 - **WebSocket**: ws://localhost:8080/api/ws
 - **Health Check**: http://localhost:8080/api/health
@@ -143,16 +144,16 @@ stateDiagram-v2
     [*] --> Init: Initial state
 
     Init --> Running: First/Last/GoTo/Next/Previous
-    
+
     Paused --> Running: First/Last/GoTo*/Next*/Previous*
     Paused --> Paused: Next (on last slide)
     Paused --> Paused: Previous (on first slide)
     Paused --> Paused: GoTo (to last slide when already on last)
-    
+
     Running --> Running: First/Last/GoTo/Next/Previous
     Running --> Paused: Pause
     Running --> Done: Next (on last slide)
-    
+
     Done --> Paused: Previous/First/Last/GoTo
 
     note right of Init
@@ -181,9 +182,11 @@ stateDiagram-v2
 ## Command Behavior Details
 
 ### From `Init` State
+
 - **All navigation commands** (`First`, `Last`, `GoTo`, `Next`, `Previous`) → Navigate to **first slide** and transition to `Running`
 
 ### From `Paused` State
+
 - **`First`** → Navigate to first slide and transition to `Running`
 - **`Last`** → Navigate to last slide and transition to `Running` (unless already on last slide, then stay `Paused`)
 - **`GoTo(slide)`** → Navigate to specified slide and transition to `Running` (unless going to last slide while already on last, then stay `Paused`)
@@ -192,6 +195,7 @@ stateDiagram-v2
 - **`Resume`** → Transition to `Running` with current slide
 
 ### From `Running` State
+
 - **`First`** → Navigate to first slide (stay `Running`)
 - **`Last`** → Navigate to last slide (stay `Running`)
 - **`GoTo(slide)`** → Navigate to specified slide (stay `Running`)
@@ -200,18 +204,21 @@ stateDiagram-v2
 - **`Pause`** → Transition to `Paused` with current slide
 
 ### From `Done` State
+
 - **All navigation commands** → Navigate to requested slide and transition to `Paused`
 
 ## Special Commands
+
 - **`Ping`** → Returns `Pong` (no state change)
 - **`Register`/`Unregister`** → Handled separately via WebSocket (no state change)
 
 ## State Properties
 
 Each state maintains different information:
+
 - **`Init`**: No slide information
 - **`Paused`**: Current slide + total duration
-- **`Running`**: Current slide + start timestamp + total duration  
+- **`Running`**: Current slide + start timestamp + total duration
 - **`Done`**: Current slide + total duration
 
 ## Configuration
@@ -298,13 +305,13 @@ CMD ["toboggan-server", "/app/presentation.toml"]
 server {
     listen 80;
     server_name your-domain.com;
-    
+
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }
-    
+
     location /api/ws {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
@@ -339,7 +346,7 @@ The server uses structured logging:
 ```bash
 # Log levels
 RUST_LOG=error    # Errors only
-RUST_LOG=warn     # Warnings and errors  
+RUST_LOG=warn     # Warnings and errors
 RUST_LOG=info     # Info, warnings, errors
 RUST_LOG=debug    # Debug info + above
 RUST_LOG=trace    # All logs (very verbose)
@@ -367,6 +374,7 @@ RUST_LOG=trace    # All logs (very verbose)
 ### Common Issues
 
 **Server Won't Start:**
+
 ```bash
 # Check if port is already in use
 lsof -i :8080
@@ -376,6 +384,7 @@ cargo run -p toboggan-server -- --port 3000 presentation.toml
 ```
 
 **WebSocket Connection Failed:**
+
 ```bash
 # Check server is running
 curl http://localhost:8080/api/health
@@ -385,6 +394,7 @@ websocat ws://localhost:8080/api/ws
 ```
 
 **Presentation Not Loading:**
+
 ```bash
 # Validate TOML syntax
 toml_verify presentation.toml

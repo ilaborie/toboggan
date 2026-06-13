@@ -72,7 +72,7 @@ for arch in $ARCHS; do
       # Intel iOS simulator
       export CFLAGS_x86_64_apple_ios="-target x86_64-apple-ios"
       $HOME/.cargo/bin/cargo rustc -p "${FFI_TARGET}" --lib --crate-type staticlib $RELFLAG --target x86_64-apple-ios
-      
+
       RUST_LIB_PATH="${TARGET_DIR}/x86_64-apple-ios/$([[ "${BUILDVARIANT}" != "debug" ]] && echo "release" || echo "debug")/lib${LIB_NAME}.a"
       # Copy the built library to where Xcode expects it
       cp "$RUST_LIB_PATH" "${BUILT_PRODUCTS_DIR}/"
@@ -85,7 +85,7 @@ for arch in $ARCHS; do
         # Hardware iOS targets
         # export CFLAGS_aarch64_apple_ios="-target aarch64-apple-ios"
         $HOME/.cargo/bin/cargo rustc -p "${FFI_TARGET}" --lib --crate-type staticlib $RELFLAG --target aarch64-apple-ios
-        
+
         RUST_LIB_PATH="${TARGET_DIR}/aarch64-apple-ios/$([[ "${BUILDVARIANT}" != "debug" ]] && echo "release" || echo "debug")/lib${LIB_NAME}.a"
         # Copy the built library to where Xcode expects it
         cp "$RUST_LIB_PATH" "${BUILT_PRODUCTS_DIR}/"
@@ -95,7 +95,7 @@ for arch in $ARCHS; do
         # M1 iOS simulator
         # export CFLAGS_aarch64_apple_ios_sim="-target aarch64-apple-ios-simulator"
         $HOME/.cargo/bin/cargo rustc -p "${FFI_TARGET}" --lib --crate-type staticlib $RELFLAG --target aarch64-apple-ios-sim
-        
+
         RUST_LIB_PATH="${TARGET_DIR}/aarch64-apple-ios-sim/$([[ "${BUILDVARIANT}" != "debug" ]] && echo "release" || echo "debug")/lib${LIB_NAME}.a"
         # Copy the built library to where Xcode expects it
         cp "$RUST_LIB_PATH" "${BUILT_PRODUCTS_DIR}/"

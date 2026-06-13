@@ -22,3 +22,5 @@ cargo = { binstall = true }
 swiftlint = "latest"
 "npm:@stoplight/spectral-cli" = "latest"
 "cargo:cargo-ndk" = "latest"
+prek = "latest"
+shfmt = "latest"

@@ -5,15 +5,21 @@ use wasm_bindgen::prelude::*;
 use web_sys::{Element, HtmlElement};
 
 fn escape_html(html: &str) -> String {
-    let div = document().create_element("div").unwrap_throw();
+    let div = document()
+        .create_element("div")
+        .expect_throw("DOM unavailable: could not create div for HTML escaping");
     div.set_text_content(Some(html));
     div.inner_html()
 }
 
 #[must_use]
 pub fn create_html_element(tag: &str) -> HtmlElement {
-    let result = document().create_element(tag).unwrap_throw();
-    result.dyn_into().unwrap_throw()
+    let result = document()
+        .create_element(tag)
+        .expect_throw("DOM unavailable: could not create element");
+    result
+        .dyn_into()
+        .expect_throw("create_element returned a non-HtmlElement node")
 }
 
 #[must_use]
@@ -25,7 +31,7 @@ pub fn render_content(content: &Content, wrapper: Option<&str>) -> String {
     };
 
     if let Some(wrapper) = wrapper {
-        format!("<{wrapper}>{inner}</{wrapper}>",)
+        format!("<{wrapper}>{inner}</{wrapper}>")
     } else {
         inner
     }
@@ -65,7 +71,9 @@ pub fn inject_head_html(head_html: Option<&str>) {
     };
 
     // Create temporary container to parse HTML
-    let temp = document().create_element("div").unwrap_throw();
+    let temp = document()
+        .create_element("div")
+        .expect_throw("DOM unavailable: could not create temp div for head HTML injection");
     temp.set_inner_html(html);
 
     // Move each child to document.head with marker attribute

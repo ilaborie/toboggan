@@ -256,7 +256,10 @@ pub(super) fn process_talk_metadata(
     toboggan_dir: &TobogganDir,
     theme: &str,
 ) -> Result<TalkMetadata> {
-    let mut metadata = TalkMetadata::default();
+    let mut metadata = TalkMetadata {
+        source_dir: Some(toboggan_dir.as_ref().to_path_buf()),
+        ..TalkMetadata::default()
+    };
 
     if let Some(cover) = toboggan_dir.get_cover()? {
         let path = cover.path();
@@ -267,6 +270,8 @@ pub(super) fn process_talk_metadata(
             .date
             .and_then(|date| parse_date_string(&date).ok())
             .unwrap_or_else(Date::today);
+        // The cover's frontmatter is the natural place for talk-level defaults.
+        metadata.default_terminal_cwd = front_matter.quake_cwd;
     }
 
     if let Some(footer) = toboggan_dir.get_footer()? {
@@ -498,5 +503,28 @@ mod tests {
         assert!(!is_slide_file(&PathBuf::from("slide.txt")));
         assert!(!is_slide_file(&PathBuf::from("slide.pdf")));
         assert!(!is_slide_file(&PathBuf::from("slide")));
+    }
+
+    #[test]
+    fn process_talk_metadata_captures_source_dir_and_quake_default() -> Result<()> {
+        let temp_dir = tempdir().expect("temp");
+        let dir_path = temp_dir.path();
+
+        create_test_file(
+            dir_path,
+            "_cover.md",
+            "+++\nquake_cwd = \"examples/api\"\n+++\n# Cover",
+        )
+        .expect("write cover");
+
+        let toboggan_dir = TobogganDir::new(dir_path.to_path_buf())?;
+        let metadata = process_talk_metadata(&toboggan_dir, "base16-ocean.light")?;
+
+        assert_eq!(metadata.source_dir.as_deref(), Some(dir_path));
+        assert_eq!(
+            metadata.default_terminal_cwd.as_deref(),
+            Some("examples/api")
+        );
+        Ok(())
     }
 }

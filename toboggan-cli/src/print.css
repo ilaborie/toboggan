@@ -55,4 +55,11 @@ main {
 	.step {
 		opacity: 1 !important;
 	}
+
+	/* Alert blocks: keep border, drop tinted background */
+	.markdown-alert {
+		background-color: transparent !important;
+		break-inside: avoid;
+		page-break-inside: avoid;
+	}
 }
