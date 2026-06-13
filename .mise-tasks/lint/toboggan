@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#MISE description="Lint the example presentations with toboggan-lint"
+
+set -eu
+
+echo "📐 Linting example presentations..."
+cargo run -q -p toboggan -- lint examples/toboggan-guide/slides

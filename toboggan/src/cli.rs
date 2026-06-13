@@ -57,6 +57,8 @@ pub(crate) enum Commands {
     Thumbnails(ThumbnailsArgs),
     /// Run the MCP authoring server, or install its client config
     Mcp(McpArgs),
+    /// Install the authoring skill for an LLM client
+    Skills(SkillsArgs),
 }
 
 /// Build options shared by `build`, the default action, `stats`, `pdf`, ...
@@ -420,6 +422,17 @@ pub(crate) enum McpAction {
 pub(crate) enum McpClient {
     /// Claude Code
     ClaudeCode,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct SkillsArgs {
+    /// Target LLM client
+    #[arg(long, value_enum, default_value_t = McpClient::ClaudeCode)]
+    pub(crate) target: McpClient,
+
+    /// Directory to install the skill into (default: current directory)
+    #[arg(long)]
+    pub(crate) dir: Option<PathBuf>,
 }
 
 fn parse_date(input: &str) -> Result<Date, String> {

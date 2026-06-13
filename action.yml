@@ -1,0 +1,69 @@
+name: Build Toboggan presentation
+description: >-
+  Build a Toboggan presentation folder into a single-file HTML, a PDF, and/or a
+  slide overview with thumbnails. Intended for use in a presentation repository.
+author: Igor Laborie
+
+inputs:
+  folder:
+    description: Path to the slides folder to build.
+    required: false
+    default: ./slides
+  outputs:
+    description: Comma-separated artifacts to produce (html, pdf, thumbnails).
+    required: false
+    default: html,pdf,thumbnails
+  out-dir:
+    description: Directory to write artifacts into.
+    required: false
+    default: dist
+  version:
+    description: Toboggan version to install (default: latest).
+    required: false
+    default: latest
+
+outputs:
+  out-dir:
+    description: Directory containing the built artifacts.
+    value: ${{ inputs.out-dir }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install cargo-binstall
+      uses: cargo-bins/cargo-binstall@main
+
+    - name: Install toboggan
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Prefer a prebuilt binary; fall back to building from source.
+        if [ "${{ inputs.version }}" = "latest" ]; then
+          cargo binstall -y toboggan || cargo install --locked toboggan
+        else
+          cargo binstall -y "toboggan@${{ inputs.version }}" \
+            || cargo install --locked "toboggan@${{ inputs.version }}"
+        fi
+
+    - name: Install Typst
+      if: contains(inputs.outputs, 'pdf') || contains(inputs.outputs, 'thumbnails')
+      uses: typst-community/setup-typst@v4
+
+    - name: Build artifacts
+      shell: bash
+      run: |
+        set -euo pipefail
+        folder="${{ inputs.folder }}"
+        out="${{ inputs.out-dir }}"
+        mkdir -p "$out"
+        IFS=',' read -ra kinds <<< "${{ inputs.outputs }}"
+        for kind in "${kinds[@]}"; do
+          case "$(echo "$kind" | xargs)" in
+            html)       toboggan build "$folder" --output "$out/index.html" ;;
+            pdf)        toboggan pdf "$folder" --output "$out/presentation.pdf" ;;
+            thumbnails) toboggan thumbnails "$folder" --output "$out/overview" ;;
+          esac
+        done

@@ -1,0 +1,39 @@
+# Builds and publishes prebuilt `toboggan` binaries when a version tag is pushed.
+#
+# These releases let the `ilaborie/toboggan` GitHub Action install the CLI via
+# `cargo binstall` instead of compiling from source on every run.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  upload:
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-apple-darwin
+            os: macos-13
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Build and upload toboggan
+        uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: toboggan
+          target: ${{ matrix.target }}
+          token: ${{ secrets.GITHUB_TOKEN }}

@@ -80,6 +80,7 @@ fn dispatch(cli: Cli) -> miette::Result<()> {
                 _ => block_on(toboggan_mcp::serve_stdio(dir)),
             }
         }
+        Some(Commands::Skills(args)) => to_miette(commands::skills::install(args)),
     }
 }
 

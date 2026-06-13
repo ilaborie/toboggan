@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-#MISE description="Launch the backend in dev mode"
+#MISE description="Build + serve the riir-folder example in dev mode (live reload)"
 
 set -eu
 
-# Ensure web frontend is built first (required for server)
+# Ensure web frontend is built first (embedded by the server)
 echo "🌐 Ensuring web frontend is built..."
 mise build:web
 
-echo "🚀 Starting server in dev mode..."
-bacon run-long -- -p toboggan-server -- --public-dir ../riir/public/ --watch ../riir/riir.toml
+echo "🚀 Build + serve examples/riir-folder at http://localhost:8080"
+cargo run -p toboggan -- examples/riir-folder

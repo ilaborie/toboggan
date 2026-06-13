@@ -27,46 +27,48 @@ Toboggan is a presentation system that allows you to create, serve, and control 
 git clone https://github.com/ilaborie/toboggan
 cd toboggan
 
-# Build all components
-cargo build --release
-
-# Run the server with example presentation
-cargo run -p toboggan-server
+# Build the unified CLI (and the embedded web frontend)
+mise build:web
+cargo install --path toboggan
 ```
+
+Everything is driven by the single **`toboggan`** command.
 
 ### Create a presentation
 
 ```bash
-# Convert Markdown to TOML
-cargo run -p toboggan-cli -- examples/my-talk.md -o my-talk.toml
-
-# Or create TOML directly
-cat > my-talk.toml << 'EOF'
-date = "2025-01-26"
-
-[title]
-type = "Text"
-text = "My Presentation"
-
-[[slides]]
-kind = "Cover"
-[slides.title]
-type = "Text"
-text = "Welcome"
-EOF
+# Scaffold a new deck (creates slides/, public/, a mise.toml, and a jj repo)
+toboggan new my-talk --title "My Presentation"
 ```
 
 ### Serve and present
 
 ```bash
-# Start the server
-cargo run -p toboggan-server -- my-talk.toml
+# Build the folder in-memory and serve it with live reload (the default action)
+toboggan my-talk
 
-# Open web interface
+# Open the homepage (links to run, slide overview, guide, PDF, API docs)
 open http://localhost:8080
 
-# Or use terminal client
-cargo run -p toboggan-tui
+# Present from the terminal or desktop instead
+toboggan tui
+toboggan desktop
+```
+
+### Build, lint, export
+
+```bash
+toboggan build ./my-talk/slides -o talk.toml   # toml/json/yaml/html/typst
+toboggan lint ./my-talk/slides                 # presentation linter
+toboggan pdf ./my-talk/slides                  # PDF (needs `typst`)
+toboggan thumbnails ./my-talk/slides           # per-slide overview + search
+```
+
+### Author with an LLM
+
+```bash
+toboggan mcp init     # register the MCP authoring server with Claude Code
+toboggan skills       # install the authoring skill
 ```
 
 ## Building
