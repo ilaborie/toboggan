@@ -22,66 +22,66 @@ repository = "https://github.com/ilaborie/toboggan"
 [workspace.dependencies]
 # Core dependencies
 derive_more = { version = "2.1.1", default-features = false }
-jiff = { version = "0.2.17", default-features = false }
-serde = { version = "1.0.219", default-features = false }
-uuid = { version = "1.18.1", default-features = false }
-humantime = "2.1.0"
+jiff = { version = "0.2.28", default-features = false }
+serde = { version = "1.0.228", default-features = false }
+uuid = { version = "1.23.3", default-features = false }
+humantime = "2.3.0"
 getrandom = "0.4.2"
 
 # Server dependencies
-axum = "0.8.8"
-tokio = "1.48.0"
+axum = "0.8.9"
+tokio = "1.52.3"
 toml = "1.1.2"
 tracing = "0.1.44"
-tracing-subscriber = "0.3.22"
-clap = "4.5.53"
-anyhow = "1.0.100"
-serde_json = "1.0.148"
+tracing-subscriber = "0.3.23"
+clap = "4.6.1"
+anyhow = "1.0.102"
+serde_json = "1.0.150"
 serde-saphyr = "0.0.27"
-tower-http = "0.6.8"
-futures = "0.3.31"
-dashmap = "6.1.0"
+tower-http = "0.6.11"
+futures = "0.3.32"
+dashmap = "6.2.1"
 slotmap = "1.1.1"
 
 # OpenAPI dependencies
-utoipa = "5.4.0"
+utoipa = "5.5.0"
 utoipa-scalar = "0.3.0"
 
 # Dev dependencies
-clawspec-core = "0.4.2"
-tempfile = "3.24.0"
+clawspec-core = "0.4.3"
+tempfile = "3.27.0"
 
 # Other dependencies
 comrak = "0.52.0"
 miette = "7.6.0"
-comfy-table = "7.2.1"
+comfy-table = "7.2.2"
 
 # Desktop dependencies
 iced = "0.14.0"
 tokio-tungstenite = { version = "0.29.0", default-features = false }
-reqwest = { version = "0.13.1", default-features = false }
-lucide-icons = "1.14.0"
+reqwest = { version = "0.13.4", default-features = false }
+lucide-icons = "1.18.0"
 async-stream = "0.3.6"
 
 # Other dependencies
 scraper = "0.27.0"
 
 # Server-specific dependencies
-rust-embed = "8.9.0"
+rust-embed = "8.11.0"
 mime_guess = "2.0.5"
 notify = "8.2.0"
 
 # CLI-specific dependencies
-owo-colors = "4.2.3"
+owo-colors = "4.3.0"
 
 # TUI-specific dependencies
-ratatui = "0.30.0"
+ratatui = "0.30.1"
 crossterm = "0.29.0"
-tui-logger = "0.18.0"
+tui-logger = "0.18.2"
 tachyonfx = "0.25"
 
 # Mobile-specific dependencies (iOS & Android)
-uniffi = "0.31.0"
+uniffi = "0.31.1"
 
 
 [workspace.lints.rust]

@@ -25,7 +25,7 @@ iced = { workspace = true, features = [
   "image",
 ] }
 # Force naga termcolor feature - see https://github.com/gfx-rs/wgpu/pull/7482
-naga = { version = "27", features = ["termcolor"] }
+naga = { version = "29", features = ["termcolor"] }
 lucide-icons = { workspace = true }
 
 tokio = { workspace = true, features = ["full"] }
