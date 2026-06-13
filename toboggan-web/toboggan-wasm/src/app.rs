@@ -324,10 +324,18 @@ async fn handle_state_change(
     recovery_state: &Rc<RefCell<RecoveryState>>,
     presentation_meta: &Rc<RefCell<PresentationMeta>>,
 ) {
-    // Auto-start presentation when in Init state
+    // Auto-start presentation when in Init state. If the URL carries `?slide=N`
+    // (e.g. opened from the slide overview), jump straight to that slide.
     if matches!(state, State::Init) {
-        info!("Auto-starting presentation from Init state");
-        let _ = tx_cmd.unbounded_send(Command::First);
+        if let Some(index) = slide_from_url() {
+            info!("Starting at slide from URL");
+            let _ = tx_cmd.unbounded_send(Command::GoTo {
+                slide: SlideId::new(index),
+            });
+        } else {
+            info!("Auto-starting presentation from Init state");
+            let _ = tx_cmd.unbounded_send(Command::First);
+        }
         return;
     }
 
@@ -391,6 +399,18 @@ async fn handle_talk_change(
     update_root_state_class(&state, root_element, presentation_meta);
     update_slide_display(&state, api, elements).await;
     show_completion_toast_if_done(&state, elements);
+}
+
+/// Reads a `slide=N` parameter from the page URL query string, if present.
+///
+/// Used by the slide overview's click-to-run links (`/run?slide=N`).
+fn slide_from_url() -> Option<usize> {
+    let search = web_sys::window()?.location().search().ok()?;
+    let query = search.strip_prefix('?').unwrap_or(&search);
+    query.split('&').find_map(|pair| {
+        pair.strip_prefix("slide=")
+            .and_then(|value| value.parse::<usize>().ok())
+    })
 }
 
 /// Attempts to restore slide position after re-connection

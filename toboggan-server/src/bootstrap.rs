@@ -85,6 +85,7 @@ pub async fn launch_with_talk(
     let router = routes_with_cors(
         settings.allowed_origins.as_deref(),
         settings.public_dir.clone(),
+        settings.thumbnails_dir.clone(),
         openapi,
     )
     .with_state(state);

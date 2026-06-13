@@ -5,6 +5,8 @@ mod text;
 pub use self::text::TextRenderer;
 
 mod html;
+mod thumbnails;
+pub use self::thumbnails::{ThumbnailOptions, generate_thumbnails};
 mod typst;
 
 use std::borrow::Cow;

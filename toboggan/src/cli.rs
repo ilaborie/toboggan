@@ -134,6 +134,10 @@ pub(crate) struct ServeOptions {
     #[arg(long, env = "TOBOGGAN_PUBLIC_DIR")]
     pub(crate) public_dir: Option<PathBuf>,
 
+    /// Directory of generated thumbnails + overview.html (served at /overview/)
+    #[arg(long, env = "TOBOGGAN_THUMBNAILS_DIR")]
+    pub(crate) thumbnails_dir: Option<PathBuf>,
+
     /// Shell to spawn for embedded terminals
     #[arg(long, env = "TOBOGGAN_SHELL")]
     pub(crate) shell: Option<String>,
@@ -151,6 +155,7 @@ impl ServeOptions {
             cleanup_interval_secs: 60,
             allowed_origins: self.allowed_origins,
             public_dir: self.public_dir,
+            thumbnails_dir: self.thumbnails_dir,
             watch,
             shell: self.shell,
         }
@@ -377,9 +382,16 @@ pub(crate) struct ThumbnailsArgs {
     /// Input folder to process
     pub(crate) input: PathBuf,
 
-    /// Output directory for thumbnails and the overview page
+    /// Output directory for thumbnails and the overview page (default: ./overview)
     #[arg(short, long)]
     pub(crate) output: Option<PathBuf>,
+
+    /// Do not emit a search index / search box
+    #[arg(long)]
+    pub(crate) no_search: bool,
+
+    #[command(flatten)]
+    pub(crate) build: BuildOptions,
 }
 
 #[derive(Debug, Args)]

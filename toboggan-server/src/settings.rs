@@ -40,6 +40,11 @@ pub struct Settings {
     #[clap(long, env = "TOBOGGAN_PUBLIC_DIR")]
     pub public_dir: Option<PathBuf>,
 
+    /// Optional directory of generated thumbnails + overview.html.
+    /// Served at /overview/ and linked from the homepage as /slides.
+    #[clap(long, env = "TOBOGGAN_THUMBNAILS_DIR")]
+    pub thumbnails_dir: Option<PathBuf>,
+
     /// Enable watch mode to automatically reload the talk file when it changes
     #[clap(long, env = "TOBOGGAN_WATCH")]
     pub watch: bool,

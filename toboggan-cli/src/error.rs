@@ -127,6 +127,13 @@ pub enum TobogganCliError {
         help("Run with --help to see available options")
     )]
     CliParse { source: clap::Error },
+
+    #[display("Typst rendering failed: {message}")]
+    #[diagnostic(
+        code(toboggan_cli::typst),
+        help("Ensure the `typst` binary is installed and on PATH")
+    )]
+    Typst { message: String },
 }
 
 impl TobogganCliError {
@@ -197,6 +204,20 @@ impl TobogganCliError {
     #[must_use]
     pub fn write_file(path: PathBuf, source: io::Error) -> Self {
         Self::WriteFile { path, source }
+    }
+
+    #[must_use]
+    pub fn typst(source: &io::Error) -> Self {
+        Self::Typst {
+            message: format!("could not run `typst`: {source}"),
+        }
+    }
+
+    #[must_use]
+    pub fn typst_failed(status: &str) -> Self {
+        Self::Typst {
+            message: format!("`typst compile` failed: {status}"),
+        }
     }
 }
 
