@@ -20,7 +20,7 @@ pub enum OutputFormat {
 }
 
 /// Command-line settings for the Toboggan CLI.
-#[derive(Debug, clap::Parser)]
+#[derive(Debug, Clone, clap::Parser)]
 #[command(
     name = "toboggan-cli",
     about = "Convert Markdown folders to Toboggan presentation TOML",

@@ -1,8 +1,9 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::Context;
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as _};
+use toboggan_core::Talk;
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
@@ -10,8 +11,36 @@ use crate::TobogganState;
 
 const DEBOUNCE_DURATION: Duration = Duration::from_millis(300);
 
-pub fn start_watch_task(talk_path: PathBuf, state: TobogganState) -> anyhow::Result<()> {
-    info!(path = %talk_path.display(), "Starting file watcher");
+/// Rebuilds a fresh [`Talk`] from the current on-disk content of a watched path.
+///
+/// Used to decouple the watcher from *how* a talk is produced: serving a single
+/// `.toml` file reads and parses that file, while a folder-based presentation
+/// re-runs the folder parser.
+pub type ReloadFn = Box<dyn Fn() -> anyhow::Result<Talk> + Send + Sync + 'static>;
+
+/// Configuration for the talk reload watcher.
+pub struct WatchConfig {
+    /// Path to watch: a single `.toml` file, or a presentation folder.
+    pub path: PathBuf,
+    /// Watch the path recursively (used for folder-based presentations).
+    pub recursive: bool,
+    /// Rebuilds the [`Talk`] from the current on-disk content.
+    pub reload: ReloadFn,
+}
+
+/// Starts a background task that watches `config.path` and hot-swaps the served
+/// talk whenever it changes (debounced).
+///
+/// # Errors
+/// Returns an error if the underlying file-system watcher cannot be created or
+/// cannot start watching the requested path.
+pub fn start_watch_task(config: WatchConfig, state: TobogganState) -> anyhow::Result<()> {
+    let WatchConfig {
+        path,
+        recursive,
+        reload,
+    } = config;
+    info!(path = %path.display(), recursive, "Starting talk watcher");
 
     let (tx, rx) = mpsc::channel::<Result<Event, notify::Error>>(100);
 
@@ -22,11 +51,16 @@ pub fn start_watch_task(talk_path: PathBuf, state: TobogganState) -> anyhow::Res
     })
     .context("Failed to create file watcher")?;
 
+    let mode = if recursive {
+        RecursiveMode::Recursive
+    } else {
+        RecursiveMode::NonRecursive
+    };
     watcher
-        .watch(&talk_path, RecursiveMode::NonRecursive)
-        .with_context(|| format!("Failed to watch file: {}", talk_path.display()))?;
+        .watch(&path, mode)
+        .with_context(|| format!("Failed to watch path: {}", path.display()))?;
 
-    tokio::spawn(watch_loop(watcher, rx, talk_path, state));
+    tokio::spawn(watch_loop(watcher, rx, state, reload));
 
     Ok(())
 }
@@ -34,8 +68,8 @@ pub fn start_watch_task(talk_path: PathBuf, state: TobogganState) -> anyhow::Res
 async fn watch_loop(
     watcher: RecommendedWatcher,
     mut rx: mpsc::Receiver<Result<Event, notify::Error>>,
-    talk_path: PathBuf,
     state: TobogganState,
+    reload: ReloadFn,
 ) {
     let mut last_reload = tokio::time::Instant::now();
     let _watcher = watcher; // Keep watcher alive
@@ -44,7 +78,7 @@ async fn watch_loop(
         match event_result {
             Ok(event) => {
                 if should_reload(&event)
-                    && let Some(reload_time) = handle_reload(&talk_path, &state, last_reload).await
+                    && let Some(reload_time) = handle_reload(&state, &reload, last_reload).await
                 {
                     last_reload = reload_time;
                 }
@@ -59,22 +93,31 @@ async fn watch_loop(
 }
 
 async fn handle_reload(
-    talk_path: &Path,
     state: &TobogganState,
+    reload: &ReloadFn,
     last_reload: tokio::time::Instant,
 ) -> Option<tokio::time::Instant> {
     let now = tokio::time::Instant::now();
-    let elapsed = now.duration_since(last_reload);
+    if now.duration_since(last_reload) < DEBOUNCE_DURATION {
+        return None;
+    }
 
-    if elapsed >= DEBOUNCE_DURATION {
-        info!("File change detected, reloading talk");
-        if let Err(err) = reload_talk(talk_path, state).await {
+    info!("Change detected, reloading talk");
+    let new_talk = match reload() {
+        Ok(talk) => talk,
+        Err(err) => {
+            error!("Failed to rebuild talk: {err:?}");
+            return None;
+        }
+    };
+
+    match state.reload_talk(new_talk).await {
+        Ok(()) => Some(now),
+        Err(err) => {
             error!("Failed to reload talk: {err:?}");
-        } else {
-            return Some(now);
+            None
         }
     }
-    None
 }
 
 fn should_reload(event: &Event) -> bool {
@@ -82,16 +125,4 @@ fn should_reload(event: &Event) -> bool {
         event.kind,
         EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
     )
-}
-
-async fn reload_talk(path: &Path, state: &TobogganState) -> anyhow::Result<()> {
-    let content = tokio::fs::read_to_string(path)
-        .await
-        .with_context(|| format!("Reading talk file {}", path.display()))?;
-
-    let new_talk = toml::from_str(&content).context("Parsing talk TOML")?;
-
-    state.reload_talk(new_talk).await?;
-
-    Ok(())
 }

@@ -8,22 +8,54 @@ use tracing::{info, instrument, warn};
 use utoipa::openapi::OpenApi;
 
 use crate::{
-    ClientService, Settings, TalkService, TobogganState, routes_with_cors, start_watch_task,
+    ClientService, Settings, TalkService, TobogganState, WatchConfig, routes_with_cors,
+    start_watch_task,
 };
 
+/// Loads the talk from `settings.talk` and serves it.
+///
+/// When `settings.watch` is set, the single `.toml` file is watched and the talk
+/// is hot-swapped on change. To serve an in-memory talk (e.g. built from a
+/// folder) use [`launch_with_talk`].
 #[doc(hidden)]
 #[instrument]
 pub async fn launch(settings: Settings) -> anyhow::Result<()> {
+    let talk = load_talk(&settings.talk).await.context("Loading talk")?;
+
+    let watch = settings.watch.then(|| {
+        let reload_path = settings.talk.clone();
+        WatchConfig {
+            path: settings.talk.clone(),
+            recursive: false,
+            reload: Box::new(move || load_talk_sync(&reload_path)),
+        }
+    });
+
+    launch_with_talk(talk, settings, watch).await
+}
+
+/// Serves an already-built [`Talk`], optionally watching a path for reloads.
+///
+/// This is the shared serving core: `launch` uses it after reading a `.toml`
+/// file, and the unified CLI's build+serve uses it with a talk parsed from a
+/// folder plus a recursive [`WatchConfig`].
+///
+/// # Errors
+/// Returns an error if the address cannot be bound, the talk has no slides, the
+/// watcher cannot start, or the HTTP server fails.
+#[doc(hidden)]
+pub async fn launch_with_talk(
+    talk: Talk,
+    settings: Settings,
+    watch: Option<WatchConfig>,
+) -> anyhow::Result<()> {
     info!(?settings, "launching server...");
     let Settings {
         host,
         port,
-        ref talk,
         max_clients,
         ..
     } = settings;
-
-    let talk = load_talk(talk).await.context("Loading talk")?;
 
     let addr = SocketAddr::from((host, port));
     info!(?addr, "Using address");
@@ -44,10 +76,8 @@ pub async fn launch(settings: Settings) -> anyhow::Result<()> {
         info!("Cleanup task completed");
     });
 
-    if settings.watch {
-        let watch_state = state.clone();
-        let watch_path = settings.talk.clone();
-        start_watch_task(watch_path, watch_state).context("Starting file watcher")?;
+    if let Some(watch) = watch {
+        start_watch_task(watch, state.clone()).context("Starting watcher")?;
     }
 
     let openapi = create_openapi()?;
@@ -80,6 +110,13 @@ async fn load_talk(path: &Path) -> anyhow::Result<Talk> {
         .with_context(|| format!("Reading talk file {}", path.display()))?;
     let result = toml::from_str(&content).context("Parsing talk")?;
     Ok(result)
+}
+
+/// Synchronous talk load used by the single-file reload watcher.
+fn load_talk_sync(path: &Path) -> anyhow::Result<Talk> {
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("Reading talk file {}", path.display()))?;
+    toml::from_str(&content).context("Parsing talk")
 }
 
 async fn setup_shutdown_signal(timeout: Duration) {
@@ -121,9 +158,17 @@ async fn setup_shutdown_signal(timeout: Duration) {
     info!("Shutdown signal processed, server will now terminate gracefully");
 }
 
+/// The bundled `OpenAPI` document as a JSON string.
+///
+/// Exposed so the unified CLI's `openapi` subcommand can emit it without
+/// starting the server.
+#[must_use]
+pub fn openapi_json() -> &'static str {
+    include_str!("../openapi.json")
+}
+
 fn create_openapi() -> anyhow::Result<OpenApi> {
-    let json_content = include_str!("../openapi.json");
-    let openapi = serde_json::from_str(json_content).context("reading openapi.json file")?;
+    let openapi = serde_json::from_str(openapi_json()).context("reading openapi.json file")?;
     Ok(openapi)
 }
 

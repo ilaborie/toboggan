@@ -17,4 +17,4 @@ mod watcher;
 pub use self::watcher::*;
 
 mod bootstrap;
-pub use self::bootstrap::launch;
+pub use self::bootstrap::{launch, launch_with_talk, openapi_json};

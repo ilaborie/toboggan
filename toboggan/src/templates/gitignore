@@ -1,0 +1,8 @@
+# Generated presentation artifacts
+*.toml
+!mise.toml
+*.html
+*.pdf
+*.typ
+/thumbnails/
+/overview/

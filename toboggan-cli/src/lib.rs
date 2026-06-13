@@ -204,7 +204,15 @@ fn validate_input(input: Option<&PathBuf>) -> Result<&PathBuf> {
     Ok(input)
 }
 
-fn parse_presentation(input: &Path, settings: &Settings) -> Result<ParseResult> {
+/// Parses a presentation folder into a [`ParseResult`], applying slide numbering
+/// unless `settings.no_counter` is set.
+///
+/// Exposed so the unified CLI's build+serve and folder-watch paths can rebuild
+/// the talk in-memory via [`ParseResult::to_talk`].
+///
+/// # Errors
+/// Returns an error if the folder cannot be parsed.
+pub fn parse_presentation(input: &Path, settings: &Settings) -> Result<ParseResult> {
     debug!("Processing folder-based talk from {}", input.display());
 
     let parser = FolderParser::new(input.to_path_buf(), settings.theme.clone())?;

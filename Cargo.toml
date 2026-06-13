@@ -8,6 +8,7 @@ members = [
   "toboggan-tui",
   "toboggan-desktop",
   "toboggan-mobile",
+  "toboggan",
 ]
 exclude = ["toboggan-esp32", "toboggan-py"]
 resolver = "2"
