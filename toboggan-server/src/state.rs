@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use axum::extract::FromRef;
 use toboggan_core::{Command, Notification, Talk, Timestamp};
+use tokio::sync::RwLock;
 
 use crate::services::{ClientService, TalkService};
 use crate::{HealthResponse, HealthResponseStatus};
@@ -27,6 +28,8 @@ pub struct TobogganState {
     /// Shell spawned for embedded terminals. `Arc<str>` keeps state clones cheap,
     /// since the whole state is cloned on every request extraction.
     terminal_shell: Arc<str>,
+    /// Lazily-rendered PDF of the current talk, invalidated on reload.
+    pdf_cache: Arc<RwLock<Option<Arc<[u8]>>>>,
 }
 
 impl TobogganState {
@@ -42,7 +45,23 @@ impl TobogganState {
             talk_service,
             client_service,
             terminal_shell,
+            pdf_cache: Arc::new(RwLock::new(None)),
         }
+    }
+
+    /// Returns a clone of the current talk.
+    pub(crate) async fn talk(&self) -> Talk {
+        self.talk_service.talk().await
+    }
+
+    /// Returns the cached rendered PDF, if any.
+    pub(crate) async fn cached_pdf(&self) -> Option<Arc<[u8]>> {
+        self.pdf_cache.read().await.clone()
+    }
+
+    /// Stores the rendered PDF in the cache.
+    pub(crate) async fn store_pdf(&self, bytes: Arc<[u8]>) {
+        *self.pdf_cache.write().await = Some(bytes);
     }
 
     /// Returns the shell to spawn for embedded terminals
@@ -92,6 +111,8 @@ impl TobogganState {
     /// Returns an error if the new talk has no slides
     pub async fn reload_talk(&self, new_talk: Talk) -> anyhow::Result<()> {
         let notification = self.talk_service.reload_talk(new_talk).await?;
+        // The cached PDF is now stale.
+        *self.pdf_cache.write().await = None;
         self.client_service.notify_all(&notification).await;
         Ok(())
     }

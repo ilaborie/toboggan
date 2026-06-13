@@ -15,6 +15,7 @@ use utoipa_scalar::{Scalar, Servable};
 use crate::TobogganState;
 
 mod api;
+mod pages;
 mod static_assets;
 mod terminal_ws;
 mod ws;
@@ -44,6 +45,12 @@ pub fn routes_with_cors(
         )
         .layer(TraceLayer::new_for_http())
         .route("/health", get(health))
+        // Server-rendered pages: landing page, the run/present app, the guide,
+        // and the on-demand PDF download.
+        .route("/", get(pages::homepage))
+        .route("/run", get(pages::run_app))
+        .route("/guide", get(pages::guide))
+        .route("/download.pdf", get(pages::pdf::download_pdf))
         .merge(Scalar::with_url("/doc", openapi))
         .layer(cors);
 
@@ -53,16 +60,21 @@ pub fn routes_with_cors(
         router = router.nest_service("/public", ServeDir::new(assets_dir));
     }
 
-    // Serve embedded web assets (catch-all for SPA)
+    // Serve embedded web asset files only (hashed JS/CSS, favicon, manifest).
+    // The `/` and `/run` routes own the HTML entry points.
     router = router.fallback(serve_embedded_web_assets);
 
     router
 }
 
+/// Serves a real embedded web asset file (hashed JS/CSS, favicon, manifest).
+///
+/// Unlike the previous behavior, this no longer falls back to `index.html` for
+/// unknown paths — the `/` (homepage) and `/run` (present app) routes own the
+/// HTML entry points, so unmatched paths return `404`.
 async fn serve_embedded_web_assets(uri: Uri) -> Response {
     let path = uri.path().trim_start_matches('/');
 
-    // Try to serve the requested file
     if let Some(content) = static_assets::WebAppAssets::get(path) {
         let mime = mime_guess::from_path(path).first_or_octet_stream();
         return (
@@ -73,17 +85,6 @@ async fn serve_embedded_web_assets(uri: Uri) -> Response {
             .into_response();
     }
 
-    // For SPA: serve index.html for all non-asset routes
-    if let Some(index) = static_assets::WebAppAssets::get("index.html") {
-        return (
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, "text/html")],
-            index.data,
-        )
-            .into_response();
-    }
-
-    // Fallback if index.html is not found
     (StatusCode::NOT_FOUND, "Not found").into_response()
 }
 

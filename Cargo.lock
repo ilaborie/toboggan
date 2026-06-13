@@ -6520,6 +6520,8 @@ dependencies = [
  "serde",
  "serde_json",
  "slotmap",
+ "tempfile",
+ "toboggan-cli",
  "toboggan-core",
  "toboggan-stats",
  "tokio",
