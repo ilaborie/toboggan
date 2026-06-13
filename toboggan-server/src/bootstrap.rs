@@ -70,6 +70,12 @@ pub async fn launch_with_talk(
     info!(%terminal_shell, "Embedded terminals will use this shell");
     let state = TobogganState::new(talk_service, client_service, terminal_shell.into());
 
+    // A pre-generated overview directory (`--thumbnails-dir`) seeds the cache as
+    // ready; otherwise the overview is generated lazily on the first request.
+    if let Some(thumbnails_dir) = settings.thumbnails_dir.clone() {
+        state.seed_thumbnails_dir(thumbnails_dir).await;
+    }
+
     let cleanup_interval = settings.cleanup_interval();
     tokio::spawn(async move {
         cleanup_service.cleanup_clients_task(cleanup_interval).await;
@@ -85,7 +91,6 @@ pub async fn launch_with_talk(
     let router = routes_with_cors(
         settings.allowed_origins.as_deref(),
         settings.public_dir.clone(),
-        settings.thumbnails_dir.clone(),
         openapi,
     )
     .with_state(state);

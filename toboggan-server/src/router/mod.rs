@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use axum::extract::State;
 use axum::http::{Method, StatusCode, Uri, header};
-use axum::response::{IntoResponse, Redirect, Response};
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use tower_http::cors::{Any, CorsLayer};
@@ -21,13 +21,12 @@ mod terminal_ws;
 mod ws;
 
 pub fn routes(assets_dir: Option<PathBuf>, openapi: OpenApi) -> Router<TobogganState> {
-    routes_with_cors(None, assets_dir, None, openapi)
+    routes_with_cors(None, assets_dir, openapi)
 }
 
 pub fn routes_with_cors(
     allowed_origins: Option<&[String]>,
     assets_dir: Option<PathBuf>,
-    thumbnails_dir: Option<PathBuf>,
     openapi: OpenApi,
 ) -> Router<TobogganState> {
     let cors = create_cors_layer(allowed_origins);
@@ -52,6 +51,9 @@ pub fn routes_with_cors(
         .route("/run", get(pages::run_app))
         .route("/guide", get(pages::guide))
         .route("/download.pdf", get(pages::pdf::download_pdf))
+        // Slide overview: lazily generated on first hit, served from the cache.
+        .route("/slides", get(pages::overview::slides_page))
+        .route("/overview/{*path}", get(pages::overview::overview_asset))
         .merge(Scalar::with_url("/doc", openapi))
         .layer(cors);
 
@@ -59,16 +61,6 @@ pub fn routes_with_cors(
     // Use /public to avoid conflict with embedded web assets
     if let Some(assets_dir) = assets_dir {
         router = router.nest_service("/public", ServeDir::new(assets_dir));
-    }
-
-    // Serve the generated slide overview when a thumbnails directory is provided.
-    if let Some(thumbnails_dir) = thumbnails_dir {
-        router = router
-            .route(
-                "/slides",
-                get(|| async { Redirect::to("/overview/overview.html") }),
-            )
-            .nest_service("/overview", ServeDir::new(thumbnails_dir));
     }
 
     // Serve embedded web asset files only (hashed JS/CSS, favicon, manifest).

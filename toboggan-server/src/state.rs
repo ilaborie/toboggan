@@ -1,10 +1,11 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::extract::FromRef;
 use toboggan_core::{Command, Notification, Talk, Timestamp};
 use tokio::sync::RwLock;
 
-use crate::services::{ClientService, TalkService};
+use crate::services::{ClientService, TalkService, ThumbStatus, ThumbnailService};
 use crate::{HealthResponse, HealthResponseStatus};
 
 impl FromRef<TobogganState> for TalkService {
@@ -30,6 +31,8 @@ pub struct TobogganState {
     terminal_shell: Arc<str>,
     /// Lazily-rendered PDF of the current talk, invalidated on reload.
     pdf_cache: Arc<RwLock<Option<Arc<[u8]>>>>,
+    /// Lazily-generated slide-overview thumbnails, invalidated on reload.
+    thumbnail_service: ThumbnailService,
 }
 
 impl TobogganState {
@@ -46,6 +49,7 @@ impl TobogganState {
             client_service,
             terminal_shell,
             pdf_cache: Arc::new(RwLock::new(None)),
+            thumbnail_service: ThumbnailService::new(),
         }
     }
 
@@ -62,6 +66,23 @@ impl TobogganState {
     /// Stores the rendered PDF in the cache.
     pub(crate) async fn store_pdf(&self, bytes: Arc<[u8]>) {
         *self.pdf_cache.write().await = Some(bytes);
+    }
+
+    /// Pre-seeds an externally-generated thumbnails directory (`--thumbnails-dir`).
+    pub(crate) async fn seed_thumbnails_dir(&self, dir: PathBuf) {
+        self.thumbnail_service.seed_external(dir).await;
+    }
+
+    /// Ensures slide-overview thumbnails are being generated and reports status.
+    pub(crate) async fn ensure_thumbnails(&self) -> ThumbStatus {
+        self.thumbnail_service
+            .ensure(self.talk_service.clone())
+            .await
+    }
+
+    /// Reads a generated overview asset by its relative path, if ready.
+    pub(crate) async fn thumbnail_asset(&self, rel: &str) -> Option<Vec<u8>> {
+        self.thumbnail_service.read_asset(rel).await
     }
 
     /// Returns the shell to spawn for embedded terminals
@@ -111,8 +132,9 @@ impl TobogganState {
     /// Returns an error if the new talk has no slides
     pub async fn reload_talk(&self, new_talk: Talk) -> anyhow::Result<()> {
         let notification = self.talk_service.reload_talk(new_talk).await?;
-        // The cached PDF is now stale.
+        // The cached PDF and thumbnails are now stale.
         *self.pdf_cache.write().await = None;
+        self.thumbnail_service.invalidate().await;
         self.client_service.notify_all(&notification).await;
         Ok(())
     }

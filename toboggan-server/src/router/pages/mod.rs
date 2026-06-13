@@ -2,6 +2,7 @@
 //! (`/run`), and the packaged guide (`/guide`). The slide-overview page (`/slides`)
 //! is served from `--thumbnails-dir` by the router when configured.
 
+pub(super) mod overview;
 pub(super) mod pdf;
 
 use std::sync::OnceLock;
