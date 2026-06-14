@@ -19,6 +19,8 @@ pub(crate) fn generate(args: ThumbnailsArgs) -> anyhow::Result<()> {
         build,
     } = args;
 
+    super::ensure_typst()?;
+
     let settings = build.into_cli_settings(input.clone(), true);
     let parse_result = toboggan_cli::parse_presentation(&input, &settings)
         .map_err(|err| anyhow::anyhow!("{err}"))?;

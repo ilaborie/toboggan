@@ -12,6 +12,8 @@ use crate::cli::PdfArgs;
 /// binary is missing, or compilation fails.
 #[allow(clippy::print_stdout)]
 pub(crate) fn build_pdf(args: PdfArgs) -> anyhow::Result<()> {
+    super::ensure_typst()?;
+
     let settings = args.cli_settings();
     let PdfArgs { input, output, .. } = args;
     let output = output.unwrap_or_else(|| default_pdf_path(&input));
