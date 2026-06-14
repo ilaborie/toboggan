@@ -64,7 +64,7 @@ footer = """
 </style>
 
 <div class="rail"></div>
-<div class="sled">🛷</div>
+<div class="sled">🛝</div>
 <div class="txt">
   <span class="title">Toboggan · User Guide</span>
   <span class="count"></span>
@@ -115,7 +115,7 @@ body_source = """
 </style>
 
 <div class="hero">
-  <span class="sled">🛷</span>
+  <span class="sled">🛝</span>
 
 # Toboggan
 
@@ -176,7 +176,7 @@ raw = """
   }
 </style>
 <div class="hero">
-  <span class="sled">🛷</span>
+  <span class="sled">🛝</span>
 <h1>Toboggan</h1>
   <p class="tag">The terminal-first presentation system — author once, present anywhere.</p>
   <p class="hint">Press <kbd>→</kbd> to start · built <em>with</em> Toboggan</p>
@@ -215,7 +215,7 @@ alt = """
 </style>
 
 <div class="hero">
-  <span class="sled">🛷</span>
+  <span class="sled">🛝</span>
 
 # Toboggan
 
@@ -2675,7 +2675,7 @@ stylesheet — exactly how this deck loads Space Grotesk.
 
 ### 📊 Live footer
 
-The footer reads `--current-slide` / `--total-slides`; this guide's 🛷 rides the
+The footer reads `--current-slide` / `--total-slides`; this guide's 🛝 rides the
 progress bar with pure CSS, no assets.
 
 ### 🖼️ Pre-render diagrams
@@ -2721,7 +2721,7 @@ raw = """
 <p>Drop <code>&lt;link&gt;</code> tags in <code>_head.html</code> and point <code>--font-slide-*</code> at them in your
 stylesheet — exactly how this deck loads Space Grotesk.</p>
 <h3>📊 Live footer</h3>
-<p>The footer reads <code>--current-slide</code> / <code>--total-slides</code>; this guide's 🛷 rides the
+<p>The footer reads <code>--current-slide</code> / <code>--total-slides</code>; this guide's 🛝 rides the
 progress bar with pure CSS, no assets.</p>
 <h3>🖼️ Pre-render diagrams</h3>
 <p>Compile D2 / Mermaid / Graphviz to <code>.webp</code> in <code>public/</code>, embed with <code>&lt;img&gt;</code>.
@@ -2753,7 +2753,7 @@ stylesheet — exactly how this deck loads Space Grotesk.
 
 ### 📊 Live footer
 
-The footer reads `--current-slide` / `--total-slides`; this guide's 🛷 rides the
+The footer reads `--current-slide` / `--total-slides`; this guide's 🛝 rides the
 progress bar with pure CSS, no assets.
 
 ### 🖼️ Pre-render diagrams
@@ -3128,7 +3128,7 @@ $ toboggan-server --public-dir public/ toboggan-guide.toml
 - 🧪 Feature reference: `examples/demo-terminal/`
 - 📖 API docs: `/doc` on a running server
 
-### Happy sledding 🛷
+### Happy sledding 🛝
 """
 
 [slides.style]
@@ -3168,7 +3168,7 @@ raw = """
 <li>🧪 Feature reference: <code>examples/demo-terminal/</code></li>
 <li>📖 API docs: <code>/doc</code> on a running server</li>
 </ul>
-<h3>Happy sledding 🛷</h3>
+<h3>Happy sledding 🛝</h3>
 </div><!-- end step -->
 """
 alt = """
@@ -3196,7 +3196,7 @@ $ toboggan-server --public-dir public/ toboggan-guide.toml
 - 🧪 Feature reference: `examples/demo-terminal/`
 - 📖 API docs: `/doc` on a running server
 
-### Happy sledding 🛷
+### Happy sledding 🛝
 """
 
 [slides.body.style]

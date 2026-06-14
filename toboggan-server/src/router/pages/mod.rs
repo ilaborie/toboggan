@@ -114,7 +114,7 @@ fn render_homepage(talk: &Talk) -> String {
 </head>
 <body>
   <main class="card">
-    <div class="sled">🛷</div>
+    <div class="sled">🛝</div>
     <h1>{title}</h1>
     <p class="date">{date}</p>
     <div class="stats">

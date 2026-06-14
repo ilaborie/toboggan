@@ -53,7 +53,7 @@ const GENERATING_PAGE: &str = r#"<!doctype html>
 </head>
 <body>
   <div class="box">
-    <div class="sled">🛷</div>
+    <div class="sled">🛝</div>
     <h1>Rendering slide thumbnails…</h1>
     <p class="muted">This page refreshes automatically.</p>
   </div>
@@ -84,7 +84,7 @@ fn unavailable_page(reason: &str) -> String {
 </head>
 <body>
   <div class="box">
-    <div style="font-size:3rem">🛷</div>
+    <div style="font-size:3rem">🛝</div>
     <h1>Slide overview unavailable</h1>
     <p class="muted">{reason}</p>
     <p>Install the <a href="https://typst.app/">typst</a> binary, then reload. The

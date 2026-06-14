@@ -210,7 +210,7 @@ fn render_overview(talk: &Talk, entries: &[SlideEntry], search: bool) -> String 
 </head>
 <body>
   <header>
-    <h1>🛷 {title}</h1>
+    <h1>🛝 {title}</h1>
     {search_box}
   </header>
   <div class="grid">
