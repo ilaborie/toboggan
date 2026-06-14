@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#MISE description="Build web frontend with TypeScript and Vite"
+
+set -eu
+
+echo "🌐 Building web frontend..."
+mise build:wasm
+
+# Build toboggan-web with npm
+echo "🔧 Building toboggan-web with TypeScript and Vite..."
+cd toboggan-web
+npm run build
+cd ..
+
+echo ""
+echo "✅ Web build completed successfully!"
+echo "📦 Built frontend files ready for deployment"

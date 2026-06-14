@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+#MISE description="Build all Rust code including ESP32 and WASM"
+
+set -eu
+
+echo "🦀 Building all Rust components..."
+
+# Build web first (required for toboggan-server)
+echo "🌐 Building web frontend (required for server)..."
+mise build:web
+
+# Build all regular Rust crates
+echo "📦 Building all Rust crates..."
+cargo build --release --workspace
+
+# Note: WASM is already built as part of web build
+
+# # Build ESP32 code
+# echo "🔧 Building ESP32 code..."
+# cd toboggan-esp32
+
+# # Ensure the ESP32 target is available
+# echo "🎯 Adding ESP32 target if needed..."
+# rustup target add xtensa-esp32s3-espidf
+
+# echo "⚡ Building ESP32 binary..."
+# cargo build --release
+
+echo ""
+echo "✅ All Rust builds completed successfully!"
+echo "🌐 Web frontend: built and embedded in server"
+echo "📦 Standard Rust crates: built with --release"
+echo "🕸️ WASM: optimized and compressed"
+echo "⚡ ESP32: SKIPPED, need manual build"
+echo ""
+echo "Rust components ready! 🦀"
