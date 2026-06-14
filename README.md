@@ -1,4 +1,4 @@
-# Toboggan 🛷
+# Toboggan 🛝
 
 A modern, multi-platform presentation system built in Rust with real-time synchronization across devices.
 
@@ -55,6 +55,19 @@ toboggan tui
 toboggan desktop
 ```
 
+### Read the guide
+
+Toboggan ships with a full authoring guide, served alongside any deck:
+
+```bash
+# Serve any presentation, then open the guide route
+toboggan my-talk
+open http://localhost:8080/guide
+```
+
+The guide's source lives in [`examples/toboggan-guide/`](examples/toboggan-guide) — a
+real Toboggan deck you can read on disk or lint/build like any other.
+
 ### Build, lint, export
 
 ```bash
@@ -66,6 +79,10 @@ toboggan thumbnails ./my-talk/slides           # per-slide overview + search
 
 ### Author with an LLM
 
+`toboggan new` already writes a project-local `.mcp.json` and installs the authoring
+skill by default (opt out with `--no-mcp` / `--no-skill`). For an existing deck, wire
+them up manually:
+
 ```bash
 toboggan mcp init     # register the MCP authoring server with Claude Code
 toboggan skills       # install the authoring skill
@@ -75,9 +92,10 @@ toboggan skills       # install the authoring skill
 
 ### Prerequisites
 
-- Rust 1.83+ (2024 edition)
+- Rust 1.95+ (2024 edition)
 - Node.js 20+ (for web frontend)
 - `mise` (optional, for task automation)
+- `typst` (optional, for `pdf` and `thumbnails`)
 
 ### Build all components
 
@@ -131,18 +149,30 @@ Toboggan is designed as a modular system with clear separation of concerns. The 
 
 ### Workspace Components
 
+Workspace members:
+
 ```
 toboggan/
-├── toboggan-core/       # Core domain models and business logic
-├── toboggan-server/     # Axum server with WebSocket & REST
+├── toboggan-core/       # Domain model (Talk, Slide, Content, …)
+├── toboggan-stats/      # Word/step/image counts and HTML inspection
+├── toboggan-cli/        # Folder parser + renderers (toml/json/yaml/html/typst) + thumbnails
+├── toboggan-server/     # Axum WebSocket/REST server, homepage, PDF, guide
+├── toboggan-lint/       # Library-first presentation linter (rules + LintReport)
+├── toboggan-mcp/        # rmcp stdio MCP server (outline/stats/lint/scaffold/mutations)
 ├── toboggan-client/     # Shared client library with WebSocket support
-├── toboggan-cli/        # Command-line tool for Markdown → TOML conversion
-├── toboggan-web/        # Web frontend with TypeScript and WASM client
 ├── toboggan-tui/        # Terminal UI client using ratatui
-├── toboggan-desktop/    # Native desktop app using iced framework
-├── toboggan-mobile/        # iOS Rust library with UniFFI bindings
-├── TobogganApp/         # Native iOS app using SwiftUI
-└── toboggan-esp32/      # ESP32 embedded client (excluded from workspace)
+├── toboggan-desktop/    # Native desktop app using iced
+├── toboggan-mobile/     # iOS/Android Rust library with UniFFI bindings
+└── toboggan/            # The unified `toboggan` CLI binary that dispatches to all of the above
+```
+
+Companion directories outside the Cargo workspace:
+
+```
+├── toboggan-web/        # TypeScript + WASM web frontend (built into the embedded dist)
+├── TobogganApp/         # Native iOS app (SwiftUI)
+├── toboggan-esp32/      # ESP32 embedded client (excluded from the workspace)
+└── toboggan-py/         # Python bindings (excluded from the workspace)
 ```
 
 ### Core Design Principles
@@ -243,6 +273,11 @@ We welcome contributions to Toboggan! Here's how you can help:
 3. Make your changes following the project guidelines
 4. Run tests: `mise check` or `cargo test`
 5. Submit a pull request
+
+> **Before you push (especially with jj):** the `prek` checks are installed as
+> *git* hooks, which **jj does not run**. Run `mise check` (or `prek run
+> --all-files`) yourself before pushing. CI re-runs the Rust gate on every push
+> and pull request regardless.
 
 ### Development Guidelines
 

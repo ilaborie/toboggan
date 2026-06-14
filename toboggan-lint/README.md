@@ -18,12 +18,27 @@ for diagnostic in &report.diagnostics {
 
 ## Rules
 
-`pause/in-part`, `pause/empty-step`, `pause/too-many-steps`, `term/in-part`,
-`term/unresolved-cwd`, `term/duplicate-cwd`, `html/nested-step`,
+`pause/in-part` (cover and part slides), `pause/empty-step`, `pause/too-many-steps`,
+`term/in-part`, `term/unresolved-cwd`, `term/duplicate-cwd`, `html/nested-step`,
 `html/img-missing-alt`, `html/raw-script`, `html/heading-h1`,
 `structure/empty-slide`, `structure/title-missing`, `structure/duplicate-part-name`,
 `content/excessive-words`, `content/too-many-images`.
 
-The optional `spell` feature adds `spelling/typo` via the `typos` CLI.
+With the optional `spell` feature, `spelling/typo` runs as part of the default
+suite via the `typos` CLI. It degrades silently when `typos` is not installed.
 
-Use it from the unified CLI with `toboggan lint <folder>`.
+## Disabling rules per slide
+
+Diagnostics are per-slide, so a rule can be silenced for a whole slide via front
+matter or a body directive (per-line disabling is not supported):
+
+```md
++++
+disabled_rules = ["html/img-missing-alt"]
++++
+
+<!-- lint-disable html/raw-script pause/empty-step -->
+```
+
+Use it from the unified CLI with `toboggan lint <folder>` (`--no-spell` opts out
+of spell checking).

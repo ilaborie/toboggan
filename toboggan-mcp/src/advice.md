@@ -21,6 +21,7 @@ title = "Slide title"
 classes = ["no_title"]   # hide the rendered title (use a body `#` heading instead)
 skip = true              # hide this slide
 hidden_in = ["pdf"]      # exclude from a render target (web | pdf)
+disabled_rules = ["html/img-missing-alt"]  # silence lint rules for this slide
 +++
 ```
 
@@ -29,6 +30,7 @@ hidden_in = ["pdf"]      # exclude from a render target (web | pdf)
 - `<!-- pause -->` — split the slide into reveal steps. Never use on cover/part slides.
 - `<!-- pause :class -->` — add CSS classes to a step.
 - `<!-- notes -->` — everything after is speaker notes.
+- `<!-- lint-disable rule-id … -->` — silence lint rules for this slide.
 - terminals — see the guide for the `terminal` directive.
 
 ## Quality tips
