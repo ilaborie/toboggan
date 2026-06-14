@@ -16,15 +16,13 @@ toboggan-cli = { path = "../toboggan-cli" }
 toboggan-stats = { path = "../toboggan-stats" }
 toboggan-lint = { path = "../toboggan-lint" }
 
-rmcp = { version = "1.7.0", features = ["server", "macros", "transport-io"] }
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-std"] }
+rmcp = { workspace = true, features = ["server", "macros", "transport-io"] }
 anyhow = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-schemars = "1"
-tracing = { workspace = true }
+schemars = { workspace = true }
 tempfile = { workspace = true }
-toml_edit = "0.25.12"
+toml_edit = { workspace = true }
 toml.workspace = true
 
 [lints]

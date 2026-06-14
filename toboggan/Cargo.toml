@@ -21,7 +21,6 @@ toboggan-server = { path = "../toboggan-server" }
 toboggan-tui = { path = "../toboggan-tui" }
 toboggan-desktop = { path = "../toboggan-desktop" }
 toboggan-client = { path = "../toboggan-client" }
-toboggan-stats = { path = "../toboggan-stats" }
 toboggan-lint = { path = "../toboggan-lint", features = ["spell"] }
 toboggan-mcp = { path = "../toboggan-mcp" }
 
