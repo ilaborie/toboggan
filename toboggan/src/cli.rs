@@ -143,6 +143,10 @@ pub(crate) struct ServeOptions {
     /// Shell to spawn for embedded terminals
     #[arg(long, env = "TOBOGGAN_SHELL")]
     pub(crate) shell: Option<String>,
+
+    /// Open the presentation in the default browser once the server is ready
+    #[arg(long, env = "TOBOGGAN_OPEN")]
+    pub(crate) open: bool,
 }
 
 impl ServeOptions {
@@ -160,6 +164,7 @@ impl ServeOptions {
             thumbnails_dir: self.thumbnails_dir,
             watch,
             shell: self.shell,
+            open: self.open,
         }
     }
 }
@@ -276,6 +281,14 @@ pub(crate) struct NewArgs {
     /// Version control to initialize
     #[arg(long, value_enum, default_value_t = Vcs::Jj)]
     pub(crate) vcs: Vcs,
+
+    /// Skip writing the project-local `.mcp.json` MCP server config
+    #[arg(long)]
+    pub(crate) no_mcp: bool,
+
+    /// Skip installing the Claude Code authoring skill
+    #[arg(long)]
+    pub(crate) no_skill: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -361,9 +374,9 @@ pub(crate) struct LintArgs {
     #[arg(long)]
     pub(crate) json: bool,
 
-    /// Also run spell checking via the `typos` CLI
+    /// Skip spell checking (runs by default via the `typos` CLI when available)
     #[arg(long)]
-    pub(crate) spell: bool,
+    pub(crate) no_spell: bool,
 
     #[command(flatten)]
     pub(crate) build: BuildOptions,

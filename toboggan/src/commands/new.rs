@@ -4,7 +4,7 @@ use std::process::Command;
 use toboggan_core::Date;
 use tracing::{info, warn};
 
-use crate::cli::{NewArgs, Vcs};
+use crate::cli::{McpClient, NewArgs, SkillsArgs, Vcs};
 
 /// Scaffolds a new presentation folder and initializes version control.
 ///
@@ -28,6 +28,24 @@ pub(crate) fn scaffold(args: NewArgs) -> anyhow::Result<()> {
     init_vcs(dir, args.vcs);
 
     println!("✅ Created presentation \"{title}\" at {}", dir.display());
+
+    // Wire up Claude Code authoring by default (opt out with --no-mcp/--no-skill).
+    if !args.no_mcp {
+        match toboggan_mcp::write_mcp_json(dir) {
+            Ok(path) => println!("✅ Wrote MCP config at {}", path.display()),
+            Err(err) => warn!("could not write .mcp.json ({err}); skipping MCP setup"),
+        }
+    }
+    if !args.no_skill {
+        let skill_args = SkillsArgs {
+            target: McpClient::ClaudeCode,
+            dir: Some(dir.clone()),
+        };
+        if let Err(err) = crate::commands::skills::install(skill_args) {
+            warn!("could not install authoring skill ({err}); skipping");
+        }
+    }
+
     println!("   Build & serve it with:  toboggan {}", dir.display());
     Ok(())
 }

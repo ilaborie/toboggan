@@ -8,7 +8,7 @@ use miette::SourceSpan;
 use toboggan_core::{Content, Slide, SlideKind, TerminalConfig};
 
 use crate::error::{Result, TobogganCliError};
-use crate::parser::comments::{is_notes, parse_code, parse_pause, parse_term};
+use crate::parser::comments::{is_notes, parse_code, parse_lint_disable, parse_pause, parse_term};
 use crate::parser::directory::{extract_node_text, parse_frontmatter};
 use crate::parser::{
     ContentRenderer, CssClasses, DEFAULT_SLIDE_TITLE, FrontMatter, HtmlRenderer, MarkdownNode,
@@ -118,6 +118,7 @@ pub enum SlideContentParser {
         title: Option<String>,
         inner: InnerContent,
         terminals: Vec<TerminalConfig>,
+        lint_disabled: Vec<String>,
     },
     Notes {
         fm: FrontMatter,
@@ -125,6 +126,7 @@ pub enum SlideContentParser {
         inner: InnerContent,
         notes: InnerContent,
         terminals: Vec<TerminalConfig>,
+        lint_disabled: Vec<String>,
     },
 }
 
@@ -162,6 +164,7 @@ impl SlideContentParser {
             title,
             inner,
             terminals,
+            lint_disabled,
         } = self
         {
             *self = Self::Notes {
@@ -170,6 +173,7 @@ impl SlideContentParser {
                 inner: inner.clone(),
                 notes: InnerContent::default(),
                 terminals: terminals.clone(),
+                lint_disabled: lint_disabled.clone(),
             };
         }
     }
@@ -183,11 +187,15 @@ impl SlideContentParser {
                     title: None,
                     inner: InnerContent::default(),
                     terminals: Vec::new(),
+                    lint_disabled: Vec::new(),
                 };
                 self.handle(elt, file_name)?;
             }
             Self::Base {
-                inner, terminals, ..
+                inner,
+                terminals,
+                lint_disabled,
+                ..
             } => match data {
                 NodeValue::FrontMatter(content) => {
                     self.handle_frontmatter(content, file_name)?;
@@ -202,6 +210,11 @@ impl SlideContentParser {
                 }
                 NodeValue::HtmlBlock(html) if is_notes(&html.literal) => {
                     self.transition_to_notes();
+                }
+                // `<!-- lint-disable rule -->` is a directive: collect the rule
+                // ids and drop the comment from the rendered body.
+                NodeValue::HtmlBlock(html) if parse_lint_disable(&html.literal).is_some() => {
+                    lint_disabled.extend(parse_lint_disable(&html.literal).unwrap_or_default());
                 }
                 NodeValue::HtmlBlock(html) => match parse_term(&html.literal) {
                     Some((cwd, theme, cmd)) => {
@@ -263,6 +276,16 @@ impl SlideContentParser {
         }
     }
 
+    /// Rule ids silenced via `<!-- lint-disable -->` comments in the body.
+    fn lint_disabled(&self) -> Vec<String> {
+        match self {
+            Self::Init => Vec::new(),
+            Self::Base { lint_disabled, .. } | Self::Notes { lint_disabled, .. } => {
+                lint_disabled.clone()
+            }
+        }
+    }
+
     fn body_source(&self) -> Option<String> {
         match self {
             Self::Init => None,
@@ -299,6 +322,15 @@ impl SlideContentParser {
 
         let body = self.body(&renderer);
 
+        // Per-slide lint silencing: front matter `disabled_rules` plus any
+        // `<!-- lint-disable -->` body directives, de-duplicated.
+        let mut lint_disabled = front_matter.disabled_rules.clone();
+        for rule in self.lint_disabled() {
+            if !lint_disabled.contains(&rule) {
+                lint_disabled.push(rule);
+            }
+        }
+
         let result = Slide {
             kind: SlideKind::Standard,
             style,
@@ -325,6 +357,7 @@ impl SlideContentParser {
                 })
                 .collect(),
             quake_terminal_cwd: front_matter.quake_cwd.clone(),
+            lint_disabled,
         };
 
         Ok((result, front_matter))
@@ -382,6 +415,37 @@ mod tests {
 
         assert_eq!(slide.title.to_string(), "Test Title");
         assert!(matches!(slide.body, Content::Html { .. }));
+
+        Ok(())
+    }
+
+    #[test]
+    fn lint_disable_from_front_matter_and_comment() -> Result<()> {
+        let markdown = r#"+++
+title = "T"
+disabled_rules = ["html/img-missing-alt"]
++++
+
+# T
+
+<!-- lint-disable html/raw-script pause/empty-step -->
+
+Body."#;
+        let (slide, _) = parse_markdown_content(markdown)?;
+
+        assert!(
+            slide
+                .lint_disabled
+                .contains(&"html/img-missing-alt".to_owned())
+        );
+        assert!(slide.lint_disabled.contains(&"html/raw-script".to_owned()));
+        assert!(slide.lint_disabled.contains(&"pause/empty-step".to_owned()));
+        // The directive comment must not leak into the rendered body.
+        assert!(
+            !slide.body.to_string().contains("lint-disable"),
+            "directive leaked into body: {}",
+            slide.body
+        );
 
         Ok(())
     }

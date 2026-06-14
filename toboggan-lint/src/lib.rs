@@ -17,8 +17,6 @@ pub use self::diagnostic::{LintDiagnostic, RuleId, Severity, SlideRef};
 pub use self::report::LintReport;
 pub use self::rule::{LintConfig, Rule, RuleContext};
 pub use self::rules::all_rules;
-#[cfg(feature = "spell")]
-pub use self::rules::spelling::spell_check;
 
 /// Lints `talk` with the given configuration and returns a [`LintReport`].
 #[must_use]
@@ -43,7 +41,15 @@ pub fn lint(talk: &Talk, config: &LintConfig) -> LintReport {
             config,
         };
         for rule in &rules {
-            if config.is_enabled(rule.id()) {
+            // A rule runs unless it is globally disabled or silenced for this
+            // slide via front matter / a `<!-- lint-disable -->` body comment.
+            // Talk-level rules are not affected by per-slide directives.
+            let id = rule.id();
+            let disabled_here = slide
+                .lint_disabled
+                .iter()
+                .any(|disabled| disabled == id.as_str());
+            if config.is_enabled(id) && !disabled_here {
                 rule.check_slide(&context, &mut out);
             }
         }
@@ -95,6 +101,55 @@ mod tests {
         assert_eq!(diagnostic.severity, Severity::Warning);
         assert_eq!(report.warnings, 1);
         assert_eq!(report.errors, 0);
+    }
+
+    #[test]
+    fn detects_pause_in_cover() {
+        let cover = Slide {
+            kind: SlideKind::Cover,
+            title: Content::text("Welcome"),
+            body: Content::html(r#"<div class="step">oops</div>"#),
+            ..Default::default()
+        };
+        let report = lint(&talk_with(vec![cover]), &LintConfig::default());
+        let diagnostic = report
+            .diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.rule.as_str() == "pause/in-part")
+            .unwrap_or_else(|| panic!("expected pause/in-part, got {:?}", report.diagnostics));
+        assert_eq!(diagnostic.severity, Severity::Warning);
+    }
+
+    #[test]
+    fn per_slide_disable_suppresses_rule() {
+        let slide = Slide::new("T")
+            .with_body(Content::html(r#"<img src="a.png">"#))
+            .with_lint_disabled(["html/img-missing-alt".to_owned()]);
+        let report = lint(&talk_with(vec![slide]), &LintConfig::default());
+        assert!(
+            !report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.rule.as_str() == "html/img-missing-alt"),
+            "disabled rule should not fire: {:?}",
+            report.diagnostics
+        );
+    }
+
+    #[test]
+    fn per_slide_disable_leaves_other_rules() {
+        let slide = Slide::new("T")
+            .with_body(Content::html(r#"<img src="a.png">"#))
+            .with_lint_disabled(["pause/empty-step".to_owned()]);
+        let report = lint(&talk_with(vec![slide]), &LintConfig::default());
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.rule.as_str() == "html/img-missing-alt"),
+            "unrelated rule should still fire: {:?}",
+            report.diagnostics
+        );
     }
 
     #[test]

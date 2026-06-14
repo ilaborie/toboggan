@@ -609,6 +609,14 @@
             ],
             "default": "Standard"
           },
+          "lint_disabled": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Lint rule ids silenced for this slide (front matter `disabled_rules` or a\n`<!-- lint-disable rule-id -->` body comment). Disabling is per-slide:\ndiagnostics are not line-tracked, so a directive covers the whole slide.",
+            "default": []
+          },
           "notes": {
             "oneOf": [
               {

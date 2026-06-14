@@ -8,7 +8,7 @@ mod init;
 mod server;
 mod workspace;
 
-pub use self::init::mcp_init;
+pub use self::init::{mcp_init, write_mcp_json};
 pub use self::server::TobogganServer;
 
 pub(crate) const ADVICE: &str = include_str!("advice.md");

@@ -108,6 +108,11 @@ pub struct Slide {
     /// Resolved against [`Talk::source_dir`] when relative.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quake_terminal_cwd: Option<String>,
+    /// Lint rule ids silenced for this slide (front matter `disabled_rules` or a
+    /// `<!-- lint-disable rule-id -->` body comment). Disabling is per-slide:
+    /// diagnostics are not line-tracked, so a directive covers the whole slide.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub lint_disabled: Vec<String>,
 }
 
 /// Borrowed view over a slide's body content.
@@ -221,6 +226,12 @@ impl Slide {
     #[must_use]
     pub fn with_quake_terminal_cwd(mut self, cwd: impl Into<String>) -> Self {
         self.quake_terminal_cwd = Some(cwd.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_lint_disabled(mut self, rules: impl IntoIterator<Item = String>) -> Self {
+        self.lint_disabled = Vec::from_iter(rules);
         self
     }
 

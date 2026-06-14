@@ -15,7 +15,7 @@ pub(crate) fn run_lint(args: LintArgs) -> anyhow::Result<()> {
         input,
         deny,
         json,
-        spell,
+        no_spell,
         build,
     } = args;
 
@@ -24,13 +24,12 @@ pub(crate) fn run_lint(args: LintArgs) -> anyhow::Result<()> {
         .map_err(|err| anyhow::anyhow!("{err}"))?;
     let talk = parse_result.to_talk();
 
-    let mut report = toboggan_lint::lint(&talk, &LintConfig::default());
-
-    if spell {
-        let mut diagnostics = std::mem::take(&mut report.diagnostics);
-        diagnostics.extend(toboggan_lint::spell_check(&talk));
-        report = LintReport::new(diagnostics);
+    // Spell checking (`spelling/typo`) runs by default; `--no-spell` opts out.
+    let mut config = LintConfig::default();
+    if no_spell {
+        config.disabled.insert("spelling/typo".to_owned());
     }
+    let report = toboggan_lint::lint(&talk, &config);
 
     if json {
         let output = serde_json::to_string_pretty(&report)

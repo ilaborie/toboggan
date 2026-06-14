@@ -53,6 +53,10 @@ pub struct Settings {
     /// Defaults to the `SHELL` environment variable, then `sh`.
     #[clap(long, env = "TOBOGGAN_SHELL")]
     pub shell: Option<String>,
+
+    /// Open the presentation in the default browser once the server is ready
+    #[clap(long, env = "TOBOGGAN_OPEN")]
+    pub open: bool,
 }
 
 impl Settings {

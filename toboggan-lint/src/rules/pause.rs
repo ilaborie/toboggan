@@ -4,7 +4,7 @@ use toboggan_stats::HtmlDocument;
 use crate::diagnostic::{LintDiagnostic, RuleId, Severity};
 use crate::rule::{Rule, RuleContext, body_html};
 
-/// Part (section) slides should not contain reveal steps.
+/// Cover and part (section) slides should not contain reveal steps.
 pub(crate) struct PauseInPart;
 
 impl Rule for PauseInPart {
@@ -17,9 +17,11 @@ impl Rule for PauseInPart {
     }
 
     fn check_slide(&self, context: &RuleContext<'_>, out: &mut Vec<LintDiagnostic>) {
-        if context.slide.kind != SlideKind::Part {
-            return;
-        }
+        let kind = match context.slide.kind {
+            SlideKind::Cover => "cover",
+            SlideKind::Part => "part",
+            SlideKind::Standard => return,
+        };
         let steps = HtmlDocument::parse_fragment(body_html(context.slide)).count_steps();
         if steps > 0 {
             out.push(
@@ -27,9 +29,9 @@ impl Rule for PauseInPart {
                     self.id(),
                     self.default_severity(),
                     context.slide_ref,
-                    format!("part slide has {steps} reveal step(s)"),
+                    format!("{kind} slide has {steps} reveal step(s)"),
                 )
-                .with_help("remove `pause` comments from part (section) slides"),
+                .with_help("remove `pause` comments from cover and part (section) slides"),
             );
         }
     }

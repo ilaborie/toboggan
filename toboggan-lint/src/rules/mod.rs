@@ -12,7 +12,7 @@ use crate::rule::Rule;
 /// Returns every built-in lint rule.
 #[must_use]
 pub fn all_rules() -> Vec<Box<dyn Rule>> {
-    vec![
+    let mut rules: Vec<Box<dyn Rule>> = vec![
         Box::new(pause::PauseInPart),
         Box::new(pause::EmptyStep),
         Box::new(pause::TooManySteps),
@@ -28,5 +28,11 @@ pub fn all_rules() -> Vec<Box<dyn Rule>> {
         Box::new(structure::DuplicatePartName),
         Box::new(content::ExcessiveWords),
         Box::new(content::TooManyImages),
-    ]
+    ];
+    // Spell checking is opt-in at compile time (needs the `typos` CLI at runtime);
+    // it degrades silently when `typos` is absent. Disable per deck with
+    // `--no-spell` or `disabled_rules = ["spelling/typo"]`.
+    #[cfg(feature = "spell")]
+    rules.push(Box::new(spelling::SpellCheck));
+    rules
 }

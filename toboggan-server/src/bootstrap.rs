@@ -63,6 +63,16 @@ pub async fn launch_with_talk(
         .await
         .with_context(|| format!("Connecting to {addr} ..."))?;
 
+    if settings.open {
+        let url = format!("http://{host}:{port}/");
+        info!(%url, "Opening presentation in the default browser");
+        tokio::task::spawn_blocking(move || {
+            if let Err(err) = open::that(&url) {
+                warn!(%url, %err, "Could not open the browser");
+            }
+        });
+    }
+
     let talk_service = TalkService::new(talk).context("build talk service")?;
     let client_service = ClientService::new(max_clients);
     let cleanup_service = client_service.clone();

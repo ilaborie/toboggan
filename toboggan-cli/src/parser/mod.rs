@@ -58,6 +58,10 @@ pub struct FrontMatter {
     /// Falls back to the talk-level default. Relative paths resolve against the talk dir.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quake_cwd: Option<String>,
+
+    /// Lint rule ids to silence for this slide (e.g. `["html/img-missing-alt"]`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub disabled_rules: Vec<String>,
 }
 
 impl FrontMatter {
