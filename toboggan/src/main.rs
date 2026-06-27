@@ -1,14 +1,14 @@
 use std::future::Future;
 
-use clap::Parser;
 use clap::error::ErrorKind;
+use clap::{CommandFactory, Parser};
 use miette::IntoDiagnostic;
 use tracing_subscriber::EnvFilter;
 
 mod cli;
 mod commands;
 
-use cli::{Cli, Commands, McpAction};
+use cli::{Cli, Commands, CompletionArgs, McpAction};
 
 fn main() -> miette::Result<()> {
     let cli = match Cli::try_parse() {
@@ -81,7 +81,18 @@ fn dispatch(cli: Cli) -> miette::Result<()> {
             }
         }
         Some(Commands::Skills(args)) => to_miette(commands::skills::install(args)),
+        Some(Commands::Completion(args)) => {
+            generate_completion(&args);
+            Ok(())
+        }
     }
+}
+
+/// Writes a shell completion script for `toboggan` to stdout.
+fn generate_completion(args: &CompletionArgs) {
+    let mut command = Cli::command();
+    let bin_name = command.get_name().to_owned();
+    clap_complete::generate(args.shell, &mut command, bin_name, &mut std::io::stdout());
 }
 
 /// Runs an async server/client task on a dedicated multi-thread runtime.

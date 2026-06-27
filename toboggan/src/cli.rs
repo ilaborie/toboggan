@@ -2,6 +2,7 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
+use clap_complete::Shell;
 use toboggan_cli::OutputFormat;
 use toboggan_client::TobogganConfig;
 use toboggan_core::Date;
@@ -59,6 +60,8 @@ pub(crate) enum Commands {
     Mcp(McpArgs),
     /// Install the authoring skill for an LLM client
     Skills(SkillsArgs),
+    /// Generate a shell completion script (write it to your shell's completions dir)
+    Completion(CompletionArgs),
 }
 
 /// Build options shared by `build`, the default action, `stats`, `pdf`, ...
@@ -446,6 +449,13 @@ pub(crate) struct SkillsArgs {
     /// Directory to install the skill into (default: current directory)
     #[arg(long)]
     pub(crate) dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct CompletionArgs {
+    /// Shell to generate the completion script for
+    #[arg(value_enum)]
+    pub(crate) shell: Shell,
 }
 
 fn parse_date(input: &str) -> Result<Date, String> {

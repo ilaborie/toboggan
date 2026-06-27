@@ -88,6 +88,17 @@ toboggan mcp init     # register the MCP authoring server with Claude Code
 toboggan skills       # install the authoring skill
 ```
 
+### Shell completions
+
+Generate a completion script for your shell (`bash`, `zsh`, `fish`, `elvish`,
+`powershell`) and drop it where your shell looks for completions:
+
+```bash
+toboggan completion fish > ~/.config/fish/completions/toboggan.fish
+toboggan completion zsh  > ~/.zfunc/_toboggan   # ensure ~/.zfunc is on $fpath
+toboggan completion bash > /etc/bash_completion.d/toboggan
+```
+
 ## Building
 
 ### Prerequisites
