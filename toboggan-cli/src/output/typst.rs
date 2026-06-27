@@ -212,7 +212,7 @@ fn content_to_typst(content: &Content) -> String {
         Content::Empty => String::new(),
         Content::Text { text } => escape_typst(text),
         Content::Html { alt: Some(alt), .. } => escape_typst(alt),
-        Content::Html { raw: _, .. } => {
+        Content::Html { .. } => {
             tracing::warn!(
                 "Slide content is HTML without alt text; emitting a visible Typst \
                  placeholder. Add alt text or use body_source for proper rendering."
