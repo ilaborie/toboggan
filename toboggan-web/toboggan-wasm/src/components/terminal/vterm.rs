@@ -306,6 +306,25 @@ impl VirtualTerminal {
     }
 }
 
+/// Measure a monospace cell's advance width for `font`, ceiled to a whole pixel
+/// to avoid sub-pixel gaps between cells. Falls back to `font_size * 0.6` when
+/// the platform cannot measure text; returns `None` only if the 2D context is
+/// unavailable.
+fn measure_char_width(canvas: &HtmlCanvasElement, font: &str, font_size: f64) -> Option<f64> {
+    let ctx = canvas
+        .get_context("2d")
+        .ok()
+        .flatten()?
+        .dyn_into::<web_sys::CanvasRenderingContext2d>()
+        .ok()?;
+    ctx.set_font(font);
+    Some(
+        ctx.measure_text("M")
+            .map_or(font_size * 0.6, |metrics| metrics.width())
+            .ceil(),
+    )
+}
+
 impl TermScreen {
     #[allow(clippy::similar_names)]
     fn new(cols: u16, rows: u16, theme: Theme) -> Self {
@@ -431,29 +450,32 @@ impl TermScreen {
         clippy::cast_precision_loss
     )]
     fn render_to_canvas(&self, canvas: &HtmlCanvasElement, font_size: f64) {
-        let font_family =
-            "'JetBrainsMono Nerd Font Mono', 'MonaspiceNe Nerd Font', 'JetBrainsMono Nerd Font', 'Inconsolata', monospace";
+        let font_family = "'JetBrainsMono Nerd Font Mono', 'MonaspiceNe Nerd Font', 'JetBrainsMono Nerd Font', 'Inconsolata', monospace";
         let font = format!("{font_size}px {font_family}");
 
         // Measure actual character width and ceil to avoid sub-pixel gaps
-        let char_width = {
-            let Ok(Some(ctx)) = canvas.get_context("2d") else {
-                error!("Failed to get 2d context for character measurement");
-                return;
-            };
-            let Ok(ctx) = ctx.dyn_into::<web_sys::CanvasRenderingContext2d>() else {
-                error!("Failed to cast to CanvasRenderingContext2d for measurement");
-                return;
-            };
-            ctx.set_font(&font);
-            ctx.measure_text("M")
-                .map_or(font_size * 0.6, |m| m.width())
-                .ceil()
+        let Some(char_width) = measure_char_width(canvas, &font, font_size) else {
+            error!("Failed to measure terminal character width");
+            return;
         };
         let char_height = (font_size * 1.3).ceil();
 
-        canvas.set_width((f64::from(self.cols) * char_width) as u32);
-        canvas.set_height((f64::from(self.rows) * char_height) as u32);
+        // Logical (CSS px) grid size.
+        let css_width = f64::from(self.cols) * char_width;
+        let css_height = f64::from(self.rows) * char_height;
+
+        // Size the backing store at device resolution so glyphs stay crisp on
+        // HiDPI screens, and pin the CSS size so the browser does not rescale
+        // (and blur) the canvas to fit its box.
+        let dpr = web_sys::window()
+            .map(|win| win.device_pixel_ratio())
+            .filter(|ratio| *ratio > 0.0)
+            .unwrap_or(1.0);
+        canvas.set_width((css_width * dpr) as u32);
+        canvas.set_height((css_height * dpr) as u32);
+        let style = canvas.style();
+        let _ = style.set_property("width", &format!("{css_width}px"));
+        let _ = style.set_property("height", &format!("{css_height}px"));
 
         let Ok(Some(ctx)) = canvas.get_context("2d") else {
             error!("Failed to get 2d context for rendering");
@@ -463,15 +485,13 @@ impl TermScreen {
             error!("Failed to cast to CanvasRenderingContext2d for rendering");
             return;
         };
+        // Draw in logical pixels; the scale maps them onto the device-resolution
+        // backing store. `set_width` above reset the transform, so this applies once.
+        let _ = ctx.scale(dpr, dpr);
 
         // Fill entire canvas with default background
         ctx.set_fill_style_str(&self.default_bg.to_css());
-        ctx.fill_rect(
-            0.0,
-            0.0,
-            f64::from(canvas.width()),
-            f64::from(canvas.height()),
-        );
+        ctx.fill_rect(0.0, 0.0, css_width, css_height);
 
         // Pass 1: draw all cell backgrounds
         for (row_idx, row) in self.grid.iter().enumerate() {

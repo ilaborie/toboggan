@@ -12,7 +12,9 @@ use toboggan_core::{TerminalConfig, Theme};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{Element, HtmlCanvasElement, HtmlElement, KeyboardEvent, Node, ShadowRoot};
+use web_sys::{
+    Element, HtmlCanvasElement, HtmlElement, KeyboardEvent, Node, ResizeObserver, ShadowRoot,
+};
 
 use self::vterm::VirtualTerminal;
 use crate::components::WasmElement;
@@ -128,6 +130,10 @@ impl TobogganTerminalElement {
         // Set up action channel (shared between keyboard handler and button clicks)
         let (tx_key, rx_key) = mpsc::unbounded::<KeyAction>();
         setup_keyboard_handler(&canvas, tx_key.clone());
+        // Re-fit the grid whenever the body's box changes: the very first
+        // (post-layout) callback corrects the initial 0-size fallback, and later
+        // ones handle window resizes and side-by-side flex reflow.
+        setup_resize_observer(&body, tx_key.clone());
         setup_button_click(&btn_maximize, tx_key.clone(), KeyAction::Expand);
         setup_button_click(&btn_minimize, tx_key, KeyAction::Restore);
 
@@ -148,8 +154,16 @@ impl TobogganTerminalElement {
     }
 
     pub(crate) fn stop_terminal(&self) {
-        if let Some(container) = &self.container {
-            container.set_inner_html("");
+        let Some(container) = &self.container else {
+            return;
+        };
+        container.set_inner_html("");
+        // A fullscreen terminal's shadow host is relocated to <body> (so
+        // `position: fixed` escapes the slide's clipping). Clearing the slide's
+        // own container never touches it, so the host would keep floating over
+        // later slides — remove it directly, wherever it now lives.
+        if let Ok(root) = container.get_root_node().dyn_into::<ShadowRoot>() {
+            root.host().remove();
         }
     }
 }
@@ -190,7 +204,7 @@ fn shadow_host(el: &HtmlElement) -> Option<Element> {
         .map(|root| root.host())
 }
 
-/// Message from keyboard/button handler to terminal session
+/// Message from keyboard/button/resize handler to terminal session
 #[derive(Clone)]
 enum KeyAction {
     Input(String),
@@ -198,6 +212,30 @@ enum KeyAction {
     FontDecrease,
     Expand,
     Restore,
+    /// The terminal body changed size (initial layout, window resize, flex
+    /// reflow); re-fit the grid to the new dimensions.
+    Resize,
+}
+
+/// Observe the terminal body and request a re-fit on every size change.
+///
+/// The observer (and its closure) are intentionally leaked, matching the
+/// keyboard/button handlers: the terminal lives for the slide's lifetime and is
+/// torn down by clearing the container, after which the observer stops firing.
+fn setup_resize_observer(target: &Element, tx: mpsc::UnboundedSender<KeyAction>) {
+    let closure = Closure::<dyn FnMut()>::new(move || {
+        // Session-ended sends fail silently; the observer just stops mattering.
+        let _ = tx.unbounded_send(KeyAction::Resize);
+    });
+    match ResizeObserver::new(closure.as_ref().unchecked_ref()) {
+        Ok(observer) => {
+            observer.observe(target);
+            // Keep the observer alive for the page's lifetime.
+            std::mem::forget(observer);
+        }
+        Err(err) => error!("Failed to create ResizeObserver:", err),
+    }
+    closure.forget();
 }
 
 fn setup_button_click(btn: &Element, tx: mpsc::UnboundedSender<KeyAction>, action: KeyAction) {
@@ -256,6 +294,9 @@ async fn run_terminal_session(
         // then restore it to its original position on collapse.
         let host_el = window_el_kbd.as_ref().and_then(shadow_host);
         let mut fullscreen_origin: Option<(Node, Option<Node>)> = None;
+        // Last grid size sent to the server, so a `Resize` that resolves to the
+        // same dimensions (a spurious observer callback) is a no-op.
+        let mut last_dims = (DEFAULT_COLS, initial_rows);
         while let Some(action) = rx_key.next().await {
             match action {
                 KeyAction::Input(input) => {
@@ -276,6 +317,7 @@ async fn run_terminal_session(
                     };
                     let (new_cols, new_rows) =
                         compute_terminal_size(window_el_kbd.as_ref(), new_size);
+                    last_dims = (new_cols, new_rows);
                     resize_and_render(
                         &vterm_kbd,
                         &canvas_kbd,
@@ -308,6 +350,7 @@ async fn run_terminal_session(
                     }
                     let size = *font_size_kbd.borrow();
                     let (new_cols, new_rows) = compute_terminal_size(window_el_kbd.as_ref(), size);
+                    last_dims = (new_cols, new_rows);
                     resize_and_render(
                         &vterm_kbd,
                         &canvas_kbd,
@@ -334,6 +377,7 @@ async fn run_terminal_session(
                     }
                     let size = *font_size_kbd.borrow();
                     let (new_cols, new_rows) = compute_terminal_size(window_el_kbd.as_ref(), size);
+                    last_dims = (new_cols, new_rows);
                     resize_and_render(
                         &vterm_kbd,
                         &canvas_kbd,
@@ -344,6 +388,22 @@ async fn run_terminal_session(
                     )
                     .await;
                     let _ = canvas_kbd.focus();
+                }
+                KeyAction::Resize => {
+                    let size = *font_size_kbd.borrow();
+                    let new_dims = compute_terminal_size(window_el_kbd.as_ref(), size);
+                    if new_dims != last_dims {
+                        last_dims = new_dims;
+                        resize_and_render(
+                            &vterm_kbd,
+                            &canvas_kbd,
+                            &ws_write_kbd,
+                            new_dims.0,
+                            new_dims.1,
+                            size,
+                        )
+                        .await;
+                    }
                 }
             }
         }
