@@ -528,9 +528,13 @@ const BODY_H_PADDING: f64 = 6.0;
 
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn compute_terminal_size(window_el: Option<&HtmlElement>, font_size: f64) -> (u16, u16) {
-    let char_height = (font_size * 1.3).ceil();
-    // Character width approximation (0.6 ratio of font size)
-    let char_width = (font_size * 0.6).ceil();
+    // Measure the same font metrics the renderer uses so the row/col count matches
+    // the canvas cell size; fall back to the width/height heuristics when the font
+    // cannot be measured yet.
+    let (char_width, char_height) = vterm::cell_metrics_for(font_size)
+        .map_or((font_size * 0.6, font_size * 1.3), |metrics| {
+            (metrics.char_width, metrics.char_height)
+        });
 
     let (avail_w, avail_h) = window_el
         .map(|el| (f64::from(el.client_width()), f64::from(el.client_height())))

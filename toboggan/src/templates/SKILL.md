@@ -46,6 +46,8 @@ hidden_in = ["pdf"]      # exclude from a render target (web | pdf)
 - `<!-- pause -->` splits a slide into reveal steps. Never on cover/part slides.
 - `<!-- pause :class -->` adds CSS classes to a step.
 - `<!-- notes -->` — everything after is speaker notes.
+- `<!-- term: . -->` embeds a live terminal; add the `term-50vh` class to pin its
+  pane to half the viewport height.
 
 ## CLI
 

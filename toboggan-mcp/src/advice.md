@@ -31,7 +31,8 @@ disabled_rules = ["html/img-missing-alt"]  # silence lint rules for this slide
 - `<!-- pause :class -->` — add CSS classes to a step.
 - `<!-- notes -->` — everything after is speaker notes.
 - `<!-- lint-disable rule-id … -->` — silence lint rules for this slide.
-- terminals — see the guide for the `terminal` directive.
+- terminals — see the guide for the `terminal` directive. Add the `term-50vh`
+  class to pin an embedded terminal pane to half the viewport height.
 
 ## Quality tips
 

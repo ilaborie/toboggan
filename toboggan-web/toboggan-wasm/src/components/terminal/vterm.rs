@@ -306,11 +306,37 @@ impl VirtualTerminal {
     }
 }
 
-/// Measure a monospace cell's advance width for `font`, ceiled to a whole pixel
-/// to avoid sub-pixel gaps between cells. Falls back to `font_size * 0.6` when
-/// the platform cannot measure text; returns `None` only if the 2D context is
-/// unavailable.
-fn measure_char_width(canvas: &HtmlCanvasElement, font: &str, font_size: f64) -> Option<f64> {
+/// Monospace font stack used for the terminal canvas. Shared so the render path
+/// and the row/col sizing path (`compute_terminal_size`) measure the same font.
+pub(super) const FONT_FAMILY: &str = "'JetBrainsMono Nerd Font Mono', 'MonaspiceNe Nerd Font', 'JetBrainsMono Nerd Font', 'Inconsolata', monospace";
+
+/// Cell layout metrics derived from a browser font measurement.
+pub(super) struct CellMetrics {
+    /// Advance width of one monospace cell, ceiled to whole pixels.
+    pub(super) char_width: f64,
+    /// Full line-box height of the cell (font ascent + descent), ceiled.
+    pub(super) char_height: f64,
+    /// Distance from the top of the cell down to the text baseline.
+    pub(super) ascent: f64,
+}
+
+/// Measure monospace cell metrics for `font` using the canvas `TextMetrics`.
+///
+/// `char_width` is the advance of "M" (ceiled to avoid sub-pixel gaps between
+/// cells). The vertical metrics come from the font bounding box so a full-height
+/// glyph (e.g. a powerline separator, which fills the ascent→descent box) lands
+/// exactly on one cell and lines up with the cell background — anchoring by a
+/// fixed offset instead misregisters those glyphs against the background rect.
+///
+/// Falls back to width `font_size * 0.6` / height `font_size * 1.3` / ascent
+/// `font_size` when the platform reports no vertical metrics (e.g. the web font
+/// has not loaded yet); the next render (on WS output or resize) self-corrects.
+/// Returns `None` only if the 2D context is unavailable.
+pub(super) fn measure_cell_metrics(
+    canvas: &HtmlCanvasElement,
+    font: &str,
+    font_size: f64,
+) -> Option<CellMetrics> {
     let ctx = canvas
         .get_context("2d")
         .ok()
@@ -318,11 +344,40 @@ fn measure_char_width(canvas: &HtmlCanvasElement, font: &str, font_size: f64) ->
         .dyn_into::<web_sys::CanvasRenderingContext2d>()
         .ok()?;
     ctx.set_font(font);
-    Some(
-        ctx.measure_text("M")
-            .map_or(font_size * 0.6, |metrics| metrics.width())
-            .ceil(),
-    )
+    let metrics = ctx.measure_text("M").ok();
+
+    let char_width = metrics
+        .as_ref()
+        .map_or(font_size * 0.6, web_sys::TextMetrics::width)
+        .ceil();
+
+    let (line_height, ascent) = metrics
+        .as_ref()
+        .map(|m| (m.font_bounding_box_ascent(), m.font_bounding_box_descent()))
+        .filter(|(ascent, descent)| ascent + descent > 0.0)
+        .map_or((font_size * 1.3, font_size), |(ascent, descent)| {
+            (ascent + descent, ascent)
+        });
+
+    Some(CellMetrics {
+        char_width,
+        char_height: line_height.ceil(),
+        ascent,
+    })
+}
+
+/// Measure cell metrics for `font_size` without an existing canvas, by creating a
+/// detached one. Used by the sizing path so it derives rows/cols from the same
+/// metrics the renderer uses. Returns `None` if a canvas or 2D context is
+/// unavailable.
+pub(super) fn cell_metrics_for(font_size: f64) -> Option<CellMetrics> {
+    let canvas = gloo::utils::document()
+        .create_element("canvas")
+        .ok()?
+        .dyn_into::<HtmlCanvasElement>()
+        .ok()?;
+    let font = format!("{font_size}px {FONT_FAMILY}");
+    measure_cell_metrics(&canvas, &font, font_size)
 }
 
 impl TermScreen {
@@ -450,15 +505,20 @@ impl TermScreen {
         clippy::cast_precision_loss
     )]
     fn render_to_canvas(&self, canvas: &HtmlCanvasElement, font_size: f64) {
-        let font_family = "'JetBrainsMono Nerd Font Mono', 'MonaspiceNe Nerd Font', 'JetBrainsMono Nerd Font', 'Inconsolata', monospace";
+        let font_family = FONT_FAMILY;
         let font = format!("{font_size}px {font_family}");
 
-        // Measure actual character width and ceil to avoid sub-pixel gaps
-        let Some(char_width) = measure_char_width(canvas, &font, font_size) else {
-            error!("Failed to measure terminal character width");
+        // Measure the cell box (width + font-metric line height + baseline) so
+        // full-height glyphs align with the cell background.
+        let Some(metrics) = measure_cell_metrics(canvas, &font, font_size) else {
+            error!("Failed to measure terminal cell metrics");
             return;
         };
-        let char_height = (font_size * 1.3).ceil();
+        let CellMetrics {
+            char_width,
+            char_height,
+            ascent,
+        } = metrics;
 
         // Logical (CSS px) grid size.
         let css_width = f64::from(self.cols) * char_width;
@@ -510,9 +570,13 @@ impl TermScreen {
             }
         }
 
-        // Pass 2: draw all characters and decorations on top
+        // Pass 2: draw all characters and decorations on top.
+        // Anchor on the alphabetic baseline (row_y + ascent) so every glyph —
+        // text or a full-cell powerline separator — fills its cell consistently
+        // and lines up with the background rectangles from Pass 1.
         ctx.set_font(&font);
-        ctx.set_text_baseline("top");
+        ctx.set_text_baseline("alphabetic");
+        let baseline_offset = ascent.round();
 
         for (row_idx, row) in self.grid.iter().enumerate() {
             let row_y = row_idx as f64 * char_height;
@@ -543,7 +607,7 @@ impl TermScreen {
                     fg.to_css()
                 };
                 ctx.set_fill_style_str(&fg_css);
-                let _ = ctx.fill_text(&cell.ch.to_string(), col_x, row_y + 2.0);
+                let _ = ctx.fill_text(&cell.ch.to_string(), col_x, row_y + baseline_offset);
 
                 // Underline
                 if cell.style.underline {
