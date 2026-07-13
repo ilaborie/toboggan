@@ -50,6 +50,25 @@ impl Default for Cell {
     }
 }
 
+impl Cell {
+    /// A blank space cell painted in the given default foreground/background.
+    fn blank(fg: Rgb, bg: Rgb) -> Self {
+        Self {
+            style: CellStyle {
+                fg,
+                bg,
+                ..CellStyle::default()
+            },
+            ..Self::default()
+        }
+    }
+}
+
+/// Builds a `rows × cols` grid of blank cells in the given default colors.
+fn blank_grid(cols: u16, rows: u16, fg: Rgb, bg: Rgb) -> Vec<Vec<Cell>> {
+    vec![vec![Cell::blank(fg, bg); cols as usize]; rows as usize]
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Rgb {
     red: u8,
@@ -310,6 +329,40 @@ impl VirtualTerminal {
 /// and the row/col sizing path (`compute_terminal_size`) measure the same font.
 pub(super) const FONT_FAMILY: &str = "'JetBrainsMono Nerd Font Mono', 'MonaspiceNe Nerd Font', 'JetBrainsMono Nerd Font', 'Inconsolata', monospace";
 
+/// Cell-width ratio (× font size) used when the font can't be measured yet.
+pub(super) const FALLBACK_WIDTH_RATIO: f64 = 0.6;
+/// Cell-height ratio (× font size) used when the font can't be measured yet.
+pub(super) const FALLBACK_HEIGHT_RATIO: f64 = 1.3;
+
+/// Stroke width (CSS px) for underline / strikethrough decorations.
+const DECORATION_LINE_WIDTH: f64 = 1.0;
+/// Distance (CSS px) up from the cell bottom at which the underline is drawn.
+const UNDERLINE_INSET: f64 = 2.0;
+/// Translucent fill used for the block cursor.
+const CURSOR_FILL: &str = "rgba(200,200,200,0.5)";
+
+/// Acquires the 2D rendering context for `canvas`, or `None` if unavailable.
+fn canvas_2d(canvas: &HtmlCanvasElement) -> Option<web_sys::CanvasRenderingContext2d> {
+    canvas
+        .get_context("2d")
+        .ok()
+        .flatten()?
+        .dyn_into::<web_sys::CanvasRenderingContext2d>()
+        .ok()
+}
+
+/// CSI numeric parameter at `idx`, defaulting to `default` and clamped to at least
+/// 1 — the `params.get(idx).unwrap_or(default).max(1)` idiom used across CSI dispatch.
+fn param(params: &[u16], idx: usize, default: u16) -> u16 {
+    params.get(idx).copied().unwrap_or(default).max(1)
+}
+
+/// 1-based CSI coordinate at `idx` (defaulting to 1) converted to a 0-based grid
+/// index: `param(params, idx, 1) - 1`.
+fn coord(params: &[u16], idx: usize) -> u16 {
+    param(params, idx, 1) - 1
+}
+
 /// Cell layout metrics derived from a browser font measurement.
 pub(super) struct CellMetrics {
     /// Advance width of one monospace cell, ceiled to whole pixels.
@@ -337,27 +390,26 @@ pub(super) fn measure_cell_metrics(
     font: &str,
     font_size: f64,
 ) -> Option<CellMetrics> {
-    let ctx = canvas
-        .get_context("2d")
-        .ok()
-        .flatten()?
-        .dyn_into::<web_sys::CanvasRenderingContext2d>()
-        .ok()?;
+    let ctx = canvas_2d(canvas)?;
     ctx.set_font(font);
     let metrics = ctx.measure_text("M").ok();
 
     let char_width = metrics
         .as_ref()
-        .map_or(font_size * 0.6, web_sys::TextMetrics::width)
+        .map_or(
+            font_size * FALLBACK_WIDTH_RATIO,
+            web_sys::TextMetrics::width,
+        )
         .ceil();
 
     let (line_height, ascent) = metrics
         .as_ref()
         .map(|m| (m.font_bounding_box_ascent(), m.font_bounding_box_descent()))
         .filter(|(ascent, descent)| ascent + descent > 0.0)
-        .map_or((font_size * 1.3, font_size), |(ascent, descent)| {
-            (ascent + descent, ascent)
-        });
+        .map_or(
+            (font_size * FALLBACK_HEIGHT_RATIO, font_size),
+            |(ascent, descent)| (ascent + descent, ascent),
+        );
 
     Some(CellMetrics {
         char_width,
@@ -420,20 +472,7 @@ impl TermScreen {
             ..CellStyle::default()
         };
 
-        let grid = vec![
-            vec![
-                Cell {
-                    style: CellStyle {
-                        fg: default_fg,
-                        bg: default_bg,
-                        ..CellStyle::default()
-                    },
-                    ..Cell::default()
-                };
-                cols as usize
-            ];
-            rows as usize
-        ];
+        let grid = blank_grid(cols, rows, default_fg, default_bg);
 
         Self {
             cols,
@@ -464,20 +503,7 @@ impl TermScreen {
         self.cols = cols;
         self.rows = rows;
 
-        let mut new_grid = vec![
-            vec![
-                Cell {
-                    style: CellStyle {
-                        fg: self.default_fg,
-                        bg: self.default_bg,
-                        ..CellStyle::default()
-                    },
-                    ..Cell::default()
-                };
-                cols as usize
-            ];
-            rows as usize
-        ];
+        let mut new_grid = blank_grid(cols, rows, self.default_fg, self.default_bg);
 
         // Copy existing content
         for (row_idx, row) in new_grid.iter_mut().enumerate() {
@@ -537,12 +563,8 @@ impl TermScreen {
         let _ = style.set_property("width", &format!("{css_width}px"));
         let _ = style.set_property("height", &format!("{css_height}px"));
 
-        let Ok(Some(ctx)) = canvas.get_context("2d") else {
+        let Some(ctx) = canvas_2d(canvas) else {
             error!("Failed to get 2d context for rendering");
-            return;
-        };
-        let Ok(ctx) = ctx.dyn_into::<web_sys::CanvasRenderingContext2d>() else {
-            error!("Failed to cast to CanvasRenderingContext2d for rendering");
             return;
         };
         // Draw in logical pixels; the scale maps them onto the device-resolution
@@ -612,17 +634,17 @@ impl TermScreen {
                 // Underline
                 if cell.style.underline {
                     ctx.set_stroke_style_str(&fg.to_css());
-                    ctx.set_line_width(1.0);
+                    ctx.set_line_width(DECORATION_LINE_WIDTH);
                     ctx.begin_path();
-                    ctx.move_to(col_x, row_y + char_height - 2.0);
-                    ctx.line_to(col_x + char_width, row_y + char_height - 2.0);
+                    ctx.move_to(col_x, row_y + char_height - UNDERLINE_INSET);
+                    ctx.line_to(col_x + char_width, row_y + char_height - UNDERLINE_INSET);
                     ctx.stroke();
                 }
 
                 // Strikethrough
                 if cell.style.strikethrough {
                     ctx.set_stroke_style_str(&fg.to_css());
-                    ctx.set_line_width(1.0);
+                    ctx.set_line_width(DECORATION_LINE_WIDTH);
                     ctx.begin_path();
                     ctx.move_to(col_x, row_y + char_height / 2.0);
                     ctx.line_to(col_x + char_width, row_y + char_height / 2.0);
@@ -634,7 +656,7 @@ impl TermScreen {
         // Draw cursor
         let cursor_x = f64::from(self.cursor_col) * char_width;
         let cursor_y = f64::from(self.cursor_row) * char_height;
-        ctx.set_fill_style_str("rgba(200,200,200,0.5)");
+        ctx.set_fill_style_str(CURSOR_FILL);
         ctx.fill_rect(cursor_x, cursor_y, char_width, char_height);
     }
 
@@ -718,14 +740,7 @@ impl TermScreen {
     }
 
     fn default_cell(&self) -> Cell {
-        Cell {
-            style: CellStyle {
-                fg: self.default_fg,
-                bg: self.default_bg,
-                ..CellStyle::default()
-            },
-            ..Cell::default()
-        }
+        Cell::blank(self.default_fg, self.default_bg)
     }
 
     fn enter_alternate_screen(&mut self) {
@@ -931,50 +946,50 @@ impl vte::Perform for TermScreen {
         match action {
             // Cursor Up
             'A' => {
-                let count = params.first().copied().unwrap_or(1).max(1);
+                let count = param(&params, 0, 1);
                 self.cursor_row = self.cursor_row.saturating_sub(count);
             }
             // Cursor Down
             'B' => {
-                let count = params.first().copied().unwrap_or(1).max(1);
+                let count = param(&params, 0, 1);
                 self.cursor_row = (self.cursor_row + count).min(self.rows.saturating_sub(1));
             }
             // Cursor Forward
             'C' => {
-                let count = params.first().copied().unwrap_or(1).max(1);
+                let count = param(&params, 0, 1);
                 self.cursor_col = (self.cursor_col + count).min(self.cols.saturating_sub(1));
             }
             // Cursor Back
             'D' => {
-                let count = params.first().copied().unwrap_or(1).max(1);
+                let count = param(&params, 0, 1);
                 self.cursor_col = self.cursor_col.saturating_sub(count);
             }
             // Vertical Position Absolute (VPA) - move to specific row
             'd' => {
-                let row = params.first().copied().unwrap_or(1).max(1) - 1;
+                let row = coord(&params, 0);
                 self.cursor_row = row.min(self.rows.saturating_sub(1));
             }
             // Cursor Next Line
             'E' => {
-                let count = params.first().copied().unwrap_or(1).max(1);
+                let count = param(&params, 0, 1);
                 self.cursor_row = (self.cursor_row + count).min(self.rows.saturating_sub(1));
                 self.cursor_col = 0;
             }
             // Cursor Previous Line
             'F' => {
-                let count = params.first().copied().unwrap_or(1).max(1);
+                let count = param(&params, 0, 1);
                 self.cursor_row = self.cursor_row.saturating_sub(count);
                 self.cursor_col = 0;
             }
             // Cursor Horizontal Absolute
             'G' => {
-                let col = params.first().copied().unwrap_or(1).max(1) - 1;
+                let col = coord(&params, 0);
                 self.cursor_col = col.min(self.cols.saturating_sub(1));
             }
             // Cursor Position (CUP)
             'H' | 'f' => {
-                let row = params.first().copied().unwrap_or(1).max(1) - 1;
-                let col = params.get(1).copied().unwrap_or(1).max(1) - 1;
+                let row = coord(&params, 0);
+                let col = coord(&params, 1);
                 self.cursor_row = row.min(self.rows.saturating_sub(1));
                 self.cursor_col = col.min(self.cols.saturating_sub(1));
             }
@@ -984,7 +999,7 @@ impl vte::Perform for TermScreen {
             'K' => self.erase_in_line(params.first().copied().unwrap_or(0)),
             // Insert Lines (within scroll region)
             'L' => {
-                let count = params.first().copied().unwrap_or(1).max(1) as usize;
+                let count = param(&params, 0, 1) as usize;
                 let row = self.cursor_row as usize;
                 let bottom = self.scroll_bottom as usize;
                 let default = self.default_cell();
@@ -997,7 +1012,7 @@ impl vte::Perform for TermScreen {
             }
             // Delete Lines (within scroll region)
             'M' => {
-                let count = params.first().copied().unwrap_or(1).max(1) as usize;
+                let count = param(&params, 0, 1) as usize;
                 let row = self.cursor_row as usize;
                 let bottom = self.scroll_bottom as usize;
                 let default = self.default_cell();
@@ -1012,7 +1027,7 @@ impl vte::Perform for TermScreen {
             }
             // Insert Characters
             '@' => {
-                let count = params.first().copied().unwrap_or(1).max(1) as usize;
+                let count = param(&params, 0, 1) as usize;
                 let row = self.cursor_row as usize;
                 let col = self.cursor_col as usize;
                 let default = self.default_cell();
@@ -1027,7 +1042,7 @@ impl vte::Perform for TermScreen {
             }
             // Delete Characters
             'P' => {
-                let count = params.first().copied().unwrap_or(1).max(1) as usize;
+                let count = param(&params, 0, 1) as usize;
                 let row = self.cursor_row as usize;
                 let col = self.cursor_col as usize;
                 let default = self.default_cell();
@@ -1042,8 +1057,8 @@ impl vte::Perform for TermScreen {
             }
             // Set Scrolling Region (DECSTBM)
             'r' => {
-                let top = params.first().copied().unwrap_or(1).max(1) - 1;
-                let bottom = params.get(1).copied().unwrap_or(self.rows).max(1) - 1;
+                let top = coord(&params, 0);
+                let bottom = param(&params, 1, self.rows) - 1;
                 self.scroll_top = top.min(self.rows.saturating_sub(1));
                 self.scroll_bottom = bottom.min(self.rows.saturating_sub(1));
                 self.cursor_row = 0;
@@ -1051,17 +1066,17 @@ impl vte::Perform for TermScreen {
             }
             // Scroll Up
             'S' => {
-                let count = params.first().copied().unwrap_or(1).max(1);
+                let count = param(&params, 0, 1);
                 self.scroll_up(count);
             }
             // Scroll Down
             'T' => {
-                let count = params.first().copied().unwrap_or(1).max(1);
+                let count = param(&params, 0, 1);
                 self.scroll_down(count);
             }
             // Erase Characters
             'X' => {
-                let count = params.first().copied().unwrap_or(1).max(1) as usize;
+                let count = param(&params, 0, 1) as usize;
                 let row = self.cursor_row as usize;
                 let col = self.cursor_col as usize;
                 let default = self.default_cell();
@@ -1075,7 +1090,7 @@ impl vte::Perform for TermScreen {
             }
             // Tab backward
             'Z' => {
-                let count = params.first().copied().unwrap_or(1).max(1);
+                let count = param(&params, 0, 1);
                 for _ in 0..count {
                     self.cursor_col = if self.cursor_col >= 8 {
                         (self.cursor_col - 1) / 8 * 8

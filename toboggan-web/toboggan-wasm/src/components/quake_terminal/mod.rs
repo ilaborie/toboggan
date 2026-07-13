@@ -2,14 +2,13 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gloo::console::{debug, info};
-use gloo::utils::{document, window};
+use gloo::utils::document;
 use toboggan_core::TerminalConfig;
-use wasm_bindgen::closure::Closure;
-use wasm_bindgen::{JsCast, UnwrapThrowExt};
-use web_sys::{AddEventListenerOptions, HtmlElement, KeyboardEvent};
+use wasm_bindgen::UnwrapThrowExt;
+use web_sys::HtmlElement;
 
 use crate::components::{TobogganTerminalElement, WasmElement};
-use crate::create_html_element;
+use crate::{create_html_element, install_capture_keydown, is_editable_target};
 
 const CSS: &str = include_str!("style.css");
 const STYLE_MARKER_ATTR: &str = "data-toboggan-quake-style";
@@ -116,7 +115,9 @@ fn inject_quake_style() {
 }
 
 fn register_toggle_listener(state: Rc<RefCell<QuakeState>>) {
-    let closure = Closure::<dyn FnMut(_)>::new(move |event: KeyboardEvent| {
+    // Capture phase so we run before the inner terminal's own keydown handler
+    // (which otherwise eats every key for the PTY).
+    install_capture_keydown(move |event| {
         if event.key() != TOGGLE_KEY {
             return;
         }
@@ -124,26 +125,13 @@ fn register_toggle_listener(state: Rc<RefCell<QuakeState>>) {
         // field (search box, contenteditable). The PTY canvas is a <canvas>,
         // not an editable element, so it's not matched here — backtick will
         // toggle even while focus is in the terminal, which is intentional.
-        if is_editable_target(&event) {
+        if is_editable_target(event) {
             return;
         }
         event.prevent_default();
         event.stop_propagation();
         toggle(&state);
     });
-
-    // Use the capture phase so we run before the inner terminal's own keydown
-    // handler (which otherwise eats every key for the PTY).
-    let opts = AddEventListenerOptions::new();
-    opts.set_capture(true);
-    window()
-        .add_event_listener_with_callback_and_add_event_listener_options(
-            "keydown",
-            closure.as_ref().unchecked_ref(),
-            &opts,
-        )
-        .unwrap_throw();
-    closure.forget();
 }
 
 fn toggle(state_rc: &Rc<RefCell<QuakeState>>) {
@@ -169,20 +157,6 @@ fn toggle(state_rc: &Rc<RefCell<QuakeState>>) {
         let _ = class_list.remove_1("open");
         debug!("QuakeTerminal closed");
     }
-}
-
-fn is_editable_target(event: &KeyboardEvent) -> bool {
-    let Some(target) = event.target() else {
-        return false;
-    };
-    let Ok(element) = target.dyn_into::<HtmlElement>() else {
-        return false;
-    };
-    if element.is_content_editable() {
-        return true;
-    }
-    let tag = element.tag_name();
-    matches!(tag.as_str(), "INPUT" | "TEXTAREA" | "SELECT")
 }
 
 fn restart_session(state_rc: &Rc<RefCell<QuakeState>>) {

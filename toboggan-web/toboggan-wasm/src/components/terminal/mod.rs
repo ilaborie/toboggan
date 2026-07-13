@@ -27,6 +27,9 @@ const DEFAULT_FONT_SIZE: f64 = 22.0;
 const FONT_SIZE_STEP: f64 = 2.0;
 const FONT_SIZE_MIN: f64 = 8.0;
 const FONT_SIZE_MAX: f64 = 32.0;
+/// Smallest grid the terminal is ever sized to, so a collapsed box still yields a usable PTY.
+const MIN_COLS: u16 = 20;
+const MIN_ROWS: u16 = 4;
 
 #[derive(Debug, Default)]
 pub(crate) struct TobogganTerminalElement {
@@ -59,18 +62,18 @@ impl TobogganTerminalElement {
             create_element_with_class(&document, "div", "terminal-btn terminal-btn-minimize");
         let btn_maximize =
             create_element_with_class(&document, "div", "terminal-btn terminal-btn-maximize");
-        if buttons.append_child(&btn_close).is_err() {
-            error!("Failed to append close button to terminal titlebar");
-        }
-        if buttons.append_child(&btn_minimize).is_err() {
-            error!("Failed to append minimize button to terminal titlebar");
-        }
-        if buttons.append_child(&btn_maximize).is_err() {
-            error!("Failed to append maximize button to terminal titlebar");
-        }
-        if titlebar.append_child(&buttons).is_err() {
-            error!("Failed to append buttons to titlebar");
-        }
+        append_or_log(&buttons, &btn_close, "close button to terminal titlebar");
+        append_or_log(
+            &buttons,
+            &btn_minimize,
+            "minimize button to terminal titlebar",
+        );
+        append_or_log(
+            &buttons,
+            &btn_maximize,
+            "maximize button to terminal titlebar",
+        );
+        append_or_log(&titlebar, &buttons, "buttons to titlebar");
 
         let title_text = create_element_with_class(&document, "span", "terminal-title");
         let cwd_str = config.cwd.to_string_lossy();
@@ -80,37 +83,18 @@ impl TobogganTerminalElement {
             .or_else(|| config.cwd.file_name().and_then(|n| n.to_str()))
             .unwrap_or(&cwd_str);
         title_text.set_text_content(Some(title));
-        if titlebar.append_child(&title_text).is_err() {
-            error!("Failed to append title text to titlebar");
-        }
-        if window_el.append_child(&titlebar).is_err() {
-            error!("Failed to append titlebar to terminal window");
-        }
+        append_or_log(&titlebar, &title_text, "title text to titlebar");
+        append_or_log(&window_el, &titlebar, "titlebar to terminal window");
 
         let body = create_element_with_class(&document, "div", "terminal-body");
 
-        let Ok(canvas) = document.create_element("canvas") else {
-            error!("Failed to create canvas element");
+        let Some(canvas) = create_terminal_canvas(&document) else {
             return;
         };
-        let Ok(canvas) = canvas.dyn_into::<HtmlCanvasElement>() else {
-            error!("Failed to cast to HtmlCanvasElement");
-            return;
-        };
-        canvas.set_class_name("terminal-canvas");
-        if canvas.set_attribute("tabindex", "0").is_err() {
-            error!("Failed to make terminal canvas focusable");
-        }
 
-        if body.append_child(&canvas).is_err() {
-            error!("Failed to append canvas to terminal body");
-        }
-        if window_el.append_child(&body).is_err() {
-            error!("Failed to append body to terminal window");
-        }
-        if container.append_child(&window_el).is_err() {
-            error!("Failed to append terminal window to container");
-        }
+        append_or_log(&body, &canvas, "canvas to terminal body");
+        append_or_log(&window_el, &body, "body to terminal window");
+        append_or_log(container, &window_el, "terminal window to container");
 
         // focus() failure is non-critical (e.g. element not yet visible)
         let _ = canvas.focus();
@@ -190,6 +174,31 @@ fn create_element_with_class(document: &web_sys::Document, tag: &str, class: &st
         .unwrap_or_else(|err| panic!("Failed to create <{tag}> element: {err:?}"));
     el.set_class_name(class);
     el
+}
+
+/// Appends `child` to `parent`, logging `what` on failure instead of panicking.
+fn append_or_log(parent: &Element, child: &Node, what: &str) {
+    if parent.append_child(child).is_err() {
+        error!("Failed to append", what);
+    }
+}
+
+/// Creates the focusable `<canvas>` the terminal renders into, or logs and
+/// returns `None` if the element cannot be created.
+fn create_terminal_canvas(document: &web_sys::Document) -> Option<HtmlCanvasElement> {
+    let Ok(element) = document.create_element("canvas") else {
+        error!("Failed to create canvas element");
+        return None;
+    };
+    let Ok(canvas) = element.dyn_into::<HtmlCanvasElement>() else {
+        error!("Failed to cast to HtmlCanvasElement");
+        return None;
+    };
+    canvas.set_class_name("terminal-canvas");
+    if canvas.set_attribute("tabindex", "0").is_err() {
+        error!("Failed to make terminal canvas focusable");
+    }
+    Some(canvas)
 }
 
 /// Resolve the shadow-DOM host element for a node living inside the terminal's shadow root.
@@ -315,15 +324,11 @@ async fn run_terminal_session(
                         };
                         *size
                     };
-                    let (new_cols, new_rows) =
-                        compute_terminal_size(window_el_kbd.as_ref(), new_size);
-                    last_dims = (new_cols, new_rows);
-                    resize_and_render(
+                    last_dims = refit(
                         &vterm_kbd,
                         &canvas_kbd,
                         &ws_write_kbd,
-                        new_cols,
-                        new_rows,
+                        window_el_kbd.as_ref(),
                         new_size,
                     )
                     .await;
@@ -349,14 +354,11 @@ async fn run_terminal_session(
                         }
                     }
                     let size = *font_size_kbd.borrow();
-                    let (new_cols, new_rows) = compute_terminal_size(window_el_kbd.as_ref(), size);
-                    last_dims = (new_cols, new_rows);
-                    resize_and_render(
+                    last_dims = refit(
                         &vterm_kbd,
                         &canvas_kbd,
                         &ws_write_kbd,
-                        new_cols,
-                        new_rows,
+                        window_el_kbd.as_ref(),
                         size,
                     )
                     .await;
@@ -376,30 +378,26 @@ async fn run_terminal_session(
                         error!("Failed to restore terminal host into slide on collapse");
                     }
                     let size = *font_size_kbd.borrow();
-                    let (new_cols, new_rows) = compute_terminal_size(window_el_kbd.as_ref(), size);
-                    last_dims = (new_cols, new_rows);
-                    resize_and_render(
+                    last_dims = refit(
                         &vterm_kbd,
                         &canvas_kbd,
                         &ws_write_kbd,
-                        new_cols,
-                        new_rows,
+                        window_el_kbd.as_ref(),
                         size,
                     )
                     .await;
                     let _ = canvas_kbd.focus();
                 }
                 KeyAction::Resize => {
+                    // Skip the redundant repaint when a spurious observer callback
+                    // resolves to the same grid we last sent the server.
                     let size = *font_size_kbd.borrow();
-                    let new_dims = compute_terminal_size(window_el_kbd.as_ref(), size);
-                    if new_dims != last_dims {
-                        last_dims = new_dims;
-                        resize_and_render(
+                    if compute_terminal_size(window_el_kbd.as_ref(), size) != last_dims {
+                        last_dims = refit(
                             &vterm_kbd,
                             &canvas_kbd,
                             &ws_write_kbd,
-                            new_dims.0,
-                            new_dims.1,
+                            window_el_kbd.as_ref(),
                             size,
                         )
                         .await;
@@ -531,10 +529,13 @@ fn compute_terminal_size(window_el: Option<&HtmlElement>, font_size: f64) -> (u1
     // Measure the same font metrics the renderer uses so the row/col count matches
     // the canvas cell size; fall back to the width/height heuristics when the font
     // cannot be measured yet.
-    let (char_width, char_height) = vterm::cell_metrics_for(font_size)
-        .map_or((font_size * 0.6, font_size * 1.3), |metrics| {
-            (metrics.char_width, metrics.char_height)
-        });
+    let (char_width, char_height) = vterm::cell_metrics_for(font_size).map_or(
+        (
+            font_size * vterm::FALLBACK_WIDTH_RATIO,
+            font_size * vterm::FALLBACK_HEIGHT_RATIO,
+        ),
+        |metrics| (metrics.char_width, metrics.char_height),
+    );
 
     let (avail_w, avail_h) = window_el
         .map(|el| (f64::from(el.client_width()), f64::from(el.client_height())))
@@ -550,7 +551,7 @@ fn compute_terminal_size(window_el: Option<&HtmlElement>, font_size: f64) -> (u1
     let cols = (body_width / char_width).floor() as u16;
     let rows = (body_height / char_height).floor() as u16;
 
-    (cols.max(20), rows.max(4))
+    (cols.max(MIN_COLS), rows.max(MIN_ROWS))
 }
 
 #[allow(clippy::await_holding_refcell_ref)] // Safe: single-threaded WASM
@@ -576,6 +577,20 @@ async fn resize_and_render(
     {
         error!("Failed to send resize to server");
     }
+}
+
+/// Recomputes the grid for `font_size`, resizes and repaints the terminal, and
+/// returns the new `(cols, rows)`. Shared by the font-resize and fullscreen arms.
+async fn refit(
+    vterm: &Rc<RefCell<VirtualTerminal>>,
+    canvas: &HtmlCanvasElement,
+    ws_write: &Rc<RefCell<futures::stream::SplitSink<WebSocket, Message>>>,
+    window_el: Option<&HtmlElement>,
+    font_size: f64,
+) -> (u16, u16) {
+    let (cols, rows) = compute_terminal_size(window_el, font_size);
+    resize_and_render(vterm, canvas, ws_write, cols, rows, font_size).await;
+    (cols, rows)
 }
 
 fn update_title(title_el: Option<&HtmlElement>, current: &mut String, new_title: Option<&str>) {
