@@ -23,7 +23,7 @@ ignored = ["beamterm-renderer"]
 [dependencies]
 toboggan-core = { path = "../../toboggan-core", features = ["js"] }
 
-wasm-bindgen = "0.2.125"
+wasm-bindgen = "0.2.126"
 gloo = { version = "0.12.0", default-features = false, features = [
   "timers",
   "events",
@@ -31,7 +31,7 @@ gloo = { version = "0.12.0", default-features = false, features = [
   "utils",
   "net",
 ] }
-web-sys = { version = "0.3.102", features = [
+web-sys = { version = "0.3.103", features = [
   "BeforeUnloadEvent",
   "HtmlElement",
   "HtmlDialogElement",
@@ -55,9 +55,9 @@ web-sys = { version = "0.3.102", features = [
   "DomTokenList",
   "ResizeObserver",
 ] }
-js-sys = "0.3.102"
+js-sys = "0.3.103"
 serde-wasm-bindgen = "0.6.5"
-wasm-bindgen-futures = "0.4.75"
+wasm-bindgen-futures = "0.4.76"
 futures = "0.3.32"
 serde = "1.0.228"
 console_error_panic_hook = "0.1.7"
