@@ -166,6 +166,18 @@ Here's our implementation:
 This will be replaced with the contents of src/main.rs
 ```
 
+The directive is `<!-- code:<info>:<path> -->`, where `<info>` is the fence info
+string the file is wrapped in (`rust`, `javascript`, …), so syntax highlighting
+behaves exactly as with a hand-written fence. Two things to keep in mind:
+
+- The path is resolved from the directory you run the CLI in — the deck folder —
+  **not** from the slide file. Keep snippets beside your build command.
+- A missing file is a hard error: the build fails rather than emitting an empty
+  block.
+
+Works anywhere a block does: slide bodies, steps after `<!-- pause -->`, and
+inside `<!-- notes -->`.
+
 ## Presentation Statistics
 
 The CLI provides comprehensive statistics about your presentation:

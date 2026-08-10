@@ -1,6 +1,6 @@
 ---
 name: toboggan-authoring
-description: Author Toboggan presentations — folder/markdown conventions, pause/notes/terminal directives, styling, and the toboggan CLI/MCP tools. Use when creating or editing a Toboggan slide deck.
+description: Author Toboggan presentations — folder/markdown conventions, pause/notes/code-embed/terminal directives, styling, and the toboggan CLI/MCP tools. Use when creating or editing a Toboggan slide deck.
 ---
 
 # Authoring Toboggan presentations
@@ -46,6 +46,11 @@ hidden_in = ["pdf"]      # exclude from a render target (web | pdf)
 - `<!-- pause -->` splits a slide into reveal steps. Never on cover/part slides.
 - `<!-- pause :class -->` adds CSS classes to a step.
 - `<!-- notes -->` — everything after is speaker notes.
+- `<!-- code:rust:snippets/hello.rs -->` embeds an external file as a fenced code
+  block, so snippets never drift from the real source. The part after `code:` is
+  the fence info string (`rust`, `js`, …). The path is resolved from where
+  `toboggan` runs (the deck folder), not from the slide file, and a missing file
+  fails the build.
 - `<!-- term: . -->` embeds a live terminal; add the `term-50vh` class to pin its
   pane to half the viewport height.
 

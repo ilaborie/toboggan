@@ -30,6 +30,10 @@ disabled_rules = ["html/img-missing-alt"]  # silence lint rules for this slide
 - `<!-- pause -->` — split the slide into reveal steps. Never use on cover/part slides.
 - `<!-- pause :class -->` — add CSS classes to a step.
 - `<!-- notes -->` — everything after is speaker notes.
+- `<!-- code:lang:path/to/file.rs -->` — embed an external file as a fenced code
+  block instead of copy-pasting it (`lang` is the fence info string). The path is
+  resolved from the directory where `toboggan` runs — the deck folder — not from
+  the slide file; a missing file fails the build.
 - `<!-- lint-disable rule-id … -->` — silence lint rules for this slide.
 - terminals — see the guide for the `terminal` directive. Add the `term-50vh`
   class to pin an embedded terminal pane to half the viewport height.
