@@ -20,27 +20,33 @@ pub type ReloadFn = Box<dyn Fn() -> anyhow::Result<Talk> + Send + Sync + 'static
 
 /// Configuration for the talk reload watcher.
 pub struct WatchConfig {
-    /// Path to watch: a single `.toml` file, or a presentation folder.
-    pub path: PathBuf,
-    /// Watch the path recursively (used for folder-based presentations).
+    /// Paths to watch: a single `.toml` file, or a presentation folder together
+    /// with the deck's `public/` assets directory.
+    ///
+    /// An asset edit does not change the [`Talk`], but running the same reload
+    /// path still notifies clients, and a client that re-renders re-fetches the
+    /// stylesheets and images it references — which is why `/public` must be
+    /// served with revalidation for this to be visible.
+    pub paths: Vec<PathBuf>,
+    /// Watch each path recursively (used for folder-based presentations).
     pub recursive: bool,
     /// Rebuilds the [`Talk`] from the current on-disk content.
     pub reload: ReloadFn,
 }
 
-/// Starts a background task that watches `config.path` and hot-swaps the served
-/// talk whenever it changes (debounced).
+/// Starts a background task that watches `config.paths` and hot-swaps the served
+/// talk whenever any of them changes (debounced).
 ///
 /// # Errors
 /// Returns an error if the underlying file-system watcher cannot be created or
-/// cannot start watching the requested path.
+/// cannot start watching one of the requested paths.
 pub fn start_watch_task(config: WatchConfig, state: TobogganState) -> anyhow::Result<()> {
     let WatchConfig {
-        path,
+        paths,
         recursive,
         reload,
     } = config;
-    info!(path = %path.display(), recursive, "Starting talk watcher");
+    info!(?paths, recursive, "Starting talk watcher");
 
     let (tx, rx) = mpsc::channel::<Result<Event, notify::Error>>(100);
 
@@ -56,9 +62,11 @@ pub fn start_watch_task(config: WatchConfig, state: TobogganState) -> anyhow::Re
     } else {
         RecursiveMode::NonRecursive
     };
-    watcher
-        .watch(&path, mode)
-        .with_context(|| format!("Failed to watch path: {}", path.display()))?;
+    for path in &paths {
+        watcher
+            .watch(path, mode)
+            .with_context(|| format!("Failed to watch path: {}", path.display()))?;
+    }
 
     tokio::spawn(watch_loop(watcher, rx, state, reload));
 

@@ -54,6 +54,7 @@ utoipa-scalar = "0.3.0"
 # Dev dependencies
 clawspec-core = "0.4.4"
 tempfile = "3.27.0"
+tower = "0.5.2"
 
 # Other dependencies
 comrak = "0.54.0"

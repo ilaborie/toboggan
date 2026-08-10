@@ -1,12 +1,13 @@
 use std::path::PathBuf;
 
 use axum::extract::State;
-use axum::http::{Method, StatusCode, Uri, header};
+use axum::http::{HeaderValue, Method, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
+use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::TraceLayer;
 use tracing::error;
 use utoipa::openapi::OpenApi;
@@ -61,7 +62,7 @@ pub fn routes_with_cors(
     // Add local assets directory if provided (for presentation images/files)
     // Use /public to avoid conflict with embedded web assets
     if let Some(assets_dir) = assets_dir {
-        router = router.nest_service("/public", ServeDir::new(assets_dir));
+        router = router.nest("/public", public_assets(assets_dir));
     }
 
     // Serve embedded web asset files only (hashed JS/CSS, favicon, manifest).
@@ -69,6 +70,31 @@ pub fn routes_with_cors(
     router = router.fallback(serve_embedded_web_assets);
 
     router
+}
+
+/// Serves the deck's own `public/` directory, always revalidated.
+///
+/// These assets are author-editable and unhashed, so a stylesheet edited during
+/// a talk must reach the browser on the next fetch. `ServeDir` sends `ETag` and
+/// `Last-Modified` but no `Cache-Control`, which lets a cache pick its *own*
+/// freshness lifetime and reuse a stale copy for hours without ever asking
+/// (RFC 9111 §4.2.2) — and a hard reload does not rescue slide styles, which are
+/// `@import`ed from a shadow root after load.
+///
+/// `no-cache` means "revalidate before reuse", not "do not store": paired with
+/// the validators above, the steady-state cost is a conditional request per
+/// asset answered `304` with no body. Do *not* use `no-store` here — it would
+/// re-download every font on every slide change.
+fn public_assets<S>(assets_dir: PathBuf) -> Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    Router::new()
+        .fallback_service(ServeDir::new(assets_dir))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("no-cache"),
+        ))
 }
 
 /// Serves a real embedded web asset file (hashed JS/CSS, favicon, manifest).
@@ -125,4 +151,47 @@ fn create_cors_layer(allowed_origins: Option<&[String]>) -> CorsLayer {
     }
 
     cors
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use axum::body::Body;
+    use axum::http::Request;
+    use tower::ServiceExt as _;
+
+    use super::*;
+
+    /// The deck's own assets must never be reused without asking the server:
+    /// an author editing `public/slide.css` mid-talk otherwise keeps seeing the
+    /// copy the browser fetched an hour ago.
+    #[tokio::test]
+    async fn public_assets_are_revalidated() {
+        let assets_dir = tempfile::tempdir().expect("temp assets dir");
+        std::fs::write(assets_dir.path().join("slide.css"), "body { color: red }")
+            .expect("write stylesheet");
+
+        let response = public_assets::<()>(assets_dir.path().to_path_buf())
+            .oneshot(
+                Request::get("/slide.css")
+                    .body(Body::empty())
+                    .expect("build request"),
+            )
+            .await
+            .expect("serve request");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(header::CACHE_CONTROL)
+                .expect("public assets must carry a cache policy"),
+            "no-cache"
+        );
+        // `no-cache` is only cheap because the validators are still there.
+        assert!(
+            response.headers().contains_key(header::ETAG),
+            "ServeDir should still send an ETag to revalidate against"
+        );
+    }
 }

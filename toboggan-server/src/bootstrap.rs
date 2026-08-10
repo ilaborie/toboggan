@@ -25,7 +25,7 @@ pub async fn launch(settings: Settings) -> anyhow::Result<()> {
     let watch = settings.watch.then(|| {
         let reload_path = settings.talk.clone();
         WatchConfig {
-            path: settings.talk.clone(),
+            paths: vec![settings.talk.clone()],
             recursive: false,
             reload: Box::new(move || load_talk_sync(&reload_path)),
         }

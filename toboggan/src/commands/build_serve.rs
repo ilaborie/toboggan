@@ -22,8 +22,15 @@ pub(crate) async fn build_and_serve(args: DefaultArgs) -> anyhow::Result<()> {
     let watch_config = watch.then(|| {
         let folder = slides_dir.clone();
         let settings = cli_settings.clone();
+        // Watch the assets directory alongside the slides: editing a stylesheet
+        // or an image leaves the `Talk` identical, but the reload still notifies
+        // clients, and re-rendering re-fetches whatever the slide references.
+        let paths = [Some(slides_dir.clone()), server_settings.public_dir.clone()]
+            .into_iter()
+            .flatten()
+            .collect();
         WatchConfig {
-            path: slides_dir.clone(),
+            paths,
             recursive: true,
             reload: Box::new(move || build_talk(&folder, &settings)),
         }

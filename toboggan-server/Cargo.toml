@@ -21,7 +21,12 @@ clap = { workspace = true, features = ["env", "derive"] }
 anyhow = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-tower-http = { workspace = true, features = ["trace", "cors", "fs"] }
+tower-http = { workspace = true, features = [
+  "trace",
+  "cors",
+  "fs",
+  "set-header",
+] }
 futures = { workspace = true }
 slotmap = { workspace = true, features = ["serde"] }
 derive_more = { workspace = true, features = ["display", "error"] }
@@ -45,6 +50,7 @@ tokio-tungstenite = { workspace = true, features = [
   "connect",
   "rustls-tls-native-roots",
 ] }
+tower = { workspace = true, features = ["util"] }
 
 [[test]]
 name = "multi_client_sync"
