@@ -13,7 +13,7 @@ use std::sync::Arc;
 use tempfile::TempDir;
 use toboggan_cli::output::{ThumbnailOptions, generate_thumbnails};
 use tokio::sync::RwLock;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use super::TalkService;
 
@@ -61,6 +61,20 @@ impl Source {
     }
 }
 
+/// The entry page every `/slides` redirect targets; an overview directory
+/// without it is unusable.
+const OVERVIEW_ENTRY: &str = "overview.html";
+
+/// The outcome of an `/overview/*` asset lookup.
+pub(crate) enum AssetLookup {
+    /// The asset was read from the overview directory.
+    Found(Vec<u8>),
+    /// Thumbnails are ready, but this asset is not among them.
+    Missing,
+    /// Thumbnails are not ready — regenerating after a reload, or unavailable.
+    NotReady,
+}
+
 /// What the `/slides` page should render right now.
 pub(crate) enum ThumbStatus {
     /// Thumbnails are ready; serve the overview.
@@ -85,7 +99,18 @@ impl ThumbnailService {
     ///
     /// Intended for bootstrap (before any request); it overwrites the state
     /// unconditionally and does not coordinate with an in-flight generation.
+    ///
+    /// A directory without an [`OVERVIEW_ENTRY`] is not seeded: marking it
+    /// `Ready` would send `/slides` to a page that does not exist, and the
+    /// service falls back to generating the overview itself.
     pub(crate) async fn seed_external(&self, dir: PathBuf) {
+        if !dir.join(OVERVIEW_ENTRY).is_file() {
+            warn!(
+                dir = %dir.display(),
+                "thumbnails directory has no {OVERVIEW_ENTRY}; generating the overview instead"
+            );
+            return;
+        }
         self.inner.write().await.state = ThumbState::Ready(Source::External(dir));
     }
 
@@ -128,19 +153,27 @@ impl ThumbnailService {
     }
 
     /// Reads a generated asset (e.g. `overview.html`, `thumb-0001.png`) by its
-    /// relative path. Returns `None` unless thumbnails are ready, and rejects any
-    /// path that tries to escape the cache directory.
-    pub(crate) async fn read_asset(&self, rel: &str) -> Option<Vec<u8>> {
+    /// relative path, rejecting any path that tries to escape the cache
+    /// directory.
+    ///
+    /// Distinguishes "not ready" from "ready but absent" so the route can send
+    /// the browser back to `/slides` only in the first case: `/slides` redirects
+    /// here whenever the overview is ready, so answering a ready-but-absent
+    /// asset with that redirect would loop.
+    pub(crate) async fn read_asset(&self, rel: &str) -> AssetLookup {
         if rel
             .split('/')
             .any(|segment| segment == ".." || segment.is_empty())
         {
-            return None;
+            return AssetLookup::Missing;
         }
         let inner = self.inner.read().await;
         match &inner.state {
-            ThumbState::Ready(source) => tokio::fs::read(source.path().join(rel)).await.ok(),
-            _ => None,
+            ThumbState::Ready(source) => match tokio::fs::read(source.path().join(rel)).await {
+                Ok(bytes) => AssetLookup::Found(bytes),
+                Err(_) => AssetLookup::Missing,
+            },
+            _ => AssetLookup::NotReady,
         }
     }
 

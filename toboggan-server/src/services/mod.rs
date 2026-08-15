@@ -5,7 +5,7 @@ mod talk;
 pub use self::talk::*;
 
 mod thumbnails;
-pub(crate) use self::thumbnails::{ThumbStatus, ThumbnailService};
+pub(crate) use self::thumbnails::{AssetLookup, ThumbStatus, ThumbnailService};
 
 // mod client_service;
 // mod talk_service;

@@ -6,10 +6,11 @@
 //! of a server error.
 
 use axum::extract::{Path, State};
+use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 
 use crate::TobogganState;
-use crate::services::ThumbStatus;
+use crate::services::{AssetLookup, ThumbStatus};
 
 /// Landing point for the slide overview at `/slides`.
 pub(crate) async fn slides_page(State(state): State<TobogganState>) -> Response {
@@ -29,8 +30,16 @@ pub(crate) async fn overview_asset(
     Path(rel): Path<String>,
 ) -> Response {
     match state.thumbnail_asset(&rel).await {
-        Some(bytes) => super::super::static_assets::asset_response(&rel, bytes),
-        None => Redirect::to("/slides").into_response(),
+        AssetLookup::Found(bytes) => super::super::static_assets::asset_response(&rel, bytes),
+        // Regenerating after a reload: `/slides` serves the "generating…" page,
+        // which retries until the overview is back.
+        AssetLookup::NotReady => Redirect::to("/slides").into_response(),
+        // Ready, but no such asset. `/slides` redirects straight back here when
+        // the overview is ready, so bouncing this case would loop until the
+        // browser gives up.
+        AssetLookup::Missing => {
+            (StatusCode::NOT_FOUND, format!("no such asset: {rel}")).into_response()
+        }
     }
 }
 
