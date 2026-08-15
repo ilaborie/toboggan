@@ -25,7 +25,15 @@ pub(crate) async fn build_and_serve(args: DefaultArgs) -> anyhow::Result<()> {
         // Watch the assets directory alongside the slides: editing a stylesheet
         // or an image leaves the `Talk` identical, but the reload still notifies
         // clients, and re-rendering re-fetches whatever the slide references.
-        let paths = [Some(slides_dir.clone()), server_settings.public_dir.clone()]
+        //
+        // Only if it exists: `--public-dir` may point at a folder the author has
+        // not created yet, and the watcher errors on a missing path — serving
+        // without live-reloaded assets beats refusing to start.
+        let assets_dir = server_settings
+            .public_dir
+            .clone()
+            .filter(|dir| dir.is_dir());
+        let paths = [Some(slides_dir.clone()), assets_dir]
             .into_iter()
             .flatten()
             .collect();

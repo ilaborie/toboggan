@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::Path;
 use std::time::Duration;
 
@@ -64,7 +64,7 @@ pub async fn launch_with_talk(
         .with_context(|| format!("Connecting to {addr} ..."))?;
 
     if settings.open {
-        let url = format!("http://{host}:{port}/");
+        let url = browse_url(host, port);
         info!(%url, "Opening presentation in the default browser");
         tokio::task::spawn_blocking(move || {
             if let Err(err) = open::that(&url) {
@@ -117,6 +117,21 @@ pub async fn launch_with_talk(
     info!("Server shutdown complete");
 
     Ok(())
+}
+
+/// Builds the URL `--open` hands to the browser.
+///
+/// Two things the bind address cannot supply directly: a wildcard bind
+/// (`0.0.0.0` / `::`) is not an address a client can connect to, so it becomes
+/// loopback; and an IPv6 literal needs brackets in a URL authority, which
+/// `SocketAddr`'s `Display` adds and plain interpolation does not.
+fn browse_url(host: IpAddr, port: u16) -> String {
+    let host = match host {
+        IpAddr::V4(addr) if addr.is_unspecified() => IpAddr::V4(Ipv4Addr::LOCALHOST),
+        IpAddr::V6(addr) if addr.is_unspecified() => IpAddr::V6(Ipv6Addr::LOCALHOST),
+        addr => addr,
+    };
+    format!("http://{}/", SocketAddr::new(host, port))
 }
 
 #[instrument]
@@ -211,6 +226,28 @@ mod tests {
         assert!(
             openapi.components.is_some(),
             "should have component schemas"
+        );
+    }
+
+    #[test]
+    fn browse_url_is_reachable_and_bracketed() {
+        // A wildcard bind is not connectable; loopback of the same family is.
+        assert_eq!(
+            browse_url(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 8080),
+            "http://127.0.0.1:8080/"
+        );
+        assert_eq!(
+            browse_url(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 8080),
+            "http://[::1]:8080/"
+        );
+        // An IPv6 literal needs brackets in the URL authority.
+        assert_eq!(
+            browse_url(IpAddr::V6(Ipv6Addr::LOCALHOST), 3000),
+            "http://[::1]:3000/"
+        );
+        assert_eq!(
+            browse_url(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10)), 80),
+            "http://192.168.1.10:80/"
         );
     }
 }
