@@ -19,6 +19,16 @@ pub(crate) fn install(args: SkillsArgs) -> anyhow::Result<()> {
     fs::create_dir_all(&skill_dir)?;
 
     let skill_file = skill_dir.join("SKILL.md");
+    // Never silently replace an edited skill: authors tailor SKILL.md to their
+    // deck, and re-running `toboggan skills` (or `toboggan new` in an existing
+    // directory) used to discard that work with no warning.
+    if skill_file.exists() && !args.force {
+        println!(
+            "↩︎ {} already exists, leaving it alone (pass --force to overwrite)",
+            skill_file.display()
+        );
+        return Ok(());
+    }
     fs::write(&skill_file, SKILL_TEMPLATE)?;
     fs::write(skill_dir.join(".symposium"), "")?;
 

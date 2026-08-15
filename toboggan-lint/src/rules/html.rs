@@ -8,7 +8,7 @@ pub(crate) struct NestedStep;
 
 impl Rule for NestedStep {
     fn id(&self) -> RuleId {
-        RuleId("html/nested-step")
+        super::ids::HTML_NESTED_STEP
     }
 
     fn default_severity(&self) -> Severity {
@@ -36,7 +36,7 @@ pub(crate) struct ImgMissingAlt;
 
 impl Rule for ImgMissingAlt {
     fn id(&self) -> RuleId {
-        RuleId("html/img-missing-alt")
+        super::ids::HTML_IMG_MISSING_ALT
     }
 
     fn default_severity(&self) -> Severity {
@@ -65,7 +65,7 @@ pub(crate) struct RawScript;
 
 impl Rule for RawScript {
     fn id(&self) -> RuleId {
-        RuleId("html/raw-script")
+        super::ids::HTML_RAW_SCRIPT
     }
 
     fn default_severity(&self) -> Severity {
@@ -97,7 +97,7 @@ pub(crate) struct HeadingH1;
 
 impl Rule for HeadingH1 {
     fn id(&self) -> RuleId {
-        RuleId("html/heading-h1")
+        super::ids::HTML_HEADING_H1
     }
 
     fn default_severity(&self) -> Severity {

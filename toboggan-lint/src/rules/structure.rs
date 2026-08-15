@@ -11,7 +11,7 @@ pub(crate) struct EmptySlide;
 
 impl Rule for EmptySlide {
     fn id(&self) -> RuleId {
-        RuleId("structure/empty-slide")
+        super::ids::STRUCTURE_EMPTY_SLIDE
     }
 
     fn default_severity(&self) -> Severity {
@@ -42,7 +42,7 @@ pub(crate) struct TitleMissing;
 
 impl Rule for TitleMissing {
     fn id(&self) -> RuleId {
-        RuleId("structure/title-missing")
+        super::ids::STRUCTURE_TITLE_MISSING
     }
 
     fn default_severity(&self) -> Severity {
@@ -70,7 +70,7 @@ pub(crate) struct DuplicatePartName;
 
 impl Rule for DuplicatePartName {
     fn id(&self) -> RuleId {
-        RuleId("structure/duplicate-part-name")
+        super::ids::STRUCTURE_DUPLICATE_PART_NAME
     }
 
     fn default_severity(&self) -> Severity {

@@ -10,7 +10,7 @@ pub(crate) struct TerminalInPart;
 
 impl Rule for TerminalInPart {
     fn id(&self) -> RuleId {
-        RuleId("term/in-part")
+        super::ids::TERM_IN_PART
     }
 
     fn default_severity(&self) -> Severity {
@@ -37,7 +37,7 @@ pub(crate) struct UnresolvedCwd;
 
 impl Rule for UnresolvedCwd {
     fn id(&self) -> RuleId {
-        RuleId("term/unresolved-cwd")
+        super::ids::TERM_UNRESOLVED_CWD
     }
 
     fn default_severity(&self) -> Severity {
@@ -70,7 +70,7 @@ pub(crate) struct DuplicateCwd;
 
 impl Rule for DuplicateCwd {
     fn id(&self) -> RuleId {
-        RuleId("term/duplicate-cwd")
+        super::ids::TERM_DUPLICATE_CWD
     }
 
     fn default_severity(&self) -> Severity {

@@ -1,4 +1,5 @@
 pub(crate) mod build_serve;
+pub(crate) mod deck;
 pub(crate) mod lint;
 pub(crate) mod misc;
 pub(crate) mod new;

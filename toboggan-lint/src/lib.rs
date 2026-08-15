@@ -2,13 +2,13 @@
 //!
 //! The library runs a set of [`Rule`]s over a parsed [`Talk`] and produces a
 //! framework-neutral [`LintReport`]. It deliberately has no CLI/terminal
-//! dependencies so it can be reused by `toboggan-cli` (rendered with miette) and
-//! `toboggan-mcp` (serialized to JSON).
+//! dependencies, so the consumers decide on presentation: the `toboggan` binary
+//! prints coloured lines, and `toboggan-mcp` serializes the report to JSON.
 
 mod diagnostic;
 mod report;
 mod rule;
-mod rules;
+pub mod rules;
 
 use toboggan_core::Talk;
 
@@ -16,13 +16,45 @@ use self::diagnostic::SlideRef as Ref;
 pub use self::diagnostic::{LintDiagnostic, RuleId, Severity, SlideRef};
 pub use self::report::LintReport;
 pub use self::rule::{LintConfig, Rule, RuleContext};
-pub use self::rules::all_rules;
+pub use self::rules::{all_rule_ids, all_rules, ids};
+
+/// Reported when a disable directive names a rule that does not exist.
+///
+/// Not in [`ids`] because no `Rule` produces it: it is the linter reporting on
+/// its own configuration.
+const UNKNOWN_RULE: &str = "lint/unknown-rule";
 
 /// Lints `talk` with the given configuration and returns a [`LintReport`].
 #[must_use]
 pub fn lint(talk: &Talk, config: &LintConfig) -> LintReport {
     let rules = all_rules();
     let mut out = Vec::new();
+
+    // A rule id nobody recognises silences nothing, so a typo in `disabled_rules`
+    // or a `<!-- lint-disable -->` directive would otherwise leave the author
+    // believing a rule was off. Reported as a diagnostic rather than logged: this
+    // library has no logger, and the author is the one who can fix it.
+    let known = all_rule_ids();
+    let is_known = |id: &str| known.iter().any(|rule| rule.as_str() == id);
+    for id in config.disabled.iter().filter(|id| !is_known(id)) {
+        out.push(LintDiagnostic::talk(
+            RuleId(UNKNOWN_RULE),
+            Severity::Warning,
+            format!("unknown lint rule id `{id}` in the disabled list"),
+        ));
+    }
+    for slide in &talk.slides {
+        for id in slide.lint_disabled.iter().filter(|id| !is_known(id)) {
+            out.push(LintDiagnostic::talk(
+                RuleId(UNKNOWN_RULE),
+                Severity::Warning,
+                format!(
+                    "unknown lint rule id `{id}` disabled on slide \"{}\"",
+                    slide.title
+                ),
+            ));
+        }
+    }
 
     // Talk-level rules first.
     for rule in &rules {
@@ -99,8 +131,8 @@ mod tests {
             .find(|diagnostic| diagnostic.rule.as_str() == "pause/in-part")
             .unwrap_or_else(|| panic!("expected pause/in-part, got {:?}", report.diagnostics));
         assert_eq!(diagnostic.severity, Severity::Warning);
-        assert_eq!(report.warnings, 1);
-        assert_eq!(report.errors, 0);
+        assert_eq!(report.warnings(), 1);
+        assert_eq!(report.errors(), 0);
     }
 
     #[test]
@@ -214,6 +246,194 @@ mod tests {
                 .diagnostics
                 .iter()
                 .any(|diagnostic| diagnostic.rule.as_str() == "html/img-missing-alt")
+        );
+    }
+    /// Finds the ids of every diagnostic in `report`.
+    fn ids_in(report: &LintReport) -> Vec<&str> {
+        report
+            .diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.rule.as_str())
+            .collect()
+    }
+
+    fn fires(report: &LintReport, rule: RuleId) -> bool {
+        ids_in(report).contains(&rule.as_str())
+    }
+
+    /// Every rule must be reachable: a rule that no input can trigger is dead
+    /// weight, and one whose id is misspelled can never be disabled.
+    #[test]
+    fn every_rule_id_is_unique() {
+        let mut ids = all_rule_ids()
+            .into_iter()
+            .map(RuleId::as_str)
+            .collect::<Vec<_>>();
+        ids.sort_unstable();
+        let count = ids.len();
+        ids.dedup();
+        assert_eq!(
+            ids.len(),
+            count,
+            "duplicate rule ids would be undisableable"
+        );
+    }
+
+    #[test]
+    fn detects_empty_step() {
+        let slide = Slide::new("T").with_body(Content::html(r#"<div class="step"></div>"#));
+        let report = lint(&talk_with(vec![slide]), &LintConfig::default());
+        assert!(
+            fires(&report, ids::PAUSE_EMPTY_STEP),
+            "{:?}",
+            ids_in(&report)
+        );
+    }
+
+    #[test]
+    fn detects_raw_script() {
+        let slide = Slide::new("T").with_body(Content::html("<script>alert(1)</script>"));
+        let report = lint(&talk_with(vec![slide]), &LintConfig::default());
+        assert!(
+            fires(&report, ids::HTML_RAW_SCRIPT),
+            "{:?}",
+            ids_in(&report)
+        );
+    }
+
+    #[test]
+    fn detects_empty_slide() {
+        let report = lint(&talk_with(vec![Slide::default()]), &LintConfig::default());
+        assert!(
+            fires(&report, ids::STRUCTURE_EMPTY_SLIDE),
+            "{:?}",
+            ids_in(&report)
+        );
+    }
+
+    #[test]
+    fn detects_missing_title_on_a_part() {
+        let part = Slide {
+            kind: SlideKind::Part,
+            body: Content::html("<p>x</p>"),
+            ..Default::default()
+        };
+        let report = lint(&talk_with(vec![part]), &LintConfig::default());
+        assert!(
+            fires(&report, ids::STRUCTURE_TITLE_MISSING),
+            "{:?}",
+            ids_in(&report)
+        );
+    }
+
+    /// The three `max_*` thresholds are `>` comparisons, so a slide sitting
+    /// exactly on the limit must stay quiet. A `>` → `>=` slip is invisible
+    /// without this pair of assertions.
+    #[test]
+    fn excessive_words_fires_only_above_the_limit() {
+        let config = LintConfig {
+            max_words_per_slide: 5,
+            ..LintConfig::default()
+        };
+        // The title counts toward the total, so a 1-word title plus 4 body words
+        // sits exactly on the limit of 5.
+        let at_limit = Slide::new("T").with_body(Content::html("<p>one two three four</p>"));
+        let report = lint(&talk_with(vec![at_limit]), &config);
+        assert!(
+            !fires(&report, ids::CONTENT_EXCESSIVE_WORDS),
+            "{:?}",
+            ids_in(&report)
+        );
+
+        let over = Slide::new("T").with_body(Content::html("<p>one two three four five</p>"));
+        let report = lint(&talk_with(vec![over]), &config);
+        assert!(
+            fires(&report, ids::CONTENT_EXCESSIVE_WORDS),
+            "{:?}",
+            ids_in(&report)
+        );
+    }
+
+    #[test]
+    fn too_many_images_fires_only_above_the_limit() {
+        let config = LintConfig {
+            max_images_per_slide: 2,
+            ..LintConfig::default()
+        };
+        let img = r#"<img src="a.png" alt="a">"#;
+        let at_limit = Slide::new("T").with_body(Content::html(format!("{img}{img}")));
+        let report = lint(&talk_with(vec![at_limit]), &config);
+        assert!(
+            !fires(&report, ids::CONTENT_TOO_MANY_IMAGES),
+            "{:?}",
+            ids_in(&report)
+        );
+
+        let over = Slide::new("T").with_body(Content::html(format!("{img}{img}{img}")));
+        let report = lint(&talk_with(vec![over]), &config);
+        assert!(
+            fires(&report, ids::CONTENT_TOO_MANY_IMAGES),
+            "{:?}",
+            ids_in(&report)
+        );
+    }
+
+    #[test]
+    fn too_many_steps_fires_only_above_the_limit() {
+        let config = LintConfig {
+            max_steps_per_slide: 2,
+            ..LintConfig::default()
+        };
+        let step = r#"<div class="step">x</div>"#;
+        let at_limit = Slide::new("T").with_body(Content::html(format!("{step}{step}")));
+        let report = lint(&talk_with(vec![at_limit]), &config);
+        assert!(
+            !fires(&report, ids::PAUSE_TOO_MANY_STEPS),
+            "{:?}",
+            ids_in(&report)
+        );
+
+        let over = Slide::new("T").with_body(Content::html(format!("{step}{step}{step}")));
+        let report = lint(&talk_with(vec![over]), &config);
+        assert!(
+            fires(&report, ids::PAUSE_TOO_MANY_STEPS),
+            "{:?}",
+            ids_in(&report)
+        );
+    }
+
+    /// A rule id nobody recognises silences nothing, so it has to be reported —
+    /// otherwise a typo leaves the author believing a rule is off.
+    #[test]
+    fn unknown_disabled_rule_id_is_reported() {
+        let mut config = LintConfig::default();
+        config.disabled.insert("html/img-missing-alts".to_owned());
+        let slide = Slide::new("T").with_body(Content::html(r#"<img src="a.png">"#));
+        let report = lint(&talk_with(vec![slide]), &config);
+        assert!(
+            ids_in(&report).contains(&"lint/unknown-rule"),
+            "expected an unknown-rule diagnostic, got {:?}",
+            ids_in(&report)
+        );
+        // ...and the real rule still fires, because nothing was silenced.
+        assert!(
+            fires(&report, ids::HTML_IMG_MISSING_ALT),
+            "{:?}",
+            ids_in(&report)
+        );
+    }
+
+    /// `disable` takes a `RuleId`, so this cannot drift from the rule's own id.
+    #[test]
+    fn disable_by_rule_id_silences_the_rule() {
+        let mut config = LintConfig::default();
+        config.disable(ids::HTML_IMG_MISSING_ALT);
+        let slide = Slide::new("T").with_body(Content::html(r#"<img src="a.png">"#));
+        let report = lint(&talk_with(vec![slide]), &config);
+        assert!(
+            !fires(&report, ids::HTML_IMG_MISSING_ALT),
+            "{:?}",
+            ids_in(&report)
         );
     }
 }

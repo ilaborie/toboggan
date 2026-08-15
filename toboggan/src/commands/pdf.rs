@@ -14,28 +14,42 @@ use crate::cli::PdfArgs;
 pub(crate) fn build_pdf(args: PdfArgs) -> anyhow::Result<()> {
     super::ensure_typst()?;
 
-    let settings = args.cli_settings();
+    let mut settings = args.cli_settings();
     let PdfArgs { input, output, .. } = args;
-    let output = output.unwrap_or_else(|| default_pdf_path(&input));
+    let deck = super::deck::resolve_deck(&input);
+    settings.input = Some(deck.slides.clone());
+    let output = output.unwrap_or_else(|| default_pdf_path(&deck.slides));
 
-    let parse_result = toboggan_cli::parse_presentation(&input, &settings)
-        .map_err(|err| anyhow::anyhow!("{err}"))?;
-    let talk = parse_result.to_talk();
+    let talk = super::deck::build_talk(&deck.slides, &settings)?;
     let typst_source = toboggan_cli::output::serialize_talk(&talk, OutputFormat::Typst)
         .map_err(|err| anyhow::anyhow!("{err}"))?;
 
-    let typ_path = output.with_extension("typ");
+    // Two things have to line up for a slide's `#image("../public/logo.png")` to
+    // resolve: the intermediate `.typ` must sit where the slides do (typst
+    // resolves relative paths against the *file*), and the project root must be
+    // the deck (typst refuses any path that escapes it). Compiling a temp file
+    // from elsewhere failed every such slide with "would escape the project root".
+    let root = deck.root();
+    let typ_path = deck.slides.join(".toboggan-pdf.typ");
     std::fs::write(&typ_path, &typst_source)
         .map_err(|err| anyhow::anyhow!("writing {}: {err}", typ_path.display()))?;
 
     let status = Command::new("typst")
         .arg("compile")
+        .arg("--root")
+        .arg(&root)
         .arg(&typ_path)
         .arg(&output)
         .status()
         .map_err(|err| {
             anyhow::anyhow!("could not run `typst` (is it installed and on PATH?): {err}")
         })?;
+
+    // Best-effort: the PDF is the deliverable, and leaving the scratch file
+    // behind on success was a reported annoyance.
+    if let Err(err) = std::fs::remove_file(&typ_path) {
+        tracing::debug!("could not remove {}: {err}", typ_path.display());
+    }
 
     if !status.success() {
         anyhow::bail!("`typst compile` failed with status {status}");

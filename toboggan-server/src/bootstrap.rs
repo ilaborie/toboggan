@@ -8,8 +8,8 @@ use tracing::{info, instrument, warn};
 use utoipa::openapi::OpenApi;
 
 use crate::{
-    ClientService, Settings, TalkService, TobogganState, WatchConfig, routes_with_cors,
-    start_watch_task,
+    ClientService, ServerSettings, Settings, TalkService, TobogganState, WatchConfig, WatchTarget,
+    routes_with_cors, start_watch_task,
 };
 
 /// Loads the talk from `settings.talk` and serves it.
@@ -25,13 +25,12 @@ pub async fn launch(settings: Settings) -> anyhow::Result<()> {
     let watch = settings.watch.then(|| {
         let reload_path = settings.talk.clone();
         WatchConfig {
-            paths: vec![settings.talk.clone()],
-            recursive: false,
+            target: WatchTarget::TalkFile(settings.talk.clone()),
             reload: Box::new(move || load_talk_sync(&reload_path)),
         }
     });
 
-    launch_with_talk(talk, settings, watch).await
+    launch_with_talk(talk, settings.server, watch).await
 }
 
 /// Serves an already-built [`Talk`], optionally watching a path for reloads.
@@ -46,11 +45,11 @@ pub async fn launch(settings: Settings) -> anyhow::Result<()> {
 #[doc(hidden)]
 pub async fn launch_with_talk(
     talk: Talk,
-    settings: Settings,
+    settings: ServerSettings,
     watch: Option<WatchConfig>,
 ) -> anyhow::Result<()> {
     info!(?settings, "launching server...");
-    let Settings {
+    let ServerSettings {
         host,
         port,
         max_clients,
@@ -185,6 +184,19 @@ async fn setup_shutdown_signal(timeout: Duration) {
         "Waiting up to {} seconds for graceful shutdown",
         timeout.as_secs()
     );
+
+    // Actually enforce the timeout the flag advertises. Axum's graceful shutdown
+    // waits for every open connection to close, and a presentation WebSocket
+    // never closes on its own — so Ctrl+C hung for as long as one browser tab
+    // stayed open, however `--shutdown-timeout` was set.
+    tokio::spawn(async move {
+        tokio::time::sleep(timeout).await;
+        warn!(
+            timeout_secs = timeout.as_secs(),
+            "graceful shutdown timed out with connections still open; exiting"
+        );
+        std::process::exit(0);
+    });
 
     info!("Shutdown signal processed, server will now terminate gracefully");
 }

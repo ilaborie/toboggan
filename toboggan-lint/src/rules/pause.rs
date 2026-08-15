@@ -9,7 +9,7 @@ pub(crate) struct PauseInPart;
 
 impl Rule for PauseInPart {
     fn id(&self) -> RuleId {
-        RuleId("pause/in-part")
+        super::ids::PAUSE_IN_PART
     }
 
     fn default_severity(&self) -> Severity {
@@ -42,7 +42,7 @@ pub(crate) struct EmptyStep;
 
 impl Rule for EmptyStep {
     fn id(&self) -> RuleId {
-        RuleId("pause/empty-step")
+        super::ids::PAUSE_EMPTY_STEP
     }
 
     fn default_severity(&self) -> Severity {
@@ -70,7 +70,7 @@ pub(crate) struct TooManySteps;
 
 impl Rule for TooManySteps {
     fn id(&self) -> RuleId {
-        RuleId("pause/too-many-steps")
+        super::ids::PAUSE_TOO_MANY_STEPS
     }
 
     fn default_severity(&self) -> Severity {

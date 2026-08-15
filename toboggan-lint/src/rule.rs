@@ -32,6 +32,16 @@ impl Default for LintConfig {
 }
 
 impl LintConfig {
+    /// Disables `rule`.
+    ///
+    /// Takes a [`RuleId`] rather than a string so callers reference
+    /// [`crate::ids`] and a renamed rule breaks the build instead of silently
+    /// disabling nothing.
+    pub fn disable(&mut self, rule: RuleId) -> &mut Self {
+        self.disabled.insert(rule.as_str().to_owned());
+        self
+    }
+
     /// Returns whether `rule` is enabled.
     #[must_use]
     pub fn is_enabled(&self, rule: RuleId) -> bool {

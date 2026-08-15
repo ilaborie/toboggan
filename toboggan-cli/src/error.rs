@@ -21,6 +21,22 @@ pub enum TobogganCliError {
     )]
     ReadFile { path: PathBuf, source: io::Error },
 
+    #[display("{count} slide(s) failed to parse:\n  {details}")]
+    #[diagnostic(
+        code(toboggan_cli::slides_failed_to_parse),
+        help("Fix the slides above, or mark them `skip = true` to exclude them deliberately")
+    )]
+    SlidesFailedToParse { count: usize, details: String },
+
+    #[display("Invalid code embed `{}`: {reason}", path.display())]
+    #[diagnostic(
+        code(toboggan_cli::invalid_code_embed),
+        help(
+            "`<!-- code:lang:path -->` paths are relative to the deck root and must stay inside it"
+        )
+    )]
+    InvalidCodeEmbed { path: PathBuf, reason: String },
+
     #[display("Failed to create file: {}", path.display())]
     #[diagnostic(
         code(toboggan_cli::create_file),

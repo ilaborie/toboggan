@@ -3,16 +3,18 @@ use serde::Serialize;
 use crate::diagnostic::{LintDiagnostic, Severity};
 
 /// The result of linting a talk: all diagnostics plus severity counts.
+///
+/// The counts are derived from `diagnostics` and kept private so they cannot
+/// drift from it. That is not tidiness: `toboggan lint` decides its exit code
+/// from [`Self::errors`] and [`Self::warnings`], so a desynced count is a lint
+/// gate that passes on a failing deck. Build reports with [`Self::new`].
 #[derive(Debug, Clone, Serialize)]
 pub struct LintReport {
     /// All diagnostics, in discovery order.
     pub diagnostics: Vec<LintDiagnostic>,
-    /// Number of error-severity diagnostics.
-    pub errors: usize,
-    /// Number of warning-severity diagnostics.
-    pub warnings: usize,
-    /// Number of info-severity diagnostics.
-    pub infos: usize,
+    errors: usize,
+    warnings: usize,
+    infos: usize,
 }
 
 impl LintReport {
@@ -35,6 +37,24 @@ impl LintReport {
             warnings,
             infos,
         }
+    }
+
+    /// Number of error-severity diagnostics.
+    #[must_use]
+    pub fn errors(&self) -> usize {
+        self.errors
+    }
+
+    /// Number of warning-severity diagnostics.
+    #[must_use]
+    pub fn warnings(&self) -> usize {
+        self.warnings
+    }
+
+    /// Number of info-severity diagnostics.
+    #[must_use]
+    pub fn infos(&self) -> usize {
+        self.infos
     }
 
     /// Returns `true` when there are no diagnostics at all.

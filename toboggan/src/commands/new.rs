@@ -30,8 +30,12 @@ pub(crate) fn scaffold(args: NewArgs) -> anyhow::Result<()> {
     println!("✅ Created presentation \"{title}\" at {}", dir.display());
 
     // Wire up Claude Code authoring by default (opt out with --no-mcp/--no-skill).
+    //
+    // The MCP server's root is the *slides* folder, not the deck root: pointing
+    // it at the root made `talk_outline` come back empty and `add_slide` write
+    // orphan files next to `slides/` where nothing would ever read them.
     if !args.no_mcp {
-        match toboggan_mcp::write_mcp_json(dir) {
+        match toboggan_mcp::write_mcp_json(dir, &dir.join("slides")) {
             Ok(path) => println!("✅ Wrote MCP config at {}", path.display()),
             Err(err) => warn!("could not write .mcp.json ({err}); skipping MCP setup"),
         }
@@ -40,6 +44,8 @@ pub(crate) fn scaffold(args: NewArgs) -> anyhow::Result<()> {
         let skill_args = SkillsArgs {
             target: McpClient::ClaudeCode,
             dir: Some(dir.clone()),
+            // A freshly scaffolded directory has no SKILL.md to protect.
+            force: false,
         };
         if let Err(err) = crate::commands::skills::install(skill_args) {
             warn!("could not install authoring skill ({err}); skipping");
@@ -76,7 +82,14 @@ fn already_in_repo(dir: &Path, vcs: Vcs) -> bool {
         Vcs::Git => ".git",
         Vcs::None => return false,
     };
-    let mut current = Some(dir);
+    // Canonicalize first: `Path::parent` on a relative `"mytalk"` yields `""` and
+    // then `None`, so the walk stopped at the deck itself and never saw an
+    // enclosing repo. `toboggan new mytalk` from inside a checkout would then
+    // initialize a nested repository, while the same command with an absolute
+    // path correctly skipped.
+    let canonical = dir.canonicalize();
+    let start = canonical.as_deref().unwrap_or(dir);
+    let mut current = Some(start);
     while let Some(path) = current {
         if path.join(marker).exists() {
             return true;

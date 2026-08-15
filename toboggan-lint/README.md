@@ -4,8 +4,8 @@ Library-first linter for [Toboggan](https://github.com/ilaborie/toboggan)
 presentations. Runs a set of rules over a parsed `Talk` and produces a
 framework-neutral, serializable `LintReport`.
 
-It has no CLI/terminal dependencies, so it is reused by `toboggan-cli` (rendered
-with miette) and `toboggan-mcp` (serialized to JSON).
+It has no CLI/terminal dependencies, so it is consumed by the `toboggan` binary (printed
+with `owo_colors`) and `toboggan-mcp` (serialized to JSON).
 
 ```rust
 use toboggan_lint::{lint, LintConfig};

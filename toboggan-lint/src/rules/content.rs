@@ -9,7 +9,7 @@ pub(crate) struct ExcessiveWords;
 
 impl Rule for ExcessiveWords {
     fn id(&self) -> RuleId {
-        RuleId("content/excessive-words")
+        super::ids::CONTENT_EXCESSIVE_WORDS
     }
 
     fn default_severity(&self) -> Severity {
@@ -41,7 +41,7 @@ pub(crate) struct TooManyImages;
 
 impl Rule for TooManyImages {
     fn id(&self) -> RuleId {
-        RuleId("content/too-many-images")
+        super::ids::CONTENT_TOO_MANY_IMAGES
     }
 
     fn default_severity(&self) -> Severity {

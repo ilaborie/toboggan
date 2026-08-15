@@ -19,15 +19,14 @@ pub(crate) fn run_lint(args: LintArgs) -> anyhow::Result<()> {
         build,
     } = args;
 
-    let settings = build.into_cli_settings(input.clone(), true);
-    let parse_result = toboggan_cli::parse_presentation(&input, &settings)
-        .map_err(|err| anyhow::anyhow!("{err}"))?;
-    let talk = parse_result.to_talk();
+    let slides = super::deck::resolve_deck(&input).slides;
+    let settings = build.into_cli_settings(slides.clone(), true);
+    let talk = super::deck::build_talk(&slides, &settings)?;
 
     // Spell checking (`spelling/typo`) runs by default; `--no-spell` opts out.
     let mut config = LintConfig::default();
     if no_spell {
-        config.disabled.insert("spelling/typo".to_owned());
+        config.disable(toboggan_lint::ids::SPELLING_TYPO);
     }
     let report = toboggan_lint::lint(&talk, &config);
 
@@ -42,9 +41,9 @@ pub(crate) fn run_lint(args: LintArgs) -> anyhow::Result<()> {
     if reaches_threshold(&report, deny) {
         anyhow::bail!(
             "lint failed: {} error(s), {} warning(s), {} info(s)",
-            report.errors,
-            report.warnings,
-            report.infos
+            report.errors(),
+            report.warnings(),
+            report.infos()
         );
     }
     Ok(())
@@ -66,7 +65,9 @@ fn print_report(report: &LintReport) {
 
     println!(
         "\n{} error(s), {} warning(s), {} info(s)",
-        report.errors, report.warnings, report.infos
+        report.errors(),
+        report.warnings(),
+        report.infos()
     );
 }
 
@@ -106,8 +107,55 @@ fn severity_label(severity: Severity) -> String {
 
 fn reaches_threshold(report: &LintReport, deny: DenyLevel) -> bool {
     match deny {
-        DenyLevel::Error => report.errors > 0,
-        DenyLevel::Warning => report.errors > 0 || report.warnings > 0,
+        DenyLevel::Error => report.errors() > 0,
+        DenyLevel::Warning => report.errors() > 0 || report.warnings() > 0,
         DenyLevel::Info => !report.is_clean(),
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use toboggan_lint::{LintDiagnostic, LintReport, Severity};
+
+    use super::*;
+
+    fn report_with(severities: &[Severity]) -> LintReport {
+        let diagnostics = severities
+            .iter()
+            .map(|severity| {
+                LintDiagnostic::talk(toboggan_lint::ids::PAUSE_IN_PART, *severity, "x".to_owned())
+            })
+            .collect();
+        LintReport::new(diagnostics)
+    }
+
+    /// This function decides `toboggan lint`'s exit code, which is what CI gates
+    /// on — so every arm is pinned. Swapping `errors` for `warnings` in the
+    /// `Error` arm would make every CI run green on a deck with real errors.
+    #[test]
+    fn deny_error_fires_only_on_errors() {
+        let deny = DenyLevel::Error;
+        assert!(!reaches_threshold(&report_with(&[]), deny));
+        assert!(!reaches_threshold(&report_with(&[Severity::Info]), deny));
+        assert!(!reaches_threshold(&report_with(&[Severity::Warning]), deny));
+        assert!(reaches_threshold(&report_with(&[Severity::Error]), deny));
+    }
+
+    #[test]
+    fn deny_warning_fires_on_warnings_and_errors() {
+        let deny = DenyLevel::Warning;
+        assert!(!reaches_threshold(&report_with(&[]), deny));
+        assert!(!reaches_threshold(&report_with(&[Severity::Info]), deny));
+        assert!(reaches_threshold(&report_with(&[Severity::Warning]), deny));
+        assert!(reaches_threshold(&report_with(&[Severity::Error]), deny));
+    }
+
+    #[test]
+    fn deny_info_fires_on_any_diagnostic() {
+        let deny = DenyLevel::Info;
+        assert!(!reaches_threshold(&report_with(&[]), deny));
+        assert!(reaches_threshold(&report_with(&[Severity::Info]), deny));
+        assert!(reaches_threshold(&report_with(&[Severity::Error]), deny));
     }
 }

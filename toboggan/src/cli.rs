@@ -93,8 +93,12 @@ pub(crate) struct BuildOptions {
 }
 
 impl BuildOptions {
-    /// Builds a [`toboggan_cli::Settings`] for `input`, suppressing the stats
-    /// output by default (the server/serve flow does not want it on stdout).
+    /// Builds a [`toboggan_cli::Settings`] for `input`.
+    ///
+    /// `no_stats` is the caller's choice, not a default: `build` forwards its
+    /// `--no-stats` flag, `stats` passes `false` because printing them is the
+    /// whole point, and the serve/lint/pdf paths pass `true` because they do not
+    /// want statistics on stdout.
     pub(crate) fn into_cli_settings(
         self,
         input: PathBuf,
@@ -153,11 +157,10 @@ pub(crate) struct ServeOptions {
 }
 
 impl ServeOptions {
-    fn into_server_settings(self, talk: PathBuf, watch: bool) -> toboggan_server::Settings {
-        toboggan_server::Settings {
+    fn into_server_settings(self) -> toboggan_server::ServerSettings {
+        toboggan_server::ServerSettings {
             host: self.host,
             port: self.port,
-            talk,
             max_clients: self.max_clients,
             heartbeat_interval_secs: 30,
             shutdown_timeout_secs: 30,
@@ -165,7 +168,6 @@ impl ServeOptions {
             allowed_origins: self.allowed_origins,
             public_dir: self.public_dir,
             thumbnails_dir: self.thumbnails_dir,
-            watch,
             shell: self.shell,
             open: self.open,
         }
@@ -189,20 +191,25 @@ pub(crate) struct DefaultArgs {
     pub(crate) no_watch: bool,
 }
 
+/// Everything [`DefaultArgs::resolve`] works out from the default action's flags.
+///
+/// A named struct rather than a 4-tuple: the trailing `bool` meant "watch the
+/// deck folder", which was easy to misread next to the server settings.
+pub(crate) struct ResolvedDefault {
+    pub(crate) input: PathBuf,
+    pub(crate) cli: toboggan_cli::Settings,
+    pub(crate) server: toboggan_server::ServerSettings,
+    /// Whether to watch the deck folder and hot-swap the served talk.
+    pub(crate) watch: bool,
+}
+
 impl DefaultArgs {
     /// Returns the input folder, the CLI parse settings, the server settings, and
     /// whether to watch the folder.
     ///
     /// # Errors
     /// Returns an error if no input folder was given or it is not a directory.
-    pub(crate) fn resolve(
-        self,
-    ) -> anyhow::Result<(
-        PathBuf,
-        toboggan_cli::Settings,
-        toboggan_server::Settings,
-        bool,
-    )> {
+    pub(crate) fn resolve(self) -> anyhow::Result<ResolvedDefault> {
         let input = self.input.ok_or_else(|| {
             anyhow::anyhow!(
                 "no presentation folder given; pass a folder or a subcommand (try --help)"
@@ -212,10 +219,17 @@ impl DefaultArgs {
             anyhow::bail!("input is not a directory: {}", input.display());
         }
         let watch = !self.no_watch;
-        let cli_settings = self.build.into_cli_settings(input.clone(), true);
-        // The in-memory serve does not read `talk` from disk; use the folder as a placeholder.
-        let server_settings = self.serve.into_server_settings(input.clone(), false);
-        Ok((input, cli_settings, server_settings, watch))
+        let cli = self.build.into_cli_settings(input.clone(), true);
+        // `ServerSettings`, not `Settings`: this path already has the talk in
+        // memory, so there is no talk file and no `Settings::watch` to fill in
+        // with a placeholder. Watching is driven by the `watch` field below.
+        let server = self.serve.into_server_settings();
+        Ok(ResolvedDefault {
+            input,
+            cli,
+            server,
+            watch,
+        })
     }
 }
 
@@ -224,7 +238,7 @@ pub(crate) struct BuildArgs {
     /// Input folder to process
     pub(crate) input: PathBuf,
 
-    /// Output file (default: stdout). Extension drives the format.
+    /// Output file (required to write the deck). Extension drives the format.
     #[arg(short, long)]
     pub(crate) output: Option<PathBuf>,
 
@@ -264,7 +278,11 @@ pub(crate) struct ServeArgs {
 
 impl From<ServeArgs> for toboggan_server::Settings {
     fn from(args: ServeArgs) -> Self {
-        args.serve.into_server_settings(args.talk, args.watch)
+        Self {
+            server: args.serve.into_server_settings(),
+            talk: args.talk,
+            watch: args.watch,
+        }
     }
 }
 
@@ -348,7 +366,7 @@ pub(crate) struct PdfArgs {
     /// Input folder to process
     pub(crate) input: PathBuf,
 
-    /// Output PDF path (default: <folder>.pdf)
+    /// Output PDF path (default: <deck-name>.pdf in the current directory)
     #[arg(short, long)]
     pub(crate) output: Option<PathBuf>,
 
@@ -449,6 +467,10 @@ pub(crate) struct SkillsArgs {
     /// Directory to install the skill into (default: current directory)
     #[arg(long)]
     pub(crate) dir: Option<PathBuf>,
+
+    /// Overwrite an existing SKILL.md
+    #[arg(long)]
+    pub(crate) force: bool,
 }
 
 #[derive(Debug, Args)]
@@ -462,4 +484,21 @@ fn parse_date(input: &str) -> Result<Date, String> {
     input
         .parse::<Date>()
         .map_err(|_| format!("invalid date '{input}', expected YYYY-MM-DD"))
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::CommandFactory as _;
+
+    use super::*;
+
+    /// Clap validates its argument graph at *runtime*, and `Cli::command()` is on
+    /// the live path for `--help` and `toboggan completion`. A duplicate short
+    /// flag or colliding id across the flattened `BuildOptions`/`ServeOptions`
+    /// would therefore panic for users rather than fail the build; this covers
+    /// every subcommand and flag definition in one assertion.
+    #[test]
+    fn cli_definition_is_valid() {
+        Cli::command().debug_assert();
+    }
 }

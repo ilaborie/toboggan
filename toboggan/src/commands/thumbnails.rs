@@ -21,10 +21,9 @@ pub(crate) fn generate(args: ThumbnailsArgs) -> anyhow::Result<()> {
 
     super::ensure_typst()?;
 
-    let settings = build.into_cli_settings(input.clone(), true);
-    let parse_result = toboggan_cli::parse_presentation(&input, &settings)
-        .map_err(|err| anyhow::anyhow!("{err}"))?;
-    let talk = parse_result.to_talk();
+    let slides = super::deck::resolve_deck(&input).slides;
+    let settings = build.into_cli_settings(slides.clone(), true);
+    let talk = super::deck::build_talk(&slides, &settings)?;
 
     let out_dir = output.unwrap_or_else(|| PathBuf::from("overview"));
     let options = ThumbnailOptions { search: !no_search };

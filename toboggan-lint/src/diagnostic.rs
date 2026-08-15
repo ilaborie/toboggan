@@ -55,8 +55,8 @@ impl SlideRef {
     }
 }
 
-/// A single lint finding. Framework-neutral: the CLI renders it with miette, the
-/// MCP server serializes it to JSON.
+/// A single lint finding. Framework-neutral: the `toboggan` binary prints it
+/// with `owo_colors`, and the MCP server serializes it to JSON.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct LintDiagnostic {
     /// The rule that produced this diagnostic.

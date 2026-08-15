@@ -46,10 +46,15 @@ pub fn generate_thumbnails(talk: &Talk, out_dir: &Path, options: ThumbnailOption
     std::fs::create_dir_all(out_dir)
         .map_err(|source| TobogganCliError::create_file(out_dir.to_path_buf(), source))?;
 
+    // Slides reference images relative to the deck root (`../public/logo.png`),
+    // so typst has to be told where that is. Without it every such slide fails
+    // with "path would escape the project root".
+    let root = super::typst::deck_root(talk);
+    let slides_dir = talk.source_dir.as_deref().map(Path::new);
     for (index, slide) in talk.slides.iter().enumerate() {
         let typst_source = super::typst::generate_thumbnail_typst(slide);
         let png = out_dir.join(format!("thumb-{index:04}.png"));
-        compile_first_page_png(&typst_source, &png)?;
+        compile_first_page_png(&typst_source, &png, root.as_deref(), slides_dir)?;
     }
 
     let entries = build_entries(talk);
@@ -74,16 +79,31 @@ pub fn generate_thumbnails(talk: &Talk, out_dir: &Path, options: ThumbnailOption
 /// A `{p}` output template is used so slides whose content overflows into extra
 /// pages still compile; only page 1 (the slide itself) is kept, keeping the
 /// thumbnail index aligned with the slide index.
-fn compile_first_page_png(typst_source: &[u8], png: &Path) -> Result<()> {
+fn compile_first_page_png(
+    typst_source: &[u8],
+    png: &Path,
+    root: Option<&Path>,
+    slides_dir: Option<&Path>,
+) -> Result<()> {
     let dir = tempfile::tempdir()
         .map_err(|source| TobogganCliError::create_file(png.to_path_buf(), source))?;
-    let input = dir.path().join("slide.typ");
+    // Alongside the slides when we know where they are, so a slide's relative
+    // `#image("../public/…")` resolves the same way it does on disk; a temp dir
+    // otherwise (a talk deserialized from `.toml` references no local files).
+    let input = slides_dir.map_or_else(
+        || dir.path().join("slide.typ"),
+        |slides| slides.join(".toboggan-thumb.typ"),
+    );
     std::fs::write(&input, typst_source)
         .map_err(|source| TobogganCliError::write_file(input.clone(), source))?;
 
     let pattern = dir.path().join("page-{p}.png");
-    let output = Command::new("typst")
-        .arg("compile")
+    let mut command = Command::new("typst");
+    command.arg("compile");
+    if let Some(root) = root {
+        command.arg("--root").arg(root);
+    }
+    let output = command
         .arg(&input)
         .arg(&pattern)
         .output()
@@ -97,6 +117,9 @@ fn compile_first_page_png(typst_source: &[u8], png: &Path) -> Result<()> {
         )));
     }
 
+    if slides_dir.is_some() {
+        let _ = std::fs::remove_file(&input);
+    }
     let first_page = dir.path().join("page-1.png");
     std::fs::copy(&first_page, png)
         .map_err(|source| TobogganCliError::write_file(png.to_path_buf(), source))?;

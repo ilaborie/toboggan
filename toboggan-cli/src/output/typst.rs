@@ -1,3 +1,26 @@
+use std::path::{Path, PathBuf};
+/// The Typst project root for `talk`: the deck root its slides' relative asset
+/// paths resolve against.
+///
+/// `source_dir` is the *slides* folder, but a slide writes `../public/logo.png`,
+/// so the root has to be its parent. Compiling with any other root makes typst
+/// reject every such image with "path would escape the project root".
+///
+/// `None` when the talk was not built from a folder (a deserialized `.toml`
+/// does not carry `source_dir`); the caller then compiles without `--root`,
+/// which is correct for a deck that references no local files.
+#[must_use]
+pub fn deck_root(talk: &Talk) -> Option<PathBuf> {
+    let slides = Path::new(talk.source_dir.as_deref()?);
+    slides
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .map_or_else(
+            || Some(slides.to_path_buf()),
+            |parent| Some(parent.to_path_buf()),
+        )
+}
+
 use std::fmt::Write as _;
 
 use comrak::nodes::{AlertType, AstNode, ListType, NodeValue};
@@ -89,7 +112,9 @@ fn write_title_slide(out: &mut String, title: &str, date: &str) {
 
 fn write_slide(out: &mut String, slide: &Slide) {
     match slide.kind {
-        SlideKind::Cover => {} // Cover is handled in write_preamble
+        // The cover's title and date are emitted by `write_header` /
+        // `write_title_slide`; there is nothing more to render here.
+        SlideKind::Cover => {}
         SlideKind::Part => write_section(out, slide),
         SlideKind::Standard => write_standard(out, slide),
     }
@@ -258,8 +283,11 @@ fn render_children<'a>(
 fn render_node<'a>(node: &'a MarkdownNode<'a>, out: &mut String, list_depth: usize, tight: bool) {
     match &node.data.borrow().value {
         NodeValue::FrontMatter(_) | NodeValue::HtmlBlock(_) | NodeValue::HtmlInline(_) => {
-            // HTML blocks from slide sources are comment-marker artefacts
-            // (<!-- term: ... -->, <!-- pause -->); already handled upstream.
+            // Typst has no HTML, so raw markup is dropped. Note this is *not*
+            // where the directive comments go: `<!-- term: … -->`, `<!-- pause -->`
+            // and friends are consumed by the parser and never reach the
+            // renderer. What lands here is genuine slide HTML (`<style>`, `<div>`,
+            // an inline `<img>`), which silently does not appear in the PDF.
         }
 
         NodeValue::Paragraph => {
@@ -414,9 +442,16 @@ fn render_table<'a>(node: &'a MarkdownNode<'a>, out: &mut String) {
     let Some(first) = rows.first() else { return };
     let columns = first.len();
     if columns == 0 {
+        // A visible placeholder, like the terminal and unsupported-content paths:
+        // silently dropping the table leaves a hole in the PDF that nobody
+        // notices until they are presenting from it.
         tracing::warn!(
-            "Table has no columns (empty header row); skipping #table emission to avoid \
-             producing invalid Typst."
+            "Table has no columns (empty header row); emitting a placeholder instead of an \
+             invalid #table."
+        );
+        let _ = writeln!(
+            out,
+            "#text(fill: red)[\\[Table omitted --- header row has no columns\\]]"
         );
         return;
     }

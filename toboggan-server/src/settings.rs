@@ -2,8 +2,15 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 use std::time::Duration;
 
+/// Everything the server needs once it already has a [`crate::Talk`].
+///
+/// Split out from [`Settings`] because `launch_with_talk` — the entry point the
+/// unified CLI's build+serve uses — has the talk in memory and never reads
+/// `talk` or `watch`. Keeping them in one struct meant those two fields were
+/// filled with placeholders on that path, and the startup log dutifully reported
+/// the placeholders as if they were configuration.
 #[derive(Debug, clap::Parser)]
-pub struct Settings {
+pub struct ServerSettings {
     /// The host to bind to
     #[clap(long, env = "TOBOGGAN_HOST", default_value_t = IpAddr::V4(Ipv4Addr::LOCALHOST))]
     pub host: IpAddr,
@@ -11,9 +18,6 @@ pub struct Settings {
     /// The port to bind to
     #[clap(long, env = "TOBOGGAN_PORT", default_value_t = 8080)]
     pub port: u16,
-
-    /// The talk file to serve
-    pub talk: PathBuf,
 
     /// Maximum number of concurrent WebSocket clients
     #[clap(long, env = "TOBOGGAN_MAX_CLIENTS", default_value_t = 100)]
@@ -45,10 +49,6 @@ pub struct Settings {
     #[clap(long, env = "TOBOGGAN_THUMBNAILS_DIR")]
     pub thumbnails_dir: Option<PathBuf>,
 
-    /// Enable watch mode to automatically reload the talk file when it changes
-    #[clap(long, env = "TOBOGGAN_WATCH")]
-    pub watch: bool,
-
     /// Shell to spawn for embedded terminals (e.g. `/opt/homebrew/bin/fish`).
     /// Defaults to the `SHELL` environment variable, then `sh`.
     #[clap(long, env = "TOBOGGAN_SHELL")]
@@ -59,7 +59,21 @@ pub struct Settings {
     pub open: bool,
 }
 
-impl Settings {
+/// `toboggan serve`'s settings: which talk file to serve, and how.
+#[derive(Debug, clap::Parser)]
+pub struct Settings {
+    #[clap(flatten)]
+    pub server: ServerSettings,
+
+    /// The talk file to serve
+    pub talk: PathBuf,
+
+    /// Enable watch mode to automatically reload the talk file when it changes
+    #[clap(long, env = "TOBOGGAN_WATCH")]
+    pub watch: bool,
+}
+
+impl ServerSettings {
     /// Resolves the shell for embedded terminals: explicit `--shell`, else `$SHELL`, else `sh`.
     #[must_use]
     pub fn resolve_shell(&self) -> String {
@@ -68,9 +82,7 @@ impl Settings {
             .or_else(|| std::env::var("SHELL").ok())
             .unwrap_or_else(|| "sh".to_owned())
     }
-}
 
-impl Settings {
     #[must_use]
     pub fn heartbeat_interval(&self) -> Duration {
         Duration::from_secs(self.heartbeat_interval_secs)
@@ -87,38 +99,46 @@ impl Settings {
     }
 
     /// # Errors
-    /// Returns error if configuration is invalid
-    pub fn validate(&self) -> Result<(), String> {
-        if self.max_clients == 0 {
-            return Err("max_clients must be greater than 0".to_owned());
+    /// Returns an error if the configuration is invalid.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(self.max_clients > 0, "max_clients must be greater than 0");
+        anyhow::ensure!(
+            self.heartbeat_interval_secs > 0,
+            "heartbeat_interval_secs must be greater than 0"
+        );
+
+        if let Some(assets_dir) = &self.public_dir {
+            anyhow::ensure!(
+                assets_dir.exists(),
+                "Assets directory does not exist: {}",
+                assets_dir.display()
+            );
+            anyhow::ensure!(
+                assets_dir.is_dir(),
+                "Assets path is not a directory: {}",
+                assets_dir.display()
+            );
         }
 
-        if self.heartbeat_interval_secs == 0 {
-            return Err("heartbeat_interval_secs must be greater than 0".to_owned());
-        }
+        Ok(())
+    }
+}
 
-        if !self.talk.exists() {
-            return Err(format!("Talk file does not exist: {}", self.talk.display()));
-        }
+impl Settings {
+    /// # Errors
+    /// Returns an error if the configuration or the talk file is invalid.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        self.server.validate()?;
 
-        if self.talk.extension().is_none_or(|ext| ext != "toml") {
-            return Err("Talk file must have .toml extension".to_owned());
-        }
-
-        if let Some(ref assets_dir) = self.public_dir {
-            if !assets_dir.exists() {
-                return Err(format!(
-                    "Assets directory does not exist: {}",
-                    assets_dir.display()
-                ));
-            }
-            if !assets_dir.is_dir() {
-                return Err(format!(
-                    "Assets path is not a directory: {}",
-                    assets_dir.display()
-                ));
-            }
-        }
+        anyhow::ensure!(
+            self.talk.exists(),
+            "Talk file does not exist: {}",
+            self.talk.display()
+        );
+        anyhow::ensure!(
+            self.talk.extension().is_some_and(|ext| ext == "toml"),
+            "Talk file must have .toml extension"
+        );
 
         Ok(())
     }

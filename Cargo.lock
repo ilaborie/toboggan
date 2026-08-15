@@ -6853,6 +6853,7 @@ dependencies = [
  "miette",
  "owo-colors",
  "serde_json",
+ "tempfile",
  "toboggan-cli",
  "toboggan-client",
  "toboggan-core",
