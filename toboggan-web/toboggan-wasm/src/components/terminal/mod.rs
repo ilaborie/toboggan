@@ -144,10 +144,18 @@ impl TobogganTerminalElement {
         container.set_inner_html("");
         // A fullscreen terminal's shadow host is relocated to <body> (so
         // `position: fixed` escapes the slide's clipping). Clearing the slide's
-        // own container never touches it, so the host would keep floating over
-        // later slides — remove it directly, wherever it now lives.
+        // own container never touches it, so such a host would keep floating over
+        // later slides — remove it directly.
+        //
+        // Only in that case: a host still sitting where it was mounted is reused
+        // (the quake overlay keeps one host for the whole session and re-populates
+        // its shadow container on every restart), and removing it would leave the
+        // terminal permanently detached.
         if let Ok(root) = container.get_root_node().dyn_into::<ShadowRoot>() {
-            root.host().remove();
+            let host = root.host();
+            if is_child_of_body(&host) {
+                host.remove();
+            }
         }
     }
 }
@@ -199,6 +207,20 @@ fn create_terminal_canvas(document: &web_sys::Document) -> Option<HtmlCanvasElem
         error!("Failed to make terminal canvas focusable");
     }
     Some(canvas)
+}
+
+/// Whether `el` is a direct child of `<body>`, i.e. a terminal host that was lifted
+/// out of its slide for fullscreen and never restored.
+///
+/// The quake overlay also lives under `<body>`, but its terminal host is nested
+/// inside the overlay element, so it is not matched here.
+fn is_child_of_body(el: &Element) -> bool {
+    let Some(parent) = el.parent_node() else {
+        return false;
+    };
+    gloo::utils::document()
+        .body()
+        .is_some_and(|body| body.is_same_node(Some(&parent)))
 }
 
 /// Resolve the shadow-DOM host element for a node living inside the terminal's shadow root.
