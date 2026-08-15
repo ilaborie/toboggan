@@ -31,6 +31,11 @@ struct RecoveryState {
     last_known_state: Option<State>,
     /// Whether we're waiting to attempt state restoration after reconnection
     pending_restoration: bool,
+    /// Whether a `?slide=N` auto-start is awaiting its first state change. The
+    /// server rejects an out-of-range index without changing state, so an error
+    /// while this is set means the jump failed and we must start from the first
+    /// slide instead of sitting in `Init` with a blank screen.
+    pending_url_goto: bool,
 }
 
 #[derive(Default)]
@@ -233,6 +238,18 @@ async fn handle_messages(
             }
             CommunicationMessage::Error { error } => {
                 elements.borrow().toast.toast(ToastType::Error, &error);
+                // The only error that can reach us while still in `Init` is a
+                // rejected `?slide=N` (the overview links to a slide the deck no
+                // longer has). Start from the first slide rather than leaving the
+                // page blank.
+                let jump_failed = {
+                    let mut recovery = recovery_state.borrow_mut();
+                    std::mem::take(&mut recovery.pending_url_goto)
+                };
+                if jump_failed {
+                    info!("Slide from URL was rejected, starting from the first slide");
+                    let _ = tx_cmd.unbounded_send(Command::First);
+                }
             }
             CommunicationMessage::Registered { client_id: id } => {
                 *client_id.borrow_mut() = Some(id);
@@ -329,6 +346,7 @@ async fn handle_state_change(
     if matches!(state, State::Init) {
         if let Some(index) = slide_from_url() {
             info!("Starting at slide from URL");
+            recovery_state.borrow_mut().pending_url_goto = true;
             let _ = tx_cmd.unbounded_send(Command::GoTo {
                 slide: SlideId::new(index),
             });
@@ -338,6 +356,9 @@ async fn handle_state_change(
         }
         return;
     }
+
+    // We left `Init`, so the URL jump landed and needs no fallback.
+    recovery_state.borrow_mut().pending_url_goto = false;
 
     // Try to restore previous slide position after reconnection
     if try_restore_slide_position(&state, elements, tx_cmd, recovery_state) {
