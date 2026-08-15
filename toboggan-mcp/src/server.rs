@@ -81,10 +81,22 @@ impl TobogganServer {
         }))
     }
 
-    #[tool(description = "Lint the presentation and return the diagnostics report as JSON.")]
-    fn lint(&self) -> Result<Json<LintResult>, ErrorData> {
+    #[tool(
+        description = "Lint the presentation and return the diagnostics report as JSON. Set \
+                          `spell` to also run the spell checker."
+    )]
+    fn lint(&self, Parameters(params): Parameters<Lint>) -> Result<Json<LintResult>, ErrorData> {
         let talk = self.load_talk()?;
-        let report = toboggan_lint::lint(&talk, &LintConfig::default());
+        let mut config = LintConfig::default();
+        // `spelling/typo` shells out to the `typos` binary over every slide, so
+        // it is opt-in here: an agent linting after each edit should not pay for
+        // a whole-deck spell check it did not ask for. (The rule is compiled in
+        // whenever anything in the binary enables `toboggan-lint/spell`, which
+        // the CLI does — so it has to be disabled explicitly, not by omission.)
+        if !params.spell {
+            config.disabled.insert("spelling/typo".to_owned());
+        }
+        let report = toboggan_lint::lint(&talk, &config);
         let report = serde_json::to_value(&report)
             .map_err(|err| ErrorData::internal_error(err.to_string(), None))?;
         Ok(Json(LintResult { report }))
@@ -408,6 +420,14 @@ pub(crate) struct LintResult {
 pub(crate) struct AddPart {
     /// Title of the new section.
     pub(crate) title: String,
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+pub(crate) struct Lint {
+    /// Also run the spell checker (`spelling/typo`). Off by default: it shells
+    /// out to the `typos` binary over every slide.
+    #[serde(default)]
+    pub(crate) spell: bool,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]

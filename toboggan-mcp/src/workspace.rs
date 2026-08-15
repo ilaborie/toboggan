@@ -482,13 +482,19 @@ impl Workspace {
     }
 
     /// Resolves `path` (always `self.root.join(rel)`) and asserts it stays within
-    /// the workspace root, performing *every* check before any filesystem
-    /// mutation so a hostile input can never create or write files outside the
-    /// root.
+    /// the workspace root, so a hostile input can never create or write files
+    /// outside the root.
     ///
-    /// Three escape vectors are rejected up front: an absolute `rel` (whose
-    /// `join` discards the root, leaving a path outside it), a `..` component, and
-    /// a symlinked ancestor or final component that points out of the root.
+    /// Three escape vectors are rejected: an absolute `rel` (whose `join`
+    /// discards the root, leaving a path outside it), a `..` component, and a
+    /// symlinked ancestor or final component that points out of the root.
+    ///
+    /// This is pure validation — it touches the filesystem only to read. Callers
+    /// that write into a directory that may not exist create it themselves
+    /// (`add_part`, `new_presentation`); every other caller targets the root or a
+    /// section folder already known to exist. Resolving a path must not have side
+    /// effects, or a failed lookup (`remove_slide` on a typo) would litter the
+    /// deck with empty directories.
     fn confine(&self, path: &Path) -> anyhow::Result<PathBuf> {
         if !path.starts_with(&self.root) {
             anyhow::bail!("path escapes the presentation folder: {}", path.display());
@@ -504,7 +510,7 @@ impl Workspace {
         let parent = path.parent().unwrap_or(&self.root);
 
         // Resolve the nearest existing ancestor and confirm it stays in the root
-        // *before* creating anything — guards against a symlinked ancestor.
+        // — guards against a symlinked ancestor.
         let anchor = nearest_existing(parent).canonicalize()?;
         if !anchor.starts_with(&self.root) {
             anyhow::bail!("path escapes the presentation folder: {}", path.display());
@@ -517,7 +523,6 @@ impl Workspace {
             anyhow::bail!("refusing to write through a symlink: {}", path.display());
         }
 
-        fs::create_dir_all(parent)?;
         Ok(path.to_path_buf())
     }
 
@@ -1025,6 +1030,19 @@ mod tests {
                 .expect("parent")
                 .join("evil.md")
                 .exists()
+        );
+    }
+
+    #[test]
+    fn confine_does_not_create_directories_while_resolving() {
+        let (dir, workspace) = workspace();
+        // A well-formed but non-existent path: rejected on its own merits, and
+        // resolving it must leave the deck folder untouched.
+        let result = workspace.remove_slide("ghost/part/slide.md", false);
+        assert!(result.is_err());
+        assert!(
+            !dir.path().join("ghost").exists(),
+            "resolving a path must not create directories"
         );
     }
 
