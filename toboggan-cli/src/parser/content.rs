@@ -110,6 +110,22 @@ fn append_md_block(dest: &mut String, block: &str) {
     dest.push_str(block);
 }
 
+/// Records the rule ids of a `<!-- lint-disable … -->` directive.
+///
+/// The comment is always consumed (it is a directive, not content), but a bare
+/// `<!-- lint-disable -->` silences nothing — almost certainly a typo — so it is
+/// reported rather than dropped without a trace.
+fn collect_lint_disabled(rules: Vec<String>, lint_disabled: &mut Vec<String>, file_name: &str) {
+    if rules.is_empty() {
+        tracing::warn!(
+            slide = file_name,
+            "`lint-disable` lists no rule id, ignoring"
+        );
+        return;
+    }
+    lint_disabled.extend(rules);
+}
+
 #[derive(Debug, Clone)]
 pub enum SlideContentParser {
     Init,
@@ -211,13 +227,13 @@ impl SlideContentParser {
                 NodeValue::HtmlBlock(html) if is_notes(&html.literal) => {
                     self.transition_to_notes();
                 }
-                // `<!-- lint-disable rule -->` is a directive: collect the rule
-                // ids and drop the comment from the rendered body.
-                NodeValue::HtmlBlock(html) if parse_lint_disable(&html.literal).is_some() => {
-                    lint_disabled.extend(parse_lint_disable(&html.literal).unwrap_or_default());
-                }
-                NodeValue::HtmlBlock(html) => match parse_term(&html.literal) {
-                    Some((cwd, theme, cmd)) => {
+                // `lint-disable` and `term` are directives: record what they
+                // carry and drop the comment from the rendered body. Anything
+                // else is ordinary HTML and goes through to `inner`.
+                NodeValue::HtmlBlock(html) => {
+                    if let Some(rules) = parse_lint_disable(&html.literal) {
+                        collect_lint_disabled(rules, lint_disabled, file_name);
+                    } else if let Some((cwd, theme, cmd)) = parse_term(&html.literal) {
                         let mut config = TerminalConfig::new(cwd);
                         if let Some(theme) = theme {
                             config = config.with_theme(theme);
@@ -226,14 +242,26 @@ impl SlideContentParser {
                             config = config.with_cmd(cmd);
                         }
                         terminals.push(config);
+                    } else {
+                        inner.handle(elt, file_name)?;
                     }
-                    None => inner.handle(elt, file_name)?,
-                },
+                }
                 _ => inner.handle(elt, file_name)?,
             },
-            Self::Notes { notes, .. } => {
-                notes.handle(elt, file_name)?;
-            }
+            Self::Notes {
+                notes,
+                lint_disabled,
+                ..
+            } => match data {
+                // `lint-disable` is slide-scoped, so it stays a directive below
+                // `<!-- notes -->`. Without this arm it would be neither honoured
+                // nor stripped, and the raw comment would render into the notes.
+                NodeValue::HtmlBlock(html) => match parse_lint_disable(&html.literal) {
+                    Some(rules) => collect_lint_disabled(rules, lint_disabled, file_name),
+                    None => notes.handle(elt, file_name)?,
+                },
+                _ => notes.handle(elt, file_name)?,
+            },
         }
 
         Ok(())
@@ -441,6 +469,50 @@ Body."#;
         assert!(slide.lint_disabled.contains(&"html/raw-script".to_owned()));
         assert!(slide.lint_disabled.contains(&"pause/empty-step".to_owned()));
         // The directive comment must not leak into the rendered body.
+        assert!(
+            !slide.body.to_string().contains("lint-disable"),
+            "directive leaked into body: {}",
+            slide.body
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn lint_disable_below_notes_still_applies() -> Result<()> {
+        let markdown = r"# T
+
+Body.
+
+<!-- notes -->
+
+<!-- lint-disable html/raw-script -->
+
+Remember to breathe.";
+        let (slide, _) = parse_markdown_content(markdown)?;
+
+        assert!(
+            slide.lint_disabled.contains(&"html/raw-script".to_owned()),
+            "a slide-scoped directive must apply wherever it sits"
+        );
+        let notes = slide.notes.to_string();
+        assert!(
+            !notes.contains("lint-disable"),
+            "directive leaked into notes: {notes}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn bare_lint_disable_silences_nothing_and_is_consumed() -> Result<()> {
+        let markdown = "# T\n\n<!-- lint-disable -->\n\nBody.";
+        let (slide, _) = parse_markdown_content(markdown)?;
+
+        assert!(
+            slide.lint_disabled.is_empty(),
+            "a directive with no rule ids must not disable anything"
+        );
         assert!(
             !slide.body.to_string().contains("lint-disable"),
             "directive leaked into body: {}",
