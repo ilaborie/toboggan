@@ -9,24 +9,33 @@ use toboggan_core::Talk;
 use tracing::{error, info};
 
 use crate::TobogganState;
+use crate::state::CachedPdf;
 
 /// Serves the talk as a downloadable PDF at `/download.pdf`.
 ///
 /// The PDF is rendered on demand via the `typst` binary and cached until the
 /// talk reloads. If `typst` is missing or compilation fails, returns `503`.
 pub(crate) async fn download_pdf(State(state): State<TobogganState>) -> Response {
-    if let Some(bytes) = state.cached_pdf().await {
-        return pdf_response(&bytes);
+    if let Some(cached) = state.cached_pdf().await {
+        return pdf_response(&cached.bytes, &cached.slug);
     }
 
+    // Read the epoch before the talk: a reload in between then makes the epoch
+    // stale, so the render is discarded rather than published as the current
+    // deck's PDF. The reverse order could pair an old talk with a fresh epoch.
+    let epoch = state.pdf_epoch().await;
     let talk = state.talk().await;
-    let slug = slugify(&talk.title);
+    let slug: Arc<str> = Arc::from(slugify(&talk.title));
     match render_pdf(talk).await {
         Ok(bytes) => {
             let bytes: Arc<[u8]> = Arc::from(bytes);
-            state.store_pdf(Arc::clone(&bytes)).await;
+            let cached = CachedPdf {
+                bytes: Arc::clone(&bytes),
+                slug: Arc::clone(&slug),
+            };
+            state.store_pdf(epoch, cached).await;
             info!(bytes = bytes.len(), "rendered PDF");
-            pdf_response_named(&bytes, &slug)
+            pdf_response(&bytes, &slug)
         }
         Err(err) => {
             error!("PDF generation failed: {err:?}");
@@ -39,11 +48,7 @@ pub(crate) async fn download_pdf(State(state): State<TobogganState>) -> Response
     }
 }
 
-fn pdf_response(bytes: &[u8]) -> Response {
-    pdf_response_named(bytes, "presentation")
-}
-
-fn pdf_response_named(bytes: &[u8], slug: &str) -> Response {
+fn pdf_response(bytes: &[u8], slug: &str) -> Response {
     (
         StatusCode::OK,
         [

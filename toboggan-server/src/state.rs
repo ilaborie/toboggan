@@ -5,7 +5,7 @@ use axum::extract::FromRef;
 use toboggan_core::{Command, Notification, Talk, Timestamp};
 use tokio::sync::RwLock;
 
-use crate::services::{ClientService, TalkService, ThumbStatus, ThumbnailService};
+use crate::services::{AssetLookup, ClientService, TalkService, ThumbStatus, ThumbnailService};
 use crate::{HealthResponse, HealthResponseStatus};
 
 impl FromRef<TobogganState> for TalkService {
@@ -20,6 +20,27 @@ impl FromRef<TobogganState> for ClientService {
     }
 }
 
+/// A rendered PDF together with the download filename it was rendered under, so
+/// a cache hit serves the same `Content-Disposition` as the render that filled
+/// it.
+#[derive(Clone)]
+pub(crate) struct CachedPdf {
+    pub(crate) bytes: Arc<[u8]>,
+    pub(crate) slug: Arc<str>,
+}
+
+/// The rendered-PDF cache plus an `epoch` that is bumped on every reload.
+///
+/// A render captures the epoch before it reads the talk and only commits if the
+/// epoch is still current, so a reload landing mid-render cannot have its
+/// invalidation undone by the in-flight (now stale) result. Mirrors the same
+/// guard in [`ThumbnailService`].
+#[derive(Default)]
+struct PdfCache {
+    epoch: u64,
+    rendered: Option<CachedPdf>,
+}
+
 /// Thin coordinator/facade that orchestrates `TalkService` and `ClientService`
 #[derive(Clone)]
 pub struct TobogganState {
@@ -30,7 +51,7 @@ pub struct TobogganState {
     /// since the whole state is cloned on every request extraction.
     terminal_shell: Arc<str>,
     /// Lazily-rendered PDF of the current talk, invalidated on reload.
-    pdf_cache: Arc<RwLock<Option<Arc<[u8]>>>>,
+    pdf_cache: Arc<RwLock<PdfCache>>,
     /// Lazily-generated slide-overview thumbnails, invalidated on reload.
     thumbnail_service: ThumbnailService,
 }
@@ -48,7 +69,7 @@ impl TobogganState {
             talk_service,
             client_service,
             terminal_shell,
-            pdf_cache: Arc::new(RwLock::new(None)),
+            pdf_cache: Arc::new(RwLock::new(PdfCache::default())),
             thumbnail_service: ThumbnailService::new(),
         }
     }
@@ -59,13 +80,24 @@ impl TobogganState {
     }
 
     /// Returns the cached rendered PDF, if any.
-    pub(crate) async fn cached_pdf(&self) -> Option<Arc<[u8]>> {
-        self.pdf_cache.read().await.clone()
+    pub(crate) async fn cached_pdf(&self) -> Option<CachedPdf> {
+        self.pdf_cache.read().await.rendered.clone()
     }
 
-    /// Stores the rendered PDF in the cache.
-    pub(crate) async fn store_pdf(&self, bytes: Arc<[u8]>) {
-        *self.pdf_cache.write().await = Some(bytes);
+    /// The current PDF epoch. Capture this *before* reading the talk to render,
+    /// so any reload that races the render is guaranteed to invalidate it.
+    pub(crate) async fn pdf_epoch(&self) -> u64 {
+        self.pdf_cache.read().await.epoch
+    }
+
+    /// Stores a rendered PDF, unless a reload has happened since `epoch` was
+    /// captured — in which case the render is of a talk that no longer exists
+    /// and is dropped rather than published.
+    pub(crate) async fn store_pdf(&self, epoch: u64, pdf: CachedPdf) {
+        let mut cache = self.pdf_cache.write().await;
+        if cache.epoch == epoch {
+            cache.rendered = Some(pdf);
+        }
     }
 
     /// Pre-seeds an externally-generated thumbnails directory (`--thumbnails-dir`).
@@ -80,8 +112,8 @@ impl TobogganState {
             .await
     }
 
-    /// Reads a generated overview asset by its relative path, if ready.
-    pub(crate) async fn thumbnail_asset(&self, rel: &str) -> Option<Vec<u8>> {
+    /// Reads a generated overview asset by its relative path.
+    pub(crate) async fn thumbnail_asset(&self, rel: &str) -> AssetLookup {
         self.thumbnail_service.read_asset(rel).await
     }
 
@@ -132,8 +164,14 @@ impl TobogganState {
     /// Returns an error if the new talk has no slides
     pub async fn reload_talk(&self, new_talk: Talk) -> anyhow::Result<()> {
         let notification = self.talk_service.reload_talk(new_talk).await?;
-        // The cached PDF and thumbnails are now stale.
-        *self.pdf_cache.write().await = None;
+        // The cached PDF and thumbnails are now stale. Bumping the epoch also
+        // tells an in-flight render to discard its result instead of re-filling
+        // the cache we are clearing here.
+        {
+            let mut cache = self.pdf_cache.write().await;
+            cache.rendered = None;
+            cache.epoch = cache.epoch.wrapping_add(1);
+        }
         self.thumbnail_service.invalidate().await;
         self.client_service.notify_all(&notification).await;
         Ok(())

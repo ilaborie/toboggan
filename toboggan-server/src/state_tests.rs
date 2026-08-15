@@ -1,9 +1,12 @@
 #[cfg(test)]
 #[allow(clippy::module_inception, clippy::unwrap_used, clippy::expect_used)]
 mod tests {
+    use std::sync::Arc;
+
     use axum::extract::FromRef;
     use toboggan_core::{Command, Date, Notification, Slide, SlideId, State, Talk};
 
+    use crate::state::CachedPdf;
     use crate::{ClientService, TalkService, TobogganState};
 
     fn create_test_talk() -> Talk {
@@ -379,5 +382,47 @@ mod tests {
         // Verify current state is also Running
         let current_state = TalkService::from_ref(&state).current_state().await;
         assert!(matches!(current_state, State::Running { .. }));
+    }
+
+    #[tokio::test]
+    async fn pdf_rendered_before_a_reload_is_not_cached() {
+        let state = create_test_state(create_test_talk());
+
+        // A render captures the epoch, then a reload lands before it finishes.
+        let epoch = state.pdf_epoch().await;
+        state
+            .reload_talk(create_test_talk().add_slide(Slide::new("Fourth Slide")))
+            .await
+            .expect("reload");
+
+        state
+            .store_pdf(
+                epoch,
+                CachedPdf {
+                    bytes: Arc::from(b"stale".as_slice()),
+                    slug: Arc::from("test-talk"),
+                },
+            )
+            .await;
+
+        assert!(
+            state.cached_pdf().await.is_none(),
+            "a render of the pre-reload talk must not fill the cache"
+        );
+
+        // A render that started after the reload still commits.
+        let epoch = state.pdf_epoch().await;
+        state
+            .store_pdf(
+                epoch,
+                CachedPdf {
+                    bytes: Arc::from(b"fresh".as_slice()),
+                    slug: Arc::from("test-talk"),
+                },
+            )
+            .await;
+        let cached = state.cached_pdf().await.expect("cached PDF");
+        assert_eq!(&*cached.bytes, b"fresh");
+        assert_eq!(&*cached.slug, "test-talk");
     }
 }
