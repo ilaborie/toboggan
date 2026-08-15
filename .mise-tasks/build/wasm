@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
-#MISE description="Auto-format code and apply clippy suggested fixes"
+#MISE description="Build the embedded web client's WASM bundle"
 
 set -eu
 
 export RUST_LOG="info,wasm_pack=warn"
 WASM_PROJECT="toboggan-web/toboggan-wasm"
 
-# Build WASM
-wasm-pack build --target web --no-pack --no-opt --release --out-dir pkg $WASM_PROJECT
-
-# Try to compress
-wasm-opt --enable-bulk-memory --enable-nontrapping-float-to-int -Os -o $WASM_PROJECT/pkg/toboggan_wasm_bg.wasm $WASM_PROJECT/pkg/toboggan_wasm_bg.wasm
+# wasm-opt flags live in the crate's `[package.metadata.wasm-pack.profile.release]`,
+# so wasm-pack size-optimizes with its own managed binaryen and this build needs
+# no separately-installed wasm-opt (which the release workflow does not have).
+wasm-pack build --target web --no-pack --release --out-dir pkg $WASM_PROJECT
 
 # Show file size
 echo "Build complete! File sizes:"

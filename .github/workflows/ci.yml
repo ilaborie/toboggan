@@ -34,8 +34,10 @@ jobs:
       # and its build.rs fails if the folder is missing. That bundle is a
       # gitignored build artifact produced by the separate wasm/vite pipeline.
       # Stub a minimal dist so the Rust gate can compile the server without the
-      # full web toolchain — web assets have their own Biome checks and are built
-      # for real in the release workflow.
+      # full web toolchain. The stub is only ever compiled against, never
+      # shipped: the release workflow builds the real bundle before it produces a
+      # binary. Anything that depends on the dist's *contents* is therefore not
+      # covered here.
       - name: Stub embedded web dist
         run: |
           mkdir -p toboggan-web/dist

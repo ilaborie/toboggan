@@ -6,10 +6,10 @@ set -eu
 echo "🌐 Building web frontend..."
 mise build:wasm
 
-# Build toboggan-web with npm
+# Build toboggan-web with pnpm (the repo's lockfile is pnpm-lock.yaml)
 echo "🔧 Building toboggan-web with TypeScript and Vite..."
 cd toboggan-web
-npm run build
+pnpm run build
 cd ..
 
 echo ""

@@ -11,6 +11,13 @@ repository = "https://github.com/ilaborie/toboggan"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[package.metadata.wasm-pack.profile.release]
+# Size-optimize with wasm-pack's own managed binaryen, so a build needs nothing
+# beyond wasm-pack itself. The feature flags are required: rustc emits both
+# bulk-memory and non-trapping float-to-int ops, which wasm-opt rejects by
+# default.
+wasm-opt = ["-Os", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]
+
 [package.metadata.cargo-machete]
 # beamterm-renderer is consumed via its js-api feature (registers JS bindings
 # at link time); cargo-machete misses that because there's no `use` statement.

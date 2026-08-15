@@ -31,6 +31,34 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+
+      # `toboggan` embeds the web client through toboggan-server's RustEmbed, and
+      # its build.rs fails outright when `toboggan-web/dist` is missing. Unlike
+      # CI — which stubs the folder because it only type-checks the Rust — a
+      # release binary has to carry the real bundle, so it is built here.
+      # Mirrors `mise build:web`; wasm-opt flags come from the wasm crate's
+      # `[package.metadata.wasm-pack]`, so no binaryen install is needed.
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: toboggan-web/pnpm-lock.yaml
+      - name: Build embedded web client
+        run: |
+          wasm-pack build --target web --no-pack --release --out-dir pkg toboggan-web/toboggan-wasm
+          cd toboggan-web
+          pnpm install --frozen-lockfile
+          pnpm run build
+      - name: Verify the embedded bundle exists
+        run: test -f toboggan-web/dist/index.html
+
       - name: Build and upload toboggan
         uses: taiki-e/upload-rust-binary-action@v1
         with:
