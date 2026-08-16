@@ -50,7 +50,7 @@ runs:
 
     - name: Install Typst
       if: contains(inputs.outputs, 'pdf') || contains(inputs.outputs, 'thumbnails')
-      uses: typst-community/setup-typst@v4
+      uses: typst-community/setup-typst@v5
 
     - name: Build artifacts
       shell: bash

@@ -23,11 +23,15 @@ jobs:
             os: ubuntu-latest
           - target: aarch64-apple-darwin
             os: macos-latest
+          # The Intel macOS runner. `macos-latest` is Apple silicon, so the
+          # x86_64 binary needs an explicitly-Intel label; `macos-13` — the one
+          # this used to name — has since been retired by GitHub, which would
+          # have failed this matrix leg at scheduling time on the first tag.
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-15-intel
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -42,10 +46,10 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: wasm-pack
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 10
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
