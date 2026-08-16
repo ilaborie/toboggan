@@ -116,11 +116,15 @@ impl TobogganTerminalElement {
             .dyn_into::<HtmlElement>()
             .map_err(|_| error!("Failed to cast window element to HtmlElement"))
             .ok();
+        let body_html = body
+            .dyn_into::<HtmlElement>()
+            .map_err(|_| error!("Failed to cast terminal body to HtmlElement"))
+            .ok();
         // Both dimensions, not just rows: passing the computed rows alongside a
         // hardcoded 80 columns made every session's first frame 80 wide no matter
         // how wide the pane was, until the first resize corrected it.
         let (initial_cols, initial_rows) =
-            compute_terminal_size(window_html.as_ref(), DEFAULT_FONT_SIZE);
+            compute_terminal_size(body_html.as_ref(), DEFAULT_FONT_SIZE);
         let ws_url = build_terminal_ws_url(api_base_url, config, initial_cols, initial_rows);
 
         // Set up action channel (shared between keyboard handler and button clicks)
@@ -129,7 +133,9 @@ impl TobogganTerminalElement {
         // Re-fit the grid whenever the body's box changes: the very first
         // (post-layout) callback corrects the initial 0-size fallback, and later
         // ones handle window resizes and side-by-side flex reflow.
-        setup_resize_observer(&body, tx_key.clone());
+        if let Some(ref body_el) = body_html {
+            setup_resize_observer(body_el, tx_key.clone());
+        }
         setup_button_click(&btn_maximize, tx_key.clone(), KeyAction::Expand);
         setup_button_click(&btn_minimize, tx_key.clone(), KeyAction::Restore);
         // Kept so `stop_terminal` can end the session (and with it the PTY).
@@ -144,6 +150,7 @@ impl TobogganTerminalElement {
                 theme,
                 title_el,
                 window_html,
+                body_html,
                 (initial_cols, initial_rows),
                 rx_key,
             )
@@ -199,6 +206,11 @@ impl WasmElement for TobogganTerminalElement {
             create_and_append_element(&root, "div"),
             "create terminal container"
         );
+        // Sized explicitly rather than left to inherit the host's layout: an
+        // unclassed wrapper is only stretched to the host when the host is a
+        // flex container, and any outer rule setting `display` on the host wins
+        // over `:host`, so that is not something this component can rely on.
+        container.set_class_name("terminal-container");
 
         self.container = Some(container);
     }
@@ -334,13 +346,14 @@ fn setup_button_click(btn: &Element, tx: mpsc::UnboundedSender<KeyAction>, actio
     closure.forget();
 }
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 async fn run_terminal_session(
     canvas: HtmlCanvasElement,
     ws_url: &str,
     theme: Theme,
     title_el: Option<HtmlElement>,
     window_el: Option<HtmlElement>,
+    body_el: Option<HtmlElement>,
     // The grid the session opens with, as `(cols, rows)`.
     initial_size: (u16, u16),
     rx_key: mpsc::UnboundedReceiver<KeyAction>,
@@ -373,6 +386,8 @@ async fn run_terminal_session(
     let vterm_rc = Rc::new(RefCell::new(vterm));
     let vterm_kbd = Rc::clone(&vterm_rc);
     let window_el_kbd = window_el.clone();
+    // Measured for sizing; `window_el_kbd` stays for the fullscreen class.
+    let body_el_kbd = body_el.clone();
 
     spawn_local(async move {
         let mut rx_key = rx_key;
@@ -416,7 +431,7 @@ async fn run_terminal_session(
                         &vterm_kbd,
                         &canvas_kbd,
                         &ws_write_kbd,
-                        window_el_kbd.as_ref(),
+                        body_el_kbd.as_ref(),
                         new_size,
                     )
                     .await;
@@ -446,7 +461,7 @@ async fn run_terminal_session(
                         &vterm_kbd,
                         &canvas_kbd,
                         &ws_write_kbd,
-                        window_el_kbd.as_ref(),
+                        body_el_kbd.as_ref(),
                         size,
                     )
                     .await;
@@ -470,7 +485,7 @@ async fn run_terminal_session(
                         &vterm_kbd,
                         &canvas_kbd,
                         &ws_write_kbd,
-                        window_el_kbd.as_ref(),
+                        body_el_kbd.as_ref(),
                         size,
                     )
                     .await;
@@ -480,12 +495,12 @@ async fn run_terminal_session(
                     // Skip the redundant repaint when a spurious observer callback
                     // resolves to the same grid we last sent the server.
                     let size = *font_size_kbd.borrow();
-                    if compute_terminal_size(window_el_kbd.as_ref(), size) != last_dims {
+                    if compute_terminal_size(body_el_kbd.as_ref(), size) != last_dims {
                         last_dims = refit(
                             &vterm_kbd,
                             &canvas_kbd,
                             &ws_write_kbd,
-                            window_el_kbd.as_ref(),
+                            body_el_kbd.as_ref(),
                             size,
                         )
                         .await;
@@ -616,15 +631,19 @@ fn translate_key(event: &KeyboardEvent) -> String {
     }
 }
 
-/// Titlebar height in pixels (CSS: .terminal-titlebar { height: 36px })
-const TITLEBAR_HEIGHT: f64 = 36.0;
 /// Body vertical padding: top 2px + bottom 3px (CSS: .terminal-body { padding: 2px 3px 3px })
 const BODY_PADDING: f64 = 5.0;
 /// Body horizontal padding: left 3px + right 3px (CSS: .terminal-body { padding: 2px 3px 3px })
 const BODY_H_PADDING: f64 = 6.0;
 
+/// Grid that fits `body_el`, the element the canvas actually lives in.
+///
+/// Measuring the body rather than the whole window drops what used to be a
+/// hardcoded 36px subtraction for the titlebar. That constant made the titlebar
+/// mandatory: hiding it — as the quake overlay now does — left the grid 36px
+/// short of the space it had.
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn compute_terminal_size(window_el: Option<&HtmlElement>, font_size: f64) -> (u16, u16) {
+fn compute_terminal_size(body_el: Option<&HtmlElement>, font_size: f64) -> (u16, u16) {
     // Measure the same font metrics the renderer uses so the row/col count matches
     // the canvas cell size; fall back to the width/height heuristics when the font
     // cannot be measured yet.
@@ -636,19 +655,16 @@ fn compute_terminal_size(window_el: Option<&HtmlElement>, font_size: f64) -> (u1
         |metrics| (metrics.char_width, metrics.char_height),
     );
 
-    let (avail_w, avail_h) = window_el
+    let (avail_w, avail_h) = body_el
         .map(|el| (f64::from(el.client_width()), f64::from(el.client_height())))
         .filter(|(width, height)| *width > 0.0 && *height > 0.0)
         .unwrap_or((
             f64::from(DEFAULT_COLS) * char_width + BODY_H_PADDING,
-            f64::from(DEFAULT_ROWS) * char_height + TITLEBAR_HEIGHT + BODY_PADDING,
+            f64::from(DEFAULT_ROWS) * char_height + BODY_PADDING,
         ));
 
-    let body_width = avail_w - BODY_H_PADDING;
-    let body_height = avail_h - TITLEBAR_HEIGHT - BODY_PADDING;
-
-    let cols = (body_width / char_width).floor() as u16;
-    let rows = (body_height / char_height).floor() as u16;
+    let cols = ((avail_w - BODY_H_PADDING) / char_width).floor() as u16;
+    let rows = ((avail_h - BODY_PADDING) / char_height).floor() as u16;
 
     (cols.max(MIN_COLS), rows.max(MIN_ROWS))
 }
@@ -684,10 +700,10 @@ async fn refit(
     vterm: &Rc<RefCell<VirtualTerminal>>,
     canvas: &HtmlCanvasElement,
     ws_write: &Rc<futures::lock::Mutex<futures::stream::SplitSink<WebSocket, Message>>>,
-    window_el: Option<&HtmlElement>,
+    body_el: Option<&HtmlElement>,
     font_size: f64,
 ) -> (u16, u16) {
-    let (cols, rows) = compute_terminal_size(window_el, font_size);
+    let (cols, rows) = compute_terminal_size(body_el, font_size);
     resize_and_render(vterm, canvas, ws_write, cols, rows, font_size).await;
     (cols, rows)
 }

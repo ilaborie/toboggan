@@ -14,30 +14,36 @@ h6 {
 	margin: 0.1em 0;
 }
 
+/* Sizes go through custom properties so a deck can retune them from
+   `_head.html`. Descendant selectors cannot reach in here — this shadow tree is
+   closed to them — but custom properties inherit across the boundary, so
+   `.toboggan-slide { --slide-h1-size: 220% }` in the light DOM works. The
+   fallback keeps the default without a `:host` declaration to be overridden. */
 h1 {
-	font-size: 350%;
+	font-size: var(--slide-h1-size, 350%);
 	text-align: center;
 }
 
 h2 {
-	font-size: 200%;
+	font-size: var(--slide-h2-size, 200%);
 	text-align: center;
 }
 
 h3 {
-	font-size: 150%;
+	font-size: var(--slide-h3-size, 150%);
 }
 
 h4 {
-	font-size: 115%;
+	font-size: var(--slide-h4-size, 115%);
 }
 
 h5 {
-	font-size: 110%;
+	font-size: var(--slide-h5-size, 110%);
 }
 
-h5 {
-	font-size: 105%;
+/* Was a second `h5` rule, so `h6` had no size of its own at all. */
+h6 {
+	font-size: var(--slide-h6-size, 105%);
 }
 
 ul,
@@ -61,6 +67,19 @@ code {
 	color: var(--accent2);
 	text-shadow: 1px 1px rgba(0, 0, 0, 0.2);
 	font-family: var(--font-slide-mono);
+	font-size: var(--slide-code-size, 100%);
+}
+
+/* A `code` inside a `pre` would otherwise apply the ratio twice. */
+pre code {
+	font-size: 100%;
+}
+
+/* Tables had no size of their own, so they rendered at the 32px body size and
+   a reference table of eight rows overflowed the slide. Still 100% by default —
+   decks opt into something denser. */
+table {
+	font-size: var(--slide-table-size, 100%);
 }
 
 /* Layout */
