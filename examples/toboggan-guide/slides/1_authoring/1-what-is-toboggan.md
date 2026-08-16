@@ -5,7 +5,7 @@ classes = ["no_title"]
 
 # What is Toboggan?
 
-A **terminal-first** presentation system written in Rust.
+A presentation system written in Rust: **Markdown decks with live terminals**.
 
 <!-- pause -->
 
