@@ -17,10 +17,13 @@ const FALLBACK_CWD: &str = ".";
 
 /// Drop-down "Quake-style" terminal overlay toggled by the backtick key.
 ///
-/// The session's working directory is sourced from the active slide's
-/// resolved `quake_terminal_cwd` (with talk-level and server-level fallbacks
-/// already applied by the loader). When the resolved cwd changes between
-/// slides, the existing PTY session is torn down and reopened.
+/// The session's working directory is sourced from the active slide's resolved
+/// `quake_terminal_cwd`. The loader applies the slide→talk fallback only, which
+/// is why this module keeps its own [`FALLBACK_CWD`] for the remaining case.
+///
+/// When the resolved cwd changes between slides, the existing session is shut
+/// down — its WebSocket closed, and with it the server-side PTY — and a new one
+/// is opened in the new directory.
 #[derive(Default)]
 pub(crate) struct TobogganQuakeTerminalElement {
     state: Option<Rc<RefCell<QuakeState>>>,
@@ -30,10 +33,17 @@ struct QuakeState {
     overlay: HtmlElement,
     inner: TobogganTerminalElement,
     api_base_url: String,
-    /// The cwd currently driving the running PTY session (or `None` if no session is active).
+    /// The cwd currently driving the running PTY session, or `None` when no
+    /// session has been started yet.
+    ///
+    /// Distinct from [`Self::is_open`]: closing the overlay hides it but leaves
+    /// the session running, so a reopen is instant. `is_open == true` therefore
+    /// always implies `active_cwd.is_some()` — `toggle` starts a session before
+    /// it sets the flag — but the converse does not hold.
     active_cwd: Option<String>,
     /// The cwd that should be used the next time the overlay is opened.
     pending_cwd: Option<String>,
+    /// Whether the overlay is currently visible.
     is_open: bool,
 }
 
@@ -82,6 +92,11 @@ impl WasmElement for TobogganQuakeTerminalElement {
         body.append_child(&overlay).unwrap_throw();
 
         let mut inner = TobogganTerminalElement::default();
+        // This host is created once and re-populated on every restart, so it must
+        // survive `stop_terminal` — including while the terminal is fullscreen,
+        // when its host is sitting directly under `<body>` like a lifted slide
+        // terminal's.
+        inner.set_persistent(true);
         inner.render(&inner_host);
 
         let state = Rc::new(RefCell::new(QuakeState {

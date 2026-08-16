@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use futures::channel::mpsc;
-use futures::{SinkExt, StreamExt};
+use futures::{FutureExt, SinkExt, StreamExt};
 use gloo::console::{error, info};
 use gloo::net::websocket::Message;
 use gloo::net::websocket::futures::WebSocket;
@@ -34,13 +34,23 @@ const MIN_ROWS: u16 = 4;
 #[derive(Debug, Default)]
 pub(crate) struct TobogganTerminalElement {
     container: Option<Element>,
+    /// Signals the running session to shut down. `None` when no session is live.
+    session: RefCell<Option<mpsc::UnboundedSender<KeyAction>>>,
+    /// Whether this terminal's shadow host outlives its sessions.
+    ///
+    /// Set for the quake overlay, which creates one host at render time and
+    /// re-populates it on every restart — removing that host would leave the
+    /// overlay permanently empty.
+    persistent: bool,
 }
 
 impl TobogganTerminalElement {
-    pub(crate) fn start_terminal(&self, config: &TerminalConfig, api_base_url: &str) {
+    /// Returns `None` if the terminal's DOM could not be built; the caller has
+    /// nothing to do about it beyond the logging already done here.
+    pub(crate) fn start_terminal(&self, config: &TerminalConfig, api_base_url: &str) -> Option<()> {
         let Some(container) = &self.container else {
             error!("start_terminal called before render");
-            return;
+            return None;
         };
 
         let document = gloo::utils::document();
@@ -51,17 +61,17 @@ impl TobogganTerminalElement {
         } else {
             "terminal-window terminal-dark"
         };
-        let window_el = create_element_with_class(&document, "div", window_class);
+        let window_el = create_element_with_class(&document, "div", window_class)?;
 
-        let titlebar = create_element_with_class(&document, "div", "terminal-titlebar");
+        let titlebar = create_element_with_class(&document, "div", "terminal-titlebar")?;
 
-        let buttons = create_element_with_class(&document, "div", "terminal-buttons");
+        let buttons = create_element_with_class(&document, "div", "terminal-buttons")?;
         let btn_close =
-            create_element_with_class(&document, "div", "terminal-btn terminal-btn-close");
+            create_element_with_class(&document, "div", "terminal-btn terminal-btn-close")?;
         let btn_minimize =
-            create_element_with_class(&document, "div", "terminal-btn terminal-btn-minimize");
+            create_element_with_class(&document, "div", "terminal-btn terminal-btn-minimize")?;
         let btn_maximize =
-            create_element_with_class(&document, "div", "terminal-btn terminal-btn-maximize");
+            create_element_with_class(&document, "div", "terminal-btn terminal-btn-maximize")?;
         append_or_log(&buttons, &btn_close, "close button to terminal titlebar");
         append_or_log(
             &buttons,
@@ -75,7 +85,7 @@ impl TobogganTerminalElement {
         );
         append_or_log(&titlebar, &buttons, "buttons to titlebar");
 
-        let title_text = create_element_with_class(&document, "span", "terminal-title");
+        let title_text = create_element_with_class(&document, "span", "terminal-title")?;
         let cwd_str = config.cwd.to_string_lossy();
         let title = config
             .cmd
@@ -86,11 +96,9 @@ impl TobogganTerminalElement {
         append_or_log(&titlebar, &title_text, "title text to titlebar");
         append_or_log(&window_el, &titlebar, "titlebar to terminal window");
 
-        let body = create_element_with_class(&document, "div", "terminal-body");
+        let body = create_element_with_class(&document, "div", "terminal-body")?;
 
-        let Some(canvas) = create_terminal_canvas(&document) else {
-            return;
-        };
+        let canvas = create_terminal_canvas(&document)?;
 
         append_or_log(&body, &canvas, "canvas to terminal body");
         append_or_log(&window_el, &body, "body to terminal window");
@@ -108,8 +116,12 @@ impl TobogganTerminalElement {
             .dyn_into::<HtmlElement>()
             .map_err(|_| error!("Failed to cast window element to HtmlElement"))
             .ok();
-        let initial_rows = compute_terminal_size(window_html.as_ref(), DEFAULT_FONT_SIZE).1;
-        let ws_url = build_terminal_ws_url(api_base_url, config, initial_rows);
+        // Both dimensions, not just rows: passing the computed rows alongside a
+        // hardcoded 80 columns made every session's first frame 80 wide no matter
+        // how wide the pane was, until the first resize corrected it.
+        let (initial_cols, initial_rows) =
+            compute_terminal_size(window_html.as_ref(), DEFAULT_FONT_SIZE);
+        let ws_url = build_terminal_ws_url(api_base_url, config, initial_cols, initial_rows);
 
         // Set up action channel (shared between keyboard handler and button clicks)
         let (tx_key, rx_key) = mpsc::unbounded::<KeyAction>();
@@ -119,7 +131,9 @@ impl TobogganTerminalElement {
         // ones handle window resizes and side-by-side flex reflow.
         setup_resize_observer(&body, tx_key.clone());
         setup_button_click(&btn_maximize, tx_key.clone(), KeyAction::Expand);
-        setup_button_click(&btn_minimize, tx_key, KeyAction::Restore);
+        setup_button_click(&btn_minimize, tx_key.clone(), KeyAction::Restore);
+        // Kept so `stop_terminal` can end the session (and with it the PTY).
+        *self.session.borrow_mut() = Some(tx_key);
 
         info!("Starting terminal session:", &ws_url);
 
@@ -130,14 +144,21 @@ impl TobogganTerminalElement {
                 theme,
                 title_el,
                 window_html,
-                initial_rows,
+                (initial_cols, initial_rows),
                 rx_key,
             )
             .await;
         });
+        Some(())
     }
 
     pub(crate) fn stop_terminal(&self) {
+        // End the session first: clearing the DOM alone leaves the WebSocket open
+        // and the server-side PTY running for the life of the page.
+        if let Some(tx) = self.session.borrow_mut().take() {
+            let _ = tx.unbounded_send(KeyAction::Shutdown);
+        }
+
         let Some(container) = &self.container else {
             return;
         };
@@ -147,16 +168,23 @@ impl TobogganTerminalElement {
         // own container never touches it, so such a host would keep floating over
         // later slides — remove it directly.
         //
-        // Only in that case: a host still sitting where it was mounted is reused
-        // (the quake overlay keeps one host for the whole session and re-populates
-        // its shadow container on every restart), and removing it would leave the
-        // terminal permanently detached.
+        // Never for a persistent host: `Expand` moves *any* host to <body>, so a
+        // fullscreen quake terminal is a body child too, and removing it would
+        // detach the overlay's one reusable host for good.
+        if self.persistent {
+            return;
+        }
         if let Ok(root) = container.get_root_node().dyn_into::<ShadowRoot>() {
             let host = root.host();
             if is_child_of_body(&host) {
                 host.remove();
             }
         }
+    }
+
+    /// Marks this terminal's shadow host as reused across sessions.
+    pub(crate) fn set_persistent(&mut self, persistent: bool) {
+        self.persistent = persistent;
     }
 }
 
@@ -176,12 +204,26 @@ impl WasmElement for TobogganTerminalElement {
     }
 }
 
-fn create_element_with_class(document: &web_sys::Document, tag: &str, class: &str) -> Element {
-    let el = document
-        .create_element(tag)
-        .unwrap_or_else(|err| panic!("Failed to create <{tag}> element: {err:?}"));
-    el.set_class_name(class);
-    el
+/// Creates an element with `class`, or `None` if the DOM refuses.
+///
+/// Returns an `Option` rather than panicking: a panic here aborts the whole
+/// presentation (the crate builds with `panic = "abort"`), and every sibling
+/// helper on this path degrades instead.
+fn create_element_with_class(
+    document: &web_sys::Document,
+    tag: &str,
+    class: &str,
+) -> Option<Element> {
+    match document.create_element(tag) {
+        Ok(el) => {
+            el.set_class_name(class);
+            Some(el)
+        }
+        Err(err) => {
+            error!("Failed to create element:", tag, format!("{err:?}"));
+            None
+        }
+    }
 }
 
 /// Appends `child` to `parent`, logging `what` on failure instead of panicking.
@@ -212,8 +254,9 @@ fn create_terminal_canvas(document: &web_sys::Document) -> Option<HtmlCanvasElem
 /// Whether `el` is a direct child of `<body>`, i.e. a terminal host that was lifted
 /// out of its slide for fullscreen and never restored.
 ///
-/// The quake overlay also lives under `<body>`, but its terminal host is nested
-/// inside the overlay element, so it is not matched here.
+/// Callers must exclude persistent hosts themselves: `KeyAction::Expand` moves
+/// whichever host it is given to `<body>`, so this matches an expanded quake host
+/// as readily as a slide's.
 fn is_child_of_body(el: &Element) -> bool {
     let Some(parent) = el.parent_node() else {
         return false;
@@ -246,6 +289,13 @@ enum KeyAction {
     /// The terminal body changed size (initial layout, window resize, flex
     /// reflow); re-fit the grid to the new dimensions.
     Resize,
+    /// Close the WebSocket and end the session.
+    ///
+    /// Without this, tearing a terminal down only cleared the DOM: the read loop
+    /// stayed parked on the socket, so the server kept the PTY (a shell, two OS
+    /// threads, two tokio tasks) alive for the life of the page. Advancing past a
+    /// terminal slide and back leaked one PTY per visit.
+    Shutdown,
 }
 
 /// Observe the terminal body and request a re-fit on every size change.
@@ -284,16 +334,18 @@ fn setup_button_click(btn: &Element, tx: mpsc::UnboundedSender<KeyAction>, actio
     closure.forget();
 }
 
-#[allow(clippy::await_holding_refcell_ref, clippy::too_many_lines)] // Safe: single-threaded WASM
+#[allow(clippy::too_many_lines)]
 async fn run_terminal_session(
     canvas: HtmlCanvasElement,
     ws_url: &str,
     theme: Theme,
     title_el: Option<HtmlElement>,
     window_el: Option<HtmlElement>,
-    initial_rows: u16,
+    // The grid the session opens with, as `(cols, rows)`.
+    initial_size: (u16, u16),
     rx_key: mpsc::UnboundedReceiver<KeyAction>,
 ) {
+    let (initial_cols, initial_rows) = initial_size;
     let ws = match WebSocket::open(ws_url) {
         Ok(ws) => ws,
         Err(err) => {
@@ -303,14 +355,18 @@ async fn run_terminal_session(
     };
 
     let (ws_write, mut ws_read) = ws.split();
+    // Signals the read loop to stop. Closing the sink is not enough: the split
+    // halves share the underlying socket, so while the read half is still parked
+    // on `next()` the socket stays open and the server keeps the PTY alive.
+    let (tx_stop, rx_stop) = futures::channel::oneshot::channel::<()>();
     let font_size = Rc::new(RefCell::new(DEFAULT_FONT_SIZE));
 
-    let vterm = VirtualTerminal::new(DEFAULT_COLS, initial_rows, theme);
+    let vterm = VirtualTerminal::new(initial_cols, initial_rows, theme);
 
     vterm.render_to_canvas(&canvas, *font_size.borrow());
 
     // Forward actions (keyboard input, font resize, expand/restore) to WebSocket
-    let ws_write = Rc::new(RefCell::new(ws_write));
+    let ws_write = Rc::new(futures::lock::Mutex::new(ws_write));
     let ws_write_kbd = Rc::clone(&ws_write);
     let font_size_kbd = Rc::clone(&font_size);
     let canvas_kbd = canvas.clone();
@@ -320,6 +376,7 @@ async fn run_terminal_session(
 
     spawn_local(async move {
         let mut rx_key = rx_key;
+        let mut tx_stop = Some(tx_stop);
         // The terminal's styles live in a shadow root, so on fullscreen we move the whole
         // host (not the inner window) to `<body>` to escape the slide's clipping/transform,
         // then restore it to its original position on collapse.
@@ -327,11 +384,20 @@ async fn run_terminal_session(
         let mut fullscreen_origin: Option<(Node, Option<Node>)> = None;
         // Last grid size sent to the server, so a `Resize` that resolves to the
         // same dimensions (a spurious observer callback) is a no-op.
-        let mut last_dims = (DEFAULT_COLS, initial_rows);
+        let mut last_dims = (initial_cols, initial_rows);
         while let Some(action) = rx_key.next().await {
             match action {
+                KeyAction::Shutdown => {
+                    let _ = ws_write_kbd.lock().await.close().await;
+                    // Wake the read loop so both halves drop and the socket
+                    // actually closes.
+                    if let Some(tx) = tx_stop.take() {
+                        let _ = tx.send(());
+                    }
+                    break;
+                }
                 KeyAction::Input(input) => {
-                    let send_result = ws_write_kbd.borrow_mut().send(Message::Text(input)).await;
+                    let send_result = ws_write_kbd.lock().await.send(Message::Text(input)).await;
                     if send_result.is_err() {
                         break;
                     }
@@ -431,7 +497,15 @@ async fn run_terminal_session(
 
     // Read terminal output from server
     let mut current_title = String::new();
-    while let Some(msg) = ws_read.next().await {
+    let mut rx_stop = rx_stop.fuse();
+    loop {
+        let msg = futures::select! {
+            msg = ws_read.next().fuse() => match msg {
+                Some(msg) => msg,
+                None => break,
+            },
+            _ = rx_stop => break,
+        };
         match msg {
             Ok(Message::Bytes(data)) => {
                 vterm_rc.borrow_mut().process(&data);
@@ -453,7 +527,10 @@ async fn run_terminal_session(
     }
 
     info!("Terminal session ended");
-    let _ = ws_write.borrow_mut().close().await;
+    let _ = ws_write.lock().await.close().await;
+    // Drop both halves so the underlying socket is released and the server sees
+    // the close.
+    drop(ws_read);
 }
 
 fn setup_keyboard_handler(canvas: &HtmlCanvasElement, tx: mpsc::UnboundedSender<KeyAction>) {
@@ -576,11 +653,10 @@ fn compute_terminal_size(window_el: Option<&HtmlElement>, font_size: f64) -> (u1
     (cols.max(MIN_COLS), rows.max(MIN_ROWS))
 }
 
-#[allow(clippy::await_holding_refcell_ref)] // Safe: single-threaded WASM
 async fn resize_and_render(
     vterm: &Rc<RefCell<VirtualTerminal>>,
     canvas: &HtmlCanvasElement,
-    ws_write: &Rc<RefCell<futures::stream::SplitSink<WebSocket, Message>>>,
+    ws_write: &Rc<futures::lock::Mutex<futures::stream::SplitSink<WebSocket, Message>>>,
     cols: u16,
     rows: u16,
     font_size: f64,
@@ -592,7 +668,8 @@ async fn resize_and_render(
     }
     let resize_msg = format!(r#"{{"type":"resize","cols":{cols},"rows":{rows}}}"#);
     if ws_write
-        .borrow_mut()
+        .lock()
+        .await
         .send(Message::Bytes(resize_msg.into_bytes()))
         .await
         .is_err()
@@ -606,7 +683,7 @@ async fn resize_and_render(
 async fn refit(
     vterm: &Rc<RefCell<VirtualTerminal>>,
     canvas: &HtmlCanvasElement,
-    ws_write: &Rc<RefCell<futures::stream::SplitSink<WebSocket, Message>>>,
+    ws_write: &Rc<futures::lock::Mutex<futures::stream::SplitSink<WebSocket, Message>>>,
     window_el: Option<&HtmlElement>,
     font_size: f64,
 ) -> (u16, u16) {
@@ -622,15 +699,19 @@ fn update_title(title_el: Option<&HtmlElement>, current: &mut String, new_title:
     }
 }
 
-fn build_terminal_ws_url(api_base_url: &str, config: &TerminalConfig, rows: u16) -> String {
+fn build_terminal_ws_url(
+    api_base_url: &str,
+    config: &TerminalConfig,
+    cols: u16,
+    rows: u16,
+) -> String {
     let ws_base = api_base_url
         .replace("https://", "wss://")
         .replace("http://", "ws://");
 
     let cwd_str = config.cwd.to_string_lossy();
     let encoded_cwd = String::from(js_sys::encode_uri_component(&cwd_str));
-    let mut url =
-        format!("{ws_base}/api/terminal?cwd={encoded_cwd}&cols={DEFAULT_COLS}&rows={rows}");
+    let mut url = format!("{ws_base}/api/terminal?cwd={encoded_cwd}&cols={cols}&rows={rows}");
 
     if let Some(cmd) = &config.cmd {
         url.push_str("&cmd=");

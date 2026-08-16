@@ -316,18 +316,26 @@ async fn handle_connection_status(
 
         // Register command is sent automatically by CommunicationService
 
-        if let Ok(talk) = api.get_talk().await {
-            // Update presentation metadata with total slides count
-            presentation_meta.borrow_mut().total_slides = talk.titles.len();
+        match api.get_talk().await {
+            Ok(talk) => {
+                // Update presentation metadata with total slides count
+                presentation_meta.borrow_mut().total_slides = talk.titles.len();
 
-            let mut elem = elements.borrow_mut();
-            elem.footer.set_content(talk.footer.clone());
-            drop(elem);
+                let mut elem = elements.borrow_mut();
+                elem.footer.set_content(talk.footer.clone());
+                drop(elem);
 
-            // Inject custom head HTML if provided
-            inject_head_html(talk.head.as_deref());
-        } else {
-            error!("Failed to fetch talk");
+                // Inject custom head HTML if provided
+                inject_head_html(talk.head.as_deref());
+            }
+            // Report what actually failed, and what the presenter will see: the
+            // slide counter stays at 0 and the deck's `_head.html` (fonts, custom
+            // CSS) is never injected, so the deck renders unstyled.
+            Err(err) => error!(
+                "Failed to fetch talk:",
+                err.to_string(),
+                "— slide count and custom head styles are unavailable"
+            ),
         }
     }
 }

@@ -190,7 +190,7 @@ const LIGHT_COLORS: [Rgb; 16] = [
         red: 172,
         green: 176,
         blue: 190,
-    }, // 0 black (surface1)
+    }, // 0 black (surface2, #acb0be)
     Rgb {
         red: 210,
         green: 15,
@@ -230,7 +230,7 @@ const LIGHT_COLORS: [Rgb; 16] = [
         red: 188,
         green: 192,
         blue: 204,
-    }, // 8 bright black (surface2)
+    }, // 8 bright black (surface1, #bcc0cc)
     Rgb {
         red: 210,
         green: 15,
@@ -268,6 +268,10 @@ const LIGHT_COLORS: [Rgb; 16] = [
     }, // 15 bright white (text)
 ];
 
+/// How many alternate-screen snapshots to keep. Nesting deeper than this is not
+/// something real programs do; the oldest is dropped rather than growing forever.
+const MAX_SAVED_SCREENS: usize = 8;
+
 pub(super) struct VirtualTerminal {
     screen: TermScreen,
     parser: vte::Parser,
@@ -279,7 +283,11 @@ struct TermScreen {
     cursor_row: u16,
     cursor_col: u16,
     grid: Vec<Vec<Cell>>,
-    /// Saved grids for alternate screen buffer save/restore (DECSET 47/1047/1049)
+    /// Saved grids for alternate screen buffer save/restore (DECSET 47/1047/1049).
+    ///
+    /// Bounded by [`MAX_SAVED_SCREENS`]: a program that only ever enters the
+    /// alternate screen (or a stream of `\e[?1049h` with no matching `l`) would
+    /// otherwise push a full grid clone every time and grow without limit.
     saved_screens: Vec<SavedScreen>,
     /// Saved cursor position for DEC/ANSI save/restore
     saved_cursor: Option<(u16, u16)>,
@@ -290,7 +298,8 @@ struct TermScreen {
     autowrap: bool,
     /// Deferred wrap: cursor hit the right edge, next print will wrap
     wrap_pending: bool,
-    /// Window title set by OSC 0/1/2 escape sequences
+    /// Window title set by OSC 0 or 2 escape sequences (OSC 1 sets the icon name,
+    /// which this terminal does not display)
     title: Option<String>,
     /// Inside an OSC 8 hyperlink — suppress underline rendering
     in_hyperlink: bool,
@@ -394,12 +403,15 @@ pub(super) fn measure_cell_metrics(
     ctx.set_font(font);
     let metrics = ctx.measure_text("M").ok();
 
+    // Guard the measured width the same way the height below is guarded. A font
+    // that has not loaded yet measures 0, and `avail_width / 0.0` is `inf`, which
+    // `as u16` saturates to 65535 — a 65535-column grid is ~25 MB of cells and a
+    // `resize` message the server has to honour.
     let char_width = metrics
         .as_ref()
-        .map_or(
-            font_size * FALLBACK_WIDTH_RATIO,
-            web_sys::TextMetrics::width,
-        )
+        .map(web_sys::TextMetrics::width)
+        .filter(|width| *width > 0.0)
+        .unwrap_or(font_size * FALLBACK_WIDTH_RATIO)
         .ceil();
 
     let (line_height, ascent) = metrics
@@ -744,6 +756,12 @@ impl TermScreen {
     }
 
     fn enter_alternate_screen(&mut self) {
+        // Drop the oldest snapshot rather than growing without bound: each one is
+        // a full grid clone, and a stream of `\e[?1049h` with no matching `l`
+        // would otherwise consume memory for the life of the page.
+        if self.saved_screens.len() >= MAX_SAVED_SCREENS {
+            self.saved_screens.remove(0);
+        }
         // Push current screen state onto the stack
         self.saved_screens.push(SavedScreen {
             grid: self.grid.clone(),
