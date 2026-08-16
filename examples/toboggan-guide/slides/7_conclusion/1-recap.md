@@ -13,9 +13,9 @@ classes = ["no_title", "center"]
 <!-- pause -->
 - 🎨 **Style** it with classes, inline CSS, and a custom theme
 <!-- pause -->
-- 🛠️ **Build** it to TOML / HTML / PDF with `toboggan-cli`
+- 🛠️ **Build** it to TOML / HTML / PDF with `toboggan build`
 <!-- pause -->
-- 📡 **Serve & sync** it live with `toboggan-server`
+- 📡 **Serve & sync** it live with a bare `toboggan`
 
 <!-- pause -->
 

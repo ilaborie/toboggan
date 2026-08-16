@@ -1,17 +1,20 @@
-# Continuous rebuild of the guide while editing slides/.
-# Run `bacon` (default job) to regenerate toboggan-guide.toml on every save;
-# pair it with `mise run dev` for live reload in the browser.
+# Continuous rebuild of the guide's committed artifacts while editing slides/.
+#
+# Not the authoring loop: `mise run dev` (a bare `toboggan`) already builds in
+# memory and reloads the browser on save, with no file to regenerate. Reach for
+# bacon only when you want toboggan-guide.toml on disk kept current — it is
+# committed, and toboggan-server embeds it with include_str! to serve /guide.
 default_job = "toml"
 
 [jobs.toml]
-command = ["toboggan-cli", "--output", "toboggan-guide.toml", "./slides/"]
+command = ["toboggan", "build", "-p", "./slides/", "--output", "toboggan-guide.toml"]
 need_stdout = true
 allow_warnings = true
 default_watch = false
 watch = ["slides"]
 
 [jobs.html]
-command = ["toboggan-cli", "--output", "toboggan-guide.html", "./slides/"]
+command = ["toboggan", "build", "-p", "./slides/", "--output", "toboggan-guide.html"]
 need_stdout = true
 allow_warnings = true
 default_watch = false

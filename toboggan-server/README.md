@@ -1,5 +1,16 @@
 # Toboggan Server
 
+> [!IMPORTANT]
+> **Use `toboggan serve` instead** — or a bare `toboggan`, which builds a slides
+> folder in memory and serves it with live reload. The unified
+> [`toboggan`](../toboggan) command is the supported entry point and the only binary
+> a release ships.
+>
+> The `toboggan-server` binary documented below still builds from source, but it
+> takes the talk as a positional argument where `toboggan serve` takes `-p/--path`.
+> The flags and `TOBOGGAN_*` environment variables described here are the same ones
+> the unified command exposes.
+
 The Toboggan server is a high-performance, Axum-based web server that serves presentations and provides real-time synchronization across multiple clients via WebSocket. Built with async Rust, it handles concurrent connections efficiently while maintaining presentation state consistency.
 
 ## Features

@@ -5,7 +5,7 @@ classes = ["no_title", "wide"]
 
 # A deck is a folder
 
-`toboggan-cli` reads a **directory** of Markdown/HTML files. Order comes from filenames; sections come from sub-folders.
+`toboggan` reads a **directory** of Markdown/HTML files. Order comes from filenames; sections come from sub-folders.
 
 ```text
 my-talk/

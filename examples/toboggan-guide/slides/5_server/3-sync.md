@@ -20,7 +20,8 @@ connected client over a WebSocket.
 
 | Path | Purpose |
 |---|---|
-| `/` | The web client (this UI) |
+| `/` | The homepage — links every view of the deck |
+| `/run` | The live presentation (this UI) |
 | `/api/ws` | Presentation sync WebSocket |
 | `/api/terminal` | Embedded-terminal WebSocket |
 | `/api/talk`, `/api/slides` | REST views of the deck |

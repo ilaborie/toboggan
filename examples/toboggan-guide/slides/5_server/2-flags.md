@@ -9,22 +9,28 @@ classes = ["no_title", "wide"]
 |---|---|---|
 | `--host` | `TOBOGGAN_HOST` | Bind address (default `127.0.0.1`) |
 | `--port` | `TOBOGGAN_PORT` | Port (default `8080`) |
-| `--watch` | `TOBOGGAN_WATCH` | Live-reload when the `.toml` changes |
 | `--public-dir` | `TOBOGGAN_PUBLIC_DIR` | Serve assets at `/public/` |
+| `--thumbnails-dir` | `TOBOGGAN_THUMBNAILS_DIR` | Serve an overview at `/overview/` |
 | `--shell` | `TOBOGGAN_SHELL` | Shell for embedded terminals |
 | `--allowed-origins` | `TOBOGGAN_CORS_ORIGINS` | Comma-separated CORS origins |
 | `--max-clients` | `TOBOGGAN_MAX_CLIENTS` | Concurrent client cap |
+| `--open` | `TOBOGGAN_OPEN` | Open a browser once ready |
+| `--watch` | — | Reload when the `.toml` changes |
 
 <!-- pause -->
 
 ```console
-$ toboggan-server \
+$ toboggan serve -p ./my-talk.toml \
     --public-dir ./public/ \
     --shell /opt/homebrew/bin/fish \
-    --watch \
-    ./my-talk.toml
+    --watch
 ```
 
 > [!TIP]
 > `--shell` picks which shell the live terminals spawn — point it at `fish`
 > to show off your real prompt, or `sh` for a clean, portable demo.
+
+<!-- notes -->
+Any of these can live in `toboggan.toml` under `[serve]` instead of being typed
+every time. `--watch` is the one flag with no env var — watching a built file is
+a dev-loop choice, not deployment configuration.
