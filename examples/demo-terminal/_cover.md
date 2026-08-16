@@ -5,4 +5,4 @@ classes = ["no_title", "cover"]
 
 # Toboggan
 
-> A terminal-first presentation system
+> Markdown decks with live terminals

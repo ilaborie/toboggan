@@ -47,6 +47,6 @@ background:
 
 # Toboggan
 
-  <p class="tag">The terminal-first presentation system — author once, present anywhere.</p>
+  <p class="tag">Markdown decks with live terminals — author once, present anywhere.</p>
   <p class="hint">Press <kbd>→</kbd> to start · built <em>with</em> Toboggan</p>
 </div>
