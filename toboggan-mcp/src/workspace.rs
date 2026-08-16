@@ -6,6 +6,44 @@ use serde::Serialize;
 use toboggan_cli::parser::FRONT_MATTER_DELIMITER;
 use toml_edit::{Array, DocumentMut, Item, Value};
 
+/// Whether a mutation writes to disk or only reports what it would do.
+///
+/// An enum rather than a `bool` because it is threaded positionally through
+/// every mutation, and `skip_slide(rel, skip, dry_run)` took two adjacent bools:
+/// transposing them compiled cleanly, skipped the wrong thing, and claimed it was
+/// only a preview.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DryRun {
+    /// Write the change to disk.
+    Apply,
+    /// Report the change set without touching the filesystem.
+    Preview,
+}
+
+impl DryRun {
+    /// Whether this run writes to disk.
+    fn is_apply(self) -> bool {
+        matches!(self, Self::Apply)
+    }
+
+    /// Whether this run only previews.
+    fn is_preview(self) -> bool {
+        matches!(self, Self::Preview)
+    }
+}
+
+impl From<bool> for DryRun {
+    /// Converts the wire-level `dry_run` flag the MCP tools expose.
+    fn from(dry_run: bool) -> Self {
+        if dry_run { Self::Preview } else { Self::Apply }
+    }
+}
+
+/// Staging directory used to make a renumber's two-phase rename recoverable.
+///
+/// Not numbered, so `numbered_entries` never picks it up as a part.
+const STAGING_DIR: &str = ".toboggan-renumber";
+
 /// Summary of the filesystem changes a mutation made (or would make on a dry run).
 #[derive(Debug, Default, Serialize, JsonSchema)]
 pub(crate) struct ChangeSet {
@@ -22,12 +60,27 @@ pub(crate) struct ChangeSet {
 }
 
 impl ChangeSet {
-    fn new(dry_run: bool) -> Self {
+    fn new(dry_run: DryRun) -> Self {
         Self {
-            dry_run,
+            dry_run: dry_run.is_preview(),
             ..Self::default()
         }
     }
+}
+
+/// What an [`OutlineNode`] represents.
+///
+/// An enum rather than a `String` so the tool's JSON schema constrains the value
+/// the model sees, instead of advertising an open-ended string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum NodeKind {
+    /// The deck's `_cover.md`.
+    Cover,
+    /// A section folder, with its slides nested under it.
+    Part,
+    /// A content slide.
+    Slide,
 }
 
 /// A node in the folder-based outline: a cover, a part (with nested slides), or a
@@ -35,10 +88,12 @@ impl ChangeSet {
 /// address.
 #[derive(Debug, Serialize, JsonSchema)]
 pub(crate) struct OutlineNode {
-    /// Relative path (`NN-section` for parts, `NN-section/NN-slide.md` for slides).
+    /// Relative path, as the mutation tools address it: `_cover.md` for the
+    /// cover, `NN-section` for parts, `NN-slide.md` for a top-level slide, and
+    /// `NN-section/NN-slide.md` for a slide inside a part.
     pub(crate) path: String,
-    /// `"cover"`, `"part"`, or `"slide"`.
-    pub(crate) kind: String,
+    /// What this node is.
+    pub(crate) kind: NodeKind,
     /// Front-matter title (falls back to the file/folder name).
     pub(crate) title: String,
     /// Render targets the slide is hidden in (e.g. `["web"]`).
@@ -50,6 +105,14 @@ pub(crate) struct OutlineNode {
     /// Nested slides (for parts).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) slides: Vec<OutlineNode>,
+    /// Why this node's front matter could not be read, when it could not.
+    ///
+    /// Unreadable front matter used to fall back to defaults, so the outline
+    /// reported a title invented from the filename plus `skip: false` and no
+    /// `hidden_in` — indistinguishable from a healthy slide, and the parser was
+    /// silently dropping that same slide from the built deck.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) error: Option<String>,
 }
 
 /// Safe mutation surface over a presentation folder.
@@ -65,10 +128,22 @@ pub(crate) struct Workspace {
 impl Workspace {
     /// Opens the workspace rooted at `root` (created if missing).
     ///
+    /// A `root` containing a `slides/` subdirectory is taken to be a deck root
+    /// and the workspace anchors on `slides/` instead. The parser treats its path
+    /// directly as the slides folder, so anchoring on the deck root produced an
+    /// empty outline and wrote new slides as siblings of `slides/`, where nothing
+    /// would ever read them. This mirrors the CLI's own deck resolution.
+    ///
     /// # Errors
     /// Returns an error if the root cannot be created or canonicalized.
     pub(crate) fn new(root: &Path) -> anyhow::Result<Self> {
         fs::create_dir_all(root)?;
+        let nested_slides = root.join("slides");
+        let root = if nested_slides.is_dir() {
+            nested_slides
+        } else {
+            root.to_path_buf()
+        };
         let root = root.canonicalize()?;
         Ok(Self { root })
     }
@@ -86,7 +161,7 @@ impl Workspace {
         let content = part_template(title);
         atomic_write(&part_file, content.as_bytes())?;
 
-        let mut changes = ChangeSet::new(false);
+        let mut changes = ChangeSet::new(DryRun::Apply);
         changes.created.push(format!("{dir_name}/_part.md"));
         Ok(changes)
     }
@@ -106,7 +181,7 @@ impl Workspace {
         let content = slide_template(title, body.unwrap_or(""));
         atomic_write(&file, content.as_bytes())?;
 
-        let mut changes = ChangeSet::new(false);
+        let mut changes = ChangeSet::new(DryRun::Apply);
         changes.created.push(self.rel(&file));
         Ok(changes)
     }
@@ -126,7 +201,7 @@ impl Workspace {
         let target = self.confine(&self.root.join(dir))?;
         toboggan_cli::scaffold::create_presentation(&target, title, date)
             .map_err(|err| anyhow::anyhow!("{err}"))?;
-        let mut changes = ChangeSet::new(false);
+        let mut changes = ChangeSet::new(DryRun::Apply);
         changes.created.push(format!("{dir}/"));
         Ok(changes)
     }
@@ -140,21 +215,29 @@ impl Workspace {
         let mut nodes = Vec::new();
         let cover = self.root.join("_cover.md");
         if cover.is_file() {
-            let fm = read_front_matter(&cover);
+            let (fm, error) = read_front_matter_checked(&cover);
+            let hidden_in = render_targets(&fm);
             nodes.push(OutlineNode {
                 path: "_cover.md".to_owned(),
-                kind: "cover".to_owned(),
+                kind: NodeKind::Cover,
                 title: fm.title.unwrap_or_else(|| "Cover".to_owned()),
-                hidden_in: Vec::new(),
+                hidden_in,
                 skip: fm.skip,
                 slides: Vec::new(),
+                error,
             });
         }
 
         for name in numbered_entries(&self.root)? {
             let path = self.root.join(&name);
             if path.is_dir() {
-                let title = read_front_matter(&path.join("_part.md"))
+                // Report the part's own front matter rather than hardcoding
+                // defaults: a part can be skipped or hidden just like a slide,
+                // and claiming otherwise misleads an authoring agent.
+                let (fm, error) = read_front_matter_checked(&path.join("_part.md"));
+                let hidden_in = render_targets(&fm);
+                let skip = fm.skip;
+                let title = fm
                     .title
                     .unwrap_or_else(|| strip_leading_number(&name).to_owned());
                 let slides = numbered_entries(&path)?
@@ -164,11 +247,12 @@ impl Workspace {
                     .collect();
                 nodes.push(OutlineNode {
                     path: name,
-                    kind: "part".to_owned(),
+                    kind: NodeKind::Part,
                     title,
-                    hidden_in: Vec::new(),
-                    skip: false,
+                    hidden_in,
+                    skip,
                     slides,
+                    error,
                 });
             } else if is_markdown(&name) {
                 nodes.push(slide_node(&name, &path));
@@ -184,7 +268,7 @@ impl Workspace {
         &self,
         rel: &str,
         title: &str,
-        dry_run: bool,
+        dry_run: DryRun,
     ) -> anyhow::Result<ChangeSet> {
         self.edit_frontmatter(rel, dry_run, |doc| {
             assign(doc, "title", Value::from(title));
@@ -197,7 +281,7 @@ impl Workspace {
         &self,
         folder: &str,
         title: &str,
-        dry_run: bool,
+        dry_run: DryRun,
     ) -> anyhow::Result<ChangeSet> {
         let rel = format!("{}/_part.md", folder.trim_end_matches('/'));
         self.edit_frontmatter(&rel, dry_run, |doc| {
@@ -211,13 +295,13 @@ impl Workspace {
         &self,
         rel: &str,
         body: &str,
-        dry_run: bool,
+        dry_run: DryRun,
     ) -> anyhow::Result<ChangeSet> {
         let path = self.confine(&self.root.join(rel))?;
         let content = read(&path)?;
         let (fm, _) = split_front_matter(&content);
         let new_content = reassemble(fm.as_deref(), body);
-        if !dry_run {
+        if dry_run.is_apply() {
             atomic_write(&path, new_content.as_bytes())?;
         }
         Ok(self.modified(&path, dry_run))
@@ -229,7 +313,7 @@ impl Workspace {
         &self,
         rel: &str,
         targets: &[String],
-        dry_run: bool,
+        dry_run: DryRun,
     ) -> anyhow::Result<ChangeSet> {
         for target in targets {
             if !matches!(target.as_str(), "web" | "pdf") {
@@ -255,7 +339,7 @@ impl Workspace {
         &self,
         rel: &str,
         skip: bool,
-        dry_run: bool,
+        dry_run: DryRun,
     ) -> anyhow::Result<ChangeSet> {
         self.edit_frontmatter(rel, dry_run, |doc| {
             assign_or_remove(doc, "skip", skip.then(|| Value::from(true)));
@@ -266,12 +350,12 @@ impl Workspace {
     // ----- deletion -------------------------------------------------------
 
     /// Deletes a slide file.
-    pub(crate) fn remove_slide(&self, rel: &str, dry_run: bool) -> anyhow::Result<ChangeSet> {
+    pub(crate) fn remove_slide(&self, rel: &str, dry_run: DryRun) -> anyhow::Result<ChangeSet> {
         let path = self.confine(&self.root.join(rel))?;
         if !path.is_file() {
             anyhow::bail!("slide not found: {rel}");
         }
-        if !dry_run {
+        if dry_run.is_apply() {
             fs::remove_file(&path)?;
         }
         let mut changes = ChangeSet::new(dry_run);
@@ -280,12 +364,12 @@ impl Workspace {
     }
 
     /// Deletes a section folder and all of its slides.
-    pub(crate) fn remove_part(&self, folder: &str, dry_run: bool) -> anyhow::Result<ChangeSet> {
+    pub(crate) fn remove_part(&self, folder: &str, dry_run: DryRun) -> anyhow::Result<ChangeSet> {
         let path = self.confine(&self.root.join(folder))?;
         if !path.is_dir() {
             anyhow::bail!("section folder not found: {folder}");
         }
-        if !dry_run {
+        if dry_run.is_apply() {
             fs::remove_dir_all(&path)?;
         }
         let mut changes = ChangeSet::new(dry_run);
@@ -303,7 +387,7 @@ impl Workspace {
         &self,
         part: Option<&str>,
         order: &[String],
-        dry_run: bool,
+        dry_run: DryRun,
     ) -> anyhow::Result<ChangeSet> {
         let dir = self.section_dir(part)?;
         self.renumber(&dir, order, dry_run)
@@ -316,7 +400,7 @@ impl Workspace {
         from: &str,
         to_part: Option<&str>,
         position: Option<usize>,
-        dry_run: bool,
+        dry_run: DryRun,
     ) -> anyhow::Result<ChangeSet> {
         let source = self.confine(&self.root.join(from))?;
         if !source.is_file() {
@@ -327,6 +411,14 @@ impl Workspace {
             .and_then(|name| name.to_str())
             .ok_or_else(|| anyhow::anyhow!("invalid slide path: {from}"))?
             .to_owned();
+        // `_cover.md` / `_part.md` are structural, not orderable content. Without
+        // this guard `strip_leading_number` dropped the `_` and the deck's cover
+        // was renamed into a section as a stray numbered slide.
+        if file_name.starts_with('_') {
+            anyhow::bail!(
+                "`{file_name}` is a structural file, not a slide; only `NN-*.md` slides can be moved"
+            );
+        }
         let source_dir = source
             .parent()
             .ok_or_else(|| anyhow::anyhow!("invalid slide path: {from}"))?
@@ -365,7 +457,7 @@ impl Workspace {
             &parked,
             Some(&source_dir),
         ));
-        if !dry_run {
+        if dry_run.is_apply() {
             fs::rename(&source, target_dir.join(&parked))?;
         }
 
@@ -406,7 +498,7 @@ impl Workspace {
 
     /// Reads, edits, and re-writes a slide file's front matter via `toml_edit`,
     /// preserving the body, comments, and unknown keys.
-    fn edit_frontmatter<F>(&self, rel: &str, dry_run: bool, edit: F) -> anyhow::Result<ChangeSet>
+    fn edit_frontmatter<F>(&self, rel: &str, dry_run: DryRun, edit: F) -> anyhow::Result<ChangeSet>
     where
         F: FnOnce(&mut DocumentMut) -> anyhow::Result<()>,
     {
@@ -421,7 +513,7 @@ impl Workspace {
         edit(&mut doc)?;
         let new_fm = doc.to_string();
         let new_content = reassemble(Some(&new_fm), &body);
-        if !dry_run {
+        if dry_run.is_apply() {
             atomic_write(&path, new_content.as_bytes())?;
         }
         Ok(self.modified(&path, dry_run))
@@ -429,7 +521,7 @@ impl Workspace {
 
     /// Renumbers a directory's currently-numbered entries into `order`. Thin
     /// wrapper over [`Self::renumber_entries`] that reads the present entries.
-    fn renumber(&self, dir: &Path, order: &[String], dry_run: bool) -> anyhow::Result<ChangeSet> {
+    fn renumber(&self, dir: &Path, order: &[String], dry_run: DryRun) -> anyhow::Result<ChangeSet> {
         let present = numbered_entries(dir)?;
         self.renumber_entries(dir, &present, order, dry_run)
     }
@@ -444,24 +536,44 @@ impl Workspace {
         dir: &Path,
         present: &[String],
         order: &[String],
-        dry_run: bool,
+        dry_run: DryRun,
     ) -> anyhow::Result<ChangeSet> {
         let renames = plan_renumber(present, order)?;
 
         let mut changes = ChangeSet::new(dry_run);
         self.record_renames(&mut changes, dir, &renames);
-        if dry_run {
+        if dry_run.is_preview() {
             return Ok(changes);
         }
 
-        // Phase 1: park every entry under a unique temp name.
-        for (index, (from, _)) in renames.iter().enumerate() {
-            fs::rename(dir.join(from), dir.join(format!(".__renumber_{index}")))?;
+        // Park everything in a staging directory rather than under sibling
+        // dot-names. The names used to be fixed (`.__renumber_0`, …), so a crash
+        // between the two phases left entries scattered beside the real slides
+        // where the *next* reorder's phase 1 would rename over them and lose
+        // content for good. A single directory keeps a partial run recoverable and
+        // recognisable, and refusing to start when one exists means a crash is
+        // reported rather than compounded.
+        let staging = dir.join(STAGING_DIR);
+        if staging.exists() {
+            anyhow::bail!(
+                "`{}` already exists — a previous reorder was interrupted; move its contents back \
+                 into `{}` and remove it before retrying",
+                staging.display(),
+                dir.display()
+            );
+        }
+        fs::create_dir(&staging)?;
+
+        // Phase 1: park every entry under its *final* name inside the staging dir,
+        // so a partial run is self-describing.
+        for (from, to) in &renames {
+            fs::rename(dir.join(from), staging.join(to))?;
         }
         // Phase 2: place each parked entry at its final name.
-        for (index, (_, to)) in renames.iter().enumerate() {
-            fs::rename(dir.join(format!(".__renumber_{index}")), dir.join(to))?;
+        for (_, to) in &renames {
+            fs::rename(staging.join(to), dir.join(to))?;
         }
+        fs::remove_dir(&staging)?;
         Ok(changes)
     }
 
@@ -534,7 +646,7 @@ impl Workspace {
             .replace('\\', "/")
     }
 
-    fn modified(&self, path: &Path, dry_run: bool) -> ChangeSet {
+    fn modified(&self, path: &Path, dry_run: DryRun) -> ChangeSet {
         let mut changes = ChangeSet::new(dry_run);
         changes.modified.push(self.rel(path));
         changes
@@ -696,21 +808,37 @@ fn reassemble(front: Option<&str>, body: &str) -> String {
 
 /// Builds an outline node for a slide file at relative path `rel`.
 fn slide_node(rel: &str, path: &Path) -> OutlineNode {
-    let fm = read_front_matter(path);
+    let (fm, error) = read_front_matter_checked(path);
+    let hidden_in = render_targets(&fm);
+    let skip = fm.skip;
+    // Strip the number from the file name, not the whole relative path: for
+    // `01-intro/02-b.md` the latter yields `intro/02-b`, which is neither the
+    // slide's title nor a path.
+    let fallback = Path::new(rel)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(rel);
     OutlineNode {
         path: rel.to_owned(),
-        kind: "slide".to_owned(),
-        title: fm
-            .title
-            .unwrap_or_else(|| strip_leading_number(rel).trim_end_matches(".md").to_owned()),
-        hidden_in: fm
-            .hidden_in
-            .iter()
-            .filter_map(|target| render_target_str(*target))
-            .collect(),
-        skip: fm.skip,
+        kind: NodeKind::Slide,
+        title: fm.title.unwrap_or_else(|| {
+            strip_leading_number(fallback)
+                .trim_end_matches(".md")
+                .to_owned()
+        }),
+        hidden_in,
+        skip,
         slides: Vec::new(),
+        error,
     }
+}
+
+/// The serialized render-target names a piece of front matter hides in.
+fn render_targets(fm: &toboggan_cli::parser::FrontMatter) -> Vec<String> {
+    fm.hidden_in
+        .iter()
+        .filter_map(|target| render_target_str(*target))
+        .collect()
 }
 
 /// The serialized name of a render target (`"web"` / `"pdf"`). Derived from the
@@ -730,15 +858,26 @@ fn is_markdown(name: &str) -> bool {
         .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
 }
 
-/// Reads and parses a slide's front matter, returning the default on any error
-/// (missing file, no front matter, invalid TOML) — outline is best-effort.
-fn read_front_matter(path: &Path) -> toboggan_cli::parser::FrontMatter {
-    let Ok(content) = fs::read_to_string(path) else {
-        return toboggan_cli::parser::FrontMatter::default();
+/// Reads a slide's front matter, and reports *why* it could not be read.
+///
+/// A missing file or a slide with no front matter at all is normal and reports
+/// no error. Content that is present but unparseable is not: the parser drops
+/// that slide from the built deck, so the outline has to say so rather than
+/// invent defaults for it.
+fn read_front_matter_checked(path: &Path) -> (toboggan_cli::parser::FrontMatter, Option<String>) {
+    let default = toboggan_cli::parser::FrontMatter::default();
+    let content = match fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return (default, None),
+        Err(err) => return (default, Some(format!("cannot read: {err}"))),
     };
-    let (fm, _) = split_front_matter(&content);
-    fm.and_then(|fm| toml::from_str(&fm).ok())
-        .unwrap_or_default()
+    let (Some(fm), _) = split_front_matter(&content) else {
+        return (default, None);
+    };
+    match toml::from_str(&fm) {
+        Ok(parsed) => (parsed, None),
+        Err(err) => (default, Some(format!("invalid front matter: {err}"))),
+    }
 }
 
 fn read(path: &Path) -> anyhow::Result<String> {
@@ -856,7 +995,7 @@ mod tests {
         .expect("write");
 
         workspace
-            .set_slide_title("01-x.md", "New", false)
+            .set_slide_title("01-x.md", "New", DryRun::Apply)
             .expect("set title");
 
         let updated = fs::read_to_string(&file).expect("read");
@@ -879,7 +1018,7 @@ mod tests {
         fs::write(&file, "+++\ntitle = \"X\"\n+++\n\nbody\n").expect("write");
 
         workspace
-            .set_hidden_in("01-x.md", &["web".to_owned()], false)
+            .set_hidden_in("01-x.md", &["web".to_owned()], DryRun::Apply)
             .expect("hide");
         assert!(
             fs::read_to_string(&file)
@@ -888,7 +1027,7 @@ mod tests {
         );
 
         workspace
-            .set_hidden_in("01-x.md", &[], false)
+            .set_hidden_in("01-x.md", &[], DryRun::Apply)
             .expect("show");
         assert!(
             !fs::read_to_string(&file)
@@ -901,7 +1040,7 @@ mod tests {
     fn set_hidden_in_rejects_unknown_target() {
         let (dir, workspace) = workspace();
         fs::write(dir.path().join("01-x.md"), "+++\ntitle = \"X\"\n+++\n\nb\n").expect("write");
-        let result = workspace.set_hidden_in("01-x.md", &["mobile".to_owned()], false);
+        let result = workspace.set_hidden_in("01-x.md", &["mobile".to_owned()], DryRun::Apply);
         assert!(result.is_err());
     }
 
@@ -919,7 +1058,7 @@ mod tests {
                     "02-b.md".to_owned(),
                     "01-a.md".to_owned(),
                 ],
-                false,
+                DryRun::Apply,
             )
             .expect("reorder");
         let names = numbered_entries(dir.path()).expect("list");
@@ -933,7 +1072,11 @@ mod tests {
             fs::write(dir.path().join(name), "x").expect("write");
         }
         let changes = workspace
-            .reorder(None, &["02-b.md".to_owned(), "01-a.md".to_owned()], true)
+            .reorder(
+                None,
+                &["02-b.md".to_owned(), "01-a.md".to_owned()],
+                DryRun::Preview,
+            )
             .expect("dry run");
         assert!(changes.dry_run);
         assert!(!changes.renamed.is_empty());
@@ -948,7 +1091,7 @@ mod tests {
     fn reorder_rejects_bad_order() {
         let (dir, workspace) = workspace();
         fs::write(dir.path().join("01-a.md"), "x").expect("write");
-        let result = workspace.reorder(None, &["09-missing.md".to_owned()], false);
+        let result = workspace.reorder(None, &["09-missing.md".to_owned()], DryRun::Apply);
         assert!(result.is_err());
     }
 
@@ -965,7 +1108,7 @@ mod tests {
         fs::write(outro.join("01-z.md"), "+++\ntitle=\"z\"\n+++\n\nb\n").expect("write");
 
         workspace
-            .move_slide("01-intro/02-b.md", Some("02-outro"), Some(1), false)
+            .move_slide("01-intro/02-b.md", Some("02-outro"), Some(1), DryRun::Apply)
             .expect("move");
 
         let intro_names = numbered_entries(&intro).expect("list intro");
@@ -985,7 +1128,7 @@ mod tests {
 
         // Moving to the top level renumbers the root, renaming `01-intro` itself.
         workspace
-            .move_slide("01-intro/02-b.md", None, Some(1), false)
+            .move_slide("01-intro/02-b.md", None, Some(1), DryRun::Apply)
             .expect("move to top");
 
         let top = numbered_entries(dir.path()).expect("list root");
@@ -1007,7 +1150,7 @@ mod tests {
 
         // Moving a top-level slide into the part renumbers root (renaming 03-sec).
         workspace
-            .move_slide("01-a.md", Some("03-sec"), Some(1), false)
+            .move_slide("01-a.md", Some("03-sec"), Some(1), DryRun::Apply)
             .expect("move into part");
 
         // Root compacted: 02-b -> 01-b, 03-sec -> 02-sec.
@@ -1020,7 +1163,7 @@ mod tests {
     #[test]
     fn confine_rejects_parent_traversal_without_side_effects() {
         let (dir, workspace) = workspace();
-        let result = workspace.set_slide_title("../evil.md", "x", false);
+        let result = workspace.set_slide_title("../evil.md", "x", DryRun::Apply);
         assert!(result.is_err());
         // Nothing was created outside the root.
         assert!(!dir.path().join("../evil.md").exists());
@@ -1038,7 +1181,7 @@ mod tests {
         let (dir, workspace) = workspace();
         // A well-formed but non-existent path: rejected on its own merits, and
         // resolving it must leave the deck folder untouched.
-        let result = workspace.remove_slide("ghost/part/slide.md", false);
+        let result = workspace.remove_slide("ghost/part/slide.md", DryRun::Apply);
         assert!(result.is_err());
         assert!(
             !dir.path().join("ghost").exists(),
@@ -1053,7 +1196,7 @@ mod tests {
         let target = escape.join("evil.md");
         // An absolute `rel` would replace the root in `join`; it must be rejected
         // before any directory is created.
-        let result = workspace.set_slide_title(&target.to_string_lossy(), "x", false);
+        let result = workspace.set_slide_title(&target.to_string_lossy(), "x", DryRun::Apply);
         assert!(result.is_err());
         assert!(!escape.exists(), "no directory created outside the root");
     }
@@ -1074,14 +1217,14 @@ mod tests {
         let preview_ws = Workspace::new(preview_dir.path()).expect("workspace");
         build(preview_dir.path());
         let preview = preview_ws
-            .move_slide("01-intro/02-b.md", None, Some(1), true)
+            .move_slide("01-intro/02-b.md", None, Some(1), DryRun::Preview)
             .expect("dry run");
 
         let apply_dir = tempfile::tempdir().expect("tempdir");
         let apply_ws = Workspace::new(apply_dir.path()).expect("workspace");
         build(apply_dir.path());
         let applied = apply_ws
-            .move_slide("01-intro/02-b.md", None, Some(1), false)
+            .move_slide("01-intro/02-b.md", None, Some(1), DryRun::Apply)
             .expect("apply");
 
         assert!(preview.dry_run && !applied.dry_run);
@@ -1111,6 +1254,136 @@ mod tests {
             parsed.get("title").and_then(Item::as_str),
             Some("Tricky \"q\" \\ \n line"),
             "title round-trips through escaping"
+        );
+    }
+    /// The destructive operations had no tests at all — not even a happy path.
+    #[test]
+    fn remove_slide_deletes_only_on_apply() {
+        let (dir, workspace) = workspace();
+        fs::write(dir.path().join("01-a.md"), "x").expect("write");
+
+        let preview = workspace
+            .remove_slide("01-a.md", DryRun::Preview)
+            .expect("preview");
+        assert!(preview.dry_run);
+        assert!(
+            dir.path().join("01-a.md").is_file(),
+            "preview must not delete"
+        );
+
+        let applied = workspace
+            .remove_slide("01-a.md", DryRun::Apply)
+            .expect("apply");
+        assert!(!applied.dry_run);
+        assert!(!dir.path().join("01-a.md").exists(), "apply must delete");
+    }
+
+    #[test]
+    fn remove_part_deletes_the_folder_only_on_apply() {
+        let (dir, workspace) = workspace();
+        let part = dir.path().join("01-intro");
+        fs::create_dir(&part).expect("mkdir");
+        fs::write(part.join("_part.md"), "x").expect("write");
+        fs::write(part.join("01-a.md"), "x").expect("write");
+
+        workspace
+            .remove_part("01-intro", DryRun::Preview)
+            .expect("preview");
+        assert!(part.is_dir(), "preview must not delete the folder");
+
+        workspace
+            .remove_part("01-intro", DryRun::Apply)
+            .expect("apply");
+        assert!(!part.exists(), "apply must delete the folder");
+    }
+
+    /// `confine` rejects these because resolving `""`/`"."` lands outside the
+    /// root, not because of a deliberate guard — so pin the behaviour before a
+    /// refactor turns `remove_part("")` into `remove_dir_all(root)`.
+    #[test]
+    fn remove_part_refuses_to_target_the_root() {
+        let (dir, workspace) = workspace();
+        fs::write(dir.path().join("01-a.md"), "x").expect("write");
+
+        for target in ["", ".", "./"] {
+            assert!(
+                workspace.remove_part(target, DryRun::Apply).is_err(),
+                "remove_part({target:?}) must not target the deck root"
+            );
+        }
+        assert!(
+            dir.path().join("01-a.md").is_file(),
+            "the deck must survive"
+        );
+    }
+
+    /// `_cover.md` is structural: moving it renamed the deck's cover into a
+    /// section as a stray numbered slide.
+    #[test]
+    fn move_slide_refuses_structural_files() {
+        let (dir, workspace) = workspace();
+        fs::write(dir.path().join("_cover.md"), "x").expect("write");
+        let part = dir.path().join("01-intro");
+        fs::create_dir(&part).expect("mkdir");
+        fs::write(part.join("_part.md"), "x").expect("write");
+
+        let result = workspace.move_slide("_cover.md", Some("01-intro"), None, DryRun::Apply);
+        assert!(result.is_err(), "the cover is not a movable slide");
+        assert!(dir.path().join("_cover.md").is_file(), "cover must survive");
+    }
+
+    /// An interrupted reorder leaves a staging directory behind; the next one
+    /// must refuse rather than rename over the leftovers and lose content.
+    #[test]
+    fn reorder_refuses_when_a_previous_run_was_interrupted() {
+        let (dir, workspace) = workspace();
+        fs::write(dir.path().join("01-a.md"), "x").expect("write");
+        fs::write(dir.path().join("02-b.md"), "x").expect("write");
+        fs::create_dir(dir.path().join(STAGING_DIR)).expect("staging");
+
+        let result = workspace.reorder(
+            None,
+            &["02-b.md".to_owned(), "01-a.md".to_owned()],
+            DryRun::Apply,
+        );
+        assert!(result.is_err(), "must refuse while staging leftovers exist");
+    }
+
+    /// A deck root containing `slides/` anchors on the slides folder, so an agent
+    /// pointed at the deck root does not write orphan files beside it.
+    #[test]
+    fn workspace_descends_into_a_slides_folder() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let slides = dir.path().join("slides");
+        fs::create_dir(&slides).expect("mkdir");
+        let workspace = Workspace::new(dir.path()).expect("workspace");
+
+        workspace.add_slide(None, "Ghost", None).expect("add");
+        assert!(
+            slides.join("01-ghost.md").is_file(),
+            "new slides belong in slides/, not beside it"
+        );
+    }
+
+    /// Unparseable front matter must be reported, not replaced with defaults that
+    /// look like a healthy slide.
+    #[test]
+    fn outline_reports_unreadable_front_matter() {
+        let (dir, workspace) = workspace();
+        fs::write(
+            dir.path().join("01-broken.md"),
+            "+++\ntitle = \"unclosed\n+++\n\nx\n",
+        )
+        .expect("write");
+
+        let nodes = workspace.outline().expect("outline");
+        let broken = nodes
+            .iter()
+            .find(|node| node.path == "01-broken.md")
+            .expect("the slide is listed");
+        assert!(
+            broken.error.is_some(),
+            "a slide the parser will drop must carry an error"
         );
     }
 }

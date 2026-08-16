@@ -94,7 +94,7 @@ impl TobogganServer {
         // whenever anything in the binary enables `toboggan-lint/spell`, which
         // the CLI does — so it has to be disabled explicitly, not by omission.)
         if !params.spell {
-            config.disabled.insert("spelling/typo".to_owned());
+            config.disable(toboggan_lint::ids::SPELLING_TYPO);
         }
         let report = toboggan_lint::lint(&talk, &config);
         let report = serde_json::to_value(&report)
@@ -171,7 +171,7 @@ impl TobogganServer {
     ) -> Result<Json<ChangeResult>, ErrorData> {
         let change = self
             .workspace()?
-            .set_slide_title(&params.path, &params.title, params.dry_run)
+            .set_slide_title(&params.path, &params.title, params.dry_run.into())
             .map_err(invalid_params)?;
         Ok(ChangeResult::json(
             format!("set title of {}", params.path),
@@ -188,7 +188,7 @@ impl TobogganServer {
     ) -> Result<Json<ChangeResult>, ErrorData> {
         let change = self
             .workspace()?
-            .set_part_title(&params.folder, &params.title, params.dry_run)
+            .set_part_title(&params.folder, &params.title, params.dry_run.into())
             .map_err(invalid_params)?;
         Ok(ChangeResult::json(
             format!("set title of {}", params.folder),
@@ -205,7 +205,7 @@ impl TobogganServer {
     ) -> Result<Json<ChangeResult>, ErrorData> {
         let change = self
             .workspace()?
-            .set_slide_body(&params.path, &params.body, params.dry_run)
+            .set_slide_body(&params.path, &params.body, params.dry_run.into())
             .map_err(invalid_params)?;
         Ok(ChangeResult::json(
             format!("set body of {}", params.path),
@@ -224,7 +224,7 @@ impl TobogganServer {
     ) -> Result<Json<ChangeResult>, ErrorData> {
         let change = self
             .workspace()?
-            .set_hidden_in(&params.path, &params.targets, params.dry_run)
+            .set_hidden_in(&params.path, &params.targets, params.dry_run.into())
             .map_err(invalid_params)?;
         Ok(ChangeResult::json(
             format!("set hidden_in of {}", params.path),
@@ -242,7 +242,7 @@ impl TobogganServer {
     ) -> Result<Json<ChangeResult>, ErrorData> {
         let change = self
             .workspace()?
-            .skip_slide(&params.path, params.skip, params.dry_run)
+            .skip_slide(&params.path, params.skip, params.dry_run.into())
             .map_err(invalid_params)?;
         Ok(ChangeResult::json(
             format!("set skip of {}", params.path),
@@ -257,7 +257,7 @@ impl TobogganServer {
     ) -> Result<Json<ChangeResult>, ErrorData> {
         let change = self
             .workspace()?
-            .remove_slide(&params.path, params.dry_run)
+            .remove_slide(&params.path, params.dry_run.into())
             .map_err(invalid_params)?;
         Ok(ChangeResult::json(
             format!("removed {}", params.path),
@@ -274,7 +274,7 @@ impl TobogganServer {
     ) -> Result<Json<ChangeResult>, ErrorData> {
         let change = self
             .workspace()?
-            .remove_part(&params.folder, params.dry_run)
+            .remove_part(&params.folder, params.dry_run.into())
             .map_err(invalid_params)?;
         Ok(ChangeResult::json(
             format!("removed {}", params.folder),
@@ -294,7 +294,7 @@ impl TobogganServer {
     ) -> Result<Json<ChangeResult>, ErrorData> {
         let change = self
             .workspace()?
-            .reorder(params.part.as_deref(), &params.order, params.dry_run)
+            .reorder(params.part.as_deref(), &params.order, params.dry_run.into())
             .map_err(invalid_params)?;
         Ok(ChangeResult::json("reordered".to_owned(), change))
     }
@@ -314,7 +314,7 @@ impl TobogganServer {
                 &params.from,
                 params.to_part.as_deref(),
                 params.position,
-                params.dry_run,
+                params.dry_run.into(),
             )
             .map_err(invalid_params)?;
         Ok(ChangeResult::json(format!("moved {}", params.from), change))
