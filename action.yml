@@ -54,16 +54,24 @@ runs:
 
     - name: Build artifacts
       shell: bash
+      # Inputs go through the environment rather than `${{ }}` interpolation, so
+      # a value containing shell metacharacters is data, never code.
+      env:
+        FOLDER: ${{ inputs.folder }}
+        OUT_DIR: ${{ inputs.out-dir }}
+        OUTPUTS: ${{ inputs.outputs }}
       run: |
         set -euo pipefail
-        folder="${{ inputs.folder }}"
-        out="${{ inputs.out-dir }}"
-        mkdir -p "$out"
-        IFS=',' read -ra kinds <<< "${{ inputs.outputs }}"
+        mkdir -p "$OUT_DIR"
+        IFS=',' read -ra kinds <<< "$OUTPUTS"
         for kind in "${kinds[@]}"; do
           case "$(echo "$kind" | xargs)" in
-            html)       toboggan build "$folder" --output "$out/index.html" ;;
-            pdf)        toboggan pdf "$folder" --output "$out/presentation.pdf" ;;
-            thumbnails) toboggan thumbnails "$folder" --output "$out/overview" ;;
+            html)       toboggan build "$FOLDER" --output "$OUT_DIR/index.html" ;;
+            pdf)        toboggan pdf "$FOLDER" --output "$OUT_DIR/presentation.pdf" ;;
+            thumbnails) toboggan thumbnails "$FOLDER" --output "$OUT_DIR/overview" ;;
+            "")         ;;
+            # Without this arm a typo (`thumbnail`) produced nothing at all and
+            # still exited 0, so the workflow "succeeded" with no artifacts.
+            *)          echo "::error::unknown output kind: $kind" >&2; exit 1 ;;
           esac
         done

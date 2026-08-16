@@ -20,7 +20,7 @@ $ toboggan lint ./slides/
 |---|---|
 | `--deny <level>` | Exit non-zero at/above `info`/`warning`/`error` (CI gates) |
 | `--json` | Emit a machine-readable `LintReport` |
-| `--spell` | Also spell-check via the `typos` binary |
+| `--no-spell` | Skip spell-checking (it runs by default via the `typos` binary) |
 
 > [!TIP]
 > The linter is a library (`toboggan-lint`) — the same rules power the MCP
