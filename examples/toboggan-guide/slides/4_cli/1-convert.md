@@ -6,7 +6,7 @@ classes = ["no_title", "wide"]
 # Convert a folder
 
 ```console
-$ toboggan build ./slides/ -o my-talk.toml
+$ toboggan build -p ./slides/ -o my-talk.toml
 ✅ Successfully wrote 12 slides to my-talk.toml
 ```
 
@@ -15,7 +15,7 @@ $ toboggan build ./slides/ -o my-talk.toml
 Override metadata without touching the files:
 
 ```console
-$ toboggan build ./slides/ \
+$ toboggan build -p ./slides/ \
     --title "My Conference Talk" \
     --date 2026-09-15 \
     -o my-talk.toml

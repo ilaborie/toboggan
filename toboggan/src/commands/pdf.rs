@@ -3,20 +3,20 @@ use std::process::Command;
 
 use toboggan_cli::OutputFormat;
 
-use crate::cli::PdfArgs;
-
 /// Builds a PDF from a folder by rendering Typst, then shelling out to `typst`.
 ///
 /// # Errors
 /// Returns an error if parsing fails, the `.typ` cannot be written, the `typst`
 /// binary is missing, or compilation fails.
 #[allow(clippy::print_stdout)]
-pub(crate) fn build_pdf(args: PdfArgs) -> anyhow::Result<()> {
+pub(crate) fn build_pdf(
+    input: &Path,
+    mut settings: toboggan_cli::Settings,
+    output: Option<PathBuf>,
+) -> anyhow::Result<()> {
     super::ensure_typst()?;
 
-    let mut settings = args.cli_settings();
-    let PdfArgs { input, output, .. } = args;
-    let deck = super::deck::resolve_deck(&input);
+    let deck = super::deck::resolve_deck(input);
     settings.input = Some(deck.slides.clone());
     let output = output.unwrap_or_else(|| default_pdf_path(&deck.slides));
 

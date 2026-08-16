@@ -1,21 +1,28 @@
 use std::net::{IpAddr, Ipv4Addr};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueHint};
 use clap_complete::Shell;
+use serde::Deserialize;
 use toboggan_cli::OutputFormat;
 use toboggan_client::TobogganConfig;
 use toboggan_core::Date;
+
+use crate::config;
 
 const DEFAULT_THEME: &str = "base16-ocean.light";
 const DEFAULT_WPM: u16 = 150;
 const DEFAULT_HOST: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
 const DEFAULT_PORT: u16 = 8080;
+const DEFAULT_MAX_CLIENTS: usize = 100;
 
 /// Unified Toboggan command.
 ///
-/// With no subcommand, builds the given presentation folder in-memory and serves
-/// it (watching the folder for changes) — the everyday "present this" workflow.
+/// With no subcommand, builds the presentation folder in-memory and serves it
+/// (watching for changes) — the everyday "present this" workflow. The folder is
+/// `--path`, defaulting to the current directory, so a bare `toboggan` inside a
+/// deck is the shortest form. A `toboggan.toml` can point `default-command`
+/// somewhere other than serve.
 #[derive(Debug, Parser)]
 #[command(
     name = "toboggan",
@@ -64,7 +71,44 @@ pub(crate) enum Commands {
     Completion(CompletionArgs),
 }
 
+/// The deck location, shared by every command that operates on a deck.
+///
+/// An option rather than a positional, because a positional shares its slot with
+/// the subcommand name: at `toboggan <TAB>` a shell cannot tell whether you are
+/// starting to type `build` or a folder, so it can complete neither well. As an
+/// option it also carries a [`ValueHint`], which is what actually makes the
+/// generated completion scripts offer directories.
+#[derive(Debug, Clone, Args)]
+pub(crate) struct PathArg {
+    /// Presentation folder [default: the current directory]
+    #[arg(short = 'p', long, value_name = "DIR", value_hint = ValueHint::DirPath)]
+    pub(crate) path: Option<PathBuf>,
+}
+
+impl PathArg {
+    /// The deck to work on: the flag, else the config's `path`, else the cwd.
+    pub(crate) fn resolve(&self, config: &config::Config) -> PathBuf {
+        self.path
+            .clone()
+            .or_else(|| config.deck_path().map(Path::to_path_buf))
+            .unwrap_or_else(|| PathBuf::from("."))
+    }
+
+    /// Where to start looking for config files.
+    ///
+    /// The flag only — not the config's own `path`, which is what we are about
+    /// to discover and would be circular.
+    pub(crate) fn search_root(&self) -> PathBuf {
+        self.path.clone().unwrap_or_else(|| PathBuf::from("."))
+    }
+}
+
 /// Build options shared by `build`, the default action, `stats`, `pdf`, ...
+///
+/// Fields a config file can supply are `Option`, with no clap `default_value`:
+/// clap cannot distinguish its own default from a value the user typed, so a
+/// default here would silently outrank every `toboggan.toml`. The real defaults
+/// are applied in [`BuildOptions::into_cli_settings`], after the merge.
 #[derive(Debug, Clone, Args)]
 pub(crate) struct BuildOptions {
     /// Override the presentation title
@@ -75,17 +119,17 @@ pub(crate) struct BuildOptions {
     #[arg(short, long, value_parser = parse_date)]
     pub(crate) date: Option<Date>,
 
-    /// Syntax-highlighting theme for code blocks
-    #[arg(long, default_value = DEFAULT_THEME)]
-    pub(crate) theme: String,
+    /// Syntax-highlighting theme for code blocks [default: base16-ocean.light]
+    #[arg(long)]
+    pub(crate) theme: Option<String>,
 
     /// Disable automatic numbering of parts and slides
     #[arg(long)]
     pub(crate) no_counter: bool,
 
-    /// Speaking rate in words per minute (duration estimates)
-    #[arg(long, default_value_t = DEFAULT_WPM)]
-    pub(crate) wpm: u16,
+    /// Speaking rate in words per minute (duration estimates) [default: 150]
+    #[arg(long)]
+    pub(crate) wpm: Option<u16>,
 
     /// Exclude speaker notes from duration calculations
     #[arg(long)]
@@ -93,7 +137,23 @@ pub(crate) struct BuildOptions {
 }
 
 impl BuildOptions {
-    /// Builds a [`toboggan_cli::Settings`] for `input`.
+    /// Fills unset options from the config file's `[build]` table.
+    ///
+    /// Booleans merge with `||` rather than overriding: a plain `bool` cannot
+    /// distinguish "not passed" from "passed as false", so a config file can
+    /// turn one on but the CLI cannot turn a config-enabled one back off. This
+    /// is documented in the scaffolded `toboggan.toml`.
+    pub(crate) fn merge(&mut self, config: config::BuildConfig) {
+        self.title = self.title.take().or(config.title);
+        self.date = self.date.or(config.date);
+        self.theme = self.theme.take().or(config.theme);
+        self.wpm = self.wpm.or(config.wpm);
+        self.no_counter |= config.no_counter.unwrap_or(false);
+        self.exclude_notes_from_duration |= config.exclude_notes_from_duration.unwrap_or(false);
+    }
+
+    /// Builds a [`toboggan_cli::Settings`] for `input`, applying the defaults
+    /// that clap no longer applies for us.
     ///
     /// `no_stats` is the caller's choice, not a default: `build` forwards its
     /// `--no-stats` flag, `stats` passes `false` because printing them is the
@@ -108,12 +168,12 @@ impl BuildOptions {
             output: None,
             title: self.title,
             date: self.date,
-            theme: self.theme,
+            theme: self.theme.unwrap_or_else(|| DEFAULT_THEME.to_owned()),
             list_themes: false,
             format: None,
             no_counter: self.no_counter,
             no_stats,
-            wpm: self.wpm,
+            wpm: self.wpm.unwrap_or(DEFAULT_WPM),
             exclude_notes_from_duration: self.exclude_notes_from_duration,
             input: Some(input),
         }
@@ -123,28 +183,28 @@ impl BuildOptions {
 /// Server options shared by `serve` and the default action.
 #[derive(Debug, Clone, Args)]
 pub(crate) struct ServeOptions {
-    /// Host to bind to
-    #[arg(long, env = "TOBOGGAN_HOST", default_value_t = DEFAULT_HOST)]
-    pub(crate) host: IpAddr,
+    /// Host to bind to [default: 127.0.0.1]
+    #[arg(long, env = "TOBOGGAN_HOST")]
+    pub(crate) host: Option<IpAddr>,
 
-    /// Port to bind to
-    #[arg(long, env = "TOBOGGAN_PORT", default_value_t = DEFAULT_PORT)]
-    pub(crate) port: u16,
+    /// Port to bind to [default: 8080]
+    #[arg(long, env = "TOBOGGAN_PORT")]
+    pub(crate) port: Option<u16>,
 
-    /// Maximum number of concurrent WebSocket clients
-    #[arg(long, env = "TOBOGGAN_MAX_CLIENTS", default_value_t = 100)]
-    pub(crate) max_clients: usize,
+    /// Maximum number of concurrent WebSocket clients [default: 100]
+    #[arg(long, env = "TOBOGGAN_MAX_CLIENTS")]
+    pub(crate) max_clients: Option<usize>,
 
     /// Allowed CORS origins (comma-separated)
     #[arg(long, env = "TOBOGGAN_CORS_ORIGINS", value_delimiter = ',')]
     pub(crate) allowed_origins: Option<Vec<String>>,
 
     /// Local public folder for presentation assets (served at /public/)
-    #[arg(long, env = "TOBOGGAN_PUBLIC_DIR")]
+    #[arg(long, env = "TOBOGGAN_PUBLIC_DIR", value_hint = ValueHint::DirPath)]
     pub(crate) public_dir: Option<PathBuf>,
 
     /// Directory of generated thumbnails + overview.html (served at /overview/)
-    #[arg(long, env = "TOBOGGAN_THUMBNAILS_DIR")]
+    #[arg(long, env = "TOBOGGAN_THUMBNAILS_DIR", value_hint = ValueHint::DirPath)]
     pub(crate) thumbnails_dir: Option<PathBuf>,
 
     /// Shell to spawn for embedded terminals
@@ -157,11 +217,25 @@ pub(crate) struct ServeOptions {
 }
 
 impl ServeOptions {
+    /// Fills unset options from the config file's `[serve]` table.
+    ///
+    /// See [`BuildOptions::merge`] for why `open` merges with `||`.
+    pub(crate) fn merge(&mut self, config: config::ServeConfig) {
+        self.host = self.host.or(config.host);
+        self.port = self.port.or(config.port);
+        self.max_clients = self.max_clients.or(config.max_clients);
+        self.allowed_origins = self.allowed_origins.take().or(config.allowed_origins);
+        self.public_dir = self.public_dir.take().or(config.public_dir);
+        self.thumbnails_dir = self.thumbnails_dir.take().or(config.thumbnails_dir);
+        self.shell = self.shell.take().or(config.shell);
+        self.open |= config.open.unwrap_or(false);
+    }
+
     fn into_server_settings(self) -> toboggan_server::ServerSettings {
         toboggan_server::ServerSettings {
-            host: self.host,
-            port: self.port,
-            max_clients: self.max_clients,
+            host: self.host.unwrap_or(DEFAULT_HOST),
+            port: self.port.unwrap_or(DEFAULT_PORT),
+            max_clients: self.max_clients.unwrap_or(DEFAULT_MAX_CLIENTS),
             heartbeat_interval_secs: 30,
             shutdown_timeout_secs: 30,
             cleanup_interval_secs: 60,
@@ -177,8 +251,8 @@ impl ServeOptions {
 /// Default action: build a folder in-memory and serve it.
 #[derive(Debug, Clone, Args)]
 pub(crate) struct DefaultArgs {
-    /// Presentation folder to build and serve
-    pub(crate) input: Option<PathBuf>,
+    #[command(flatten)]
+    pub(crate) path: PathArg,
 
     #[command(flatten)]
     pub(crate) build: BuildOptions,
@@ -208,16 +282,14 @@ impl DefaultArgs {
     /// whether to watch the folder.
     ///
     /// # Errors
-    /// Returns an error if no input folder was given or it is not a directory.
-    pub(crate) fn resolve(self) -> anyhow::Result<ResolvedDefault> {
-        let input = self.input.ok_or_else(|| {
-            anyhow::anyhow!(
-                "no presentation folder given; pass a folder or a subcommand (try --help)"
-            )
-        })?;
+    /// Returns an error if the resolved input folder is not a directory.
+    pub(crate) fn resolve(mut self, config: config::Config) -> anyhow::Result<ResolvedDefault> {
+        let input = self.path.resolve(&config);
         if !input.is_dir() {
             anyhow::bail!("input is not a directory: {}", input.display());
         }
+        self.build.merge(config.build);
+        self.serve.merge(config.serve);
         let watch = !self.no_watch;
         let cli = self.build.into_cli_settings(input.clone(), true);
         // `ServerSettings`, not `Settings`: this path already has the talk in
@@ -233,13 +305,94 @@ impl DefaultArgs {
     }
 }
 
+/// Reinterpreting the bare-`toboggan` flags as another command's arguments.
+///
+/// Only the deck path and the build options carry over — they are exactly the
+/// flags every selectable default command shares. The serve options have no
+/// meaning for a non-serving default; rather than dropping them quietly,
+/// [`DefaultArgs::warn_unused_serve_flags`] says so.
+impl DefaultArgs {
+    pub(crate) fn into_build_args(self) -> BuildArgs {
+        BuildArgs {
+            path: self.path,
+            output: None,
+            format: None,
+            no_stats: false,
+            build: self.build,
+        }
+    }
+
+    pub(crate) fn into_stats_args(self) -> StatsArgs {
+        StatsArgs {
+            path: self.path,
+            build: self.build,
+        }
+    }
+
+    pub(crate) fn into_lint_args(self) -> LintArgs {
+        LintArgs {
+            path: self.path,
+            deny: None,
+            json: false,
+            no_spell: false,
+            build: self.build,
+        }
+    }
+
+    pub(crate) fn into_pdf_args(self) -> PdfArgs {
+        PdfArgs {
+            path: self.path,
+            output: None,
+            build: self.build,
+        }
+    }
+
+    pub(crate) fn into_thumbnails_args(self) -> ThumbnailsArgs {
+        ThumbnailsArgs {
+            path: self.path,
+            output: None,
+            no_search: false,
+            build: self.build,
+        }
+    }
+
+    /// Reports server flags that the chosen default command cannot honour.
+    ///
+    /// These are `Option`, so "set" really means set — by a flag or by a
+    /// `TOBOGGAN_*` environment variable, both of which the author expected to
+    /// take effect.
+    pub(crate) fn warn_unused_serve_flags(&self) {
+        let mut unused = Vec::new();
+        for (set, flag) in [
+            (self.serve.host.is_some(), "--host"),
+            (self.serve.port.is_some(), "--port"),
+            (self.serve.max_clients.is_some(), "--max-clients"),
+            (self.serve.allowed_origins.is_some(), "--allowed-origins"),
+            (self.serve.public_dir.is_some(), "--public-dir"),
+            (self.serve.thumbnails_dir.is_some(), "--thumbnails-dir"),
+            (self.serve.shell.is_some(), "--shell"),
+            (self.serve.open, "--open"),
+        ] {
+            if set {
+                unused.push(flag);
+            }
+        }
+        if !unused.is_empty() {
+            tracing::warn!(
+                "ignoring {} — `default-command` in the configuration does not start a server",
+                unused.join(", ")
+            );
+        }
+    }
+}
+
 #[derive(Debug, Args)]
 pub(crate) struct BuildArgs {
-    /// Input folder to process
-    pub(crate) input: PathBuf,
+    #[command(flatten)]
+    pub(crate) path: PathArg,
 
     /// Output file (required to write the deck). Extension drives the format.
-    #[arg(short, long)]
+    #[arg(short, long, value_hint = ValueHint::FilePath)]
     pub(crate) output: Option<PathBuf>,
 
     /// Output format (auto-detected from the output extension when omitted)
@@ -254,19 +407,30 @@ pub(crate) struct BuildArgs {
     pub(crate) build: BuildOptions,
 }
 
-impl From<BuildArgs> for toboggan_cli::Settings {
-    fn from(args: BuildArgs) -> Self {
-        let mut settings = args.build.into_cli_settings(args.input, args.no_stats);
-        settings.output = args.output;
-        settings.format = args.format;
+impl BuildArgs {
+    pub(crate) fn resolve(mut self, config: config::Config) -> toboggan_cli::Settings {
+        let input = self.path.resolve(&config);
+        self.build.merge(config.build);
+        let mut settings = self.build.into_cli_settings(input, self.no_stats);
+        settings.output = self.output;
+        settings.format = self.format;
         settings
     }
 }
 
 #[derive(Debug, Args)]
 pub(crate) struct ServeArgs {
-    /// Talk `.toml` file to serve
-    pub(crate) talk: PathBuf,
+    /// Prebuilt talk `.toml` file to serve
+    ///
+    /// A file, not a folder — this command serves an already-built talk. Use the
+    /// default action (or `watch`) to build a slides folder and serve that.
+    #[arg(
+        short = 'p',
+        long,
+        value_name = "TALK_TOML",
+        value_hint = ValueHint::FilePath
+    )]
+    pub(crate) path: PathBuf,
 
     /// Watch the talk file and reload on change
     #[arg(long)]
@@ -276,12 +440,13 @@ pub(crate) struct ServeArgs {
     pub(crate) serve: ServeOptions,
 }
 
-impl From<ServeArgs> for toboggan_server::Settings {
-    fn from(args: ServeArgs) -> Self {
-        Self {
-            server: args.serve.into_server_settings(),
-            talk: args.talk,
-            watch: args.watch,
+impl ServeArgs {
+    pub(crate) fn resolve(mut self, config: config::Config) -> toboggan_server::Settings {
+        self.serve.merge(config.serve);
+        toboggan_server::Settings {
+            server: self.serve.into_server_settings(),
+            talk: self.path,
+            watch: self.watch,
         }
     }
 }
@@ -289,7 +454,11 @@ impl From<ServeArgs> for toboggan_server::Settings {
 #[derive(Debug, Args)]
 pub(crate) struct NewArgs {
     /// Directory to create the presentation in
-    pub(crate) dir: PathBuf,
+    ///
+    /// Required, unlike every other `--path`: scaffolding into an implicit
+    /// current directory is too easy to do by accident.
+    #[arg(short = 'p', long, value_name = "DIR", value_hint = ValueHint::DirPath)]
+    pub(crate) path: PathBuf,
 
     /// Presentation title (defaults to the directory name)
     #[arg(short, long)]
@@ -341,33 +510,35 @@ impl From<ClientArgs> for TobogganConfig {
 
 #[derive(Debug, Args)]
 pub(crate) struct StatsArgs {
-    /// Input folder to analyze
-    pub(crate) input: PathBuf,
+    #[command(flatten)]
+    pub(crate) path: PathArg,
 
     #[command(flatten)]
     pub(crate) build: BuildOptions,
 }
 
-impl From<StatsArgs> for toboggan_cli::Settings {
-    fn from(args: StatsArgs) -> Self {
-        args.build.into_cli_settings(args.input, false)
+impl StatsArgs {
+    pub(crate) fn resolve(mut self, config: config::Config) -> toboggan_cli::Settings {
+        let input = self.path.resolve(&config);
+        self.build.merge(config.build);
+        self.build.into_cli_settings(input, false)
     }
 }
 
 #[derive(Debug, Args)]
 pub(crate) struct OpenapiArgs {
     /// Output file (default: stdout)
-    #[arg(short, long)]
+    #[arg(short, long, value_hint = ValueHint::FilePath)]
     pub(crate) output: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
 pub(crate) struct PdfArgs {
-    /// Input folder to process
-    pub(crate) input: PathBuf,
+    #[command(flatten)]
+    pub(crate) path: PathArg,
 
     /// Output PDF path (default: <deck-name>.pdf in the current directory)
-    #[arg(short, long)]
+    #[arg(short, long, value_hint = ValueHint::FilePath)]
     pub(crate) output: Option<PathBuf>,
 
     #[command(flatten)]
@@ -375,21 +546,23 @@ pub(crate) struct PdfArgs {
 }
 
 impl PdfArgs {
-    pub(crate) fn cli_settings(&self) -> toboggan_cli::Settings {
-        self.build
-            .clone()
-            .into_cli_settings(self.input.clone(), true)
+    /// Resolves the deck folder and the parse settings for it.
+    pub(crate) fn resolve(mut self, config: config::Config) -> (PathBuf, toboggan_cli::Settings) {
+        let input = self.path.resolve(&config);
+        self.build.merge(config.build);
+        let settings = self.build.into_cli_settings(input.clone(), true);
+        (input, settings)
     }
 }
 
 #[derive(Debug, Args)]
 pub(crate) struct LintArgs {
-    /// Input folder to lint
-    pub(crate) input: PathBuf,
+    #[command(flatten)]
+    pub(crate) path: PathArg,
 
-    /// Severity at or above which lint exits non-zero
-    #[arg(long, value_enum, default_value_t = DenyLevel::Error)]
-    pub(crate) deny: DenyLevel,
+    /// Severity at or above which lint exits non-zero [default: error]
+    #[arg(long, value_enum)]
+    pub(crate) deny: Option<DenyLevel>,
 
     /// Output the report as JSON
     #[arg(long)]
@@ -403,7 +576,53 @@ pub(crate) struct LintArgs {
     pub(crate) build: BuildOptions,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+/// Everything `lint` needs once the flags and the config file are merged.
+pub(crate) struct ResolvedLint {
+    pub(crate) input: PathBuf,
+    pub(crate) settings: toboggan_cli::Settings,
+    pub(crate) deny: DenyLevel,
+    pub(crate) json: bool,
+    pub(crate) lint: toboggan_lint::LintConfig,
+}
+
+impl LintArgs {
+    pub(crate) fn resolve(mut self, config: config::Config) -> ResolvedLint {
+        let input = self.path.resolve(&config);
+        self.build.merge(config.build);
+        let settings = self.build.into_cli_settings(input.clone(), true);
+
+        let file = config.lint;
+        let mut lint = toboggan_lint::LintConfig::default();
+        if let Some(max) = file.max_steps_per_slide {
+            lint.max_steps_per_slide = max;
+        }
+        if let Some(max) = file.max_words_per_slide {
+            lint.max_words_per_slide = max;
+        }
+        if let Some(max) = file.max_images_per_slide {
+            lint.max_images_per_slide = max;
+        }
+        lint.disabled.extend(file.disabled.unwrap_or_default());
+        lint.severity_overrides
+            .extend(file.severity.unwrap_or_default());
+        // The spell rule is disabled by id, so an unknown id here would be
+        // reported by the linter like any other — see `toboggan_lint::rules::ids`.
+        if self.no_spell || file.no_spell.unwrap_or(false) {
+            lint.disable(toboggan_lint::rules::ids::SPELLING_TYPO);
+        }
+
+        ResolvedLint {
+            input,
+            settings,
+            deny: self.deny.or(file.deny).unwrap_or(DenyLevel::Error),
+            json: self.json,
+            lint,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, clap::ValueEnum)]
+#[serde(rename_all = "lowercase")]
 pub(crate) enum DenyLevel {
     /// Exit non-zero on any info, warning, or error
     Info,
@@ -415,11 +634,11 @@ pub(crate) enum DenyLevel {
 
 #[derive(Debug, Args)]
 pub(crate) struct ThumbnailsArgs {
-    /// Input folder to process
-    pub(crate) input: PathBuf,
+    #[command(flatten)]
+    pub(crate) path: PathArg,
 
     /// Output directory for thumbnails and the overview page (default: ./overview)
-    #[arg(short, long)]
+    #[arg(short, long, value_hint = ValueHint::DirPath)]
     pub(crate) output: Option<PathBuf>,
 
     /// Do not emit a search index / search box
@@ -430,14 +649,24 @@ pub(crate) struct ThumbnailsArgs {
     pub(crate) build: BuildOptions,
 }
 
+impl ThumbnailsArgs {
+    /// Resolves the deck folder and the parse settings for it.
+    pub(crate) fn resolve(mut self, config: config::Config) -> (PathBuf, toboggan_cli::Settings) {
+        let input = self.path.resolve(&config);
+        self.build.merge(config.build);
+        let settings = self.build.into_cli_settings(input.clone(), true);
+        (input, settings)
+    }
+}
+
 #[derive(Debug, Args)]
 pub(crate) struct McpArgs {
     #[command(subcommand)]
     pub(crate) action: Option<McpAction>,
 
-    /// Presentation directory the MCP server operates on
-    #[arg(long, global = true)]
-    pub(crate) dir: Option<PathBuf>,
+    /// Presentation directory the MCP server operates on [default: the current directory]
+    #[arg(short = 'p', long, global = true, value_name = "DIR", value_hint = ValueHint::DirPath)]
+    pub(crate) path: Option<PathBuf>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -464,9 +693,9 @@ pub(crate) struct SkillsArgs {
     #[arg(long, value_enum, default_value_t = McpClient::ClaudeCode)]
     pub(crate) target: McpClient,
 
-    /// Directory to install the skill into (default: current directory)
-    #[arg(long)]
-    pub(crate) dir: Option<PathBuf>,
+    /// Directory to install the skill into [default: the current directory]
+    #[arg(short = 'p', long, value_name = "DIR", value_hint = ValueHint::DirPath)]
+    pub(crate) path: Option<PathBuf>,
 
     /// Overwrite an existing SKILL.md
     #[arg(long)]

@@ -4,20 +4,20 @@
 
 [tasks.build]
 description = "Compile slides/ into toboggan-guide.toml (the served artifact)"
-run = "toboggan build ./slides/ --output toboggan-guide.toml"
+run = "toboggan build -p ./slides/ --output toboggan-guide.toml"
 
 [tasks.html]
 description = "Export a single-file static HTML version"
-run = "toboggan build ./slides/ --output toboggan-guide.html"
+run = "toboggan build -p ./slides/ --output toboggan-guide.html"
 
 [tasks.pdf]
 description = "Export a PDF handout (needs `typst`)"
-run = "toboggan pdf ./slides/ --output toboggan-guide.pdf"
+run = "toboggan pdf -p ./slides/ --output toboggan-guide.pdf"
 
 [tasks.dev]
 description = "Build + serve with live reload while editing the slides"
-run = "RUST_LOG=info toboggan ./slides/"
+run = "RUST_LOG=info toboggan -p ./slides/"
 
 [tasks.run]
 description = "Serve the compiled guide"
-run = "toboggan serve --public-dir ./public/ ./toboggan-guide.toml"
+run = "toboggan serve --public-dir ./public/ -p ./toboggan-guide.toml"

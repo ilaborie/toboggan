@@ -18,10 +18,11 @@ const SLIDE_TEMPLATE: &str = include_str!("../templates/01-welcome.md");
 const HEAD_TEMPLATE: &str = include_str!("../templates/_head.html");
 const GITIGNORE_TEMPLATE: &str = include_str!("../templates/gitignore");
 const MISE_TEMPLATE: &str = include_str!("../templates/mise.toml");
+const CONFIG_TEMPLATE: &str = include_str!("../templates/toboggan.toml");
 
 /// Creates the standard presentation folder under `dir`:
 /// `slides/` (with `_cover.md`, `_head.html`, and an `01-introduction/` part),
-/// `public/`, `.gitignore`, and `mise.toml`.
+/// `public/`, `.gitignore`, `mise.toml`, and `toboggan.toml`.
 ///
 /// # Errors
 /// Returns an error if `dir` exists and is non-empty, or if any file or
@@ -56,6 +57,14 @@ pub fn create_presentation(dir: &Path, title: &str, date: Date) -> Result<()> {
 
     let mise = MISE_TEMPLATE.replace("{{slug}}", &slugify(title));
     write(&dir.join("mise.toml"), &mise)?;
+
+    // The config doubles as the documentation for every setting: it lists each
+    // key, commented out, with its default. Authors discover options by reading
+    // the file they already have rather than by hunting through `--help`.
+    let config = CONFIG_TEMPLATE
+        .replace("{{title}}", title)
+        .replace("{{date}}", &date.to_string());
+    write(&dir.join("toboggan.toml"), &config)?;
 
     Ok(())
 }

@@ -9,7 +9,7 @@ classes = ["no_title", "wide"]
 section dividers, nested steps, images without `alt`, oversized slides, and more:
 
 ```console
-$ toboggan lint ./slides/
+$ toboggan lint -p ./slides/
   warning  content/excessive-words   slide 7 — 142 words (max 120)
   error    html/nested-step          slide 12 — nested `.step`
 ```

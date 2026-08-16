@@ -1,11 +1,10 @@
-use crate::cli::{OpenapiArgs, StatsArgs};
+use crate::cli::OpenapiArgs;
 
 /// Prints presentation statistics for a folder.
 ///
 /// # Errors
 /// Returns an error if the folder cannot be parsed or stats cannot be written.
-pub(crate) fn show_stats(args: StatsArgs) -> anyhow::Result<()> {
-    let mut settings = toboggan_cli::Settings::from(args);
+pub(crate) fn show_stats(mut settings: toboggan_cli::Settings) -> anyhow::Result<()> {
     let input = settings
         .input
         .clone()

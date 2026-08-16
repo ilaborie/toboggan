@@ -38,14 +38,15 @@ Everything is driven by the single **`toboggan`** command.
 
 ```bash
 # Scaffold a new deck (creates slides/, public/, a mise.toml, and a jj repo)
-toboggan new my-talk --title "My Presentation"
+toboggan new --path my-talk --title "My Presentation"
 ```
 
 ### Serve and present
 
 ```bash
 # Build the folder in-memory and serve it with live reload (the default action)
-toboggan my-talk
+# --path defaults to the current directory, so `cd my-talk && toboggan` also works
+toboggan -p my-talk
 
 # Open the homepage (links to run, slide overview, guide, PDF, API docs)
 open http://localhost:8080
@@ -61,7 +62,7 @@ Toboggan ships with a full authoring guide, served alongside any deck:
 
 ```bash
 # Serve any presentation, then open the guide route
-toboggan my-talk
+toboggan -p my-talk
 open http://localhost:8080/guide
 ```
 
@@ -71,11 +72,38 @@ real Toboggan deck you can read on disk or lint/build like any other.
 ### Build, lint, export
 
 ```bash
-toboggan build ./my-talk/slides -o talk.toml   # toml/json/yaml/html/typst
-toboggan lint ./my-talk/slides                 # presentation linter
-toboggan pdf ./my-talk/slides                  # PDF (needs `typst`)
-toboggan thumbnails ./my-talk/slides           # per-slide overview + search
+toboggan build -p ./my-talk/slides -o talk.toml   # toml/json/yaml/html/typst
+toboggan lint -p ./my-talk/slides                 # presentation linter
+toboggan pdf -p ./my-talk/slides                  # PDF (needs `typst`)
+toboggan thumbnails -p ./my-talk/slides           # per-slide overview + search
 ```
+
+### Configure a deck
+
+`toboggan new` writes a `toboggan.toml` listing every setting, commented out with
+its default — it is the reference for what can be configured. Anything you can
+pass as a flag can live there instead:
+
+```toml
+default-command = "lint"   # what a bare `toboggan` does
+
+[build]
+theme = "Monokai"
+wpm = 130
+
+[serve]
+open = true
+```
+
+Files are read from the deck directory, then each parent directory, then
+`~/.config/toboggan/config.toml` — so a repo of several decks can share a house
+style and one deck can override it. Precedence, strongest first:
+
+```
+CLI flag  >  TOBOGGAN_* env var  >  nearest toboggan.toml  >  … >  user global  >  default
+```
+
+An unknown key is an error rather than a silent no-op, so a typo tells you.
 
 ### Author with an LLM
 

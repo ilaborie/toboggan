@@ -4,20 +4,20 @@
 
 [tasks.dev]
 description = "Build and serve with live reload while editing"
-run = "toboggan ."
+run = "toboggan"
 
 [tasks.build]
 description = "Compile slides/ into {{slug}}.toml"
-run = "toboggan build ./slides/ --output {{slug}}.toml"
+run = "toboggan build -p ./slides/ --output {{slug}}.toml"
 
 [tasks.html]
 description = "Export a single-file static HTML version"
-run = "toboggan build ./slides/ --output {{slug}}.html"
+run = "toboggan build -p ./slides/ --output {{slug}}.html"
 
 [tasks.pdf]
 description = "Export a PDF (needs the `typst` binary)"
-run = "toboggan pdf ./slides/ --output {{slug}}.pdf"
+run = "toboggan pdf -p ./slides/ --output {{slug}}.pdf"
 
 [tasks.lint]
 description = "Lint the presentation"
-run = "toboggan lint ./slides/"
+run = "toboggan lint -p ./slides/"

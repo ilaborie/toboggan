@@ -1,0 +1,84 @@
+# Toboggan configuration for "{{title}}".
+#
+# Everything here is optional, and every key has a matching command-line flag.
+# Precedence, strongest first:
+#
+#   CLI flag  >  TOBOGGAN_* environment variable  >  this file  >  built-in default
+#
+# So a value set here is a default *for this deck*, and any flag you type still
+# wins. The file is also looked for in parent directories (handy for a repo of
+# several decks) and finally in ~/.config/toboggan/config.toml.
+#
+# Uncomment what you want to change; the value shown is the built-in default.
+
+# Deck folder, relative to this file. Change it if your slides do not live in a
+# sibling `slides/` directory.
+# path = "."
+
+# What a bare `toboggan` does. One of: serve, lint, stats, build, pdf, thumbnails.
+# `serve` builds the deck in memory and serves it with live reload.
+# default-command = "serve"
+
+[build]
+# Override the deck title and date; by default they come from slides/_cover.md.
+# title = "{{title}}"
+# date = "{{date}}"
+
+# Syntax-highlighting theme for code blocks. `toboggan build --list-themes`
+# prints the available names.
+# theme = "base16-ocean.light"
+
+# Speaking rate used for the duration estimates in `toboggan stats`.
+# wpm = 150
+
+# Turn off automatic part/slide numbering.
+# no-counter = false
+
+# Leave speaker notes out of the duration estimates.
+# exclude-notes-from-duration = false
+
+[serve]
+# Keep the port at 8080 unless you know what you are doing: the embedded web
+# client connects to 8080 and will not find a server on another port.
+# port = 8080
+# host = "127.0.0.1"
+# max-clients = 100
+
+# Extra CORS origins allowed to talk to the server.
+# allowed-origins = ["https://example.com"]
+
+# Asset folder served at /public/ (default: a `public/` sibling of the slides).
+# public-dir = "public"
+
+# Pre-generated `toboggan thumbnails` output to serve at /overview/.
+# thumbnails-dir = "overview"
+
+# Shell spawned for embedded terminals (default: your $SHELL).
+# shell = "fish"
+
+# Open the presentation in a browser once the server is ready.
+# open = false
+
+[lint]
+# Severity at or above which `toboggan lint` exits non-zero: info, warning, error.
+# deny = "error"
+
+# Skip spell checking (it runs via the `typos` CLI when that is installed).
+# no-spell = false
+
+# Per-slide budgets before the corresponding rule complains.
+# max-steps-per-slide = 20
+# max-words-per-slide = 120
+# max-images-per-slide = 8
+
+# Rules to switch off entirely, by id. `toboggan lint` names the id of every
+# diagnostic it reports, and an unknown id here is reported rather than ignored.
+# disabled = ["spelling/typo"]
+
+# Change a rule's severity instead of disabling it.
+# [lint.severity]
+# "slide/too-many-words" = "info"
+
+# Note on the boolean keys above (no-counter, open, no-spell, …): a flag can turn
+# one on, but cannot turn one back off if it is enabled here. If you need it off
+# for a single run, comment it out rather than passing a flag.

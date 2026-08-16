@@ -14,7 +14,7 @@ const SKILL_TEMPLATE: &str = include_str!("../templates/SKILL.md");
 /// Returns an error if the skill directory or files cannot be written.
 #[allow(clippy::print_stdout)]
 pub(crate) fn install(args: SkillsArgs) -> anyhow::Result<()> {
-    let base = args.dir.unwrap_or_else(|| PathBuf::from("."));
+    let base = args.path.unwrap_or_else(|| PathBuf::from("."));
     let skill_dir = base.join(".claude/skills/toboggan-authoring");
     fs::create_dir_all(&skill_dir)?;
 

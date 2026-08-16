@@ -9,7 +9,7 @@ Point `toboggan` at a folder and it **builds in memory and serves** — with liv
 reload as you edit. No intermediate file, no second process:
 
 ```console
-$ toboggan ./slides/
+$ toboggan -p ./slides/
    build + serve  http://localhost:8080
 ```
 
@@ -25,5 +25,5 @@ The homepage at `/` links every view of the deck:
 | `/download.pdf` | A PDF handout, rendered on demand |
 
 > [!TIP]
-> Scaffold a fresh deck with `toboggan new my-talk` — it lays out the folder and
+> Scaffold a fresh deck with `toboggan new -p my-talk` — it lays out the folder and
 > initializes a `jj` repo.
