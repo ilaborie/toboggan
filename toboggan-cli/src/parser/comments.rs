@@ -64,6 +64,11 @@ pub(super) fn parse_comment_content(html: &str) -> CommentType {
 
 /// Parse `<!-- lint-disable rule-a rule-b -->` (rule ids separated by whitespace
 /// and/or commas) into the list of rule ids to silence for the slide.
+///
+/// Like every Toboggan directive, this is only recognised as a *block*: the
+/// comment must stand alone on its own line, separated from surrounding text by
+/// blank lines. A comment sitting inside a paragraph parses as inline HTML and is
+/// treated as slide content, so the directive has no effect.
 fn parse_lint_disable_comment(comment_content: &str) -> CommentType {
     let rules = comment_content
         .trim_start_matches(MARKER_LINT_DISABLE)

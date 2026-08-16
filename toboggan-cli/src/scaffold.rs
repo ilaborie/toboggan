@@ -119,6 +119,69 @@ mod tests {
         assert!(root.join("mise.toml").is_file());
     }
 
+    /// The scaffold's templates carry `{{title}}`/`{{date}}`/`{{slug}}`
+    /// placeholders. Asserting only that the files exist let a renamed
+    /// placeholder ship a deck containing the literal `{{title}}`.
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn substitutes_every_template_placeholder() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path().join("deck");
+        create_presentation(&root, "My Talk", Date::today()).expect("scaffold");
+
+        for rel in [
+            "slides/_cover.md",
+            "slides/_head.html",
+            "slides/01-introduction/_part.md",
+            "slides/01-introduction/01-welcome.md",
+            "mise.toml",
+            ".gitignore",
+        ] {
+            let content = fs::read_to_string(root.join(rel)).expect("read");
+            assert!(
+                !content.contains("{{"),
+                "{rel} still contains an unsubstituted placeholder:\n{content}"
+            );
+        }
+
+        let cover = fs::read_to_string(root.join("slides/_cover.md")).expect("read");
+        assert!(cover.contains("My Talk"), "cover lost the title:\n{cover}");
+    }
+
+    /// The single most valuable assertion here: a scaffolded deck must be a deck
+    /// the parser accepts. Nothing else covered the two ends meeting.
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn the_scaffolded_deck_parses() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path().join("deck");
+        create_presentation(&root, "My Talk", Date::today()).expect("scaffold");
+
+        let settings = crate::Settings {
+            output: None,
+            title: None,
+            date: None,
+            theme: "base16-ocean.light".to_owned(),
+            list_themes: false,
+            format: None,
+            no_counter: false,
+            no_stats: true,
+            wpm: 150,
+            exclude_notes_from_duration: false,
+            input: Some(root.join("slides")),
+        };
+        let parsed =
+            crate::parse_presentation(&root.join("slides"), &settings).expect("parse scaffold");
+        assert!(
+            parsed.errors().is_empty(),
+            "scaffolded deck does not parse: {:?}",
+            parsed.errors()
+        );
+        let talk = parsed.to_talk();
+        assert_eq!(talk.title, "My Talk");
+        assert!(!talk.slides.is_empty(), "scaffolded deck has no slides");
+    }
+
     #[test]
     #[allow(clippy::expect_used)]
     fn rejects_a_non_empty_directory() {

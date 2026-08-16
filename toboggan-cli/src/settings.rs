@@ -30,9 +30,10 @@ pub enum OutputFormat {
 pub struct Settings {
     /// Output file path for the generated presentation.
     ///
-    /// If not specified, output is written to stdout. The file extension drives
-    /// the default format (`.toml`, `.json`, `.yaml`, `.html`, `.typ`).
-    #[clap(short, long, help = "Output file (default: stdout)")]
+    /// Required to write the deck: with no `-o`, the run prints a tip and writes
+    /// nothing — there is no stdout fallback. The file extension drives the
+    /// default format (`.toml`, `.json`, `.yaml`, `.html`, `.typ`).
+    #[clap(short, long, help = "Output file (required to write the deck)")]
     pub output: Option<PathBuf>,
 
     /// Override the presentation title.
@@ -147,7 +148,14 @@ impl Settings {
                 "yaml" | "yml" => return OutputFormat::Yaml,
                 "html" | "htm" => return OutputFormat::Html,
                 "typ" => return OutputFormat::Typst,
-                _ => {} // Fall through to default
+                // An unrecognised extension used to fall through to TOML, so
+                // `-o out.pdf` wrote TOML into a file named `.pdf` and exited 0.
+                // Warn rather than fail: `-f` may still name the format, and the
+                // extension is only ever a hint.
+                other => tracing::warn!(
+                    extension = other,
+                    "unrecognised output extension; defaulting to TOML (use -f to choose a format)"
+                ),
             }
         }
 

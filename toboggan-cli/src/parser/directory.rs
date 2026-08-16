@@ -139,6 +139,7 @@ pub(super) fn is_slide_file(path: &Path) -> bool {
 pub(super) fn create_slide_from_file(
     file_path: &Path,
     theme: &str,
+    asset_root: Option<&Path>,
 ) -> Result<(Slide, FrontMatter)> {
     let filename = file_path
         .file_stem()
@@ -161,7 +162,14 @@ pub(super) fn create_slide_from_file(
         let slide = create_html_slide(&content, slide_kind, filename);
         (slide, FrontMatter::default())
     } else {
-        parse_slide_from_markdown(&content, slide_kind, Some(filename), Some(file_path), theme)?
+        parse_slide_from_markdown(
+            &content,
+            slide_kind,
+            Some(filename),
+            Some(file_path),
+            theme,
+            asset_root,
+        )?
     };
 
     Ok(slide)
@@ -173,6 +181,7 @@ pub(super) fn parse_slide_from_markdown(
     filename: Option<&str>,
     file_path: Option<&Path>,
     theme: &str,
+    asset_root: Option<&Path>,
 ) -> Result<(Slide, FrontMatter)> {
     let arena = Arena::new();
     let options = default_options();
@@ -184,8 +193,14 @@ pub(super) fn parse_slide_from_markdown(
 
     let content_parser = SlideContentParser::new();
 
-    let (mut slide, front_matter) =
-        content_parser.parse(root.children(), &options, &plugins, filename, file_path)?;
+    let (mut slide, front_matter) = content_parser.parse(
+        root.children(),
+        &options,
+        &plugins,
+        filename,
+        file_path,
+        asset_root,
+    )?;
 
     slide.kind = kind;
 
@@ -252,6 +267,21 @@ pub(super) fn extract_node_text<'a>(node: &'a AstNode<'a>) -> String {
     text
 }
 
+/// The deck root a slides folder belongs to: its parent, or the folder itself
+/// when it has none.
+///
+/// Assets a slide references (`snippets/`, `public/`) sit beside `slides/`, not
+/// inside it.
+fn deck_root(slides: &Path) -> Option<PathBuf> {
+    slides
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .map_or_else(
+            || Some(slides.to_path_buf()),
+            |parent| Some(parent.to_path_buf()),
+        )
+}
+
 pub(super) fn process_talk_metadata(
     toboggan_dir: &TobogganDir,
     theme: &str,
@@ -264,7 +294,9 @@ pub(super) fn process_talk_metadata(
     if let Some(cover) = toboggan_dir.get_cover()? {
         let path = cover.path();
         debug!("Processing cover slide: {}", path.display());
-        let (cover_slide, front_matter) = create_slide_from_file(&path, theme)?;
+        let asset_root = deck_root(toboggan_dir.as_ref());
+        let (cover_slide, front_matter) =
+            create_slide_from_file(&path, theme, asset_root.as_deref())?;
         metadata.title = cover_slide.title.to_string();
         metadata.date = front_matter
             .date
@@ -295,13 +327,17 @@ pub(super) fn process_all_entries(
     toboggan_dir: &TobogganDir,
     theme: &str,
 ) -> Result<Vec<SlideProcessingResult>> {
+    // `<!-- code:lang:path -->` resolves against the deck root, i.e. the slides
+    // folder's parent — that is where a deck's `snippets/` and `public/` live.
+    let asset_root = deck_root(toboggan_dir.as_ref());
+    let asset_root = asset_root.as_deref();
     let mut result = vec![];
 
     // Process cover slide first if it exists
     if let Some(cover) = toboggan_dir.get_cover()? {
         let path = cover.path();
         debug!("Processing cover slide: {}", path.display());
-        let slide_result = process_single_file(&path, theme);
+        let slide_result = process_single_file(&path, theme, asset_root);
         result.push(slide_result);
     }
 
@@ -311,11 +347,11 @@ pub(super) fn process_all_entries(
         let path = entry.path();
 
         if path.is_dir() {
-            let folder_results = process_folder_comprehensive(&path, theme)?;
+            let folder_results = process_folder_comprehensive(&path, theme, asset_root)?;
             result.extend(folder_results);
         } else if is_slide_file(&path) {
             debug!("Processing file as slide: {}", path.display());
-            let slide_result = process_single_file(&path, theme);
+            let slide_result = process_single_file(&path, theme, asset_root);
             result.push(slide_result);
         } else {
             let filename = path
@@ -330,8 +366,12 @@ pub(super) fn process_all_entries(
     Ok(result)
 }
 
-fn process_single_file(path: &Path, theme: &str) -> SlideProcessingResult {
-    match create_slide_from_file(path, theme) {
+fn process_single_file(
+    path: &Path,
+    theme: &str,
+    asset_root: Option<&Path>,
+) -> SlideProcessingResult {
+    match create_slide_from_file(path, theme, asset_root) {
         Ok((slide, front_matter)) => {
             if front_matter.skip {
                 SlideProcessingResult::Skipped(slide)
@@ -349,7 +389,11 @@ fn process_single_file(path: &Path, theme: &str) -> SlideProcessingResult {
     }
 }
 
-fn process_folder_comprehensive(folder: &Path, theme: &str) -> Result<Vec<SlideProcessingResult>> {
+fn process_folder_comprehensive(
+    folder: &Path,
+    theme: &str,
+    asset_root: Option<&Path>,
+) -> Result<Vec<SlideProcessingResult>> {
     let mut results = vec![];
     debug!("Processing folder as part: {}", folder.display());
 
@@ -358,7 +402,7 @@ fn process_folder_comprehensive(folder: &Path, theme: &str) -> Result<Vec<SlideP
     // Process part slide if it exists
     if let Some(part_entry) = toboggan_dir.get_part()? {
         let path = part_entry.path();
-        let part_result = process_single_file(&path, theme);
+        let part_result = process_single_file(&path, theme, asset_root);
         results.push(part_result);
     } else {
         // Create implicit part slide from folder name
@@ -374,7 +418,7 @@ fn process_folder_comprehensive(folder: &Path, theme: &str) -> Result<Vec<SlideP
     for entry in toboggan_dir.get_slide_files()? {
         let path = entry.path();
         debug!("Processing folder content file: {}", path.display());
-        results.push(process_single_file(&path, theme));
+        results.push(process_single_file(&path, theme, asset_root));
     }
 
     Ok(results)
