@@ -1,0 +1,31 @@
+<style>
+	/*
+	 * Slide bodies render in a shadow root, so descendant selectors like
+	 * `.toboggan-slide h1` silently do nothing from here. Custom properties do
+	 * cross the boundary, which is why the sizes below are set as variables on
+	 * the host rather than as rules on the elements.
+	 *
+	 * The base is 32px, so the stock 350% h1 renders at 112px — most of a slide
+	 * before a single line of content. These bring the headings back to a size
+	 * that leaves room for what the slide is actually demonstrating, and shrink
+	 * code enough that the longer samples fit without scrolling.
+	 */
+	/*
+	 * Everything downstream is expressed in % and em, so the root size is the
+	 * one lever that scales the whole deck at once — including the alert blocks
+	 * and lists that no variable reaches. It does not touch the embedded
+	 * terminals, whose font size is a constant in the client, which is what we
+	 * want: the shell stays readable while the prose around it gets denser.
+	 */
+	html {
+		font-size: 25px;
+	}
+
+	.toboggan-slide {
+		--slide-h1-size: 210%;
+		--slide-h2-size: 150%;
+		--slide-h3-size: 120%;
+		--slide-code-size: 80%;
+		--slide-table-size: 75%;
+	}
+</style>

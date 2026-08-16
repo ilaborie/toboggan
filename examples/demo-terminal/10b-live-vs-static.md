@@ -1,5 +1,6 @@
 +++
 hidden_in = ["pdf"]
+classes = ["no_title"]
 +++
 
 # Live Coding (web only)

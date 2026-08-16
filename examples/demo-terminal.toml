@@ -1,11 +1,52 @@
-title = "Toboggan Feature Demo"
+title = "Toboggan"
 date = "2026-04-04"
+head = """
+<style>
+\t/*
+\t * Slide bodies render in a shadow root, so descendant selectors like
+\t * `.toboggan-slide h1` silently do nothing from here. Custom properties do
+\t * cross the boundary, which is why the sizes below are set as variables on
+\t * the host rather than as rules on the elements.
+\t *
+\t * The base is 32px, so the stock 350% h1 renders at 112px — most of a slide
+\t * before a single line of content. These bring the headings back to a size
+\t * that leaves room for what the slide is actually demonstrating, and shrink
+\t * code enough that the longer samples fit without scrolling.
+\t */
+\t/*
+\t * Everything downstream is expressed in % and em, so the root size is the
+\t * one lever that scales the whole deck at once — including the alert blocks
+\t * and lists that no variable reaches. It does not touch the embedded
+\t * terminals, whose font size is a constant in the client, which is what we
+\t * want: the shell stays readable while the prose around it gets denser.
+\t */
+\thtml {
+\t\tfont-size: 25px;
+\t}
+
+\t.toboggan-slide {
+\t\t--slide-h1-size: 210%;
+\t\t--slide-h2-size: 150%;
+\t\t--slide-h3-size: 120%;
+\t\t--slide-code-size: 80%;
+\t\t--slide-table-size: 75%;
+\t}
+</style>
+"""
 
 [[slides]]
 kind = "Cover"
+body_source = """
+# Toboggan
+
+> A terminal-first presentation system
+"""
 
 [slides.style]
-classes = ["no_title", "cover"]
+classes = [
+    "no_title",
+    "cover",
+]
 
 [slides.title]
 type = "Text"
@@ -21,14 +62,30 @@ raw = """
 """
 alt = """
 # Toboggan
+
 > A terminal-first presentation system
 """
 
 [slides.body.style]
-classes = ["no_title", "cover"]
+classes = [
+    "no_title",
+    "cover",
+]
 
 [[slides]]
 kind = "Standard"
+body_source = '''
+# Stepped Reveals
+
+Content appears progressively with `<!-- pause -->`
+
+First, this paragraph appears...
+
+...then this one\!
+
+- And finally
+- a bullet list
+'''
 
 [slides.style]
 classes = ["no_title"]
@@ -60,6 +117,7 @@ raw = """
 """
 alt = '''
 # Stepped Reveals
+
 Content appears progressively with `<!-- pause -->`
 
 First, this paragraph appears...
@@ -75,6 +133,25 @@ classes = ["no_title"]
 
 [[slides]]
 kind = "Standard"
+body_source = """
+# Pause Options
+
+### Syntax
+
+```markdown
+<!-- pause -->
+<!-- pause :highlight -->
+<!-- pause :class1 class2 -->
+```
+
+### With `spread-steps` class
+
+Distributes steps evenly across the slide height.
+
+### With `step-line-through` class
+
+Strikes through previous steps as you advance.
+"""
 
 [slides.style]
 classes = ["no_title"]
@@ -105,7 +182,9 @@ raw = """
 """
 alt = """
 # Pause Options
+
 ### Syntax
+
 ```markdown
 <!-- pause -->
 <!-- pause :highlight -->
@@ -113,9 +192,11 @@ alt = """
 ```
 
 ### With `spread-steps` class
+
 Distributes steps evenly across the slide height.
 
 ### With `step-line-through` class
+
 Strikes through previous steps as you advance.
 """
 
@@ -124,9 +205,15 @@ classes = ["no_title"]
 
 [[slides]]
 kind = "Standard"
+body_source = """
+# Live Terminal
+"""
 
 [slides.style]
-classes = ["no_title", "wide"]
+classes = [
+    "no_title",
+    "wide",
+]
 
 [slides.title]
 type = "Text"
@@ -142,13 +229,38 @@ alt = """
 """
 
 [slides.body.style]
-classes = ["no_title", "wide"]
+classes = [
+    "no_title",
+    "wide",
+]
 
 [[slides.terminals]]
 cwd = "examples/demo-terminal"
 
 [[slides]]
 kind = "Standard"
+body_source = """
+# Terminal Options
+
+### Syntax
+
+```markdown
+<!-- term: ./path -->
+<!-- term: ./path :light -->
+<!-- term: ./path | command -->
+<!-- term: ./path :light | command -->
+```
+
+### Features
+
+- Real PTY connected to your shell
+- ANSI color support (256 + truecolor)
+- Dark and light themes
+- macOS-style window chrome
+- `Cmd +` / `Cmd -` to resize font
+- Green button expands to fullscreen
+- Yellow button restores
+"""
 
 [slides.style]
 classes = ["no_title"]
@@ -183,7 +295,9 @@ raw = """
 """
 alt = """
 # Terminal Options
+
 ### Syntax
+
 ```markdown
 <!-- term: ./path -->
 <!-- term: ./path :light -->
@@ -192,6 +306,7 @@ alt = """
 ```
 
 ### Features
+
 - Real PTY connected to your shell
 - ANSI color support (256 + truecolor)
 - Dark and light themes
@@ -206,9 +321,15 @@ classes = ["no_title"]
 
 [[slides]]
 kind = "Standard"
+body_source = """
+# Light Theme
+"""
 
 [slides.style]
-classes = ["no_title", "wide"]
+classes = [
+    "no_title",
+    "wide",
+]
 
 [slides.title]
 type = "Text"
@@ -224,7 +345,10 @@ alt = """
 """
 
 [slides.body.style]
-classes = ["no_title", "wide"]
+classes = [
+    "no_title",
+    "wide",
+]
 
 [[slides.terminals]]
 cwd = "examples/demo-terminal"
@@ -232,9 +356,15 @@ theme = "light"
 
 [[slides]]
 kind = "Standard"
+body_source = """
+# Side-by-Side Terminals
+"""
 
 [slides.style]
-classes = ["no_title", "wide"]
+classes = [
+    "no_title",
+    "wide",
+]
 
 [slides.title]
 type = "Text"
@@ -250,7 +380,10 @@ alt = """
 """
 
 [slides.body.style]
-classes = ["no_title", "wide"]
+classes = [
+    "no_title",
+    "wide",
+]
 
 [[slides.terminals]]
 cwd = "examples/demo-terminal"
@@ -262,6 +395,18 @@ cmd = "hx src/lib.rs"
 
 [[slides]]
 kind = "Standard"
+body_source = """
+# Speaker Notes
+
+Content after `<!-- notes -->` is hidden from the slide.
+
+Useful for presenter talking points.
+
+```markdown
+<!-- notes -->
+This won't appear on the slide.
+```
+"""
 
 [slides.style]
 classes = ["no_title"]
@@ -274,16 +419,19 @@ text = "Speaker Notes"
 type = "Html"
 raw = """
 <h1>Speaker Notes</h1>
-<p>Content after <code>&lt;!-- notes --&gt;</code> is hidden from the slide.
-Useful for presenter talking points.</p>
+<p>Content after <code>&lt;!-- notes --&gt;</code> is hidden from the slide.</p>
+<p>Useful for presenter talking points.</p>
 <pre style="background-color:#eff1f5;"><code class="language-markdown"><span style="color:#a7adba;">&lt;!-- notes --&gt;
 </span><span style="color:#4f5b66;">This won&#39;t appear on the slide.
 </span></code></pre>
 """
 alt = """
 # Speaker Notes
+
 Content after `<!-- notes -->` is hidden from the slide.
+
 Useful for presenter talking points.
+
 ```markdown
 <!-- notes -->
 This won't appear on the slide.
@@ -296,11 +444,12 @@ classes = ["no_title"]
 [slides.notes]
 type = "Html"
 raw = """
-<p>These are speaker notes — they won't be displayed on the slide itself.
-Remind the audience about the note shortcut key.</p>
+<p>These are speaker notes — they won't be displayed on the slide itself.</p>
+<p>Remind the audience about the note shortcut key.</p>
 """
 alt = """
 These are speaker notes — they won't be displayed on the slide itself.
+
 Remind the audience about the note shortcut key.
 """
 
@@ -309,6 +458,28 @@ classes = ["no_title"]
 
 [[slides]]
 kind = "Standard"
+body_source = """
+# Slide Styling
+
+### Frontmatter classes
+
+```toml
++++
+classes = ["no_title", "wide", "cover", "center"]
++++
+```
+
+### Available classes
+
+| Class | Effect |
+| --- | --- |
+| `no_title` | Hides the slide title |
+| `wide` | Expands to 95% viewport width |
+| `cover` | Centers content (for title slides) |
+| `center` | Centers article content |
+| `spread-steps` | Distributes steps evenly |
+| `term-50vh` | Pins an embedded terminal pane to 50vh |
+"""
 
 [slides.style]
 classes = ["no_title"]
@@ -357,13 +528,19 @@ raw = """
 <td><code>spread-steps</code></td>
 <td>Distributes steps evenly</td>
 </tr>
+<tr>
+<td><code>term-50vh</code></td>
+<td>Pins an embedded terminal pane to 50vh</td>
+</tr>
 </tbody>
 </table>
 </div><!-- end step -->
 """
 alt = """
 # Slide Styling
+
 ### Frontmatter classes
+
 ```toml
 +++
 classes = ["no_title", "wide", "cover", "center"]
@@ -371,6 +548,7 @@ classes = ["no_title", "wide", "cover", "center"]
 ```
 
 ### Available classes
+
 | Class | Effect |
 | --- | --- |
 | `no_title` | Hides the slide title |
@@ -378,6 +556,7 @@ classes = ["no_title", "wide", "cover", "center"]
 | `cover` | Centers content (for title slides) |
 | `center` | Centers article content |
 | `spread-steps` | Distributes steps evenly |
+| `term-50vh` | Pins an embedded terminal pane to 50vh |
 """
 
 [slides.body.style]
@@ -385,6 +564,33 @@ classes = ["no_title"]
 
 [[slides]]
 kind = "Standard"
+body_source = """
+# Frontmatter Reference
+
+Each slide supports TOML frontmatter between `+++` delimiters:
+
+```toml
++++
+title = "Custom Title"
+classes = ["no_title", "wide"]
+style = "background: linear-gradient(#1a1a2e, #16213e);"
+skip = false
+duration = "2m"
+date = "2026-04-04"
+hidden_in = ["pdf"]
++++
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `title` | string | Override auto-detected title |
+| `classes` | list | CSS classes for layout |
+| `style` | string | Inline CSS rules |
+| `skip` | bool | Skip this slide |
+| `duration` | string | Time hint (humantime) |
+| `date` | string | Slide date |
+| `hidden_in` | list | Exclude from targets: `"web"`, `"pdf"` |
+"""
 
 [slides.style]
 classes = ["no_title"]
@@ -405,6 +611,7 @@ raw = """
 </span><span style="color:#4f5b66;">skip = false
 </span><span style="color:#4f5b66;">duration = &quot;2m&quot;
 </span><span style="color:#4f5b66;">date = &quot;2026-04-04&quot;
+</span><span style="color:#4f5b66;">hidden_in = [&quot;pdf&quot;]
 </span><span style="color:#4f5b66;">+++
 </span></code></pre>
 
@@ -448,13 +655,20 @@ raw = """
 <td>string</td>
 <td>Slide date</td>
 </tr>
+<tr>
+<td><code>hidden_in</code></td>
+<td>list</td>
+<td>Exclude from targets: <code>&quot;web&quot;</code>, <code>&quot;pdf&quot;</code></td>
+</tr>
 </tbody>
 </table>
 </div><!-- end step -->
 """
 alt = """
 # Frontmatter Reference
+
 Each slide supports TOML frontmatter between `+++` delimiters:
+
 ```toml
 +++
 title = "Custom Title"
@@ -463,6 +677,7 @@ style = "background: linear-gradient(#1a1a2e, #16213e);"
 skip = false
 duration = "2m"
 date = "2026-04-04"
+hidden_in = ["pdf"]
 +++
 ```
 
@@ -474,6 +689,7 @@ date = "2026-04-04"
 | `skip` | bool | Skip this slide |
 | `duration` | string | Time hint (humantime) |
 | `date` | string | Slide date |
+| `hidden_in` | list | Exclude from targets: `"web"`, `"pdf"` |
 """
 
 [slides.body.style]
@@ -481,9 +697,177 @@ classes = ["no_title"]
 
 [[slides]]
 kind = "Standard"
+body_source = """
+# GFM Alerts
+
+> [!NOTE]
+> Highlights information that users should take into account.
+
+> [!TIP]
+> Optional information to help a user be more successful.
+
+> [!IMPORTANT]
+> Crucial information necessary for users to succeed.
+
+> [!WARNING]
+> Critical content demanding immediate user attention.
+
+> [!CAUTION]
+> Negative potential consequences of an action.
+"""
 
 [slides.style]
-classes = ["no_title", "center"]
+classes = ["no_title"]
+
+[slides.title]
+type = "Text"
+text = "GFM Alerts"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>GFM Alerts</h1>
+<div class="markdown-alert markdown-alert-note">
+<p class="markdown-alert-title">Note</p>
+<p>Highlights information that users should take into account.</p>
+</div>
+<div class="markdown-alert markdown-alert-tip">
+<p class="markdown-alert-title">Tip</p>
+<p>Optional information to help a user be more successful.</p>
+</div>
+<div class="markdown-alert markdown-alert-important">
+<p class="markdown-alert-title">Important</p>
+<p>Crucial information necessary for users to succeed.</p>
+</div>
+<div class="markdown-alert markdown-alert-warning">
+<p class="markdown-alert-title">Warning</p>
+<p>Critical content demanding immediate user attention.</p>
+</div>
+<div class="markdown-alert markdown-alert-caution">
+<p class="markdown-alert-title">Caution</p>
+<p>Negative potential consequences of an action.</p>
+</div>
+"""
+alt = """
+# GFM Alerts
+
+> [!NOTE]
+> Highlights information that users should take into account.
+
+> [!TIP]
+> Optional information to help a user be more successful.
+
+> [!IMPORTANT]
+> Crucial information necessary for users to succeed.
+
+> [!WARNING]
+> Critical content demanding immediate user attention.
+
+> [!CAUTION]
+> Negative potential consequences of an action.
+"""
+
+[slides.body.style]
+classes = ["no_title"]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Live Coding (web only)
+
+Run the tests live:
+"""
+hidden_in = ["pdf"]
+
+[slides.style]
+classes = ["no_title"]
+
+[slides.title]
+type = "Text"
+text = "Live Coding (web only)"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Live Coding (web only)</h1>
+<p>Run the tests live:</p>
+"""
+alt = """
+# Live Coding (web only)
+
+Run the tests live:
+"""
+
+[slides.body.style]
+classes = ["no_title"]
+
+[[slides.terminals]]
+cwd = "examples/demo-terminal"
+cmd = "cargo test"
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Live Coding (pdf only)
+
+The equivalent static code shown in the PDF:
+
+```rust
+#[test]
+fn it_works() {
+    assert_eq!(2 + 2, 4);
+}
+```
+"""
+hidden_in = ["web"]
+
+[slides.style]
+classes = ["no_title"]
+
+[slides.title]
+type = "Text"
+text = "Live Coding (pdf only)"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Live Coding (pdf only)</h1>
+<p>The equivalent static code shown in the PDF:</p>
+<pre style="background-color:#eff1f5;"><code class="language-rust"><span style="color:#4f5b66;">#[</span><span style="color:#bf616a;">test</span><span style="color:#4f5b66;">]
+</span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">it_works</span><span style="color:#4f5b66;">() {
+</span><span style="color:#4f5b66;">    assert_eq!(</span><span style="color:#d08770;">2 </span><span style="color:#4f5b66;">+ </span><span style="color:#d08770;">2</span><span style="color:#4f5b66;">, </span><span style="color:#d08770;">4</span><span style="color:#4f5b66;">);
+</span><span style="color:#4f5b66;">}
+</span></code></pre>
+"""
+alt = """
+# Live Coding (pdf only)
+
+The equivalent static code shown in the PDF:
+
+```rust
+#[test]
+fn it_works() {
+    assert_eq!(2 + 2, 4);
+}
+```
+"""
+
+[slides.body.style]
+classes = ["no_title"]
+
+[[slides]]
+kind = "Standard"
+body_source = '''
+# Thank you\!
+
+Toboggan — write slides in Markdown, present from the terminal.
+'''
+
+[slides.style]
+classes = [
+    "no_title",
+    "center",
+]
 
 [slides.title]
 type = "Text"
@@ -497,8 +881,12 @@ raw = """
 """
 alt = '''
 # Thank you\!
+
 Toboggan — write slides in Markdown, present from the terminal.
 '''
 
 [slides.body.style]
-classes = ["no_title", "center"]
+classes = [
+    "no_title",
+    "center",
+]
