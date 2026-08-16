@@ -39,7 +39,7 @@ kind = "Cover"
 body_source = """
 # Toboggan
 
-> A terminal-first presentation system
+> Markdown decks with live terminals
 """
 
 [slides.style]
@@ -57,13 +57,13 @@ type = "Html"
 raw = """
 <h1>Toboggan</h1>
 <blockquote>
-<p>A terminal-first presentation system</p>
+<p>Markdown decks with live terminals</p>
 </blockquote>
 """
 alt = """
 # Toboggan
 
-> A terminal-first presentation system
+> Markdown decks with live terminals
 """
 
 [slides.body.style]

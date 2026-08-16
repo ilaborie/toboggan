@@ -1,5 +1,16 @@
 # Toboggan CLI
 
+> [!IMPORTANT]
+> **Use `toboggan build` instead.** The unified [`toboggan`](../toboggan) command is
+> the supported entry point, and the only binary a release ships — install it with
+> `cargo install --path toboggan`.
+>
+> The `toboggan-cli` binary documented below still builds from source, but it takes
+> the deck as a positional argument where `toboggan` takes `-p/--path`, so the
+> examples here are not interchangeable with the rest of the documentation. This
+> crate's real audience is now the **library**: `toboggan-server`, `toboggan-mcp`
+> and `toboggan` all depend on it for parsing and rendering.
+
 Convert Markdown presentations to Toboggan format with advanced features for speaker notes, progressive reveals, and presentation statistics.
 
 [![Crates.io](https://img.shields.io/crates/v/toboggan-cli.svg)](https://crates.io/crates/toboggan-cli)

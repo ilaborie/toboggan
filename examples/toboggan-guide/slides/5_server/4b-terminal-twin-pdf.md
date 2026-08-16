@@ -10,8 +10,8 @@ This slide is **pdf-only** (`hidden_in = ["web"]`). A live terminal can't print,
 so the handout shows a captured transcript instead:
 
 ```console
-$ toboggan-cli --version
-toboggan-cli 0.1.0
+$ toboggan --version
+toboggan 0.1.0
 
 $ ls slides/
 1_authoring  2_directives  3_styling  4_cli  5_server  6_workflow  7_conclusion

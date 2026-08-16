@@ -82,12 +82,6 @@ async fn handle_terminal(
         }
     };
 
-    // fish probes Device Attributes (DA1) on startup and blocks ~10s waiting for the
-    // reply; other shells (zsh, bash, sh) don't, so an unsolicited reply would land at
-    // their prompt as literal input. We only pre-send for fish (see DA1 pre-send below).
-    let shell_is_fish = std::path::Path::new(&shell)
-        .file_name()
-        .is_some_and(|name| name == "fish");
     let mut command = CommandBuilder::new(&shell);
     command.cwd(&abs_cwd);
     command.env("TERM", "xterm-256color");
@@ -112,19 +106,10 @@ async fn handle_terminal(
     let (tx_ws, rx_ws) = mpsc::unbounded_channel::<Message>();
     let (tx_pty, rx_pty) = std::sync::mpsc::sync_channel::<Vec<u8>>(128);
 
-    spawn_pty_reader(pair.master.try_clone_reader(), tx_ws, tx_pty.clone());
+    spawn_pty_reader(pair.master.try_clone_reader(), tx_ws);
     // macOS grace period (see portable-pty docs about race condition)
     tokio::time::sleep(Duration::from_millis(20)).await;
     spawn_pty_writer(pair.master.take_writer(), rx_pty);
-
-    // Pre-send DA1 response so fish doesn't wait 10s. Restricted to interactive fish
-    // sessions: command shells exit quickly (the response would echo as text), and
-    // non-fish shells never query at startup so the reply would be typed at the prompt
-    // (`^[[?62;4c`). Real DA1/DSR queries from any shell are still answered reactively
-    // in spawn_pty_reader.
-    if shell_is_fish && cmd.is_none() && tx_pty.send(DA1_RESPONSE.to_vec()).is_err() {
-        warn!("Failed to send DA1 response to PTY");
-    }
 
     let ws_reader_task = spawn_ws_reader(ws_receiver, tx_pty, pair.master);
     let ws_sender_task = spawn_ws_sender(rx_ws, ws_sender);
@@ -140,15 +125,17 @@ async fn handle_terminal(
     }
 }
 
-/// DA1 response: VT220 with Sixel graphics support
-const DA1_RESPONSE: &[u8] = b"\x1b[?62;4c";
-/// DSR response: cursor at row 1, col 1
-const DSR_RESPONSE: &[u8] = b"\x1b[1;1R";
-
+/// Forwards PTY output to the WebSocket verbatim.
+///
+/// This used to also answer the terminal's own Device Attributes and
+/// cursor-position queries by scanning each 4 KiB read for `\x1b[c` / `\x1b[6n`
+/// — which silently missed any query straddling two reads — plus a fish-specific
+/// pre-send to dodge the ~10 s wait its startup DA1 probe would otherwise incur.
+/// The client's emulator (rioterm) answers those queries itself and sends the
+/// replies back as ordinary input, so the server is a plain pipe again.
 fn spawn_pty_reader(
     reader: Result<Box<dyn Read + Send>, anyhow::Error>,
     tx_ws: mpsc::UnboundedSender<Message>,
-    tx_pty: std::sync::mpsc::SyncSender<Vec<u8>>,
 ) {
     let mut reader = match reader {
         Ok(reader) => reader,
@@ -165,21 +152,6 @@ fn spawn_pty_reader(
                 Ok(0) => thread::sleep(Duration::from_millis(10)),
                 Ok(len) => {
                     let data = buffer.get(..len).unwrap_or_default();
-
-                    // Respond to terminal queries (DA1, DSR) via PTY input
-                    if (data.windows(3).any(|w| w == b"\x1b[c")
-                        || data.windows(4).any(|w| w == b"\x1b[0c"))
-                        && tx_pty.send(DA1_RESPONSE.to_vec()).is_err()
-                    {
-                        warn!("Failed to send DA1 response to PTY");
-                    }
-                    if data.windows(4).any(|w| w == b"\x1b[6n")
-                        && tx_pty.send(DSR_RESPONSE.to_vec()).is_err()
-                    {
-                        warn!("Failed to send DSR response to PTY");
-                    }
-
-                    // Forward all output to WebSocket (don't strip anything)
                     if tx_ws.send(Message::Binary(data.to_vec().into())).is_err() {
                         break;
                     }
@@ -223,15 +195,17 @@ fn spawn_ws_reader(
     tokio::spawn(async move {
         while let Some(msg) = ws_receiver.next().await {
             match msg {
-                Ok(Message::Text(text)) => {
-                    if tx_pty.send(text.as_bytes().to_vec()).is_err() {
-                        break;
-                    }
-                }
+                // Text frames are control commands, binary frames are PTY input.
+                // The two used to be the other way round, with every binary frame
+                // first tried as control JSON and passed through when that failed
+                // — so pasting `{"type":"resize",…}` into the shell resized the
+                // terminal instead of reaching it. The frame type now decides.
+                Ok(Message::Text(text)) => match serde_json::from_str::<TerminalControl>(&text) {
+                    Ok(control) => handle_control(master.as_ref(), control),
+                    Err(err) => warn!(?err, %text, "Ignoring malformed terminal control"),
+                },
                 Ok(Message::Binary(data)) => {
-                    if let Ok(control) = serde_json::from_slice::<TerminalControl>(&data) {
-                        handle_control(master.as_ref(), control);
-                    } else if tx_pty.send(data.to_vec()).is_err() {
+                    if tx_pty.send(data.to_vec()).is_err() {
                         break;
                     }
                 }

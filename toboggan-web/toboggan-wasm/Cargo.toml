@@ -18,11 +18,6 @@ crate-type = ["cdylib", "rlib"]
 # default.
 wasm-opt = ["-Os", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]
 
-[package.metadata.cargo-machete]
-# beamterm-renderer is consumed via its js-api feature (registers JS bindings
-# at link time); cargo-machete misses that because there's no `use` statement.
-ignored = ["beamterm-renderer"]
-
 [workspace]
 # This empty workspace table prevents the package from inheriting workspace settings
 
@@ -68,8 +63,9 @@ wasm-bindgen-futures = "0.4.76"
 futures = "0.3.32"
 serde = "1.0.228"
 console_error_panic_hook = "0.1.7"
-beamterm-renderer = { version = "1.0.0", features = ["js-api"] }
-vte = { version = "0.15.0", default-features = false }
+# The terminal emulator itself is the `rioterm` npm package (Rio's VT core
+# compiled to wasm), bound from Rust in components/terminal/rioterm.rs. It is a
+# JS dependency, declared in toboggan-web/package.json — nothing to add here.
 
 [dev-dependencies]
 

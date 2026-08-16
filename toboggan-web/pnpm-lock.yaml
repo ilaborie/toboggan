@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      rioterm:
+        specifier: 0.1.8
+        version: 0.1.8
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.5.7
@@ -424,6 +428,9 @@ packages:
     resolution: {integrity: sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ==}
     engines: {node: ^10 || ^12 || >=14}
 
+  rioterm@0.1.8:
+    resolution: {integrity: sha512-JIy+x8Y1qt4mUm9KavsWeF2XtIEr0xBSiJTzx3bI0Oiv6ZK1W/+S+3GEcYHiOz4aMNx9C6niH5BesqiQ4RYbew==}
+
   rolldown@1.2.3:
     resolution: {integrity: sha512-rn9wpmxplLf7NLNyCk9FyWh3FM43DbY8jOzCdEPzH7uflhTftRbCEpqi6Ly2osgoU8OwObtmavMbWLaWy4LX7A==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -712,6 +719,8 @@ snapshots:
       nanoid: 3.3.18
       picocolors: 1.1.1
       source-map-js: 1.2.1
+
+  rioterm@0.1.8: {}
 
   rolldown@1.2.3:
     dependencies:

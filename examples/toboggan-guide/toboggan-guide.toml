@@ -119,7 +119,7 @@ body_source = """
 
 # Toboggan
 
-  <p class="tag">The terminal-first presentation system — author once, present anywhere.</p>
+  <p class="tag">Markdown decks with live terminals — author once, present anywhere.</p>
   <p class="hint">Press <kbd>→</kbd> to start · built <em>with</em> Toboggan</p>
 </div>
 """
@@ -178,7 +178,7 @@ raw = """
 <div class="hero">
   <span class="sled">🛝</span>
 <h1>Toboggan</h1>
-  <p class="tag">The terminal-first presentation system — author once, present anywhere.</p>
+  <p class="tag">Markdown decks with live terminals — author once, present anywhere.</p>
   <p class="hint">Press <kbd>→</kbd> to start · built <em>with</em> Toboggan</p>
 </div>
 """
@@ -219,7 +219,7 @@ alt = """
 
 # Toboggan
 
-  <p class="tag">The terminal-first presentation system — author once, present anywhere.</p>
+  <p class="tag">Markdown decks with live terminals — author once, present anywhere.</p>
   <p class="hint">Press <kbd>→</kbd> to start · built <em>with</em> Toboggan</p>
 </div>
 """
@@ -273,9 +273,9 @@ kind = "Standard"
 body_source = """
 # What is Toboggan?
 
-A **terminal-first** presentation system written in Rust.
+A presentation system written in Rust: **Markdown decks with live terminals**.
 
-You write slides as plain **Markdown**, compile them with `toboggan-cli`, and serve them with `toboggan-server` — then present from a browser, a terminal, or any synced client.
+You write slides as plain **Markdown**, and one `toboggan` command builds and serves them — then present from a browser, a terminal, or any synced client.
 
 ### Why it's different
 
@@ -298,10 +298,10 @@ text = "1.1 What is Toboggan?"
 type = "Html"
 raw = """
 <h1>What is Toboggan?</h1>
-<p>A <strong>terminal-first</strong> presentation system written in Rust.</p>
+<p>A presentation system written in Rust: <strong>Markdown decks with live terminals</strong>.</p>
 
 <div class="step step-0"><!-- begin step -->
-<p>You write slides as plain <strong>Markdown</strong>, compile them with <code>toboggan-cli</code>, and serve them with <code>toboggan-server</code> — then present from a browser, a terminal, or any synced client.</p>
+<p>You write slides as plain <strong>Markdown</strong>, and one <code>toboggan</code> command builds and serves them — then present from a browser, a terminal, or any synced client.</p>
 </div><!-- end step -->
 
 <div class="step step-1"><!-- begin step -->
@@ -337,9 +337,9 @@ raw = """
 alt = """
 # What is Toboggan?
 
-A **terminal-first** presentation system written in Rust.
+A presentation system written in Rust: **Markdown decks with live terminals**.
 
-You write slides as plain **Markdown**, compile them with `toboggan-cli`, and serve them with `toboggan-server` — then present from a browser, a terminal, or any synced client.
+You write slides as plain **Markdown**, and one `toboggan` command builds and serves them — then present from a browser, a terminal, or any synced client.
 
 ### Why it's different
 
@@ -371,7 +371,7 @@ kind = "Standard"
 body_source = """
 # A deck is a folder
 
-`toboggan-cli` reads a **directory** of Markdown/HTML files. Order comes from filenames; sections come from sub-folders.
+`toboggan` reads a **directory** of Markdown/HTML files. Order comes from filenames; sections come from sub-folders.
 
 ```text
 my-talk/
@@ -405,7 +405,7 @@ text = "1.2 Folder structure"
 type = "Html"
 raw = """
 <h1>A deck is a folder</h1>
-<p><code>toboggan-cli</code> reads a <strong>directory</strong> of Markdown/HTML files. Order comes from filenames; sections come from sub-folders.</p>
+<p><code>toboggan</code> reads a <strong>directory</strong> of Markdown/HTML files. Order comes from filenames; sections come from sub-folders.</p>
 <pre style="background-color:#eff1f5;"><code class="language-text"><span style="color:#4f5b66;">my-talk/
 </span><span style="color:#4f5b66;">├── _head.html          # injected into &lt;head&gt; (fonts, stylesheet)
 </span><span style="color:#4f5b66;">├── _footer.html        # footer component (progress bar, etc.)
@@ -428,7 +428,7 @@ raw = """
 alt = """
 # A deck is a folder
 
-`toboggan-cli` reads a **directory** of Markdown/HTML files. Order comes from filenames; sections come from sub-folders.
+`toboggan` reads a **directory** of Markdown/HTML files. Order comes from filenames; sections come from sub-folders.
 
 ```text
 my-talk/
@@ -929,8 +929,11 @@ fn main() {
 ```
 
 > [!IMPORTANT]
-> The path is resolved from **where you run `toboggan-cli`** (the deck folder),
-> not from the slide file. Keep snippets beside your build command.
+> The path is resolved against the **deck folder** — the one you pass to `-p` —
+> never against the slide file or your shell's current directory. So the same
+> embed resolves identically wherever you run the build from.
+
+Absolute paths and `..` are refused: an embed cannot reach outside the deck.
 """
 
 [slides.style]
@@ -963,9 +966,11 @@ raw = """
 </span></code></pre>
 <div class="markdown-alert markdown-alert-important">
 <p class="markdown-alert-title">Important</p>
-<p>The path is resolved from <strong>where you run <code>toboggan-cli</code></strong> (the deck folder),
-not from the slide file. Keep snippets beside your build command.</p>
+<p>The path is resolved against the <strong>deck folder</strong> — the one you pass to <code>-p</code> —
+never against the slide file or your shell's current directory. So the same
+embed resolves identically wherever you run the build from.</p>
 </div>
+<p>Absolute paths and <code>..</code> are refused: an embed cannot reach outside the deck.</p>
 </div><!-- end step -->
 """
 alt = """
@@ -990,8 +995,11 @@ fn main() {
 ```
 
 > [!IMPORTANT]
-> The path is resolved from **where you run `toboggan-cli`** (the deck folder),
-> not from the slide file. Keep snippets beside your build command.
+> The path is resolved against the **deck folder** — the one you pass to `-p` —
+> never against the slide file or your shell's current directory. So the same
+> embed resolves identically wherever you run the build from.
+
+Absolute paths and `..` are refused: an embed cannot reach outside the deck.
 """
 
 [slides.body.style]
@@ -2059,7 +2067,7 @@ classes = [
 [[slides]]
 kind = "Part"
 body_source = """
-# `toboggan-server`
+# The server
 
 Serve the deck, sync every client, and power the live terminals.
 """
@@ -2074,11 +2082,11 @@ text = "5. The Server"
 [slides.body]
 type = "Html"
 raw = """
-<h1><code>toboggan-server</code></h1>
+<h1>The server</h1>
 <p>Serve the deck, sync every client, and power the live terminals.</p>
 """
 alt = """
-# `toboggan-server`
+# The server
 
 Serve the deck, sync every client, and power the live terminals.
 """
@@ -2091,20 +2099,23 @@ kind = "Standard"
 body_source = """
 # Serve it
 
+While writing, serve the **folder** — built in memory, reloaded on save:
+
 ```console
-$ toboggan-server ./my-talk.toml
+$ toboggan -p ./slides/
 # → http://127.0.0.1:8080
 ```
 
-Bind elsewhere for the room to join from their laptops:
+To serve a deck you already built, point `serve` at the **`.toml`**:
 
 ```console
-$ toboggan-server --host 0.0.0.0 --port 9000 ./my-talk.toml
+$ toboggan serve -p ./my-talk.toml
+$ toboggan serve -p ./my-talk.toml --host 0.0.0.0 --port 9000
 ```
 
 > [!NOTE]
-> The server takes the compiled **`.toml`** (not the slides folder). Build
-> first with `toboggan-cli`, then serve — or let `--watch` rebuild for you.
+> `serve` takes a file, the default action takes a folder — that is the whole
+> difference. Both are `-p`; neither accepts a bare positional path.
 """
 
 [slides.style]
@@ -2121,44 +2132,68 @@ text = "5.1 Serve it"
 type = "Html"
 raw = """
 <h1>Serve it</h1>
-<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan-server ./my-talk.toml
+<p>While writing, serve the <strong>folder</strong> — built in memory, reloaded on save:</p>
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan -p ./slides/
 </span><span style="color:#4f5b66;"># → http://127.0.0.1:8080
 </span></code></pre>
 
 <div class="step step-0"><!-- begin step -->
-<p>Bind elsewhere for the room to join from their laptops:</p>
-<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan-server --host 0.0.0.0 --port 9000 ./my-talk.toml
+<p>To serve a deck you already built, point <code>serve</code> at the <strong><code>.toml</code></strong>:</p>
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan serve -p ./my-talk.toml
+</span><span style="color:#4f5b66;">$ toboggan serve -p ./my-talk.toml --host 0.0.0.0 --port 9000
 </span></code></pre>
 </div><!-- end step -->
 
 <div class="step step-1"><!-- begin step -->
 <div class="markdown-alert markdown-alert-note">
 <p class="markdown-alert-title">Note</p>
-<p>The server takes the compiled <strong><code>.toml</code></strong> (not the slides folder). Build
-first with <code>toboggan-cli</code>, then serve — or let <code>--watch</code> rebuild for you.</p>
+<p><code>serve</code> takes a file, the default action takes a folder — that is the whole
+difference. Both are <code>-p</code>; neither accepts a bare positional path.</p>
 </div>
 </div><!-- end step -->
 """
 alt = """
 # Serve it
 
+While writing, serve the **folder** — built in memory, reloaded on save:
+
 ```console
-$ toboggan-server ./my-talk.toml
+$ toboggan -p ./slides/
 # → http://127.0.0.1:8080
 ```
 
-Bind elsewhere for the room to join from their laptops:
+To serve a deck you already built, point `serve` at the **`.toml`**:
 
 ```console
-$ toboggan-server --host 0.0.0.0 --port 9000 ./my-talk.toml
+$ toboggan serve -p ./my-talk.toml
+$ toboggan serve -p ./my-talk.toml --host 0.0.0.0 --port 9000
 ```
 
 > [!NOTE]
-> The server takes the compiled **`.toml`** (not the slides folder). Build
-> first with `toboggan-cli`, then serve — or let `--watch` rebuild for you.
+> `serve` takes a file, the default action takes a folder — that is the whole
+> difference. Both are `-p`; neither accepts a bare positional path.
 """
 
 [slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>The unified <code>toboggan</code> binary is the only one shipped in a release, so these are
+the commands a reader will actually have. The old per-crate binaries still build
+from source but are not distributed.</p>
+"""
+alt = """
+The unified `toboggan` binary is the only one shipped in a release, so these are
+the commands a reader will actually have. The old per-crate binaries still build
+from source but are not distributed.
+"""
+
+[slides.notes.style]
 classes = [
     "no_title",
     "wide",
@@ -2173,18 +2208,19 @@ body_source = '''
 | --- | --- | --- |
 | `--host` | `TOBOGGAN_HOST` | Bind address (default `127.0.0.1`) |
 | `--port` | `TOBOGGAN_PORT` | Port (default `8080`) |
-| `--watch` | `TOBOGGAN_WATCH` | Live-reload when the `.toml` changes |
 | `--public-dir` | `TOBOGGAN_PUBLIC_DIR` | Serve assets at `/public/` |
+| `--thumbnails-dir` | `TOBOGGAN_THUMBNAILS_DIR` | Serve an overview at `/overview/` |
 | `--shell` | `TOBOGGAN_SHELL` | Shell for embedded terminals |
 | `--allowed-origins` | `TOBOGGAN_CORS_ORIGINS` | Comma-separated CORS origins |
 | `--max-clients` | `TOBOGGAN_MAX_CLIENTS` | Concurrent client cap |
+| `--open` | `TOBOGGAN_OPEN` | Open a browser once ready |
+| `--watch` | — | Reload when the `.toml` changes |
 
 ```console
-$ toboggan-server \
+$ toboggan serve -p ./my-talk.toml \
     --public-dir ./public/ \
     --shell /opt/homebrew/bin/fish \
-    --watch \
-    ./my-talk.toml
+    --watch
 ```
 
 > [!TIP]
@@ -2226,14 +2262,14 @@ raw = '''
 <td>Port (default <code>8080</code>)</td>
 </tr>
 <tr>
-<td><code>--watch</code></td>
-<td><code>TOBOGGAN_WATCH</code></td>
-<td>Live-reload when the <code>.toml</code> changes</td>
-</tr>
-<tr>
 <td><code>--public-dir</code></td>
 <td><code>TOBOGGAN_PUBLIC_DIR</code></td>
 <td>Serve assets at <code>/public/</code></td>
+</tr>
+<tr>
+<td><code>--thumbnails-dir</code></td>
+<td><code>TOBOGGAN_THUMBNAILS_DIR</code></td>
+<td>Serve an overview at <code>/overview/</code></td>
 </tr>
 <tr>
 <td><code>--shell</code></td>
@@ -2250,15 +2286,24 @@ raw = '''
 <td><code>TOBOGGAN_MAX_CLIENTS</code></td>
 <td>Concurrent client cap</td>
 </tr>
+<tr>
+<td><code>--open</code></td>
+<td><code>TOBOGGAN_OPEN</code></td>
+<td>Open a browser once ready</td>
+</tr>
+<tr>
+<td><code>--watch</code></td>
+<td>—</td>
+<td>Reload when the <code>.toml</code> changes</td>
+</tr>
 </tbody>
 </table>
 
 <div class="step step-0"><!-- begin step -->
-<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan-server \
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan serve -p ./my-talk.toml \
 </span><span style="color:#4f5b66;">    --public-dir ./public/ \
 </span><span style="color:#4f5b66;">    --shell /opt/homebrew/bin/fish \
-</span><span style="color:#4f5b66;">    --watch \
-</span><span style="color:#4f5b66;">    ./my-talk.toml
+</span><span style="color:#4f5b66;">    --watch
 </span></code></pre>
 <div class="markdown-alert markdown-alert-tip">
 <p class="markdown-alert-title">Tip</p>
@@ -2274,18 +2319,19 @@ alt = '''
 | --- | --- | --- |
 | `--host` | `TOBOGGAN_HOST` | Bind address (default `127.0.0.1`) |
 | `--port` | `TOBOGGAN_PORT` | Port (default `8080`) |
-| `--watch` | `TOBOGGAN_WATCH` | Live-reload when the `.toml` changes |
 | `--public-dir` | `TOBOGGAN_PUBLIC_DIR` | Serve assets at `/public/` |
+| `--thumbnails-dir` | `TOBOGGAN_THUMBNAILS_DIR` | Serve an overview at `/overview/` |
 | `--shell` | `TOBOGGAN_SHELL` | Shell for embedded terminals |
 | `--allowed-origins` | `TOBOGGAN_CORS_ORIGINS` | Comma-separated CORS origins |
 | `--max-clients` | `TOBOGGAN_MAX_CLIENTS` | Concurrent client cap |
+| `--open` | `TOBOGGAN_OPEN` | Open a browser once ready |
+| `--watch` | — | Reload when the `.toml` changes |
 
 ```console
-$ toboggan-server \
+$ toboggan serve -p ./my-talk.toml \
     --public-dir ./public/ \
     --shell /opt/homebrew/bin/fish \
-    --watch \
-    ./my-talk.toml
+    --watch
 ```
 
 > [!TIP]
@@ -2294,6 +2340,25 @@ $ toboggan-server \
 '''
 
 [slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>Any of these can live in <code>toboggan.toml</code> under <code>[serve]</code> instead of being typed
+every time. <code>--watch</code> is the one flag with no env var — watching a built file is
+a dev-loop choice, not deployment configuration.</p>
+"""
+alt = """
+Any of these can live in `toboggan.toml` under `[serve]` instead of being typed
+every time. `--watch` is the one flag with no env var — watching a built file is
+a dev-loop choice, not deployment configuration.
+"""
+
+[slides.notes.style]
 classes = [
     "no_title",
     "wide",
@@ -2315,7 +2380,8 @@ connected client over a WebSocket.
 
 | Path | Purpose |
 | --- | --- |
-| `/` | The web client (this UI) |
+| `/` | The homepage — links every view of the deck |
+| `/run` | The live presentation (this UI) |
 | `/api/ws` | Presentation sync WebSocket |
 | `/api/terminal` | Embedded-terminal WebSocket |
 | `/api/talk`, `/api/slides` | REST views of the deck |
@@ -2359,7 +2425,11 @@ connected client over a WebSocket.</p>
 <tbody>
 <tr>
 <td><code>/</code></td>
-<td>The web client (this UI)</td>
+<td>The homepage — links every view of the deck</td>
+</tr>
+<tr>
+<td><code>/run</code></td>
+<td>The live presentation (this UI)</td>
 </tr>
 <tr>
 <td><code>/api/ws</code></td>
@@ -2395,7 +2465,8 @@ connected client over a WebSocket.
 
 | Path | Purpose |
 | --- | --- |
-| `/` | The web client (this UI) |
+| `/` | The homepage — links every view of the deck |
+| `/run` | The live presentation (this UI) |
 | `/api/ws` | Presentation sync WebSocket |
 | `/api/terminal` | Embedded-terminal WebSocket |
 | `/api/talk`, `/api/slides` | REST views of the deck |
@@ -2491,8 +2562,8 @@ This slide is **pdf-only** (`hidden_in = ["web"]`). A live terminal can't print,
 so the handout shows a captured transcript instead:
 
 ```console
-$ toboggan-cli --version
-toboggan-cli 0.1.0
+$ toboggan --version
+toboggan 0.1.0
 
 $ ls slides/
 1_authoring  2_directives  3_styling  4_cli  5_server  6_workflow  7_conclusion
@@ -2520,8 +2591,8 @@ raw = """
 <h1>Live demo — handout</h1>
 <p>This slide is <strong>pdf-only</strong> (<code>hidden_in = [&quot;web&quot;]</code>). A live terminal can't print,
 so the handout shows a captured transcript instead:</p>
-<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan-cli --version
-</span><span style="color:#4f5b66;">toboggan-cli 0.1.0
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan --version
+</span><span style="color:#4f5b66;">toboggan 0.1.0
 </span><span style="color:#4f5b66;">
 </span><span style="color:#4f5b66;">$ ls slides/
 </span><span style="color:#4f5b66;">1_authoring  2_directives  3_styling  4_cli  5_server  6_workflow  7_conclusion
@@ -2539,8 +2610,8 @@ This slide is **pdf-only** (`hidden_in = ["web"]`). A live terminal can't print,
 so the handout shows a captured transcript instead:
 
 ```console
-$ toboggan-cli --version
-toboggan-cli 0.1.0
+$ toboggan --version
+toboggan 0.1.0
 
 $ ls slides/
 1_authoring  2_directives  3_styling  4_cli  5_server  6_workflow  7_conclusion
@@ -2592,27 +2663,28 @@ kind = "Standard"
 body_source = """
 # The edit loop
 
-Two terminals, instant feedback:
+One terminal. The default action builds the folder **in memory** and watches it,
+so there is no `.toml` to regenerate and no second process to run:
 
 ```console
-# 1 — rebuild the .toml whenever a slide changes
-$ bacon                # uses bacon.toml in the deck folder
-
-# 2 — serve with live reload
-$ toboggan-server --public-dir ./public/ --watch ./my-talk.toml
+$ toboggan -p ./slides/
+   build + serve  http://localhost:8080
 ```
 
-Or wrap both in `mise` tasks (see this deck's `mise.toml`):
+Save a slide → rebuild → the browser reloads.
+
+Wrap the rest in `mise` tasks (see this deck's `mise.toml`):
 
 ```console
-$ mise run build       # slides/ → my-talk.toml
-$ mise run dev          # serve + --watch
-$ mise run pdf          # typst export → PDF
+$ mise run dev         # the loop above
+$ mise run build       # slides/ → toboggan-guide.toml
+$ mise run pdf         # typst export → PDF
+$ mise run run         # serve the built .toml with its public/ assets
 ```
 
 > [!TIP]
-> Save a slide → `bacon` regenerates the `.toml` → `--watch` reloads the
-> browser. No manual rebuild, no refresh.
+> You only need a built `.toml` to *ship* a deck — to hand it to a server, a
+> CI job, or `toboggan serve`. While writing, skip it entirely.
 """
 
 [slides.style]
@@ -2629,54 +2701,79 @@ text = "6.1 The dev loop"
 type = "Html"
 raw = """
 <h1>The edit loop</h1>
-<p>Two terminals, instant feedback:</p>
-<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;"># 1 — rebuild the .toml whenever a slide changes
-</span><span style="color:#4f5b66;">$ bacon                # uses bacon.toml in the deck folder
-</span><span style="color:#4f5b66;">
-</span><span style="color:#4f5b66;"># 2 — serve with live reload
-</span><span style="color:#4f5b66;">$ toboggan-server --public-dir ./public/ --watch ./my-talk.toml
+<p>One terminal. The default action builds the folder <strong>in memory</strong> and watches it,
+so there is no <code>.toml</code> to regenerate and no second process to run:</p>
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan -p ./slides/
+</span><span style="color:#4f5b66;">   build + serve  http://localhost:8080
 </span></code></pre>
+<p>Save a slide → rebuild → the browser reloads.</p>
 
 <div class="step step-0"><!-- begin step -->
-<p>Or wrap both in <code>mise</code> tasks (see this deck's <code>mise.toml</code>):</p>
-<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ mise run build       # slides/ → my-talk.toml
-</span><span style="color:#4f5b66;">$ mise run dev          # serve + --watch
-</span><span style="color:#4f5b66;">$ mise run pdf          # typst export → PDF
+<p>Wrap the rest in <code>mise</code> tasks (see this deck's <code>mise.toml</code>):</p>
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ mise run dev         # the loop above
+</span><span style="color:#4f5b66;">$ mise run build       # slides/ → toboggan-guide.toml
+</span><span style="color:#4f5b66;">$ mise run pdf         # typst export → PDF
+</span><span style="color:#4f5b66;">$ mise run run         # serve the built .toml with its public/ assets
 </span></code></pre>
+</div><!-- end step -->
+
+<div class="step step-1"><!-- begin step -->
 <div class="markdown-alert markdown-alert-tip">
 <p class="markdown-alert-title">Tip</p>
-<p>Save a slide → <code>bacon</code> regenerates the <code>.toml</code> → <code>--watch</code> reloads the
-browser. No manual rebuild, no refresh.</p>
+<p>You only need a built <code>.toml</code> to <em>ship</em> a deck — to hand it to a server, a
+CI job, or <code>toboggan serve</code>. While writing, skip it entirely.</p>
 </div>
 </div><!-- end step -->
 """
 alt = """
 # The edit loop
 
-Two terminals, instant feedback:
+One terminal. The default action builds the folder **in memory** and watches it,
+so there is no `.toml` to regenerate and no second process to run:
 
 ```console
-# 1 — rebuild the .toml whenever a slide changes
-$ bacon                # uses bacon.toml in the deck folder
-
-# 2 — serve with live reload
-$ toboggan-server --public-dir ./public/ --watch ./my-talk.toml
+$ toboggan -p ./slides/
+   build + serve  http://localhost:8080
 ```
 
-Or wrap both in `mise` tasks (see this deck's `mise.toml`):
+Save a slide → rebuild → the browser reloads.
+
+Wrap the rest in `mise` tasks (see this deck's `mise.toml`):
 
 ```console
-$ mise run build       # slides/ → my-talk.toml
-$ mise run dev          # serve + --watch
-$ mise run pdf          # typst export → PDF
+$ mise run dev         # the loop above
+$ mise run build       # slides/ → toboggan-guide.toml
+$ mise run pdf         # typst export → PDF
+$ mise run run         # serve the built .toml with its public/ assets
 ```
 
 > [!TIP]
-> Save a slide → `bacon` regenerates the `.toml` → `--watch` reloads the
-> browser. No manual rebuild, no refresh.
+> You only need a built `.toml` to *ship* a deck — to hand it to a server, a
+> CI job, or `toboggan serve`. While writing, skip it entirely.
 """
 
 [slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>This used to be a two-terminal loop: bacon rebuilding the .toml on save, plus a
+server with --watch reloading it. The in-memory default action collapsed both
+into one command, so the deck's bacon.toml is now only there for regenerating
+the committed artifact.</p>
+"""
+alt = """
+This used to be a two-terminal loop: bacon rebuilding the .toml on save, plus a
+server with --watch reloading it. The in-memory default action collapsed both
+into one command, so the deck's bacon.toml is now only there for regenerating
+the committed artifact.
+"""
+
+[slides.notes.style]
 classes = [
     "no_title",
     "wide",
@@ -3044,9 +3141,9 @@ body_source = """
 
 - 🎨 **Style** it with classes, inline CSS, and a custom theme
 
-- 🛠️ **Build** it to TOML / HTML / PDF with `toboggan-cli`
+- 🛠️ **Build** it to TOML / HTML / PDF with `toboggan build`
 
-- 📡 **Serve & sync** it live with `toboggan-server`
+- 📡 **Serve & sync** it live with a bare `toboggan`
 
 ### …and this guide was built with every one of them.
 """
@@ -3086,13 +3183,13 @@ raw = """
 
 <div class="step step-3"><!-- begin step -->
 <ul>
-<li>🛠️ <strong>Build</strong> it to TOML / HTML / PDF with <code>toboggan-cli</code></li>
+<li>🛠️ <strong>Build</strong> it to TOML / HTML / PDF with <code>toboggan build</code></li>
 </ul>
 </div><!-- end step -->
 
 <div class="step step-4"><!-- begin step -->
 <ul>
-<li>📡 <strong>Serve &amp; sync</strong> it live with <code>toboggan-server</code></li>
+<li>📡 <strong>Serve &amp; sync</strong> it live with a bare <code>toboggan</code></li>
 </ul>
 </div><!-- end step -->
 
@@ -3109,9 +3206,9 @@ alt = """
 
 - 🎨 **Style** it with classes, inline CSS, and a custom theme
 
-- 🛠️ **Build** it to TOML / HTML / PDF with `toboggan-cli`
+- 🛠️ **Build** it to TOML / HTML / PDF with `toboggan build`
 
-- 📡 **Serve & sync** it live with `toboggan-server`
+- 📡 **Serve & sync** it live with a bare `toboggan`
 
 ### …and this guide was built with every one of them.
 """
@@ -3136,11 +3233,11 @@ body_source = """
 
 ```console
 $ git clone https://github.com/ilaborie/toboggan
-$ cd toboggan/examples/toboggan-guide
-$ cargo install --path ../../toboggan-cli
-$ cargo install --path ../../toboggan-server
-$ toboggan-cli slides/ -o toboggan-guide.toml
-$ toboggan-server --public-dir public/ toboggan-guide.toml
+$ cd toboggan
+$ mise build:web                 # the embedded web client
+$ cargo install --path toboggan  # one binary, every command
+$ cd examples/toboggan-guide
+$ toboggan -p ./slides/          # build + serve, live reload
 ```
 
 </div>
@@ -3175,11 +3272,11 @@ raw = """
 <h1>Go build a deck</h1>
 <div class="next-steps">
 <pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ git clone https://github.com/ilaborie/toboggan
-</span><span style="color:#4f5b66;">$ cd toboggan/examples/toboggan-guide
-</span><span style="color:#4f5b66;">$ cargo install --path ../../toboggan-cli
-</span><span style="color:#4f5b66;">$ cargo install --path ../../toboggan-server
-</span><span style="color:#4f5b66;">$ toboggan-cli slides/ -o toboggan-guide.toml
-</span><span style="color:#4f5b66;">$ toboggan-server --public-dir public/ toboggan-guide.toml
+</span><span style="color:#4f5b66;">$ cd toboggan
+</span><span style="color:#4f5b66;">$ mise build:web                 # the embedded web client
+</span><span style="color:#4f5b66;">$ cargo install --path toboggan  # one binary, every command
+</span><span style="color:#4f5b66;">$ cd examples/toboggan-guide
+</span><span style="color:#4f5b66;">$ toboggan -p ./slides/          # build + serve, live reload
 </span></code></pre>
 </div>
 
@@ -3204,11 +3301,11 @@ alt = """
 
 ```console
 $ git clone https://github.com/ilaborie/toboggan
-$ cd toboggan/examples/toboggan-guide
-$ cargo install --path ../../toboggan-cli
-$ cargo install --path ../../toboggan-server
-$ toboggan-cli slides/ -o toboggan-guide.toml
-$ toboggan-server --public-dir public/ toboggan-guide.toml
+$ cd toboggan
+$ mise build:web                 # the embedded web client
+$ cargo install --path toboggan  # one binary, every command
+$ cd examples/toboggan-guide
+$ toboggan -p ./slides/          # build + serve, live reload
 ```
 
 </div>

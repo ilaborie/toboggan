@@ -18,5 +18,8 @@ Pull an external file in as a fenced code block — no copy-paste drift:
 <!-- code:rust:snippets/hello.rs -->
 
 > [!IMPORTANT]
-> The path is resolved from **where you run `toboggan-cli`** (the deck folder),
-> not from the slide file. Keep snippets beside your build command.
+> The path is resolved against the **deck folder** — the one you pass to `-p` —
+> never against the slide file or your shell's current directory. So the same
+> embed resolves identically wherever you run the build from.
+
+Absolute paths and `..` are refused: an embed cannot reach outside the deck.

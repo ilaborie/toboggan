@@ -5,11 +5,11 @@ classes = ["no_title"]
 
 # What is Toboggan?
 
-A **terminal-first** presentation system written in Rust.
+A presentation system written in Rust: **Markdown decks with live terminals**.
 
 <!-- pause -->
 
-You write slides as plain **Markdown**, compile them with `toboggan-cli`, and serve them with `toboggan-server` — then present from a browser, a terminal, or any synced client.
+You write slides as plain **Markdown**, and one `toboggan` command builds and serves them — then present from a browser, a terminal, or any synced client.
 
 <!-- pause -->
 

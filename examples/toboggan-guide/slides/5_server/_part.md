@@ -3,6 +3,6 @@ title = "The Server"
 classes = ["no_title"]
 +++
 
-# `toboggan-server`
+# The server
 
 Serve the deck, sync every client, and power the live terminals.
