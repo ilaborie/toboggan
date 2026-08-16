@@ -1,4 +1,4 @@
-mod vterm;
+mod rioterm;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -8,28 +8,25 @@ use futures::{FutureExt, SinkExt, StreamExt};
 use gloo::console::{error, info};
 use gloo::net::websocket::Message;
 use gloo::net::websocket::futures::WebSocket;
+use js_sys::Uint8Array;
 use toboggan_core::{TerminalConfig, Theme};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{
-    Element, HtmlCanvasElement, HtmlElement, KeyboardEvent, Node, ResizeObserver, ShadowRoot,
-};
+use web_sys::{Element, HtmlElement, KeyboardEvent, Node, ResizeObserver, ShadowRoot};
 
-use self::vterm::VirtualTerminal;
+use self::rioterm::{CanvasRenderer, OpenOptions, RioTermHandle, RioTheme, Terminal};
 use crate::components::WasmElement;
 use crate::{create_and_append_element, create_shadow_root_with_style, dom_try};
 
 const CSS: &str = include_str!("style.css");
-const DEFAULT_COLS: u16 = 80;
-const DEFAULT_ROWS: u16 = 24;
 const DEFAULT_FONT_SIZE: f64 = 22.0;
 const FONT_SIZE_STEP: f64 = 2.0;
 const FONT_SIZE_MIN: f64 = 8.0;
 const FONT_SIZE_MAX: f64 = 32.0;
-/// Smallest grid the terminal is ever sized to, so a collapsed box still yields a usable PTY.
-const MIN_COLS: u16 = 20;
-const MIN_ROWS: u16 = 4;
+/// Matches `main.ts`, which preloads these faces before the app starts so the
+/// canvas renderer measures cells with the bundled font rather than a fallback.
+const FONT_FAMILY: &str = "\"JetBrainsMono Nerd Font Mono\", monospace";
 
 #[derive(Debug, Default)]
 pub(crate) struct TobogganTerminalElement {
@@ -96,62 +93,51 @@ impl TobogganTerminalElement {
         append_or_log(&titlebar, &title_text, "title text to titlebar");
         append_or_log(&window_el, &titlebar, "titlebar to terminal window");
 
+        // rioterm's `open()` mounts its own container (canvas plus the hidden
+        // textarea that takes keystrokes) into whatever element it is handed, so
+        // the body is the mount point and there is no canvas to create here.
         let body = create_element_with_class(&document, "div", "terminal-body")?;
-
-        let canvas = create_terminal_canvas(&document)?;
-
-        append_or_log(&body, &canvas, "canvas to terminal body");
         append_or_log(&window_el, &body, "body to terminal window");
         append_or_log(container, &window_el, "terminal window to container");
-
-        // focus() failure is non-critical (e.g. element not yet visible)
-        let _ = canvas.focus();
 
         let theme = config.theme;
         let title_el = title_text
             .dyn_into::<HtmlElement>()
             .map_err(|_| error!("Failed to cast title element to HtmlElement"))
             .ok();
+        let body_el = body
+            .dyn_into::<HtmlElement>()
+            .map_err(|_| error!("Failed to cast terminal body to HtmlElement"))
+            .ok()?;
         let window_html = window_el
             .dyn_into::<HtmlElement>()
             .map_err(|_| error!("Failed to cast window element to HtmlElement"))
             .ok();
-        let body_html = body
-            .dyn_into::<HtmlElement>()
-            .map_err(|_| error!("Failed to cast terminal body to HtmlElement"))
-            .ok();
-        // Both dimensions, not just rows: passing the computed rows alongside a
-        // hardcoded 80 columns made every session's first frame 80 wide no matter
-        // how wide the pane was, until the first resize corrected it.
-        let (initial_cols, initial_rows) =
-            compute_terminal_size(body_html.as_ref(), DEFAULT_FONT_SIZE);
-        let ws_url = build_terminal_ws_url(api_base_url, config, initial_cols, initial_rows);
 
-        // Set up action channel (shared between keyboard handler and button clicks)
+        // Set up action channel (shared between font shortcuts, button clicks,
+        // the resize observer, and rioterm's own output callback).
         let (tx_key, rx_key) = mpsc::unbounded::<KeyAction>();
-        setup_keyboard_handler(&canvas, tx_key.clone());
+        setup_font_shortcuts(&body_el, tx_key.clone());
         // Re-fit the grid whenever the body's box changes: the very first
         // (post-layout) callback corrects the initial 0-size fallback, and later
         // ones handle window resizes and side-by-side flex reflow.
-        if let Some(ref body_el) = body_html {
-            setup_resize_observer(body_el, tx_key.clone());
-        }
+        setup_resize_observer(&body_el, tx_key.clone());
         setup_button_click(&btn_maximize, tx_key.clone(), KeyAction::Expand);
         setup_button_click(&btn_minimize, tx_key.clone(), KeyAction::Restore);
         // Kept so `stop_terminal` can end the session (and with it the PTY).
-        *self.session.borrow_mut() = Some(tx_key);
+        *self.session.borrow_mut() = Some(tx_key.clone());
 
-        info!("Starting terminal session:", &ws_url);
-
+        let config = config.clone();
+        let api_base_url = api_base_url.to_owned();
         spawn_local(async move {
             run_terminal_session(
-                canvas,
-                &ws_url,
+                body_el,
+                &config,
+                &api_base_url,
                 theme,
                 title_el,
                 window_html,
-                body_html,
-                (initial_cols, initial_rows),
+                tx_key,
                 rx_key,
             )
             .await;
@@ -245,24 +231,6 @@ fn append_or_log(parent: &Element, child: &Node, what: &str) {
     }
 }
 
-/// Creates the focusable `<canvas>` the terminal renders into, or logs and
-/// returns `None` if the element cannot be created.
-fn create_terminal_canvas(document: &web_sys::Document) -> Option<HtmlCanvasElement> {
-    let Ok(element) = document.create_element("canvas") else {
-        error!("Failed to create canvas element");
-        return None;
-    };
-    let Ok(canvas) = element.dyn_into::<HtmlCanvasElement>() else {
-        error!("Failed to cast to HtmlCanvasElement");
-        return None;
-    };
-    canvas.set_class_name("terminal-canvas");
-    if canvas.set_attribute("tabindex", "0").is_err() {
-        error!("Failed to make terminal canvas focusable");
-    }
-    Some(canvas)
-}
-
 /// Whether `el` is a direct child of `<body>`, i.e. a terminal host that was lifted
 /// out of its slide for fullscreen and never restored.
 ///
@@ -290,10 +258,12 @@ fn shadow_host(el: &HtmlElement) -> Option<Element> {
         .map(|root| root.host())
 }
 
-/// Message from keyboard/button/resize handler to terminal session
+/// Message from a DOM handler or from rioterm to the session loop.
 #[derive(Clone)]
 enum KeyAction {
-    Input(String),
+    /// Bytes rioterm wants delivered to the PTY: keystrokes, mouse reports, and
+    /// the replies to Device Attributes / cursor-position queries.
+    Output(Vec<u8>),
     FontIncrease,
     FontDecrease,
     Expand,
@@ -315,7 +285,7 @@ enum KeyAction {
 /// The observer (and its closure) are intentionally leaked, matching the
 /// keyboard/button handlers: the terminal lives for the slide's lifetime and is
 /// torn down by clearing the container, after which the observer stops firing.
-fn setup_resize_observer(target: &Element, tx: mpsc::UnboundedSender<KeyAction>) {
+fn setup_resize_observer(target: &HtmlElement, tx: mpsc::UnboundedSender<KeyAction>) {
     let closure = Closure::<dyn FnMut()>::new(move || {
         // Session-ended sends fail silently; the observer just stops mattering.
         let _ = tx.unbounded_send(KeyAction::Resize);
@@ -327,6 +297,40 @@ fn setup_resize_observer(target: &Element, tx: mpsc::UnboundedSender<KeyAction>)
             std::mem::forget(observer);
         }
         Err(err) => error!("Failed to create ResizeObserver:", err),
+    }
+    closure.forget();
+}
+
+/// Intercept Cmd+`=` / Cmd+`-` before they reach the terminal.
+///
+/// Registered in the capture phase on the body, which is an ancestor of the
+/// hidden textarea rioterm listens on: stopping propagation here is what keeps
+/// the font shortcuts from being encoded and sent to the shell. Every other key
+/// falls through to rioterm untouched.
+fn setup_font_shortcuts(body: &HtmlElement, tx: mpsc::UnboundedSender<KeyAction>) {
+    let closure = Closure::<dyn FnMut(_)>::new(move |event: KeyboardEvent| {
+        if !event.meta_key() {
+            return;
+        }
+        let action = match event.key().as_str() {
+            "=" | "+" => KeyAction::FontIncrease,
+            "-" => KeyAction::FontDecrease,
+            _ => return,
+        };
+        event.prevent_default();
+        event.stop_propagation();
+        let _ = tx.unbounded_send(action);
+    });
+
+    if body
+        .add_event_listener_with_callback_and_bool(
+            "keydown",
+            closure.as_ref().unchecked_ref(),
+            true,
+        )
+        .is_err()
+    {
+        error!("Failed to register terminal font shortcuts");
     }
     closure.forget();
 }
@@ -346,48 +350,160 @@ fn setup_button_click(btn: &Element, tx: mpsc::UnboundedSender<KeyAction>, actio
     closure.forget();
 }
 
-#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
+/// A live rioterm instance plus the callbacks it holds.
+///
+/// The closures are fields rather than `forget()`ed because a font-size change
+/// disposes the whole terminal and builds a new one; leaking a pair per keypress
+/// would accumulate for the life of the page.
+struct Session {
+    handle: RioTermHandle,
+    terminal: Terminal,
+    renderer: CanvasRenderer,
+    _on_data: Closure<dyn FnMut(Uint8Array)>,
+    _on_title: Closure<dyn FnMut(String)>,
+}
+
+/// Body horizontal padding: left 3px + right 3px (CSS: .terminal-body { padding: 2px 3px 3px })
+const BODY_H_PADDING: f64 = 6.0;
+/// Body vertical padding: top 2px + bottom 3px (CSS: .terminal-body { padding: 2px 3px 3px })
+const BODY_V_PADDING: f64 = 5.0;
+
+/// Mounts a rioterm terminal into `body` and wires its callbacks to `tx`.
+async fn open_session(
+    body: &HtmlElement,
+    theme: Theme,
+    font_size: f64,
+    title_el: Option<HtmlElement>,
+    tx: &mpsc::UnboundedSender<KeyAction>,
+) -> Option<Session> {
+    let options = OpenOptions {
+        renderer: "canvas",
+        // We drive fitting ourselves: rioterm's own observer would resize the
+        // grid without telling us, and the server's PTY has to learn the new
+        // size or the shell keeps drawing to the old one.
+        fit: false,
+        auto_focus: true,
+        // Off because it is broken upstream in rioterm 0.1.8, not because we do
+        // not want it. `open()` registers its own `onData` listener that calls
+        // `PredictionEngine.onInput` -> `Terminal.cursorPosition()`, and those
+        // listeners fire synchronously from inside `Terminal.key()` — so the
+        // second call re-enters a wasm object the first still holds, and
+        // wasm-bindgen rejects it: "recursive use of an object detected which
+        // would lead to unsafe aliasing in rust". rioterm catches the throw, so
+        // input still reaches the shell, but nothing is ever predicted and every
+        // keystroke logs an error — one per character, during a live talk.
+        // Flip this back once upstream defers the prediction hop.
+        predictive_echo: false,
+        font_family: FONT_FAMILY.to_owned(),
+        font_size,
+        theme: if theme == Theme::Light {
+            RioTheme::LIGHT
+        } else {
+            RioTheme::DARK
+        },
+    };
+    let options = match serde_wasm_bindgen::to_value(&options) {
+        Ok(value) => value,
+        Err(err) => {
+            error!("Failed to serialize terminal options:", err.to_string());
+            return None;
+        }
+    };
+
+    let handle = match rioterm::open(body, &options).await {
+        Ok(handle) => handle.unchecked_into::<RioTermHandle>(),
+        Err(err) => {
+            error!("Failed to open the terminal:", format!("{err:?}"));
+            return None;
+        }
+    };
+    let terminal = handle.terminal();
+    let renderer = handle.renderer();
+
+    // rioterm mounts its own canvas; give it the deck's canvas styling so the
+    // stylesheet keeps applying without knowing who created the element.
+    renderer.element().set_class_name("terminal-canvas");
+
+    let tx_data = tx.clone();
+    let on_data = Closure::<dyn FnMut(Uint8Array)>::new(move |bytes: Uint8Array| {
+        let _ = tx_data.unbounded_send(KeyAction::Output(bytes.to_vec()));
+    });
+    terminal.on_data(on_data.as_ref());
+
+    let on_title = Closure::<dyn FnMut(String)>::new(move |title: String| {
+        if let Some(el) = title_el.as_ref()
+            && !title.is_empty()
+        {
+            el.set_text_content(Some(&title));
+        }
+    });
+    terminal.on_title_change(on_title.as_ref());
+
+    Some(Session {
+        handle,
+        terminal,
+        renderer,
+        _on_data: on_data,
+        _on_title: on_title,
+    })
+}
+
+/// Re-fits the grid to the body's content box and returns the size it settled
+/// on, which rioterm derives from its own cell metrics.
+fn refit(session: &Session, body: &HtmlElement) -> (u16, u16) {
+    let width = f64::from(body.client_width()) - BODY_H_PADDING;
+    let height = f64::from(body.client_height()) - BODY_V_PADDING;
+    session.renderer.fit(width, height);
+    let options = session.terminal.options();
+    (options.cols(), options.rows())
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 async fn run_terminal_session(
-    canvas: HtmlCanvasElement,
-    ws_url: &str,
+    body: HtmlElement,
+    config: &TerminalConfig,
+    api_base_url: &str,
     theme: Theme,
     title_el: Option<HtmlElement>,
     window_el: Option<HtmlElement>,
-    body_el: Option<HtmlElement>,
-    // The grid the session opens with, as `(cols, rows)`.
-    initial_size: (u16, u16),
+    tx_key: mpsc::UnboundedSender<KeyAction>,
     rx_key: mpsc::UnboundedReceiver<KeyAction>,
 ) {
-    let (initial_cols, initial_rows) = initial_size;
-    let ws = match WebSocket::open(ws_url) {
+    let font_size = Rc::new(RefCell::new(DEFAULT_FONT_SIZE));
+    let Some(session) =
+        open_session(&body, theme, DEFAULT_FONT_SIZE, title_el.clone(), &tx_key).await
+    else {
+        return;
+    };
+
+    // Size the grid before connecting: the PTY is spawned with the dimensions in
+    // the URL, so getting them right here saves the shell an initial redraw.
+    let (initial_cols, initial_rows) = refit(&session, &body);
+    let ws_url = build_terminal_ws_url(api_base_url, config, initial_cols, initial_rows);
+    info!("Starting terminal session:", &ws_url);
+
+    let ws = match WebSocket::open(&ws_url) {
         Ok(ws) => ws,
         Err(err) => {
             error!("Failed to connect to terminal:", err.to_string());
+            session.handle.dispose();
             return;
         }
     };
 
+    let session = Rc::new(RefCell::new(session));
     let (ws_write, mut ws_read) = ws.split();
     // Signals the read loop to stop. Closing the sink is not enough: the split
     // halves share the underlying socket, so while the read half is still parked
     // on `next()` the socket stays open and the server keeps the PTY alive.
     let (tx_stop, rx_stop) = futures::channel::oneshot::channel::<()>();
-    let font_size = Rc::new(RefCell::new(DEFAULT_FONT_SIZE));
 
-    let vterm = VirtualTerminal::new(initial_cols, initial_rows, theme);
-
-    vterm.render_to_canvas(&canvas, *font_size.borrow());
-
-    // Forward actions (keyboard input, font resize, expand/restore) to WebSocket
     let ws_write = Rc::new(futures::lock::Mutex::new(ws_write));
-    let ws_write_kbd = Rc::clone(&ws_write);
-    let font_size_kbd = Rc::clone(&font_size);
-    let canvas_kbd = canvas.clone();
-    let vterm_rc = Rc::new(RefCell::new(vterm));
-    let vterm_kbd = Rc::clone(&vterm_rc);
-    let window_el_kbd = window_el.clone();
-    // Measured for sizing; `window_el_kbd` stays for the fullscreen class.
-    let body_el_kbd = body_el.clone();
+    let ws_write_action = Rc::clone(&ws_write);
+    let session_action = Rc::clone(&session);
+    let body_action = body.clone();
+    let window_el_action = window_el.clone();
+    let font_size_action = Rc::clone(&font_size);
 
     spawn_local(async move {
         let mut rx_key = rx_key;
@@ -395,31 +511,38 @@ async fn run_terminal_session(
         // The terminal's styles live in a shadow root, so on fullscreen we move the whole
         // host (not the inner window) to `<body>` to escape the slide's clipping/transform,
         // then restore it to its original position on collapse.
-        let host_el = window_el_kbd.as_ref().and_then(shadow_host);
+        let host_el = window_el_action.as_ref().and_then(shadow_host);
         let mut fullscreen_origin: Option<(Node, Option<Node>)> = None;
-        // Last grid size sent to the server, so a `Resize` that resolves to the
+        // Last grid size sent to the server, so a re-fit that resolves to the
         // same dimensions (a spurious observer callback) is a no-op.
         let mut last_dims = (initial_cols, initial_rows);
         while let Some(action) = rx_key.next().await {
             match action {
                 KeyAction::Shutdown => {
-                    let _ = ws_write_kbd.lock().await.close().await;
+                    let _ = ws_write_action.lock().await.close().await;
                     // Wake the read loop so both halves drop and the socket
                     // actually closes.
                     if let Some(tx) = tx_stop.take() {
                         let _ = tx.send(());
                     }
+                    session_action.borrow().handle.dispose();
                     break;
                 }
-                KeyAction::Input(input) => {
-                    let send_result = ws_write_kbd.lock().await.send(Message::Text(input)).await;
-                    if send_result.is_err() {
+                KeyAction::Output(bytes) => {
+                    // Binary is PTY input; the resize command goes as text, so
+                    // the server never has to guess which one it received.
+                    let sent = ws_write_action
+                        .lock()
+                        .await
+                        .send(Message::Bytes(bytes))
+                        .await;
+                    if sent.is_err() {
                         break;
                     }
                 }
                 KeyAction::FontIncrease | KeyAction::FontDecrease => {
                     let new_size = {
-                        let mut size = font_size_kbd.borrow_mut();
+                        let mut size = font_size_action.borrow_mut();
                         *size = if matches!(action, KeyAction::FontIncrease) {
                             (*size + FONT_SIZE_STEP).min(FONT_SIZE_MAX)
                         } else {
@@ -427,17 +550,21 @@ async fn run_terminal_session(
                         };
                         *size
                     };
-                    last_dims = refit(
-                        &vterm_kbd,
-                        &canvas_kbd,
-                        &ws_write_kbd,
-                        body_el_kbd.as_ref(),
+                    if let Some(dims) = rebuild_for_font_size(
+                        &session_action,
+                        &body_action,
+                        theme,
                         new_size,
+                        title_el.clone(),
+                        &tx_key,
                     )
-                    .await;
+                    .await
+                    {
+                        last_dims = send_resize_if_changed(&ws_write_action, dims, last_dims).await;
+                    }
                 }
                 KeyAction::Expand => {
-                    if let Some(ref win) = window_el_kbd
+                    if let Some(ref win) = window_el_action
                         && win.class_list().add_1("terminal-fullscreen").is_err()
                     {
                         error!("Failed to add terminal-fullscreen class on expand");
@@ -456,19 +583,12 @@ async fn run_terminal_session(
                             error!("Failed to move terminal host to <body> on expand");
                         }
                     }
-                    let size = *font_size_kbd.borrow();
-                    last_dims = refit(
-                        &vterm_kbd,
-                        &canvas_kbd,
-                        &ws_write_kbd,
-                        body_el_kbd.as_ref(),
-                        size,
-                    )
-                    .await;
-                    let _ = canvas_kbd.focus();
+                    let dims = refit(&session_action.borrow(), &body_action);
+                    last_dims = send_resize_if_changed(&ws_write_action, dims, last_dims).await;
+                    session_action.borrow().handle.focus();
                 }
                 KeyAction::Restore => {
-                    if let Some(ref win) = window_el_kbd
+                    if let Some(ref win) = window_el_action
                         && win.class_list().remove_1("terminal-fullscreen").is_err()
                     {
                         error!("Failed to remove terminal-fullscreen class on restore");
@@ -480,38 +600,20 @@ async fn run_terminal_session(
                     {
                         error!("Failed to restore terminal host into slide on collapse");
                     }
-                    let size = *font_size_kbd.borrow();
-                    last_dims = refit(
-                        &vterm_kbd,
-                        &canvas_kbd,
-                        &ws_write_kbd,
-                        body_el_kbd.as_ref(),
-                        size,
-                    )
-                    .await;
-                    let _ = canvas_kbd.focus();
+                    let dims = refit(&session_action.borrow(), &body_action);
+                    last_dims = send_resize_if_changed(&ws_write_action, dims, last_dims).await;
+                    session_action.borrow().handle.focus();
                 }
                 KeyAction::Resize => {
-                    // Skip the redundant repaint when a spurious observer callback
-                    // resolves to the same grid we last sent the server.
-                    let size = *font_size_kbd.borrow();
-                    if compute_terminal_size(body_el_kbd.as_ref(), size) != last_dims {
-                        last_dims = refit(
-                            &vterm_kbd,
-                            &canvas_kbd,
-                            &ws_write_kbd,
-                            body_el_kbd.as_ref(),
-                            size,
-                        )
-                        .await;
-                    }
+                    let dims = refit(&session_action.borrow(), &body_action);
+                    last_dims = send_resize_if_changed(&ws_write_action, dims, last_dims).await;
                 }
             }
         }
     });
 
-    // Read terminal output from server
-    let mut current_title = String::new();
+    // Read terminal output from the server and hand it to the emulator, which
+    // repaints itself.
     let mut rx_stop = rx_stop.fuse();
     loop {
         let msg = futures::select! {
@@ -522,18 +624,8 @@ async fn run_terminal_session(
             _ = rx_stop => break,
         };
         match msg {
-            Ok(Message::Bytes(data)) => {
-                vterm_rc.borrow_mut().process(&data);
-                let vterm = vterm_rc.borrow();
-                vterm.render_to_canvas(&canvas, *font_size.borrow());
-                update_title(title_el.as_ref(), &mut current_title, vterm.title());
-            }
-            Ok(Message::Text(text)) => {
-                vterm_rc.borrow_mut().process(text.as_bytes());
-                let vterm = vterm_rc.borrow();
-                vterm.render_to_canvas(&canvas, *font_size.borrow());
-                update_title(title_el.as_ref(), &mut current_title, vterm.title());
-            }
+            Ok(Message::Bytes(data)) => session.borrow().terminal.write(&data),
+            Ok(Message::Text(text)) => session.borrow().terminal.write(text.as_bytes()),
             Err(err) => {
                 error!("Terminal WebSocket error:", err.to_string());
                 break;
@@ -548,171 +640,60 @@ async fn run_terminal_session(
     drop(ws_read);
 }
 
-fn setup_keyboard_handler(canvas: &HtmlCanvasElement, tx: mpsc::UnboundedSender<KeyAction>) {
-    let closure = Closure::<dyn FnMut(_)>::new(move |event: KeyboardEvent| {
-        let key = event.key();
-        let meta = event.meta_key();
-
-        // Cmd+/Cmd- for font size (don't send to terminal)
-        if meta && (key == "=" || key == "+") {
-            event.prevent_default();
-            if tx.unbounded_send(KeyAction::FontIncrease).is_err() {
-                return;
-            }
-            return;
-        }
-        if meta && key == "-" {
-            event.prevent_default();
-            if tx.unbounded_send(KeyAction::FontDecrease).is_err() {
-                return;
-            }
-            return;
-        }
-
-        event.prevent_default();
-        event.stop_propagation();
-
-        let input = translate_key(&event);
-        if !input.is_empty() {
-            // Ignore send errors: session may have ended while handlers are still registered.
-            let _ = tx.unbounded_send(KeyAction::Input(input));
-        }
-    });
-
-    if canvas
-        .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())
-        .is_err()
-    {
-        error!("Failed to register keyboard handler on canvas");
-    }
-    closure.forget();
-}
-
-fn translate_key(event: &KeyboardEvent) -> String {
-    let key = event.key();
-    let ctrl = event.ctrl_key();
-
-    // Control key combinations (Ctrl only, not Cmd)
-    if ctrl {
-        return match key.as_str() {
-            "c" => "\x03".to_owned(),
-            "d" => "\x04".to_owned(),
-            "z" => "\x1a".to_owned(),
-            "l" => "\x0c".to_owned(),
-            "a" => "\x01".to_owned(),
-            "e" => "\x05".to_owned(),
-            "u" => "\x15".to_owned(),
-            "k" => "\x0b".to_owned(),
-            "w" => "\x17".to_owned(),
-            "r" => "\x12".to_owned(),
-            _ => String::new(),
-        };
-    }
-
-    // Special keys
-    match key.as_str() {
-        "Enter" => "\r".to_owned(),
-        "Backspace" => "\x7f".to_owned(),
-        "Tab" => "\t".to_owned(),
-        "Escape" => "\x1b".to_owned(),
-        "ArrowUp" => "\x1b[A".to_owned(),
-        "ArrowDown" => "\x1b[B".to_owned(),
-        "ArrowRight" => "\x1b[C".to_owned(),
-        "ArrowLeft" => "\x1b[D".to_owned(),
-        "Home" => "\x1b[H".to_owned(),
-        "End" => "\x1b[F".to_owned(),
-        "Delete" => "\x1b[3~".to_owned(),
-        "PageUp" => "\x1b[5~".to_owned(),
-        "PageDown" => "\x1b[6~".to_owned(),
-        // Single printable character
-        ch if ch.len() == 1 => ch.to_owned(),
-        // Ignore modifier-only keys, etc.
-        _ => String::new(),
-    }
-}
-
-/// Body vertical padding: top 2px + bottom 3px (CSS: .terminal-body { padding: 2px 3px 3px })
-const BODY_PADDING: f64 = 5.0;
-/// Body horizontal padding: left 3px + right 3px (CSS: .terminal-body { padding: 2px 3px 3px })
-const BODY_H_PADDING: f64 = 6.0;
-
-/// Grid that fits `body_el`, the element the canvas actually lives in.
+/// Rebuilds the terminal at a new font size, carrying the screen across.
 ///
-/// Measuring the body rather than the whole window drops what used to be a
-/// hardcoded 36px subtraction for the titlebar. That constant made the titlebar
-/// mandatory: hiding it — as the quake overlay now does — left the grid 36px
-/// short of the space it had.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn compute_terminal_size(body_el: Option<&HtmlElement>, font_size: f64) -> (u16, u16) {
-    // Measure the same font metrics the renderer uses so the row/col count matches
-    // the canvas cell size; fall back to the width/height heuristics when the font
-    // cannot be measured yet.
-    let (char_width, char_height) = vterm::cell_metrics_for(font_size).map_or(
-        (
-            font_size * vterm::FALLBACK_WIDTH_RATIO,
-            font_size * vterm::FALLBACK_HEIGHT_RATIO,
-        ),
-        |metrics| (metrics.char_width, metrics.char_height),
-    );
+/// rioterm fixes `fontSize` when the renderer is constructed, and `open()` wires
+/// its pointer, wheel and clipboard handlers to that one renderer — swapping the
+/// renderer alone would leave those closures pointing at the disposed one. So the
+/// whole terminal is rebuilt and the buffer replayed through `serialize()`, which
+/// is the documented way to reproduce content, styling and links in a fresh
+/// terminal. Returns the new grid size, or `None` if the rebuild failed (the old
+/// terminal is gone by then, so the session ends).
+async fn rebuild_for_font_size(
+    session: &Rc<RefCell<Session>>,
+    body: &HtmlElement,
+    theme: Theme,
+    font_size: f64,
+    title_el: Option<HtmlElement>,
+    tx: &mpsc::UnboundedSender<KeyAction>,
+) -> Option<(u16, u16)> {
+    // Take the snapshot and drop the borrow before awaiting.
+    let dump = {
+        let current = session.borrow();
+        let dump = current.terminal.serialize();
+        current.handle.dispose();
+        dump
+    };
 
-    let (avail_w, avail_h) = body_el
-        .map(|el| (f64::from(el.client_width()), f64::from(el.client_height())))
-        .filter(|(width, height)| *width > 0.0 && *height > 0.0)
-        .unwrap_or((
-            f64::from(DEFAULT_COLS) * char_width + BODY_H_PADDING,
-            f64::from(DEFAULT_ROWS) * char_height + BODY_PADDING,
-        ));
-
-    let cols = ((avail_w - BODY_H_PADDING) / char_width).floor() as u16;
-    let rows = ((avail_h - BODY_PADDING) / char_height).floor() as u16;
-
-    (cols.max(MIN_COLS), rows.max(MIN_ROWS))
+    let next = open_session(body, theme, font_size, title_el, tx).await?;
+    next.terminal.write(dump.as_bytes());
+    let dims = refit(&next, body);
+    *session.borrow_mut() = next;
+    Some(dims)
 }
 
-async fn resize_and_render(
-    vterm: &Rc<RefCell<VirtualTerminal>>,
-    canvas: &HtmlCanvasElement,
+/// Tells the server to resize the PTY when the grid actually changed, and
+/// returns the dimensions now in force.
+async fn send_resize_if_changed(
     ws_write: &Rc<futures::lock::Mutex<futures::stream::SplitSink<WebSocket, Message>>>,
-    cols: u16,
-    rows: u16,
-    font_size: f64,
-) {
-    {
-        let mut vt = vterm.borrow_mut();
-        vt.resize(cols, rows);
-        vt.render_to_canvas(canvas, font_size);
+    dims: (u16, u16),
+    last: (u16, u16),
+) -> (u16, u16) {
+    if dims == last {
+        return last;
     }
-    let resize_msg = format!(r#"{{"type":"resize","cols":{cols},"rows":{rows}}}"#);
+    let (cols, rows) = dims;
+    let resize = format!(r#"{{"type":"resize","cols":{cols},"rows":{rows}}}"#);
     if ws_write
         .lock()
         .await
-        .send(Message::Bytes(resize_msg.into_bytes()))
+        .send(Message::Text(resize))
         .await
         .is_err()
     {
         error!("Failed to send resize to server");
     }
-}
-
-/// Recomputes the grid for `font_size`, resizes and repaints the terminal, and
-/// returns the new `(cols, rows)`. Shared by the font-resize and fullscreen arms.
-async fn refit(
-    vterm: &Rc<RefCell<VirtualTerminal>>,
-    canvas: &HtmlCanvasElement,
-    ws_write: &Rc<futures::lock::Mutex<futures::stream::SplitSink<WebSocket, Message>>>,
-    body_el: Option<&HtmlElement>,
-    font_size: f64,
-) -> (u16, u16) {
-    let (cols, rows) = compute_terminal_size(body_el, font_size);
-    resize_and_render(vterm, canvas, ws_write, cols, rows, font_size).await;
-    (cols, rows)
-}
-
-fn update_title(title_el: Option<&HtmlElement>, current: &mut String, new_title: Option<&str>) {
-    if let (Some(el), Some(title)) = (title_el, new_title.filter(|val| *val != current.as_str())) {
-        el.set_text_content(Some(title));
-        *current = title.to_owned();
-    }
+    dims
 }
 
 fn build_terminal_ws_url(

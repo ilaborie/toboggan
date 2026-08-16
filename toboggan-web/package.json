@@ -20,5 +20,8 @@
 		"@playwright/test": "^1.62.1",
 		"typescript": "~7.0.2",
 		"vite": "^8.2.1"
+	},
+	"dependencies": {
+		"rioterm": "0.1.8"
 	}
 }
