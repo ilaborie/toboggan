@@ -63,9 +63,17 @@ jobs:
       - name: Verify the embedded bundle exists
         run: test -f toboggan-web/dist/index.html
 
+      # A manual run has no tag to attach assets to, so it stops just short of
+      # uploading. That makes `workflow_dispatch` a genuine rehearsal of this
+      # workflow — wasm-pack, pnpm, the release build and the archiving all run
+      # for real — instead of a run that is guaranteed to go red on the last
+      # step. Worth having: everything here first executes on a `v*` tag, which
+      # is the worst moment to discover it does not work.
       - name: Build and upload toboggan
         uses: taiki-e/upload-rust-binary-action@v1
         with:
           bin: toboggan
           target: ${{ matrix.target }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          dry-run: ${{ github.event_name == 'workflow_dispatch' }}
+          dry-run-intended: ${{ github.event_name == 'workflow_dispatch' }}
