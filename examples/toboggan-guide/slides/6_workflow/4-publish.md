@@ -18,9 +18,9 @@ single-file HTML, a PDF handout, and the searchable thumbnail overview:
 
 <!-- pause -->
 
-It installs `toboggan` (prebuilt binary, falling back to `cargo install`) and
-`typst`, then runs the same commands you use locally — so what you preview is
-what your audience gets.
+It downloads the prebuilt `toboggan` binary for a pinned release, plus `typst`,
+then runs the same commands you use locally — so what you preview is what your
+audience gets.
 
 > [!NOTE]
 > A ready-to-copy consumer workflow lives in `examples/github-pages/pages.yml`.

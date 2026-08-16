@@ -18,9 +18,12 @@ inputs:
     required: false
     default: dist
   version:
-    description: Toboggan version to install (default: latest).
+    description: >-
+      Release tag of ilaborie/toboggan to install, e.g. v0.1.0. Pinned by
+      default so that a CLI change cannot alter what an already-published ref of
+      this action runs. "latest" is accepted but re-opens exactly that hole.
     required: false
-    default: latest
+    default: v0.1.0
 
 outputs:
   out-dir:
@@ -30,23 +33,48 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
-
-    - name: Install cargo-binstall
-      uses: cargo-bins/cargo-binstall@main
-
+    # Installed from this repository's own releases, which is the only place the
+    # real binary exists. The crate name `toboggan` on crates.io belongs to an
+    # unrelated project, so `cargo binstall toboggan` — what this step used to
+    # run — fetched a stranger's binary of the same name and every build below
+    # then failed on unrecognised arguments.
+    #
+    # There is deliberately no build-from-source fallback: `toboggan-server`
+    # embeds `toboggan-web/dist` at compile time and its build.rs fails when that
+    # folder is absent, and the folder is a gitignored artifact of the separate
+    # wasm/vite pipeline. A source build would therefore fail anyway, later and
+    # less clearly. Failing here names the missing release instead.
     - name: Install toboggan
       shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        REPOSITORY: ilaborie/toboggan
       run: |
         set -euo pipefail
-        # Prefer a prebuilt binary; fall back to building from source.
-        if [ "${{ inputs.version }}" = "latest" ]; then
-          cargo binstall -y toboggan || cargo install --locked toboggan
+        case "$(uname -s)-$(uname -m)" in
+          Linux-x86_64)  target=x86_64-unknown-linux-gnu ;;
+          Darwin-arm64)  target=aarch64-apple-darwin ;;
+          # Intel macOS lands here on purpose: no release is built for it.
+          *) echo "::error::no toboggan release for runner $(uname -s)-$(uname -m)"; exit 1 ;;
+        esac
+
+        # `releases/latest/download/…` is GitHub's own alias; every other value
+        # is treated as a tag, so a typo 404s loudly rather than silently
+        # installing something else.
+        if [ "$VERSION" = "latest" ]; then
+          url="https://github.com/$REPOSITORY/releases/latest/download/toboggan-$target.tar.gz"
         else
-          cargo binstall -y "toboggan@${{ inputs.version }}" \
-            || cargo install --locked "toboggan@${{ inputs.version }}"
+          url="https://github.com/$REPOSITORY/releases/download/$VERSION/toboggan-$target.tar.gz"
         fi
+
+        dir="$RUNNER_TEMP/toboggan-bin"
+        mkdir -p "$dir"
+        if ! curl -fsSL "$url" | tar -xz -C "$dir"; then
+          echo "::error::could not download $url — is the release published for this target?"
+          exit 1
+        fi
+        echo "$dir" >> "$GITHUB_PATH"
+        "$dir/toboggan" --version
 
     - name: Install Typst
       if: contains(inputs.outputs, 'pdf') || contains(inputs.outputs, 'thumbnails')
