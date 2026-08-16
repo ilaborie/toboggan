@@ -10,6 +10,7 @@ authors.workspace = true
 [dependencies]
 toboggan-core = { path = "../toboggan-core", features = ["openapi"] }
 toboggan-stats = { path = "../toboggan-stats" }
+toboggan-cli = { path = "../toboggan-cli" }
 
 axum = { workspace = true, features = ["ws"] }
 tokio = { workspace = true, features = ["full"] }
@@ -20,7 +21,12 @@ clap = { workspace = true, features = ["env", "derive"] }
 anyhow = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-tower-http = { workspace = true, features = ["trace", "cors", "fs"] }
+tower-http = { workspace = true, features = [
+  "trace",
+  "cors",
+  "fs",
+  "set-header",
+] }
 futures = { workspace = true }
 slotmap = { workspace = true, features = ["serde"] }
 derive_more = { workspace = true, features = ["display", "error"] }
@@ -29,7 +35,9 @@ utoipa-scalar = { workspace = true, features = ["axum"] }
 rust-embed = { workspace = true }
 mime_guess = { workspace = true }
 notify = { workspace = true }
-portable-pty = "0.9.0"
+portable-pty = { workspace = true }
+open = { workspace = true }
+tempfile = { workspace = true }
 
 [dev-dependencies]
 toboggan-core = { path = "../toboggan-core", features = [
@@ -42,6 +50,7 @@ tokio-tungstenite = { workspace = true, features = [
   "connect",
   "rustls-tls-native-roots",
 ] }
+tower = { workspace = true, features = ["util"] }
 
 [[test]]
 name = "multi_client_sync"

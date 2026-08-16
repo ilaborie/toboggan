@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 use std::string::ToString;
 
 use comrak::nodes::NodeValue;
@@ -8,12 +8,22 @@ use miette::SourceSpan;
 use toboggan_core::{Content, Slide, SlideKind, TerminalConfig};
 
 use crate::error::{Result, TobogganCliError};
-use crate::parser::comments::{is_notes, parse_code, parse_pause, parse_term};
+use crate::parser::comments::{is_notes, parse_code, parse_lint_disable, parse_pause, parse_term};
 use crate::parser::directory::{extract_node_text, parse_frontmatter};
 use crate::parser::{
     ContentRenderer, CssClasses, DEFAULT_SLIDE_TITLE, FrontMatter, HtmlRenderer, MarkdownNode,
     default_options,
 };
+
+/// Where a slide came from: its display name for diagnostics, and the deck root
+/// that `<!-- code:lang:path -->` directives resolve against.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct SlideSource<'a> {
+    /// The slide's path, used in error messages.
+    pub(super) name: &'a str,
+    /// Deck root for embedded files. `None` disables embedding by path.
+    pub(super) asset_root: Option<&'a Path>,
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct InnerContent {
@@ -23,7 +33,7 @@ pub struct InnerContent {
 }
 
 impl InnerContent {
-    fn handle<'a>(&mut self, elt: &'a MarkdownNode<'a>, file_name: &str) -> Result<()> {
+    fn handle<'a>(&mut self, elt: &'a MarkdownNode<'a>, source: SlideSource<'_>) -> Result<()> {
         // Check if this is a code comment and handle it differently
         let mut code_block_md = None;
         {
@@ -31,9 +41,10 @@ impl InnerContent {
             if let NodeValue::HtmlBlock(html) = &data.value
                 && let Some((info, path)) = parse_code(&html.literal)
             {
+                let resolved = resolve_embed(&path, source.asset_root)?;
                 // Instead of modifying the AST, generate markdown directly
-                let file_content = std::fs::read_to_string(&path)
-                    .map_err(|source| TobogganCliError::read_file(path.clone(), source))?;
+                let file_content = std::fs::read_to_string(&resolved)
+                    .map_err(|err| TobogganCliError::read_file(resolved.clone(), err))?;
 
                 // Generate a fenced code block markdown
                 code_block_md = Some(format!("```{info}\n{file_content}\n```\n"));
@@ -48,11 +59,11 @@ impl InnerContent {
             let data = &elt.data.borrow().value;
             let mut buffer = String::new();
             let options = default_options();
-            format_commonmark(elt, &options, &mut buffer).map_err(|source| {
+            format_commonmark(elt, &options, &mut buffer).map_err(|err| {
                 TobogganCliError::FormatCommonmark {
-                    src: miette::NamedSource::new(file_name, format!("{data:?}")),
+                    src: miette::NamedSource::new(source.name, format!("{data:?}")),
                     span: SourceSpan::from((0, 1)),
-                    message: source.to_string(),
+                    message: err.to_string(),
                 }
             })?;
             let mut md = buffer;
@@ -110,6 +121,57 @@ fn append_md_block(dest: &mut String, block: &str) {
     dest.push_str(block);
 }
 
+/// Resolves a `<!-- code:lang:path -->` target against the deck root.
+///
+/// The path used to go straight to `fs::read_to_string`, so it resolved against
+/// the *process* working directory. Two consequences: building a deck from
+/// anywhere but its own root silently dropped every embedding slide, and an
+/// absolute path such as `/etc/passwd` was read into the built talk — reachable
+/// by anyone whose deck the GitHub Action or the MCP server builds.
+///
+/// Embeds are therefore relative to the deck root and confined to it.
+///
+/// # Errors
+/// Returns an error if the path is absolute, escapes the deck, or the deck root
+/// is unknown.
+fn resolve_embed(path: &Path, asset_root: Option<&Path>) -> Result<PathBuf> {
+    let invalid = |reason: &str| {
+        Err(TobogganCliError::InvalidCodeEmbed {
+            path: path.to_path_buf(),
+            reason: reason.to_owned(),
+        })
+    };
+    if path.is_absolute() {
+        return invalid("absolute paths are not allowed; use a path relative to the deck root");
+    }
+    if path
+        .components()
+        .any(|component| matches!(component, Component::ParentDir))
+    {
+        return invalid("`..` is not allowed; embedded files must live inside the deck");
+    }
+    let Some(root) = asset_root else {
+        return invalid("the deck root is unknown, so the file cannot be located");
+    };
+    Ok(root.join(path))
+}
+
+/// Records the rule ids of a `<!-- lint-disable … -->` directive.
+///
+/// The comment is always consumed (it is a directive, not content), but a bare
+/// `<!-- lint-disable -->` silences nothing — almost certainly a typo — so it is
+/// reported rather than dropped without a trace.
+fn collect_lint_disabled(rules: Vec<String>, lint_disabled: &mut Vec<String>, file_name: &str) {
+    if rules.is_empty() {
+        tracing::warn!(
+            slide = file_name,
+            "`lint-disable` lists no rule id, ignoring"
+        );
+        return;
+    }
+    lint_disabled.extend(rules);
+}
+
 #[derive(Debug, Clone)]
 pub enum SlideContentParser {
     Init,
@@ -118,6 +180,7 @@ pub enum SlideContentParser {
         title: Option<String>,
         inner: InnerContent,
         terminals: Vec<TerminalConfig>,
+        lint_disabled: Vec<String>,
     },
     Notes {
         fm: FrontMatter,
@@ -125,6 +188,7 @@ pub enum SlideContentParser {
         inner: InnerContent,
         notes: InnerContent,
         terminals: Vec<TerminalConfig>,
+        lint_disabled: Vec<String>,
     },
 }
 
@@ -135,8 +199,8 @@ impl SlideContentParser {
     }
 
     /// Handle frontmatter parsing and state transitions
-    fn handle_frontmatter(&mut self, content: &str, file_name: &str) -> Result<()> {
-        let frontmatter = parse_frontmatter(content, file_name)?;
+    fn handle_frontmatter(&mut self, content: &str, source: SlideSource<'_>) -> Result<()> {
+        let frontmatter = parse_frontmatter(content, source.name)?;
 
         match self {
             Self::Base { fm, .. } | Self::Notes { fm, .. } => *fm = frontmatter,
@@ -162,6 +226,7 @@ impl SlideContentParser {
             title,
             inner,
             terminals,
+            lint_disabled,
         } = self
         {
             *self = Self::Notes {
@@ -170,11 +235,12 @@ impl SlideContentParser {
                 inner: inner.clone(),
                 notes: InnerContent::default(),
                 terminals: terminals.clone(),
+                lint_disabled: lint_disabled.clone(),
             };
         }
     }
 
-    fn handle<'a>(&mut self, elt: &'a MarkdownNode<'a>, file_name: &str) -> Result<()> {
+    fn handle<'a>(&mut self, elt: &'a MarkdownNode<'a>, source: SlideSource<'_>) -> Result<()> {
         let data = &elt.data.borrow().value;
         match self {
             Self::Init => {
@@ -183,28 +249,37 @@ impl SlideContentParser {
                     title: None,
                     inner: InnerContent::default(),
                     terminals: Vec::new(),
+                    lint_disabled: Vec::new(),
                 };
-                self.handle(elt, file_name)?;
+                self.handle(elt, source)?;
             }
             Self::Base {
-                inner, terminals, ..
+                inner,
+                terminals,
+                lint_disabled,
+                ..
             } => match data {
                 NodeValue::FrontMatter(content) => {
-                    self.handle_frontmatter(content, file_name)?;
+                    self.handle_frontmatter(content, source)?;
                 }
                 NodeValue::Heading(_) => {
                     let heading_text = extract_node_text(elt);
                     self.handle_heading(heading_text);
                     // Need to access inner after self is borrowed mutably
                     if let Self::Base { inner, .. } = self {
-                        inner.handle(elt, file_name)?;
+                        inner.handle(elt, source)?;
                     }
                 }
                 NodeValue::HtmlBlock(html) if is_notes(&html.literal) => {
                     self.transition_to_notes();
                 }
-                NodeValue::HtmlBlock(html) => match parse_term(&html.literal) {
-                    Some((cwd, theme, cmd)) => {
+                // `lint-disable` and `term` are directives: record what they
+                // carry and drop the comment from the rendered body. Anything
+                // else is ordinary HTML and goes through to `inner`.
+                NodeValue::HtmlBlock(html) => {
+                    if let Some(rules) = parse_lint_disable(&html.literal) {
+                        collect_lint_disabled(rules, lint_disabled, source.name);
+                    } else if let Some((cwd, theme, cmd)) = parse_term(&html.literal) {
                         let mut config = TerminalConfig::new(cwd);
                         if let Some(theme) = theme {
                             config = config.with_theme(theme);
@@ -213,14 +288,26 @@ impl SlideContentParser {
                             config = config.with_cmd(cmd);
                         }
                         terminals.push(config);
+                    } else {
+                        inner.handle(elt, source)?;
                     }
-                    None => inner.handle(elt, file_name)?,
-                },
-                _ => inner.handle(elt, file_name)?,
+                }
+                _ => inner.handle(elt, source)?,
             },
-            Self::Notes { notes, .. } => {
-                notes.handle(elt, file_name)?;
-            }
+            Self::Notes {
+                notes,
+                lint_disabled,
+                ..
+            } => match data {
+                // `lint-disable` is slide-scoped, so it stays a directive below
+                // `<!-- notes -->`. Without this arm it would be neither honoured
+                // nor stripped, and the raw comment would render into the notes.
+                NodeValue::HtmlBlock(html) => match parse_lint_disable(&html.literal) {
+                    Some(rules) => collect_lint_disabled(rules, lint_disabled, source.name),
+                    None => notes.handle(elt, source)?,
+                },
+                _ => notes.handle(elt, source)?,
+            },
         }
 
         Ok(())
@@ -263,6 +350,16 @@ impl SlideContentParser {
         }
     }
 
+    /// Rule ids silenced via `<!-- lint-disable -->` comments in the body.
+    fn lint_disabled(&self) -> Vec<String> {
+        match self {
+            Self::Init => Vec::new(),
+            Self::Base { lint_disabled, .. } | Self::Notes { lint_disabled, .. } => {
+                lint_disabled.clone()
+            }
+        }
+    }
+
     fn body_source(&self) -> Option<String> {
         match self {
             Self::Init => None,
@@ -280,6 +377,7 @@ impl SlideContentParser {
         plugins: &Plugins<'_>,
         name: Option<&str>,
         path: Option<&Path>,
+        asset_root: Option<&Path>,
     ) -> Result<(Slide, FrontMatter)>
     where
         I: Iterator<Item = &'a MarkdownNode<'a>>,
@@ -288,9 +386,13 @@ impl SlideContentParser {
             || "<unknown>".to_owned(),
             |path| path.to_string_lossy().to_string(),
         );
+        let source = SlideSource {
+            name: &file_name,
+            asset_root,
+        };
 
         for elt in iterator {
-            self.handle(elt, &file_name)?;
+            self.handle(elt, source)?;
         }
 
         let front_matter = self.front_matter();
@@ -298,6 +400,15 @@ impl SlideContentParser {
         let renderer = HtmlRenderer::new(options, plugins, style.clone());
 
         let body = self.body(&renderer);
+
+        // Per-slide lint silencing: front matter `disabled_rules` plus any
+        // `<!-- lint-disable -->` body directives, de-duplicated.
+        let mut lint_disabled = front_matter.disabled_rules.clone();
+        for rule in self.lint_disabled() {
+            if !lint_disabled.contains(&rule) {
+                lint_disabled.push(rule);
+            }
+        }
 
         let result = Slide {
             kind: SlideKind::Standard,
@@ -325,6 +436,7 @@ impl SlideContentParser {
                 })
                 .collect(),
             quake_terminal_cwd: front_matter.quake_cwd.clone(),
+            lint_disabled,
         };
 
         Ok((result, front_matter))
@@ -336,6 +448,7 @@ impl SlideContentParser {
         iterator: I,
         name: Option<&str>,
         path: Option<&Path>,
+        asset_root: Option<&Path>,
     ) -> Result<(Slide, FrontMatter)>
     where
         I: Iterator<Item = &'a MarkdownNode<'a>>,
@@ -343,7 +456,7 @@ impl SlideContentParser {
         use crate::parser::{default_options, default_plugins};
         let options = default_options();
         let plugins = default_plugins();
-        self.parse(iterator, &options, &plugins, name, path)
+        self.parse(iterator, &options, &plugins, name, path, asset_root)
     }
 }
 
@@ -365,6 +478,12 @@ mod tests {
     use crate::parser::{default_options, default_plugins};
 
     fn parse_markdown_content(content: &str) -> Result<(Slide, FrontMatter)> {
+        parse_markdown_in(content, None)
+    }
+
+    /// Parses `content` as a slide of a deck rooted at `asset_root`, which is what
+    /// `<!-- code:lang:path -->` resolves against.
+    fn parse_markdown_in(content: &str, asset_root: Option<&Path>) -> Result<(Slide, FrontMatter)> {
         let arena = Arena::new();
         let options = default_options();
         let plugins = default_plugins();
@@ -372,7 +491,7 @@ mod tests {
         let root = parse_document(&arena, content, &options);
 
         let parser = SlideContentParser::new();
-        parser.parse(root.children(), &options, &plugins, None, None)
+        parser.parse(root.children(), &options, &plugins, None, None, asset_root)
     }
 
     #[test]
@@ -382,6 +501,81 @@ mod tests {
 
         assert_eq!(slide.title.to_string(), "Test Title");
         assert!(matches!(slide.body, Content::Html { .. }));
+
+        Ok(())
+    }
+
+    #[test]
+    fn lint_disable_from_front_matter_and_comment() -> Result<()> {
+        let markdown = r#"+++
+title = "T"
+disabled_rules = ["html/img-missing-alt"]
++++
+
+# T
+
+<!-- lint-disable html/raw-script pause/empty-step -->
+
+Body."#;
+        let (slide, _) = parse_markdown_content(markdown)?;
+
+        assert!(
+            slide
+                .lint_disabled
+                .contains(&"html/img-missing-alt".to_owned())
+        );
+        assert!(slide.lint_disabled.contains(&"html/raw-script".to_owned()));
+        assert!(slide.lint_disabled.contains(&"pause/empty-step".to_owned()));
+        // The directive comment must not leak into the rendered body.
+        assert!(
+            !slide.body.to_string().contains("lint-disable"),
+            "directive leaked into body: {}",
+            slide.body
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn lint_disable_below_notes_still_applies() -> Result<()> {
+        let markdown = r"# T
+
+Body.
+
+<!-- notes -->
+
+<!-- lint-disable html/raw-script -->
+
+Remember to breathe.";
+        let (slide, _) = parse_markdown_content(markdown)?;
+
+        assert!(
+            slide.lint_disabled.contains(&"html/raw-script".to_owned()),
+            "a slide-scoped directive must apply wherever it sits"
+        );
+        let notes = slide.notes.to_string();
+        assert!(
+            !notes.contains("lint-disable"),
+            "directive leaked into notes: {notes}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn bare_lint_disable_silences_nothing_and_is_consumed() -> Result<()> {
+        let markdown = "# T\n\n<!-- lint-disable -->\n\nBody.";
+        let (slide, _) = parse_markdown_content(markdown)?;
+
+        assert!(
+            slide.lint_disabled.is_empty(),
+            "a directive with no rule ids must not disable anything"
+        );
+        assert!(
+            !slide.body.to_string().contains("lint-disable"),
+            "directive leaked into body: {}",
+            slide.body
+        );
 
         Ok(())
     }
@@ -475,8 +669,14 @@ Highlighted content.";
         let root = parse_document(&arena, markdown, &options);
 
         let parser = SlideContentParser::new();
-        let (slide, _) =
-            parser.parse(root.children(), &options, &plugins, Some("my-slide"), None)?;
+        let (slide, _) = parser.parse(
+            root.children(),
+            &options,
+            &plugins,
+            Some("my-slide"),
+            None,
+            None,
+        )?;
 
         assert_eq!(slide.title.to_string(), "my-slide");
 
@@ -493,8 +693,14 @@ Highlighted content.";
         let root = parse_document(&arena, markdown, &options);
 
         let parser = SlideContentParser::new();
-        let (slide, _) =
-            parser.parse(root.children(), &options, &plugins, Some("filename"), None)?;
+        let (slide, _) = parser.parse(
+            root.children(),
+            &options,
+            &plugins,
+            Some("filename"),
+            None,
+            None,
+        )?;
 
         // Explicit title should take precedence over filename
         assert_eq!(slide.title.to_string(), "Explicit Title");
@@ -591,8 +797,8 @@ Content with inline CSS."#;
 }"#;
         fs::write(&code_file, code_content)?;
 
-        // Create markdown with a code comment
-        let code_path = code_file.to_string_lossy();
+        // Relative to the deck root, which is what a real deck uses.
+        let code_path = "example.rs";
         let markdown = format!(
             r"# Code Comment Test
 
@@ -603,7 +809,7 @@ Content before code.
 Content after code."
         );
 
-        let (slide, _) = parse_markdown_content(&markdown)?;
+        let (slide, _) = parse_markdown_in(&markdown, Some(temp_dir.path()))?;
 
         // Verify the slide body contains the code as HTML
         if let Content::Html { raw, .. } = slide.body {
@@ -653,8 +859,9 @@ Content after code.";
         fs::write(&js_file, js_content)?;
 
         // Create comprehensive markdown with various features
-        let rust_path = rust_file.to_string_lossy();
-        let js_path = js_file.to_string_lossy();
+        // Relative to the deck root, which is what a real deck uses.
+        let rust_path = "hello.rs";
+        let js_path = "script.js";
         let markdown = format!(
             r"# Code Integration Test
 
@@ -685,7 +892,7 @@ These are speaker notes with code:
 End of notes."
         );
 
-        let (slide, _front_matter) = parse_markdown_content(&markdown)?;
+        let (slide, _front_matter) = parse_markdown_in(&markdown, Some(temp_dir.path()))?;
 
         // Verify the slide contains all the expected code
         if let Content::Html { raw, .. } = &slide.body {
@@ -750,5 +957,36 @@ End of notes."
 
         assert!(slide.hidden_in.is_empty(), "hidden_in defaults to empty");
         Ok(())
+    }
+    /// The embed path is attacker-reachable through the GitHub Action and the
+    /// MCP server, both of which build decks on someone else's behalf.
+    #[test]
+    fn code_embed_rejects_absolute_paths() {
+        let err = resolve_embed(Path::new("/etc/passwd"), Some(Path::new("/deck")))
+            .expect_err("absolute path must be rejected");
+        assert!(matches!(err, TobogganCliError::InvalidCodeEmbed { .. }));
+    }
+
+    #[test]
+    fn code_embed_rejects_parent_traversal() {
+        let err = resolve_embed(Path::new("../../etc/passwd"), Some(Path::new("/deck")))
+            .expect_err("`..` must be rejected");
+        assert!(matches!(err, TobogganCliError::InvalidCodeEmbed { .. }));
+    }
+
+    /// Relative to the *deck*, not the process working directory — which is why
+    /// building the guide from the repo root used to drop its embed slide.
+    #[test]
+    fn code_embed_resolves_against_the_deck_root() {
+        let resolved = resolve_embed(Path::new("snippets/hello.rs"), Some(Path::new("/deck")))
+            .expect("valid embed");
+        assert_eq!(resolved, Path::new("/deck/snippets/hello.rs"));
+    }
+
+    #[test]
+    fn code_embed_without_a_deck_root_is_an_error_not_a_cwd_lookup() {
+        let err = resolve_embed(Path::new("snippets/hello.rs"), None)
+            .expect_err("no root means no lookup");
+        assert!(matches!(err, TobogganCliError::InvalidCodeEmbed { .. }));
     }
 }

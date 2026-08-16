@@ -17,6 +17,10 @@ mise lint:web
 echo "==================== iOS LINTING ===================="
 mise lint:ios
 
+# Run presentation linting
+echo "================ PRESENTATION LINTING ==============="
+mise lint:toboggan
+
 echo ""
 echo "🎉 All platform linting completed successfully!"
 echo "✅ Rust: clippy checks"

@@ -1,0 +1,57 @@
+# Example workflow for a Toboggan PRESENTATION repository.
+#
+# Copy this file into your presentation repo at `.github/workflows/pages.yml`.
+# It builds the deck and publishes it to GitHub Pages, and uploads the PDF and
+# thumbnails as downloadable artifacts.
+name: Publish presentation
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the presentation
+        id: build
+        uses: ilaborie/toboggan@v1
+        with:
+          folder: ./slides
+          outputs: html,pdf,thumbnails
+          out-dir: dist
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ steps.build.outputs.out-dir }}
+
+      - name: Upload PDF + thumbnails as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: presentation
+          path: |
+            dist/presentation.pdf
+            dist/overview
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

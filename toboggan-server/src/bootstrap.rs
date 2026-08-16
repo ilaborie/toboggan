@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::Path;
 use std::time::Duration;
 
@@ -8,28 +8,69 @@ use tracing::{info, instrument, warn};
 use utoipa::openapi::OpenApi;
 
 use crate::{
-    ClientService, Settings, TalkService, TobogganState, routes_with_cors, start_watch_task,
+    ClientService, ServerSettings, Settings, TalkService, TobogganState, WatchConfig, WatchTarget,
+    routes_with_cors, start_watch_task,
 };
 
+/// Loads the talk from `settings.talk` and serves it.
+///
+/// When `settings.watch` is set, the single `.toml` file is watched and the talk
+/// is hot-swapped on change. To serve an in-memory talk (e.g. built from a
+/// folder) use [`launch_with_talk`].
 #[doc(hidden)]
 #[instrument]
 pub async fn launch(settings: Settings) -> anyhow::Result<()> {
+    let talk = load_talk(&settings.talk).await.context("Loading talk")?;
+
+    let watch = settings.watch.then(|| {
+        let reload_path = settings.talk.clone();
+        WatchConfig {
+            target: WatchTarget::TalkFile(settings.talk.clone()),
+            reload: Box::new(move || load_talk_sync(&reload_path)),
+        }
+    });
+
+    launch_with_talk(talk, settings.server, watch).await
+}
+
+/// Serves an already-built [`Talk`], optionally watching a path for reloads.
+///
+/// This is the shared serving core: `launch` uses it after reading a `.toml`
+/// file, and the unified CLI's build+serve uses it with a talk parsed from a
+/// folder plus a recursive [`WatchConfig`].
+///
+/// # Errors
+/// Returns an error if the address cannot be bound, the talk has no slides, the
+/// watcher cannot start, or the HTTP server fails.
+#[doc(hidden)]
+pub async fn launch_with_talk(
+    talk: Talk,
+    settings: ServerSettings,
+    watch: Option<WatchConfig>,
+) -> anyhow::Result<()> {
     info!(?settings, "launching server...");
-    let Settings {
+    let ServerSettings {
         host,
         port,
-        ref talk,
         max_clients,
         ..
     } = settings;
-
-    let talk = load_talk(talk).await.context("Loading talk")?;
 
     let addr = SocketAddr::from((host, port));
     info!(?addr, "Using address");
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .with_context(|| format!("Connecting to {addr} ..."))?;
+
+    if settings.open {
+        let url = browse_url(host, port);
+        info!(%url, "Opening presentation in the default browser");
+        tokio::task::spawn_blocking(move || {
+            if let Err(err) = open::that(&url) {
+                warn!(%url, %err, "Could not open the browser");
+            }
+        });
+    }
 
     let talk_service = TalkService::new(talk).context("build talk service")?;
     let client_service = ClientService::new(max_clients);
@@ -38,16 +79,20 @@ pub async fn launch(settings: Settings) -> anyhow::Result<()> {
     info!(%terminal_shell, "Embedded terminals will use this shell");
     let state = TobogganState::new(talk_service, client_service, terminal_shell.into());
 
+    // A pre-generated overview directory (`--thumbnails-dir`) seeds the cache as
+    // ready; otherwise the overview is generated lazily on the first request.
+    if let Some(thumbnails_dir) = settings.thumbnails_dir.clone() {
+        state.seed_thumbnails_dir(thumbnails_dir).await;
+    }
+
     let cleanup_interval = settings.cleanup_interval();
     tokio::spawn(async move {
         cleanup_service.cleanup_clients_task(cleanup_interval).await;
         info!("Cleanup task completed");
     });
 
-    if settings.watch {
-        let watch_state = state.clone();
-        let watch_path = settings.talk.clone();
-        start_watch_task(watch_path, watch_state).context("Starting file watcher")?;
+    if let Some(watch) = watch {
+        start_watch_task(watch, state.clone()).context("Starting watcher")?;
     }
 
     let openapi = create_openapi()?;
@@ -73,6 +118,21 @@ pub async fn launch(settings: Settings) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Builds the URL `--open` hands to the browser.
+///
+/// Two things the bind address cannot supply directly: a wildcard bind
+/// (`0.0.0.0` / `::`) is not an address a client can connect to, so it becomes
+/// loopback; and an IPv6 literal needs brackets in a URL authority, which
+/// `SocketAddr`'s `Display` adds and plain interpolation does not.
+fn browse_url(host: IpAddr, port: u16) -> String {
+    let host = match host {
+        IpAddr::V4(addr) if addr.is_unspecified() => IpAddr::V4(Ipv4Addr::LOCALHOST),
+        IpAddr::V6(addr) if addr.is_unspecified() => IpAddr::V6(Ipv6Addr::LOCALHOST),
+        addr => addr,
+    };
+    format!("http://{}/", SocketAddr::new(host, port))
+}
+
 #[instrument]
 async fn load_talk(path: &Path) -> anyhow::Result<Talk> {
     let content = tokio::fs::read_to_string(path)
@@ -80,6 +140,13 @@ async fn load_talk(path: &Path) -> anyhow::Result<Talk> {
         .with_context(|| format!("Reading talk file {}", path.display()))?;
     let result = toml::from_str(&content).context("Parsing talk")?;
     Ok(result)
+}
+
+/// Synchronous talk load used by the single-file reload watcher.
+fn load_talk_sync(path: &Path) -> anyhow::Result<Talk> {
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("Reading talk file {}", path.display()))?;
+    toml::from_str(&content).context("Parsing talk")
 }
 
 async fn setup_shutdown_signal(timeout: Duration) {
@@ -118,12 +185,33 @@ async fn setup_shutdown_signal(timeout: Duration) {
         timeout.as_secs()
     );
 
+    // Actually enforce the timeout the flag advertises. Axum's graceful shutdown
+    // waits for every open connection to close, and a presentation WebSocket
+    // never closes on its own — so Ctrl+C hung for as long as one browser tab
+    // stayed open, however `--shutdown-timeout` was set.
+    tokio::spawn(async move {
+        tokio::time::sleep(timeout).await;
+        warn!(
+            timeout_secs = timeout.as_secs(),
+            "graceful shutdown timed out with connections still open; exiting"
+        );
+        std::process::exit(0);
+    });
+
     info!("Shutdown signal processed, server will now terminate gracefully");
 }
 
+/// The bundled `OpenAPI` document as a JSON string.
+///
+/// Exposed so the unified CLI's `openapi` subcommand can emit it without
+/// starting the server.
+#[must_use]
+pub fn openapi_json() -> &'static str {
+    include_str!("../openapi.json")
+}
+
 fn create_openapi() -> anyhow::Result<OpenApi> {
-    let json_content = include_str!("../openapi.json");
-    let openapi = serde_json::from_str(json_content).context("reading openapi.json file")?;
+    let openapi = serde_json::from_str(openapi_json()).context("reading openapi.json file")?;
     Ok(openapi)
 }
 
@@ -150,6 +238,28 @@ mod tests {
         assert!(
             openapi.components.is_some(),
             "should have component schemas"
+        );
+    }
+
+    #[test]
+    fn browse_url_is_reachable_and_bracketed() {
+        // A wildcard bind is not connectable; loopback of the same family is.
+        assert_eq!(
+            browse_url(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 8080),
+            "http://127.0.0.1:8080/"
+        );
+        assert_eq!(
+            browse_url(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 8080),
+            "http://[::1]:8080/"
+        );
+        // An IPv6 literal needs brackets in the URL authority.
+        assert_eq!(
+            browse_url(IpAddr::V6(Ipv6Addr::LOCALHOST), 3000),
+            "http://[::1]:3000/"
+        );
+        assert_eq!(
+            browse_url(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10)), 80),
+            "http://192.168.1.10:80/"
         );
     }
 }

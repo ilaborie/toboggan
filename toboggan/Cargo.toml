@@ -1,0 +1,41 @@
+[package]
+name = "toboggan"
+version = "0.1.0"
+description = "Unified Toboggan command: build, serve, lint, and author presentations"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository = "https://github.com/ilaborie/toboggan"
+keywords = ["presentation", "slides", "markdown", "cli"]
+categories = ["command-line-utilities"]
+
+[[bin]]
+name = "toboggan"
+path = "src/main.rs"
+
+[dependencies]
+toboggan-core = { path = "../toboggan-core", features = ["std"] }
+toboggan-cli = { path = "../toboggan-cli" }
+toboggan-server = { path = "../toboggan-server" }
+toboggan-tui = { path = "../toboggan-tui" }
+toboggan-desktop = { path = "../toboggan-desktop" }
+toboggan-client = { path = "../toboggan-client" }
+toboggan-lint = { path = "../toboggan-lint", features = ["spell"] }
+toboggan-mcp = { path = "../toboggan-mcp" }
+
+clap = { workspace = true, features = ["env", "derive"] }
+clap_complete = { workspace = true }
+miette = { workspace = true, features = ["fancy"] }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+owo-colors = { workspace = true, features = ["supports-colors"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

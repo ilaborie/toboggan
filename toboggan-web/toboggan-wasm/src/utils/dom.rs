@@ -1,8 +1,9 @@
 use gloo::console::error;
-use gloo::utils::document;
+use gloo::utils::{document, window};
 use toboggan_core::{Content, Style};
+use wasm_bindgen::closure::Closure;
 use wasm_bindgen::prelude::*;
-use web_sys::{Element, HtmlElement};
+use web_sys::{AddEventListenerOptions, Element, HtmlElement, KeyboardEvent};
 
 fn escape_html(html: &str) -> String {
     let div = document()
@@ -10,6 +11,41 @@ fn escape_html(html: &str) -> String {
         .expect_throw("DOM unavailable: could not create div for HTML escaping");
     div.set_text_content(Some(html));
     div.inner_html()
+}
+
+/// Whether `event` targets an editable control (form field or `contenteditable`),
+/// where bare-key shortcuts should defer to normal typing.
+#[must_use]
+pub fn is_editable_target(event: &KeyboardEvent) -> bool {
+    let Some(target) = event.target() else {
+        return false;
+    };
+    let Ok(element) = target.dyn_into::<HtmlElement>() else {
+        return false;
+    };
+    if element.is_content_editable() {
+        return true;
+    }
+    matches!(element.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT")
+}
+
+/// Installs a page-lifetime capture-phase `keydown` listener on `window`.
+///
+/// Capture phase lets the handler run before slide/terminal key handlers (which
+/// otherwise consume the key). The closure is intentionally leaked via `forget`
+/// because the listener lives for the whole page and is never removed.
+pub fn install_capture_keydown(mut handler: impl FnMut(&KeyboardEvent) + 'static) {
+    let closure = Closure::<dyn FnMut(_)>::new(move |event: KeyboardEvent| handler(&event));
+    let options = AddEventListenerOptions::new();
+    options.set_capture(true);
+    window()
+        .add_event_listener_with_callback_and_add_event_listener_options(
+            "keydown",
+            closure.as_ref().unchecked_ref(),
+            &options,
+        )
+        .unwrap_throw();
+    closure.forget();
 }
 
 #[must_use]

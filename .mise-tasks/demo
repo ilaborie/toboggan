@@ -4,19 +4,11 @@
 set -eu
 
 DEMO_DIR="examples/demo-terminal"
-DEMO_TOML="examples/demo-terminal.toml"
 
-# 1. Build WASM + web frontend
-echo "🔧 Building WASM..."
-mise build:wasm
-
+# Build the web frontend (embedded by the server)
 echo "🌐 Building web frontend..."
 mise build:web
 
-# 2. Generate TOML from demo folder
-echo "📝 Generating demo presentation..."
-cargo run -p toboggan-cli -- "$DEMO_DIR" -o "$DEMO_TOML"
-
-# 3. Serve
+# Build the folder in-memory and serve with live reload (unified CLI default action)
 echo "🚀 Starting server at http://localhost:8080"
-cargo run -p toboggan-server -- --watch "$DEMO_TOML"
+cargo run -p toboggan -- "$DEMO_DIR"

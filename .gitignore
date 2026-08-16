@@ -37,6 +37,10 @@ Icon
 *.dSYM.zip
 DerivedData/
 build/
+# ...but keep the mise build/* task scripts, which the broad `build/` rule above
+# would otherwise hide.
+!.mise-tasks/build/
+!.mise-tasks/build/**
 
 # Simulator and device logs
 simulator_logs/

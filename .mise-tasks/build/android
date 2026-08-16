@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+#MISE description="Build Rust library for Android and generate Kotlin bindings"
+#MISE sources=["toboggan-mobile/src/**/*.rs", "toboggan-mobile/Cargo.toml"]
+#MISE outputs=["toboggan-android/app/src/main/jniLibs/**/*.so"]
+
+set -eEuv
+
+# Build configuration
+BUILD_TYPE="${1:-release}"
+if [[ "${BUILD_TYPE}" == "debug" ]]; then
+  CARGO_FLAGS=""
+else
+  CARGO_FLAGS="--release"
+fi
+
+ANDROID_DIR="${MISE_PROJECT_ROOT}/toboggan-android"
+JNILIBS_DIR="${ANDROID_DIR}/app/src/main/jniLibs"
+KOTLIN_OUT_DIR="${ANDROID_DIR}/app/src/main/java"
+
+# Android targets: rust-target:android-abi
+ANDROID_TARGETS=(
+  "aarch64-linux-android:arm64-v8a"
+  "armv7-linux-androideabi:armeabi-v7a"
+  "x86_64-linux-android:x86_64"
+  "i686-linux-android:x86"
+)
+
+echo "Building toboggan-mobile for Android (${BUILD_TYPE})..."
+
+# Build for each Android target
+for target_pair in "${ANDROID_TARGETS[@]}"; do
+  IFS=':' read -r rust_target android_abi <<<"$target_pair"
+  echo "Building for ${rust_target} (${android_abi})..."
+
+  cargo ndk --target "${rust_target}" --platform 31 -- build ${CARGO_FLAGS} -p toboggan-mobile
+
+  mkdir -p "${JNILIBS_DIR}/${android_abi}"
+  cp "${MISE_PROJECT_ROOT}/target/${rust_target}/${BUILD_TYPE}/libtoboggan.so" \
+    "${JNILIBS_DIR}/${android_abi}/"
+
+  echo "  Copied libtoboggan.so to jniLibs/${android_abi}/"
+done
+
+echo "All Android architectures built successfully!"
+
+# Generate Kotlin bindings using the aarch64 library
+echo "Generating Kotlin bindings..."
+mkdir -p "${KOTLIN_OUT_DIR}"
+
+cargo run -p toboggan-mobile --bin uniffi-bindgen -- generate \
+  --library "${MISE_PROJECT_ROOT}/target/aarch64-linux-android/${BUILD_TYPE}/libtoboggan.so" \
+  --language kotlin \
+  --out-dir "${KOTLIN_OUT_DIR}"
+
+echo "Kotlin bindings generated in ${KOTLIN_OUT_DIR}"
+echo "Build complete!"

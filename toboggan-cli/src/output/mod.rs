@@ -5,12 +5,14 @@ mod text;
 pub use self::text::TextRenderer;
 
 mod html;
+mod thumbnails;
+pub use self::thumbnails::{ThumbnailOptions, generate_thumbnails};
 mod typst;
-
 use std::borrow::Cow;
 
 use toboggan_core::{RenderTarget, Talk};
 
+pub use self::typst::deck_root;
 use crate::error::Result;
 use crate::settings::OutputFormat;
 

@@ -17,6 +17,8 @@ pub(super) enum CommentType {
         theme: Option<Theme>,
         cmd: Option<String>,
     },
+    /// `<!-- lint-disable rule-a rule-b -->` — silence lint rules for this slide.
+    LintDisable(Vec<String>),
     Unknown,
 }
 
@@ -24,6 +26,7 @@ const MARKER_PAUSE: &str = "pause";
 const MARKER_NOTES: &str = "notes";
 const MARKER_CODE: &str = "code";
 const MARKER_TERM: &str = "term";
+const MARKER_LINT_DISABLE: &str = "lint-disable";
 
 fn parse_comment(html: &str) -> Option<&str> {
     let html = html.trim();
@@ -42,7 +45,9 @@ pub(super) fn parse_comment_content(html: &str) -> CommentType {
         return CommentType::Unknown;
     };
 
-    if comment_content.starts_with(MARKER_PAUSE) {
+    if comment_content.starts_with(MARKER_LINT_DISABLE) {
+        parse_lint_disable_comment(comment_content)
+    } else if comment_content.starts_with(MARKER_PAUSE) {
         let classes_str = comment_content.trim_start_matches(MARKER_PAUSE);
         let classes = parse_classes(classes_str);
         CommentType::Pause(classes)
@@ -55,6 +60,24 @@ pub(super) fn parse_comment_content(html: &str) -> CommentType {
     } else {
         CommentType::Unknown
     }
+}
+
+/// Parse `<!-- lint-disable rule-a rule-b -->` (rule ids separated by whitespace
+/// and/or commas) into the list of rule ids to silence for the slide.
+///
+/// Like every Toboggan directive, this is only recognised as a *block*: the
+/// comment must stand alone on its own line, separated from surrounding text by
+/// blank lines. A comment sitting inside a paragraph parses as inline HTML and is
+/// treated as slide content, so the directive has no effect.
+fn parse_lint_disable_comment(comment_content: &str) -> CommentType {
+    let rules = comment_content
+        .trim_start_matches(MARKER_LINT_DISABLE)
+        .split([' ', '\t', ',', '\n'])
+        .map(str::trim)
+        .filter(|rule| !rule.is_empty())
+        .map(str::to_owned)
+        .collect();
+    CommentType::LintDisable(rules)
 }
 
 fn parse_classes(html: &str) -> CssClasses {
@@ -147,6 +170,13 @@ pub(super) fn parse_pause(html: &str) -> Option<CssClasses> {
 
 pub(super) fn is_notes(html: &str) -> bool {
     matches!(parse_comment_content(html), CommentType::Notes)
+}
+
+pub(super) fn parse_lint_disable(html: &str) -> Option<Vec<String>> {
+    match parse_comment_content(html) {
+        CommentType::LintDisable(rules) => Some(rules),
+        _ => None,
+    }
 }
 
 pub(super) fn parse_code(html: &str) -> Option<(String, PathBuf)> {

@@ -15,6 +15,7 @@ Set `classes` in frontmatter to change a slide's layout:
 | `cover` | Cover/title styling |
 | `spread-steps` | Distribute steps evenly down the slide |
 | `step-line-through` | Strike out earlier steps as you advance |
+| `term-50vh` | Pin an embedded terminal pane to half the viewport height |
 
 <!-- pause -->
 

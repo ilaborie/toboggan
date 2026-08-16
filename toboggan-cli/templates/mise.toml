@@ -1,0 +1,23 @@
+#:schema https://mise.jdx.dev/schema/mise.json
+# Build + serve tasks for this Toboggan presentation.
+# Requires the `toboggan` binary on PATH (cargo install --path <toboggan repo>/toboggan).
+
+[tasks.dev]
+description = "Build and serve with live reload while editing"
+run = "toboggan ."
+
+[tasks.build]
+description = "Compile slides/ into {{slug}}.toml"
+run = "toboggan build ./slides/ --output {{slug}}.toml"
+
+[tasks.html]
+description = "Export a single-file static HTML version"
+run = "toboggan build ./slides/ --output {{slug}}.html"
+
+[tasks.pdf]
+description = "Export a PDF (needs the `typst` binary)"
+run = "toboggan pdf ./slides/ --output {{slug}}.pdf"
+
+[tasks.lint]
+description = "Lint the presentation"
+run = "toboggan lint ./slides/"

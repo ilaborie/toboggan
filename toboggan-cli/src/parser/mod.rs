@@ -29,7 +29,8 @@ type MarkdownNode<'a> = Node<'a, RefCell<Ast>>;
 
 type CssClasses = Vec<String>;
 
-const FRONT_MATTER_DELIMITER: &str = "+++";
+/// Delimiter line that fences TOML front matter at the top of a slide file.
+pub const FRONT_MATTER_DELIMITER: &str = "+++";
 
 const DEFAULT_SLIDE_TITLE: &str = "<No Title>";
 const DEFAULT_PART_TITLE: &str = "Untitled Part";
@@ -57,6 +58,10 @@ pub struct FrontMatter {
     /// Falls back to the talk-level default. Relative paths resolve against the talk dir.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quake_cwd: Option<String>,
+
+    /// Lint rule ids to silence for this slide (e.g. `["html/img-missing-alt"]`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub disabled_rules: Vec<String>,
 }
 
 impl FrontMatter {

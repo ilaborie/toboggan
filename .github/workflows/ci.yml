@@ -1,0 +1,114 @@
+# Server-side gate for the repo's two Cargo workspaces.
+#
+# Why this exists: the repo's prek hooks are installed as *git* hooks
+# (.git/hooks/pre-commit, pre-push), but jj — the project's primary VCS — does
+# not run git hooks. So for a jj-driven workflow the fmt/clippy/test gate never
+# fires locally. This workflow re-runs the same checks as `mise check:rust` on
+# every push and pull request, regardless of the contributor's VCS.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The root workspace. Runs on macOS to mirror the development environment
+  # (where `mise check` is known green) and to avoid Linux GUI system-dependency
+  # setup for the iced/wgpu-based `toboggan-desktop` crate.
+  rust:
+    name: Rust (fmt + clippy + nextest + doctests)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # toboggan-server embeds `toboggan-web/dist` at compile time (RustEmbed),
+      # and its build.rs fails if the folder is missing. That bundle is a
+      # gitignored build artifact produced by the separate wasm/vite pipeline.
+      # Stub a minimal dist so the Rust gate can compile the server without the
+      # full web toolchain. The stub is only ever compiled against, never
+      # shipped: the release workflow builds the real bundle before it produces a
+      # binary. Anything that depends on the dist's *contents* is therefore not
+      # covered here.
+      - name: Stub embedded web dist
+        run: |
+          mkdir -p toboggan-web/dist
+          printf '<!doctype html><title>ci stub</title>' > toboggan-web/dist/index.html
+
+      # Install nightly first, stable last, so stable is the default toolchain;
+      # the only nightly user is the explicit `cargo +nightly fmt` below. Every
+      # command pins its toolchain so the result does not depend on action order.
+      - name: Install nightly rustfmt
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - name: Install Rust (stable + clippy)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
+      - name: Format (nightly)
+        run: cargo +nightly fmt --all --check
+      - name: Clippy
+        run: cargo +stable clippy --all-targets --all-features -- -D warnings
+      - name: Unit tests
+        run: cargo +stable nextest run
+      - name: Doctests
+        run: cargo +stable test --doc
+
+  # The embedded web client is a *separate* Cargo workspace (its Cargo.toml
+  # carries an empty `[workspace]` table), so the `rust` job above never reaches
+  # it: neither `--all-targets` nor `nextest run` crosses a workspace boundary,
+  # and `mise check:rust` has the same blind spot locally. Until this job
+  # existed, `toboggan-wasm` was only ever compiled by the release workflow —
+  # meaning a break surfaced when a `v*` tag was pushed, after the tag existed.
+  #
+  # Ubuntu rather than macOS: nothing here needs a GUI toolchain, and building
+  # the wasm crate on Linux is exactly what the release workflow does for the
+  # x86_64-unknown-linux-gnu binary, so this doubles as a smoke test for it.
+  wasm:
+    name: Web client (fmt + clippy)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: toboggan-web/toboggan-wasm
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same ordering rule as the `rust` job: nightly first so stable ends up
+      # the default toolchain, with every command pinning its own anyway.
+      - name: Install nightly rustfmt
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - name: Install Rust (stable + clippy)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: toboggan-web/toboggan-wasm
+
+      - name: Format (nightly)
+        run: cargo +nightly fmt --all --check
+      # Linted against wasm32, the only target this crate is ever built for:
+      # its web-sys/beamterm surface is meaningless on a host target, so a
+      # host-target lint would check code the browser never runs.
+      - name: Clippy (wasm32)
+        run: cargo +stable clippy --all-targets --target wasm32-unknown-unknown -- -D warnings
+      # No test step: the crate has no tests, and running any would need
+      # wasm-bindgen-test-runner plus a headless browser. `--all-targets` above
+      # still type-checks whatever test code gets added later.

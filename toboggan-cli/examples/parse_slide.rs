@@ -14,7 +14,7 @@ fn main() -> Result<()> {
 
     let content_parser = SlideContentParser::new();
     let (slide, _) =
-        content_parser.parse_with_defaults(doc.children(), Some("example-slide"), None)?;
+        content_parser.parse_with_defaults(doc.children(), Some("example-slide"), None, None)?;
 
     println!("{slide:#?}");
     println!("===");

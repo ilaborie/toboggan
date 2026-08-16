@@ -15,6 +15,8 @@ use parser::FolderParser;
 
 pub mod output;
 
+pub mod scaffold;
+
 mod settings;
 pub use self::settings::*;
 
@@ -94,6 +96,23 @@ impl ParseResult {
         }
 
         talk
+    }
+
+    /// The message of every slide that failed to parse, in discovery order.
+    ///
+    /// [`Self::to_talk`] silently drops those slides, so any caller that renders
+    /// or analyses the talk has to decide what to do about them. Without this a
+    /// single front-matter typo makes a slide vanish from the deck while the
+    /// command still reports success.
+    #[must_use]
+    pub fn errors(&self) -> Vec<&str> {
+        self.slides
+            .iter()
+            .filter_map(|slide_result| match slide_result {
+                SlideProcessingResult::Error(message) => Some(message.as_str()),
+                _ => None,
+            })
+            .collect()
     }
 
     #[must_use]
@@ -181,6 +200,17 @@ pub fn run(settings: &Settings) -> Result<()> {
     let parse_result = parse_presentation(input, settings)?;
     display_results(&parse_result, settings)?;
 
+    // Fail before writing anything. `to_talk` drops unparseable slides, so
+    // continuing here wrote a silently-truncated deck and still exited 0 — which
+    // the GitHub Action turns into a published deck with slides missing.
+    let errors = parse_result.errors();
+    if !errors.is_empty() {
+        return Err(TobogganCliError::SlidesFailedToParse {
+            count: errors.len(),
+            details: errors.join("\n  "),
+        });
+    }
+
     if let Some(output) = &settings.output {
         write_output(&parse_result, output, settings)?;
     } else {
@@ -204,7 +234,15 @@ fn validate_input(input: Option<&PathBuf>) -> Result<&PathBuf> {
     Ok(input)
 }
 
-fn parse_presentation(input: &Path, settings: &Settings) -> Result<ParseResult> {
+/// Parses a presentation folder into a [`ParseResult`], applying slide numbering
+/// unless `settings.no_counter` is set.
+///
+/// Exposed so the unified CLI's build+serve and folder-watch paths can rebuild
+/// the talk in-memory via [`ParseResult::to_talk`].
+///
+/// # Errors
+/// Returns an error if the folder cannot be parsed.
+pub fn parse_presentation(input: &Path, settings: &Settings) -> Result<ParseResult> {
     debug!("Processing folder-based talk from {}", input.display());
 
     let parser = FolderParser::new(input.to_path_buf(), settings.theme.clone())?;

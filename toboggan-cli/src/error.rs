@@ -1,5 +1,3 @@
-#![allow(unused_assignments)]
-
 use std::io;
 use std::path::PathBuf;
 
@@ -22,6 +20,22 @@ pub enum TobogganCliError {
         help("Ensure the file exists and you have read permissions")
     )]
     ReadFile { path: PathBuf, source: io::Error },
+
+    #[display("{count} slide(s) failed to parse:\n  {details}")]
+    #[diagnostic(
+        code(toboggan_cli::slides_failed_to_parse),
+        help("Fix the slides above, or mark them `skip = true` to exclude them deliberately")
+    )]
+    SlidesFailedToParse { count: usize, details: String },
+
+    #[display("Invalid code embed `{}`: {reason}", path.display())]
+    #[diagnostic(
+        code(toboggan_cli::invalid_code_embed),
+        help(
+            "`<!-- code:lang:path -->` paths are relative to the deck root and must stay inside it"
+        )
+    )]
+    InvalidCodeEmbed { path: PathBuf, reason: String },
 
     #[display("Failed to create file: {}", path.display())]
     #[diagnostic(
@@ -127,14 +141,23 @@ pub enum TobogganCliError {
         help("Run with --help to see available options")
     )]
     CliParse { source: clap::Error },
+
+    #[display("Typst rendering failed: {message}")]
+    #[diagnostic(
+        code(toboggan_cli::typst),
+        help("Ensure the `typst` binary is installed and on PATH")
+    )]
+    Typst { message: String },
+
+    #[display("Failed to scaffold presentation: {message}")]
+    #[diagnostic(
+        code(toboggan_cli::scaffold),
+        help("Choose an empty or non-existent target directory")
+    )]
+    Scaffold { message: String },
 }
 
 impl TobogganCliError {
-    /// Helper to create a `NamedSource` with consistent naming
-    fn create_named_source(file_path: &str, content: String) -> NamedSource<String> {
-        NamedSource::new(file_path, content)
-    }
-
     #[must_use]
     pub fn parse_markdown(
         file_path: &str,
@@ -143,7 +166,7 @@ impl TobogganCliError {
         message: String,
     ) -> Self {
         Self::ParseMarkdown {
-            src: Self::create_named_source(file_path, content),
+            src: NamedSource::new(file_path, content),
             span,
             message,
         }
@@ -157,7 +180,7 @@ impl TobogganCliError {
         source: toml::de::Error,
     ) -> Self {
         Self::ParseFrontmatter {
-            src: Self::create_named_source(file_path, content),
+            src: NamedSource::new(file_path, content),
             span,
             source,
         }
@@ -171,7 +194,7 @@ impl TobogganCliError {
         message: String,
     ) -> Self {
         Self::FormatCommonmark {
-            src: Self::create_named_source(file_path, content),
+            src: NamedSource::new(file_path, content),
             span,
             message,
         }
@@ -197,6 +220,25 @@ impl TobogganCliError {
     #[must_use]
     pub fn write_file(path: PathBuf, source: io::Error) -> Self {
         Self::WriteFile { path, source }
+    }
+
+    #[must_use]
+    pub fn scaffold(message: String) -> Self {
+        Self::Scaffold { message }
+    }
+
+    #[must_use]
+    pub fn typst(source: &io::Error) -> Self {
+        Self::Typst {
+            message: format!("could not run `typst`: {source}"),
+        }
+    }
+
+    #[must_use]
+    pub fn typst_failed(status: &str) -> Self {
+        Self::Typst {
+            message: format!("`typst compile` failed: {status}"),
+        }
     }
 }
 

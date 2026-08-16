@@ -23,3 +23,4 @@ classes = ["no_title", "wide", "cover", "center"]
 | `cover` | Centers content (for title slides) |
 | `center` | Centers article content |
 | `spread-steps` | Distributes steps evenly |
+| `term-50vh` | Pins an embedded terminal pane to 50vh |

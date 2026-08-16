@@ -2,14 +2,13 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gloo::console::{debug, info};
-use gloo::utils::{document, window};
+use gloo::utils::document;
 use toboggan_core::TerminalConfig;
-use wasm_bindgen::closure::Closure;
-use wasm_bindgen::{JsCast, UnwrapThrowExt};
-use web_sys::{AddEventListenerOptions, HtmlElement, KeyboardEvent};
+use wasm_bindgen::UnwrapThrowExt;
+use web_sys::HtmlElement;
 
 use crate::components::{TobogganTerminalElement, WasmElement};
-use crate::create_html_element;
+use crate::{create_html_element, install_capture_keydown, is_editable_target};
 
 const CSS: &str = include_str!("style.css");
 const STYLE_MARKER_ATTR: &str = "data-toboggan-quake-style";
@@ -18,10 +17,13 @@ const FALLBACK_CWD: &str = ".";
 
 /// Drop-down "Quake-style" terminal overlay toggled by the backtick key.
 ///
-/// The session's working directory is sourced from the active slide's
-/// resolved `quake_terminal_cwd` (with talk-level and server-level fallbacks
-/// already applied by the loader). When the resolved cwd changes between
-/// slides, the existing PTY session is torn down and reopened.
+/// The session's working directory is sourced from the active slide's resolved
+/// `quake_terminal_cwd`. The loader applies the slide→talk fallback only, which
+/// is why this module keeps its own [`FALLBACK_CWD`] for the remaining case.
+///
+/// When the resolved cwd changes between slides, the existing session is shut
+/// down — its WebSocket closed, and with it the server-side PTY — and a new one
+/// is opened in the new directory.
 #[derive(Default)]
 pub(crate) struct TobogganQuakeTerminalElement {
     state: Option<Rc<RefCell<QuakeState>>>,
@@ -31,10 +33,17 @@ struct QuakeState {
     overlay: HtmlElement,
     inner: TobogganTerminalElement,
     api_base_url: String,
-    /// The cwd currently driving the running PTY session (or `None` if no session is active).
+    /// The cwd currently driving the running PTY session, or `None` when no
+    /// session has been started yet.
+    ///
+    /// Distinct from [`Self::is_open`]: closing the overlay hides it but leaves
+    /// the session running, so a reopen is instant. `is_open == true` therefore
+    /// always implies `active_cwd.is_some()` — `toggle` starts a session before
+    /// it sets the flag — but the converse does not hold.
     active_cwd: Option<String>,
     /// The cwd that should be used the next time the overlay is opened.
     pending_cwd: Option<String>,
+    /// Whether the overlay is currently visible.
     is_open: bool,
 }
 
@@ -83,6 +92,11 @@ impl WasmElement for TobogganQuakeTerminalElement {
         body.append_child(&overlay).unwrap_throw();
 
         let mut inner = TobogganTerminalElement::default();
+        // This host is created once and re-populated on every restart, so it must
+        // survive `stop_terminal` — including while the terminal is fullscreen,
+        // when its host is sitting directly under `<body>` like a lifted slide
+        // terminal's.
+        inner.set_persistent(true);
         inner.render(&inner_host);
 
         let state = Rc::new(RefCell::new(QuakeState {
@@ -116,7 +130,9 @@ fn inject_quake_style() {
 }
 
 fn register_toggle_listener(state: Rc<RefCell<QuakeState>>) {
-    let closure = Closure::<dyn FnMut(_)>::new(move |event: KeyboardEvent| {
+    // Capture phase so we run before the inner terminal's own keydown handler
+    // (which otherwise eats every key for the PTY).
+    install_capture_keydown(move |event| {
         if event.key() != TOGGLE_KEY {
             return;
         }
@@ -124,26 +140,13 @@ fn register_toggle_listener(state: Rc<RefCell<QuakeState>>) {
         // field (search box, contenteditable). The PTY canvas is a <canvas>,
         // not an editable element, so it's not matched here — backtick will
         // toggle even while focus is in the terminal, which is intentional.
-        if is_editable_target(&event) {
+        if is_editable_target(event) {
             return;
         }
         event.prevent_default();
         event.stop_propagation();
         toggle(&state);
     });
-
-    // Use the capture phase so we run before the inner terminal's own keydown
-    // handler (which otherwise eats every key for the PTY).
-    let opts = AddEventListenerOptions::new();
-    opts.set_capture(true);
-    window()
-        .add_event_listener_with_callback_and_add_event_listener_options(
-            "keydown",
-            closure.as_ref().unchecked_ref(),
-            &opts,
-        )
-        .unwrap_throw();
-    closure.forget();
 }
 
 fn toggle(state_rc: &Rc<RefCell<QuakeState>>) {
@@ -169,20 +172,6 @@ fn toggle(state_rc: &Rc<RefCell<QuakeState>>) {
         let _ = class_list.remove_1("open");
         debug!("QuakeTerminal closed");
     }
-}
-
-fn is_editable_target(event: &KeyboardEvent) -> bool {
-    let Some(target) = event.target() else {
-        return false;
-    };
-    let Ok(element) = target.dyn_into::<HtmlElement>() else {
-        return false;
-    };
-    if element.is_content_editable() {
-        return true;
-    }
-    let tag = element.tag_name();
-    matches!(tag.as_str(), "INPUT" | "TEXTAREA" | "SELECT")
 }
 
 fn restart_session(state_rc: &Rc<RefCell<QuakeState>>) {

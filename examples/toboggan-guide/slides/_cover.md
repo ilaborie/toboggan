@@ -43,7 +43,7 @@ background:
 </style>
 
 <div class="hero">
-  <span class="sled">🛷</span>
+  <span class="sled">🛝</span>
 
 # Toboggan
 

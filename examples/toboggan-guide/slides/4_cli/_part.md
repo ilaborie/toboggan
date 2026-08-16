@@ -3,6 +3,7 @@ title = "The CLI"
 classes = ["no_title"]
 +++
 
-# `toboggan-cli`
+# The `toboggan` CLI
 
-Compile a folder of Markdown into a presentation — in the format you need.
+One command builds, serves, lints, and authors — compile a folder of Markdown
+into a presentation, in the format you need.

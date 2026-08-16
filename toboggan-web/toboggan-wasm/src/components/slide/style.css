@@ -292,6 +292,13 @@ section.center {
 	overflow: hidden;
 }
 
+/* Opt-in (frontmatter `classes = ["term-50vh"]`): pin the terminal pane to a
+   fixed half-viewport height instead of letting it flex against the slide body. */
+section.term-50vh .toboggan-terminals {
+	flex: 0 0 auto;
+	height: 50vh;
+}
+
 /* Wide layout: maximize space for terminal-heavy slides */
 section.wide {
 	width: 95vw;

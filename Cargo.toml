@@ -8,6 +8,9 @@ members = [
   "toboggan-tui",
   "toboggan-desktop",
   "toboggan-mobile",
+  "toboggan-lint",
+  "toboggan-mcp",
+  "toboggan",
 ]
 exclude = ["toboggan-esp32", "toboggan-py"]
 resolver = "2"
@@ -22,23 +25,24 @@ repository = "https://github.com/ilaborie/toboggan"
 [workspace.dependencies]
 # Core dependencies
 derive_more = { version = "2.1.1", default-features = false }
-jiff = { version = "0.2.28", default-features = false }
+jiff = { version = "0.2.32", default-features = false }
 serde = { version = "1.0.228", default-features = false }
-uuid = { version = "1.23.3", default-features = false }
-humantime = "2.3.0"
-getrandom = "0.4.2"
+uuid = { version = "1.24.0", default-features = false }
+humantime = "2.4.0"
+getrandom = "0.4.3"
 
 # Server dependencies
 axum = "0.8.9"
-tokio = "1.52.3"
-toml = "1.1.2"
+tokio = "1.53.0"
+toml = "1.1.3"
 tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
-clap = "4.6.1"
-anyhow = "1.0.102"
+clap = "4.6.2"
+clap_complete = "4.6.7"
+anyhow = "1.0.103"
 serde_json = "1.0.150"
-serde-saphyr = "0.0.27"
-tower-http = "0.6.11"
+serde-saphyr = "0.0.29"
+tower-http = "0.7.0"
 futures = "0.3.32"
 dashmap = "6.2.1"
 slotmap = "1.1.1"
@@ -48,40 +52,52 @@ utoipa = "5.5.0"
 utoipa-scalar = "0.3.0"
 
 # Dev dependencies
-clawspec-core = "0.4.3"
+clawspec-core = "0.4.4"
 tempfile = "3.27.0"
+tower = "0.5.2"
 
 # Other dependencies
-comrak = "0.52.0"
+comrak = "0.54.0"
 miette = "7.6.0"
 comfy-table = "7.2.2"
 
 # Desktop dependencies
 iced = "0.14.0"
-tokio-tungstenite = { version = "0.29.0", default-features = false }
+tokio-tungstenite = { version = "0.30.0", default-features = false }
 reqwest = { version = "0.13.4", default-features = false }
-lucide-icons = "1.18.0"
+lucide-icons = "1.24.0"
 async-stream = "0.3.6"
 
 # Other dependencies
 scraper = "0.27.0"
 
 # Server-specific dependencies
-rust-embed = "8.11.0"
+rust-embed = "8.12.0"
 mime_guess = "2.0.5"
 notify = "8.2.0"
+portable-pty = "0.9.0"
+open = "5.4.0"
+
+# MCP-specific dependencies
+rmcp = "2.2.0"
+schemars = "1"
+toml_edit = "0.25.13"
+
+# Desktop-specific dependencies
+# naga = "29"
+naga = "30"
 
 # CLI-specific dependencies
 owo-colors = "4.3.0"
 
 # TUI-specific dependencies
-ratatui = "0.30.1"
+ratatui = "0.30.2"
 crossterm = "0.29.0"
-tui-logger = "0.18.2"
+tui-logger = "0.18.3"
 tachyonfx = "0.25"
 
 # Mobile-specific dependencies (iOS & Android)
-uniffi = "0.31.1"
+uniffi = "0.32.0"
 
 
 [workspace.lints.rust]

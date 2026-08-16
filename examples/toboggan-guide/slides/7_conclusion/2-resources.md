@@ -32,4 +32,4 @@ $ toboggan-server --public-dir public/ toboggan-guide.toml
 - 🧪 Feature reference: `examples/demo-terminal/`
 - 📖 API docs: `/doc` on a running server
 
-### Happy sledding 🛷
+### Happy sledding 🛝

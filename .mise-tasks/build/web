@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#MISE description="Build web frontend with TypeScript and Vite"
+
+set -eu
+
+echo "🌐 Building web frontend..."
+mise build:wasm
+
+# Build toboggan-web with pnpm (the repo's lockfile is pnpm-lock.yaml)
+echo "🔧 Building toboggan-web with TypeScript and Vite..."
+cd toboggan-web
+pnpm run build
+cd ..
+
+echo ""
+echo "✅ Web build completed successfully!"
+echo "📦 Built frontend files ready for deployment"

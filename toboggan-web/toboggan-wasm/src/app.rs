@@ -31,6 +31,11 @@ struct RecoveryState {
     last_known_state: Option<State>,
     /// Whether we're waiting to attempt state restoration after reconnection
     pending_restoration: bool,
+    /// Whether a `?slide=N` auto-start is awaiting its first state change. The
+    /// server rejects an out-of-range index without changing state, so an error
+    /// while this is set means the jump failed and we must start from the first
+    /// slide instead of sitting in `Init` with a blank screen.
+    pending_url_goto: bool,
 }
 
 #[derive(Default)]
@@ -233,6 +238,18 @@ async fn handle_messages(
             }
             CommunicationMessage::Error { error } => {
                 elements.borrow().toast.toast(ToastType::Error, &error);
+                // The only error that can reach us while still in `Init` is a
+                // rejected `?slide=N` (the overview links to a slide the deck no
+                // longer has). Start from the first slide rather than leaving the
+                // page blank.
+                let jump_failed = {
+                    let mut recovery = recovery_state.borrow_mut();
+                    std::mem::take(&mut recovery.pending_url_goto)
+                };
+                if jump_failed {
+                    info!("Slide from URL was rejected, starting from the first slide");
+                    let _ = tx_cmd.unbounded_send(Command::First);
+                }
             }
             CommunicationMessage::Registered { client_id: id } => {
                 *client_id.borrow_mut() = Some(id);
@@ -299,18 +316,26 @@ async fn handle_connection_status(
 
         // Register command is sent automatically by CommunicationService
 
-        if let Ok(talk) = api.get_talk().await {
-            // Update presentation metadata with total slides count
-            presentation_meta.borrow_mut().total_slides = talk.titles.len();
+        match api.get_talk().await {
+            Ok(talk) => {
+                // Update presentation metadata with total slides count
+                presentation_meta.borrow_mut().total_slides = talk.titles.len();
 
-            let mut elem = elements.borrow_mut();
-            elem.footer.set_content(talk.footer.clone());
-            drop(elem);
+                let mut elem = elements.borrow_mut();
+                elem.footer.set_content(talk.footer.clone());
+                drop(elem);
 
-            // Inject custom head HTML if provided
-            inject_head_html(talk.head.as_deref());
-        } else {
-            error!("Failed to fetch talk");
+                // Inject custom head HTML if provided
+                inject_head_html(talk.head.as_deref());
+            }
+            // Report what actually failed, and what the presenter will see: the
+            // slide counter stays at 0 and the deck's `_head.html` (fonts, custom
+            // CSS) is never injected, so the deck renders unstyled.
+            Err(err) => error!(
+                "Failed to fetch talk:",
+                err.to_string(),
+                "— slide count and custom head styles are unavailable"
+            ),
         }
     }
 }
@@ -324,12 +349,24 @@ async fn handle_state_change(
     recovery_state: &Rc<RefCell<RecoveryState>>,
     presentation_meta: &Rc<RefCell<PresentationMeta>>,
 ) {
-    // Auto-start presentation when in Init state
+    // Auto-start presentation when in Init state. If the URL carries `?slide=N`
+    // (e.g. opened from the slide overview), jump straight to that slide.
     if matches!(state, State::Init) {
-        info!("Auto-starting presentation from Init state");
-        let _ = tx_cmd.unbounded_send(Command::First);
+        if let Some(index) = slide_from_url() {
+            info!("Starting at slide from URL");
+            recovery_state.borrow_mut().pending_url_goto = true;
+            let _ = tx_cmd.unbounded_send(Command::GoTo {
+                slide: SlideId::new(index),
+            });
+        } else {
+            info!("Auto-starting presentation from Init state");
+            let _ = tx_cmd.unbounded_send(Command::First);
+        }
         return;
     }
+
+    // We left `Init`, so the URL jump landed and needs no fallback.
+    recovery_state.borrow_mut().pending_url_goto = false;
 
     // Try to restore previous slide position after reconnection
     if try_restore_slide_position(&state, elements, tx_cmd, recovery_state) {
@@ -391,6 +428,18 @@ async fn handle_talk_change(
     update_root_state_class(&state, root_element, presentation_meta);
     update_slide_display(&state, api, elements).await;
     show_completion_toast_if_done(&state, elements);
+}
+
+/// Reads a `slide=N` parameter from the page URL query string, if present.
+///
+/// Used by the slide overview's click-to-run links (`/run?slide=N`).
+fn slide_from_url() -> Option<usize> {
+    let search = web_sys::window()?.location().search().ok()?;
+    let query = search.strip_prefix('?').unwrap_or(&search);
+    query.split('&').find_map(|pair| {
+        pair.strip_prefix("slide=")
+            .and_then(|value| value.parse::<usize>().ok())
+    })
 }
 
 /// Attempts to restore slide position after re-connection

@@ -12,7 +12,7 @@ Drop `<link>` tags in `_head.html` and point `--font-slide-*` at them in your
 stylesheet — exactly how this deck loads Space Grotesk.
 
 ### 📊 Live footer
-The footer reads `--current-slide` / `--total-slides`; this guide's 🛷 rides the
+The footer reads `--current-slide` / `--total-slides`; this guide's 🛝 rides the
 progress bar with pure CSS, no assets.
 
 ### 🖼️ Pre-render diagrams
