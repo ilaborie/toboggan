@@ -1,13 +1,17 @@
 use std::path::PathBuf;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use toboggan_core::{Content, Slide, SlideId};
 
 /// Severity of a lint diagnostic.
 ///
 /// Ordered so that `Error` is the greatest — `Iterator::max` over severities
 /// yields the worst one.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize)]
+///
+/// `Deserialize` as well as `Serialize`: severities arrive *into* the linter
+/// from a `toboggan.toml` `[lint.severity]` table, not just out of it in a
+/// report.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
     /// Informational suggestion.

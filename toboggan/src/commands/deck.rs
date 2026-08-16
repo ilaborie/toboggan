@@ -35,8 +35,8 @@ impl Deck {
 /// Accepts either the slides folder directly, or a deck root containing a
 /// `slides/` subdirectory (with `public/` alongside it).
 ///
-/// Every command routes through this so that `toboggan lint deck` and
-/// `toboggan lint deck/slides` agree. They used to disagree silently: only the
+/// Every command routes through this so that `toboggan lint -p deck` and
+/// `toboggan lint -p deck/slides` agree. They used to disagree silently: only the
 /// serve path descended into `slides/`, so pointing `lint`, `stats`, `pdf` or
 /// `thumbnails` at the deck root made them analyse a folder with no slides in it
 /// — and `lint` then reported a clean deck and exited 0, which passes any CI
@@ -123,7 +123,7 @@ mod tests {
     }
 
     /// Pointing at the slides folder directly has to give the same answer, so
-    /// `toboggan lint deck` and `toboggan lint deck/slides` agree.
+    /// `toboggan lint -p deck` and `toboggan lint -p deck/slides` agree.
     #[test]
     fn slides_folder_resolves_to_itself_and_finds_sibling_public() {
         let temp = tempfile::tempdir().expect("tempdir");

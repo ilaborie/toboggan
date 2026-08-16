@@ -13,7 +13,7 @@ use crate::cli::{McpClient, NewArgs, SkillsArgs, Vcs};
 /// directory cannot be created.
 #[allow(clippy::print_stdout)]
 pub(crate) fn scaffold(args: NewArgs) -> anyhow::Result<()> {
-    let dir = &args.dir;
+    let dir = &args.path;
 
     let title = args.title.unwrap_or_else(|| {
         dir.file_name()
@@ -43,7 +43,7 @@ pub(crate) fn scaffold(args: NewArgs) -> anyhow::Result<()> {
     if !args.no_skill {
         let skill_args = SkillsArgs {
             target: McpClient::ClaudeCode,
-            dir: Some(dir.clone()),
+            path: Some(dir.clone()),
             // A freshly scaffolded directory has no SKILL.md to protect.
             force: false,
         };
@@ -52,8 +52,25 @@ pub(crate) fn scaffold(args: NewArgs) -> anyhow::Result<()> {
         }
     }
 
-    println!("   Build & serve it with:  toboggan {}", dir.display());
+    print_next_steps(dir);
     Ok(())
+}
+
+/// Tells the author what to do with the folder that just appeared.
+///
+/// A scaffold that only says "created" leaves you to guess the workflow; these
+/// are the four commands that cover it, in the order they are usually wanted.
+/// `cd` first, because every command defaults to the current directory.
+#[allow(clippy::print_stdout)]
+fn print_next_steps(dir: &Path) {
+    println!("\n   Next steps:");
+    println!("     cd {}", dir.display());
+    println!(
+        "     toboggan                    # build + serve, live reload → http://localhost:8080"
+    );
+    println!("     toboggan lint               # check the deck");
+    println!("     toboggan build -o out.html  # export a standalone page");
+    println!("\n   Settings live in toboggan.toml — every option is documented there.");
 }
 
 fn init_vcs(dir: &Path, vcs: Vcs) {

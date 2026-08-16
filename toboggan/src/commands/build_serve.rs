@@ -5,13 +5,16 @@ use super::deck::{build_talk, build_talk_lossy, resolve_deck};
 use crate::cli::DefaultArgs;
 
 /// Builds the folder in-memory and serves it, optionally watching for changes.
-pub(crate) async fn build_and_serve(args: DefaultArgs) -> anyhow::Result<()> {
+pub(crate) async fn build_and_serve(
+    args: DefaultArgs,
+    config: crate::config::Config,
+) -> anyhow::Result<()> {
     let crate::cli::ResolvedDefault {
         input,
         cli: mut cli_settings,
         server: mut server_settings,
         watch,
-    } = args.resolve()?;
+    } = args.resolve(config)?;
 
     // Resolve the slides folder and a sibling `public/` when the deck root is given.
     let deck = resolve_deck(&input);

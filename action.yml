@@ -50,7 +50,7 @@ runs:
 
     - name: Install Typst
       if: contains(inputs.outputs, 'pdf') || contains(inputs.outputs, 'thumbnails')
-      uses: typst-community/setup-typst@v4
+      uses: typst-community/setup-typst@v5
 
     - name: Build artifacts
       shell: bash
@@ -66,9 +66,9 @@ runs:
         IFS=',' read -ra kinds <<< "$OUTPUTS"
         for kind in "${kinds[@]}"; do
           case "$(echo "$kind" | xargs)" in
-            html)       toboggan build "$FOLDER" --output "$OUT_DIR/index.html" ;;
-            pdf)        toboggan pdf "$FOLDER" --output "$OUT_DIR/presentation.pdf" ;;
-            thumbnails) toboggan thumbnails "$FOLDER" --output "$OUT_DIR/overview" ;;
+            html)       toboggan build --path "$FOLDER" --output "$OUT_DIR/index.html" ;;
+            pdf)        toboggan pdf --path "$FOLDER" --output "$OUT_DIR/presentation.pdf" ;;
+            thumbnails) toboggan thumbnails --path "$FOLDER" --output "$OUT_DIR/overview" ;;
             "")         ;;
             # Without this arm a typo (`thumbnail`) produced nothing at all and
             # still exited 0, so the workflow "succeeded" with no artifacts.

@@ -38,10 +38,10 @@ riir-folder/
 
 ```bash
 # Build in memory and serve with live reload — open http://localhost:8080
-toboggan examples/riir-folder
+toboggan -p examples/riir-folder
 
 # Scaffold a brand-new deck (lays out the folder + a jj repo)
-toboggan new my-talk --title "My Talk"
+toboggan new --path my-talk --title "My Talk"
 ```
 
 The homepage links the live presentation (`/run`), the searchable thumbnail
@@ -51,15 +51,15 @@ overview (`/slides`), the bundled guide (`/guide`), and a PDF (`/download.pdf`).
 
 ```bash
 # Build to a file — the extension picks the format (toml/json/yaml/html/typst)
-toboggan build examples/riir-folder -o talk.toml
-toboggan build examples/riir-folder -o talk.html      # single self-contained file
+toboggan build --path examples/riir-folder -o talk.toml
+toboggan build --path examples/riir-folder -o talk.html      # single self-contained file
 
 # Lint the deck (CI gate with --deny; --json for tooling; --spell via `typos`)
-toboggan lint examples/riir-folder
+toboggan lint --path examples/riir-folder
 
 # Export a PDF and a per-slide overview (both need the `typst` binary)
-toboggan pdf examples/riir-folder
-toboggan thumbnails examples/riir-folder
+toboggan pdf --path examples/riir-folder
+toboggan thumbnails --path examples/riir-folder
 ```
 
 Serve a prebuilt `.toml` (e.g. the guide artifact) with assets:
@@ -75,8 +75,8 @@ Edit `toboggan-guide/slides/`, then rebuild the served artifact:
 
 ```bash
 cd examples/toboggan-guide
-mise run build      # toboggan build ./slides/ -o toboggan-guide.toml
-mise run dev        # toboggan ./slides/  (build + serve, live reload)
+mise run build      # toboggan build -p ./slides/ -o toboggan-guide.toml
+mise run dev        # toboggan -p ./slides/  (build + serve, live reload)
 ```
 
 The server also bundles this guide at `/guide` on any running deck.

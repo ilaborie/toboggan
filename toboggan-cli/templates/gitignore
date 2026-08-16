@@ -1,6 +1,9 @@
-# Generated presentation artifacts
+# Generated presentation artifacts. `toboggan build` writes the talk as
+# `<slug>.toml`, hence the blanket rule — the hand-written configs are re-added.
 *.toml
 !mise.toml
+!toboggan.toml
+!.toboggan.toml
 *.html
 *.pdf
 *.typ

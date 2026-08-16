@@ -8,11 +8,11 @@ classes = ["no_title", "wide"]
 The extension is auto-detected, or force it with `-f`:
 
 ```console
-$ toboggan build ./slides/ -o talk.toml      # default — served by the server
-$ toboggan build ./slides/ -o talk.json
-$ toboggan build ./slides/ -o talk.yaml
-$ toboggan build ./slides/ -o talk.html      # single self-contained file
-$ toboggan build ./slides/ -f typst -o talk.typ
+$ toboggan build -p ./slides/ -o talk.toml      # default — served by the server
+$ toboggan build -p ./slides/ -o talk.json
+$ toboggan build -p ./slides/ -o talk.yaml
+$ toboggan build -p ./slides/ -o talk.html      # single self-contained file
+$ toboggan build -p ./slides/ -f typst -o talk.typ
 ```
 
 <!-- pause -->

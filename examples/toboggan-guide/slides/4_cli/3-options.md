@@ -6,9 +6,9 @@ classes = ["no_title", "wide"]
 # Handy options
 
 ```console
-$ toboggan build ./slides/ --theme Monokai -o talk.toml
-$ toboggan build ./slides/ --no-counter   # don't auto-number parts/slides
-$ toboggan build ./slides/ --wpm 130      # tune the duration estimate
+$ toboggan build -p ./slides/ --theme Monokai -o talk.toml
+$ toboggan build -p ./slides/ --no-counter   # don't auto-number parts/slides
+$ toboggan build -p ./slides/ --wpm 130      # tune the duration estimate
 ```
 
 <!-- pause -->

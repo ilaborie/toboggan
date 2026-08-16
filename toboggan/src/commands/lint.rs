@@ -1,7 +1,7 @@
 use owo_colors::{OwoColorize, Stream};
-use toboggan_lint::{LintConfig, LintDiagnostic, LintReport, Severity};
+use toboggan_lint::{LintDiagnostic, LintReport, Severity};
 
-use crate::cli::{DenyLevel, LintArgs};
+use crate::cli::{DenyLevel, ResolvedLint};
 
 /// Lints a presentation folder, prints the report, and fails if any diagnostic
 /// meets the `--deny` threshold.
@@ -10,24 +10,19 @@ use crate::cli::{DenyLevel, LintArgs};
 /// Returns an error if the folder cannot be parsed, or if diagnostics reach the
 /// deny threshold.
 #[allow(clippy::print_stdout)]
-pub(crate) fn run_lint(args: LintArgs) -> anyhow::Result<()> {
-    let LintArgs {
+pub(crate) fn run_lint(resolved: ResolvedLint) -> anyhow::Result<()> {
+    let ResolvedLint {
         input,
+        mut settings,
         deny,
         json,
-        no_spell,
-        build,
-    } = args;
+        lint: config,
+    } = resolved;
 
     let slides = super::deck::resolve_deck(&input).slides;
-    let settings = build.into_cli_settings(slides.clone(), true);
+    settings.input = Some(slides.clone());
     let talk = super::deck::build_talk(&slides, &settings)?;
 
-    // Spell checking (`spelling/typo`) runs by default; `--no-spell` opts out.
-    let mut config = LintConfig::default();
-    if no_spell {
-        config.disable(toboggan_lint::ids::SPELLING_TYPO);
-    }
     let report = toboggan_lint::lint(&talk, &config);
 
     if json {

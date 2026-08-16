@@ -40,5 +40,5 @@ disabled_rules = ["html/img-missing-alt"]
 <!-- lint-disable html/raw-script pause/empty-step -->
 ```
 
-Use it from the unified CLI with `toboggan lint <folder>` (`--no-spell` opts out
+Use it from the unified CLI with `toboggan lint --path <folder>` (`--no-spell` opts out
 of spell checking).

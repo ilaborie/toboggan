@@ -27,7 +27,7 @@ jobs:
     name: Rust (fmt + clippy + nextest + doctests)
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # toboggan-server embeds `toboggan-web/dist` at compile time (RustEmbed),
       # and its build.rs fails if the folder is missing. That bundle is a
@@ -85,7 +85,7 @@ jobs:
       run:
         working-directory: toboggan-web/toboggan-wasm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Same ordering rule as the `rust` job: nightly first so stable ends up
       # the default toolchain, with every command pinning its own anyway.

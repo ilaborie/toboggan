@@ -57,9 +57,11 @@ hidden_in = ["pdf"]      # exclude from a render target (web | pdf)
 ## CLI
 
 - `toboggan <folder>` — build + serve with live reload (the default action).
-- `toboggan build ./slides -o talk.toml` — build to toml/json/yaml/html/typst.
-- `toboggan lint ./slides` — lint the deck.
-- `toboggan pdf ./slides` / `toboggan thumbnails ./slides` — PDF / overview.
+- `toboggan build -p ./slides -o talk.toml` — build to toml/json/yaml/html/typst.
+- `toboggan lint -p ./slides` — lint the deck.
+- `toboggan pdf -p ./slides` / `toboggan thumbnails -p ./slides` — PDF / overview.
+- `--path`/`-p` defaults to the current directory, so from the deck root the
+  bare command is enough (`toboggan lint`).
 
 ## Quality
 

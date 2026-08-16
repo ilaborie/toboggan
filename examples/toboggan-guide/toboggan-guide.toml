@@ -1,5 +1,5 @@
 title = "Toboggan — User Guide"
-date = "2026-06-13"
+date = "2026-08-16"
 footer = """
 <style>
   /* Rendered inside the footer's shadow root, so styles are scoped to :host.
@@ -824,6 +824,9 @@ Embed a real PTY in a slide. Syntax:
 <!-- term: . | bacon test -->         # run a command on connect
 ```
 
+Add the `term-50vh` class to pin the terminal pane to half the viewport height
+(this slide uses it) — otherwise it fills the space left below the content.
+
 The terminal below is **live** — click it and type:
 """
 
@@ -831,6 +834,7 @@ The terminal below is **live** — click it and type:
 classes = [
     "no_title",
     "wide",
+    "term-50vh",
 ]
 
 [slides.title]
@@ -846,6 +850,8 @@ raw = """
 </span><span style="color:#a7adba;">&lt;!-- term: ./src :light --&gt;</span><span style="color:#4f5b66;">           # light theme
 </span><span style="color:#4f5b66;">&lt;!-- term: . | bacon test --&gt;         # run a command on connect
 </span></code></pre>
+<p>Add the <code>term-50vh</code> class to pin the terminal pane to half the viewport height
+(this slide uses it) — otherwise it fills the space left below the content.</p>
 <p>The terminal below is <strong>live</strong> — click it and type:</p>
 """
 alt = """
@@ -859,6 +865,9 @@ Embed a real PTY in a slide. Syntax:
 <!-- term: . | bacon test -->         # run a command on connect
 ```
 
+Add the `term-50vh` class to pin the terminal pane to half the viewport height
+(this slide uses it) — otherwise it fills the space left below the content.
+
 The terminal below is **live** — click it and type:
 """
 
@@ -866,6 +875,7 @@ The terminal below is **live** — click it and type:
 classes = [
     "no_title",
     "wide",
+    "term-50vh",
 ]
 
 [slides.notes]
@@ -873,18 +883,23 @@ type = "Html"
 raw = """
 <p>Multiple <code>term</code> comments on one slide render side by side. The shell is chosen
 by the server's --shell flag. The fenced examples above stay as text; the bare
-one below is a working terminal.</p>
+one below is a working terminal. <code>term-50vh</code> fixes the pane at 50vh so it does
+not push past the slide; without it the terminal flexes to fill the remaining
+height.</p>
 """
 alt = """
 Multiple `term` comments on one slide render side by side. The shell is chosen
 by the server's --shell flag. The fenced examples above stay as text; the bare
-one below is a working terminal.
+one below is a working terminal. `term-50vh` fixes the pane at 50vh so it does
+not push past the slide; without it the terminal flexes to fill the remaining
+height.
 """
 
 [slides.notes.style]
 classes = [
     "no_title",
     "wide",
+    "term-50vh",
 ]
 
 [[slides.terminals]]
@@ -1125,6 +1140,7 @@ Set `classes` in frontmatter to change a slide's layout:
 | `cover` | Cover/title styling |
 | `spread-steps` | Distribute steps evenly down the slide |
 | `step-line-through` | Strike out earlier steps as you advance |
+| `term-50vh` | Pin an embedded terminal pane to half the viewport height |
 
 This slide uses `step-line-through`…
 
@@ -1181,6 +1197,10 @@ raw = """
 <td><code>step-line-through</code></td>
 <td>Strike out earlier steps as you advance</td>
 </tr>
+<tr>
+<td><code>term-50vh</code></td>
+<td>Pin an embedded terminal pane to half the viewport height</td>
+</tr>
 </tbody>
 </table>
 
@@ -1209,6 +1229,7 @@ Set `classes` in frontmatter to change a slide's layout:
 | `cover` | Cover/title styling |
 | `spread-steps` | Distribute steps evenly down the slide |
 | `step-line-through` | Strike out earlier steps as you advance |
+| `term-50vh` | Pin an embedded terminal pane to half the viewport height |
 
 This slide uses `step-line-through`…
 
@@ -1517,14 +1538,14 @@ body_source = '''
 # Convert a folder
 
 ```console
-$ toboggan build ./slides/ -o my-talk.toml
+$ toboggan build -p ./slides/ -o my-talk.toml
 ✅ Successfully wrote 12 slides to my-talk.toml
 ```
 
 Override metadata without touching the files:
 
 ```console
-$ toboggan build ./slides/ \
+$ toboggan build -p ./slides/ \
     --title "My Conference Talk" \
     --date 2026-09-15 \
     -o my-talk.toml
@@ -1554,13 +1575,13 @@ text = "4.1 Convert a folder"
 type = "Html"
 raw = '''
 <h1>Convert a folder</h1>
-<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan build ./slides/ -o my-talk.toml
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan build -p ./slides/ -o my-talk.toml
 </span><span style="color:#4f5b66;">✅ Successfully wrote 12 slides to my-talk.toml
 </span></code></pre>
 
 <div class="step step-0"><!-- begin step -->
 <p>Override metadata without touching the files:</p>
-<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan build ./slides/ \
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan build -p ./slides/ \
 </span><span style="color:#4f5b66;">    --title &quot;My Conference Talk&quot; \
 </span><span style="color:#4f5b66;">    --date 2026-09-15 \
 </span><span style="color:#4f5b66;">    -o my-talk.toml
@@ -1600,14 +1621,14 @@ alt = '''
 # Convert a folder
 
 ```console
-$ toboggan build ./slides/ -o my-talk.toml
+$ toboggan build -p ./slides/ -o my-talk.toml
 ✅ Successfully wrote 12 slides to my-talk.toml
 ```
 
 Override metadata without touching the files:
 
 ```console
-$ toboggan build ./slides/ \
+$ toboggan build -p ./slides/ \
     --title "My Conference Talk" \
     --date 2026-09-15 \
     -o my-talk.toml
@@ -1637,11 +1658,11 @@ body_source = """
 The extension is auto-detected, or force it with `-f`:
 
 ```console
-$ toboggan build ./slides/ -o talk.toml      # default — served by the server
-$ toboggan build ./slides/ -o talk.json
-$ toboggan build ./slides/ -o talk.yaml
-$ toboggan build ./slides/ -o talk.html      # single self-contained file
-$ toboggan build ./slides/ -f typst -o talk.typ
+$ toboggan build -p ./slides/ -o talk.toml      # default — served by the server
+$ toboggan build -p ./slides/ -o talk.json
+$ toboggan build -p ./slides/ -o talk.yaml
+$ toboggan build -p ./slides/ -o talk.html      # single self-contained file
+$ toboggan build -p ./slides/ -f typst -o talk.typ
 ```
 
 | Format | Use it for |
@@ -1667,11 +1688,11 @@ type = "Html"
 raw = """
 <h1>Five output formats</h1>
 <p>The extension is auto-detected, or force it with <code>-f</code>:</p>
-<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan build ./slides/ -o talk.toml      # default — served by the server
-</span><span style="color:#4f5b66;">$ toboggan build ./slides/ -o talk.json
-</span><span style="color:#4f5b66;">$ toboggan build ./slides/ -o talk.yaml
-</span><span style="color:#4f5b66;">$ toboggan build ./slides/ -o talk.html      # single self-contained file
-</span><span style="color:#4f5b66;">$ toboggan build ./slides/ -f typst -o talk.typ
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan build -p ./slides/ -o talk.toml      # default — served by the server
+</span><span style="color:#4f5b66;">$ toboggan build -p ./slides/ -o talk.json
+</span><span style="color:#4f5b66;">$ toboggan build -p ./slides/ -o talk.yaml
+</span><span style="color:#4f5b66;">$ toboggan build -p ./slides/ -o talk.html      # single self-contained file
+</span><span style="color:#4f5b66;">$ toboggan build -p ./slides/ -f typst -o talk.typ
 </span></code></pre>
 
 <div class="step step-0"><!-- begin step -->
@@ -1709,11 +1730,11 @@ alt = """
 The extension is auto-detected, or force it with `-f`:
 
 ```console
-$ toboggan build ./slides/ -o talk.toml      # default — served by the server
-$ toboggan build ./slides/ -o talk.json
-$ toboggan build ./slides/ -o talk.yaml
-$ toboggan build ./slides/ -o talk.html      # single self-contained file
-$ toboggan build ./slides/ -f typst -o talk.typ
+$ toboggan build -p ./slides/ -o talk.toml      # default — served by the server
+$ toboggan build -p ./slides/ -o talk.json
+$ toboggan build -p ./slides/ -o talk.yaml
+$ toboggan build -p ./slides/ -o talk.html      # single self-contained file
+$ toboggan build -p ./slides/ -f typst -o talk.typ
 ```
 
 | Format | Use it for |
@@ -1736,9 +1757,9 @@ body_source = """
 # Handy options
 
 ```console
-$ toboggan build ./slides/ --theme Monokai -o talk.toml
-$ toboggan build ./slides/ --no-counter   # don't auto-number parts/slides
-$ toboggan build ./slides/ --wpm 130      # tune the duration estimate
+$ toboggan build -p ./slides/ --theme Monokai -o talk.toml
+$ toboggan build -p ./slides/ --no-counter   # don't auto-number parts/slides
+$ toboggan build -p ./slides/ --wpm 130      # tune the duration estimate
 ```
 
 Every build prints a **stats report** — word counts, per-part breakdown, and
@@ -1769,9 +1790,9 @@ text = "4.3 Handy options"
 type = "Html"
 raw = """
 <h1>Handy options</h1>
-<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan build ./slides/ --theme Monokai -o talk.toml
-</span><span style="color:#4f5b66;">$ toboggan build ./slides/ --no-counter   # don&#39;t auto-number parts/slides
-</span><span style="color:#4f5b66;">$ toboggan build ./slides/ --wpm 130      # tune the duration estimate
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan build -p ./slides/ --theme Monokai -o talk.toml
+</span><span style="color:#4f5b66;">$ toboggan build -p ./slides/ --no-counter   # don&#39;t auto-number parts/slides
+</span><span style="color:#4f5b66;">$ toboggan build -p ./slides/ --wpm 130      # tune the duration estimate
 </span></code></pre>
 
 <div class="step step-0"><!-- begin step -->
@@ -1792,9 +1813,9 @@ alt = """
 # Handy options
 
 ```console
-$ toboggan build ./slides/ --theme Monokai -o talk.toml
-$ toboggan build ./slides/ --no-counter   # don't auto-number parts/slides
-$ toboggan build ./slides/ --wpm 130      # tune the duration estimate
+$ toboggan build -p ./slides/ --theme Monokai -o talk.toml
+$ toboggan build -p ./slides/ --no-counter   # don't auto-number parts/slides
+$ toboggan build -p ./slides/ --wpm 130      # tune the duration estimate
 ```
 
 Every build prints a **stats report** — word counts, per-part breakdown, and
@@ -1826,7 +1847,7 @@ Point `toboggan` at a folder and it **builds in memory and serves** — with liv
 reload as you edit. No intermediate file, no second process:
 
 ```console
-$ toboggan ./slides/
+$ toboggan -p ./slides/
    build + serve  http://localhost:8080
 ```
 
@@ -1840,7 +1861,7 @@ The homepage at `/` links every view of the deck:
 | `/download.pdf` | A PDF handout, rendered on demand |
 
 > [!TIP]
-> Scaffold a fresh deck with `toboggan new my-talk` — it lays out the folder and
+> Scaffold a fresh deck with `toboggan new -p my-talk` — it lays out the folder and
 > initializes a `jj` repo.
 """
 
@@ -1860,7 +1881,7 @@ raw = """
 <h1>One command for everything</h1>
 <p>Point <code>toboggan</code> at a folder and it <strong>builds in memory and serves</strong> — with live
 reload as you edit. No intermediate file, no second process:</p>
-<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan ./slides/
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan -p ./slides/
 </span><span style="color:#4f5b66;">   build + serve  http://localhost:8080
 </span></code></pre>
 
@@ -1894,7 +1915,7 @@ reload as you edit. No intermediate file, no second process:</p>
 </table>
 <div class="markdown-alert markdown-alert-tip">
 <p class="markdown-alert-title">Tip</p>
-<p>Scaffold a fresh deck with <code>toboggan new my-talk</code> — it lays out the folder and
+<p>Scaffold a fresh deck with <code>toboggan new -p my-talk</code> — it lays out the folder and
 initializes a <code>jj</code> repo.</p>
 </div>
 </div><!-- end step -->
@@ -1906,7 +1927,7 @@ Point `toboggan` at a folder and it **builds in memory and serves** — with liv
 reload as you edit. No intermediate file, no second process:
 
 ```console
-$ toboggan ./slides/
+$ toboggan -p ./slides/
    build + serve  http://localhost:8080
 ```
 
@@ -1920,7 +1941,7 @@ The homepage at `/` links every view of the deck:
 | `/download.pdf` | A PDF handout, rendered on demand |
 
 > [!TIP]
-> Scaffold a fresh deck with `toboggan new my-talk` — it lays out the folder and
+> Scaffold a fresh deck with `toboggan new -p my-talk` — it lays out the folder and
 > initializes a `jj` repo.
 """
 
@@ -1939,7 +1960,7 @@ body_source = """
 section dividers, nested steps, images without `alt`, oversized slides, and more:
 
 ```console
-$ toboggan lint ./slides/
+$ toboggan lint -p ./slides/
   warning  content/excessive-words   slide 7 — 142 words (max 120)
   error    html/nested-step          slide 12 — nested `.step`
 ```
@@ -1948,7 +1969,7 @@ $ toboggan lint ./slides/
 | --- | --- |
 | `--deny <level>` | Exit non-zero at/above `info`/`warning`/`error` (CI gates) |
 | `--json` | Emit a machine-readable `LintReport` |
-| `--spell` | Also spell-check via the `typos` binary |
+| `--no-spell` | Skip spell-checking (it runs by default via the `typos` binary) |
 
 > [!TIP]
 > The linter is a library (`toboggan-lint`) — the same rules power the MCP
@@ -1971,7 +1992,7 @@ raw = """
 <h1>Lint the deck</h1>
 <p><code>toboggan lint</code> runs a set of rules over the parsed talk — catching pauses in
 section dividers, nested steps, images without <code>alt</code>, oversized slides, and more:</p>
-<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan lint ./slides/
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan lint -p ./slides/
 </span><span style="color:#4f5b66;">  warning  content/excessive-words   slide 7 — 142 words (max 120)
 </span><span style="color:#4f5b66;">  error    html/nested-step          slide 12 — nested `.step`
 </span></code></pre>
@@ -1994,8 +2015,8 @@ section dividers, nested steps, images without <code>alt</code>, oversized slide
 <td>Emit a machine-readable <code>LintReport</code></td>
 </tr>
 <tr>
-<td><code>--spell</code></td>
-<td>Also spell-check via the <code>typos</code> binary</td>
+<td><code>--no-spell</code></td>
+<td>Skip spell-checking (it runs by default via the <code>typos</code> binary)</td>
 </tr>
 </tbody>
 </table>
@@ -2013,7 +2034,7 @@ alt = """
 section dividers, nested steps, images without `alt`, oversized slides, and more:
 
 ```console
-$ toboggan lint ./slides/
+$ toboggan lint -p ./slides/
   warning  content/excessive-words   slide 7 — 142 words (max 120)
   error    html/nested-step          slide 12 — nested `.step`
 ```
@@ -2022,7 +2043,7 @@ $ toboggan lint ./slides/
 | --- | --- |
 | `--deny <level>` | Exit non-zero at/above `info`/`warning`/`error` (CI gates) |
 | `--json` | Emit a machine-readable `LintReport` |
-| `--spell` | Also spell-check via the `typos` binary |
+| `--no-spell` | Skip spell-checking (it runs by default via the `typos` binary) |
 
 > [!TIP]
 > The linter is a library (`toboggan-lint`) — the same rules power the MCP
