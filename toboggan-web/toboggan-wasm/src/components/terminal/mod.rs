@@ -199,6 +199,11 @@ impl WasmElement for TobogganTerminalElement {
             create_and_append_element(&root, "div"),
             "create terminal container"
         );
+        // Sized explicitly rather than left to inherit the host's layout: an
+        // unclassed wrapper is only stretched to the host when the host is a
+        // flex container, and any outer rule setting `display` on the host wins
+        // over `:host`, so that is not something this component can rely on.
+        container.set_class_name("terminal-container");
 
         self.container = Some(container);
     }
