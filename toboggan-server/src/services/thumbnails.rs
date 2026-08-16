@@ -26,7 +26,12 @@ pub(crate) struct ThumbnailService {
 /// The service state plus an `epoch` that is bumped on every [`invalidate`]
 /// (a reload). A generation captures the epoch at its start and only commits its
 /// result if the epoch is still current, so a reload mid-generation can never
-/// publish stale thumbnails or discard the fresh render.
+/// publish stale thumbnails.
+///
+/// The guard is one-directional: a reload landing between the epoch capture and
+/// the talk read makes a *fresh* generation look stale and discards it too. That
+/// is the safe way round — the next request regenerates — and matches the PDF
+/// cache's guard in `crate::state`.
 ///
 /// [`invalidate`]: ThumbnailService::invalidate
 struct Inner {
@@ -69,7 +74,9 @@ const OVERVIEW_ENTRY: &str = "overview.html";
 pub(crate) enum AssetLookup {
     /// The asset was read from the overview directory.
     Found(Vec<u8>),
-    /// Thumbnails are ready, but this asset is not among them.
+    /// The asset cannot be served: either the thumbnails are ready and it is not
+    /// among them, or its path was rejected for trying to escape the cache
+    /// directory. Both answer `404`.
     Missing,
     /// Thumbnails are not ready — regenerating after a reload, or unavailable.
     NotReady,
@@ -116,14 +123,23 @@ impl ThumbnailService {
 
     /// Resets to [`ThumbState::Idle`] so the next request regenerates after a
     /// talk reload, and bumps the epoch so any in-flight generation discards its
-    /// (now stale) result. An externally-supplied directory is kept as the source.
+    /// (now stale) result.
+    ///
+    /// An externally-supplied directory (`--thumbnails-dir`) is kept as the
+    /// source — the operator owns its contents and we must not replace them with
+    /// a generated set — but the epoch is still bumped so an in-flight generation
+    /// cannot commit over it.
+    ///
+    /// A previous [`ThumbState::Unavailable`] is cleared: the reason is usually
+    /// "`typst` is missing", and pinning that for the process lifetime meant
+    /// installing `typst` and reloading never recovered.
     pub(crate) async fn invalidate(&self) {
         let mut inner = self.inner.write().await;
+        inner.epoch = inner.epoch.wrapping_add(1);
         if matches!(&inner.state, ThumbState::Ready(Source::External(_))) {
             return;
         }
         inner.state = ThumbState::Idle;
-        inner.epoch = inner.epoch.wrapping_add(1);
     }
 
     /// Ensures generation is underway (using `talk_service`) and reports status.
@@ -165,14 +181,25 @@ impl ThumbnailService {
             .split('/')
             .any(|segment| segment == ".." || segment.is_empty())
         {
+            warn!(rel, "rejected overview asset path that escapes the cache");
             return AssetLookup::Missing;
         }
         let inner = self.inner.read().await;
         match &inner.state {
-            ThumbState::Ready(source) => match tokio::fs::read(source.path().join(rel)).await {
-                Ok(bytes) => AssetLookup::Found(bytes),
-                Err(_) => AssetLookup::Missing,
-            },
+            ThumbState::Ready(source) => {
+                let path = source.path().join(rel);
+                match tokio::fs::read(&path).await {
+                    Ok(bytes) => AssetLookup::Found(bytes),
+                    // A genuinely absent asset is routine (the browser probing),
+                    // but a permission or I/O error looks identical to the caller,
+                    // so it is logged rather than silently flattened to a 404.
+                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => AssetLookup::Missing,
+                    Err(err) => {
+                        error!(path = %path.display(), "reading overview asset: {err}");
+                        AssetLookup::Missing
+                    }
+                }
+            }
             _ => AssetLookup::NotReady,
         }
     }

@@ -70,10 +70,7 @@ const GENERATING_PAGE: &str = r#"<!doctype html>
 </html>"#;
 
 fn unavailable_page(reason: &str) -> String {
-    let reason = reason
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;");
+    let reason = super::escape(reason);
     format!(
         r#"<!doctype html>
 <html lang="en">

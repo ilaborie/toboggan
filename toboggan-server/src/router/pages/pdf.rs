@@ -1,3 +1,4 @@
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 
@@ -20,11 +21,15 @@ pub(crate) async fn download_pdf(State(state): State<TobogganState>) -> Response
         return pdf_response(&cached.bytes, &cached.slug);
     }
 
-    // Read the epoch before the talk: a reload in between then makes the epoch
-    // stale, so the render is discarded rather than published as the current
-    // deck's PDF. The reverse order could pair an old talk with a fresh epoch.
-    let epoch = state.pdf_epoch().await;
-    let talk = state.talk().await;
+    // Only one render at a time; everyone else waits here rather than starting
+    // their own `typst` process.
+    let _permit = state.pdf_render_permit().await;
+    // Re-check: the render we queued behind has almost certainly filled the cache.
+    if let Some(cached) = state.cached_pdf().await {
+        return pdf_response(&cached.bytes, &cached.slug);
+    }
+
+    let (epoch, talk) = state.pdf_render_input().await;
     let slug: Arc<str> = Arc::from(slugify(&talk.title));
     match render_pdf(talk).await {
         Ok(bytes) => {
@@ -67,26 +72,64 @@ fn pdf_response(bytes: &[u8], slug: &str) -> Response {
 async fn render_pdf(talk: Talk) -> anyhow::Result<Vec<u8>> {
     let typst_source = toboggan_cli::output::serialize_talk(&talk, OutputFormat::Typst)
         .map_err(|err| anyhow::anyhow!("{err}"))?;
-    tokio::task::spawn_blocking(move || compile_typst(&typst_source)).await?
+    // Compile with the deck as the project root so slides that reference
+    // `../public/...` images resolve; without it typst rejects each one and the
+    // whole download fails with a bare exit status.
+    let root = toboggan_cli::output::deck_root(&talk);
+    let slides = talk.source_dir.as_deref().map(PathBuf::from);
+    tokio::task::spawn_blocking(move || {
+        compile_typst(&typst_source, root.as_deref(), slides.as_deref())
+    })
+    .await?
 }
 
-fn compile_typst(source: &[u8]) -> anyhow::Result<Vec<u8>> {
+fn compile_typst(
+    source: &[u8],
+    root: Option<&Path>,
+    slides: Option<&Path>,
+) -> anyhow::Result<Vec<u8>> {
     let dir = tempfile::tempdir()?;
-    let input = dir.path().join("talk.typ");
+    // Beside the slides when the deck came from a folder, so a slide's relative
+    // `#image("../public/…")` resolves as authored; a temp dir otherwise.
+    let input = slides.map_or_else(
+        || dir.path().join("talk.typ"),
+        |slides| slides.join(".toboggan-download.typ"),
+    );
     let output = dir.path().join("talk.pdf");
     std::fs::write(&input, source)?;
 
-    let status = Command::new("typst")
-        .arg("compile")
+    let mut command = Command::new("typst");
+    command.arg("compile");
+    if let Some(root) = root {
+        command.arg("--root").arg(root);
+    }
+    let result = command
         .arg(&input)
         .arg(&output)
-        .status()
+        .output()
         .map_err(|err| anyhow::anyhow!("could not run `typst`: {err}"))?;
-    if !status.success() {
-        anyhow::bail!("`typst compile` failed with status {status}");
+    cleanup_input(&input, slides);
+    if !result.status.success() {
+        // Include typst's own diagnostics: a bare exit status left the user with
+        // nothing to act on.
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        anyhow::bail!(
+            "`typst compile` failed ({}): {}",
+            result.status,
+            stderr.trim()
+        );
     }
 
     Ok(std::fs::read(&output)?)
+}
+
+/// Removes the intermediate `.typ` when it was written into the deck.
+fn cleanup_input(input: &Path, slides: Option<&Path>) {
+    if slides.is_some()
+        && let Err(err) = std::fs::remove_file(input)
+    {
+        tracing::debug!("could not remove {}: {err}", input.display());
+    }
 }
 
 fn slugify(title: &str) -> String {

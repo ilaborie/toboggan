@@ -44,7 +44,6 @@ pub fn routes_with_cors(
                 .route("/ws", get(ws::websocket_handler))
                 .route("/terminal", get(terminal_ws::terminal_websocket_handler)),
         )
-        .layer(TraceLayer::new_for_http())
         .route("/health", get(health))
         // Server-rendered pages: landing page, the run/present app, the guide,
         // and the on-demand PDF download.
@@ -56,8 +55,7 @@ pub fn routes_with_cors(
         // Slide overview: lazily generated on first hit, served from the cache.
         .route("/slides", get(pages::overview::slides_page))
         .route("/overview/{*path}", get(pages::overview::overview_asset))
-        .merge(Scalar::with_url("/doc", openapi))
-        .layer(cors);
+        .merge(Scalar::with_url("/doc", openapi));
 
     // Add local assets directory if provided (for presentation images/files)
     // Use /public to avoid conflict with embedded web assets
@@ -69,7 +67,11 @@ pub fn routes_with_cors(
     // The `/` and `/run` routes own the HTML entry points.
     router = router.fallback(serve_embedded_web_assets);
 
-    router
+    // Layers last, so they wrap every route above. `.layer()` only applies to
+    // routes registered *before* it: with the tracing layer sitting up by `/api`,
+    // none of the pages, `/public`, or the fallback were traced, and CORS missed
+    // the last two as well.
+    router.layer(cors).layer(TraceLayer::new_for_http())
 }
 
 /// Serves the deck's own `public/` directory, always revalidated.
@@ -99,9 +101,10 @@ where
 
 /// Serves a real embedded web asset file (hashed JS/CSS, favicon, manifest).
 ///
-/// Unlike the previous behavior, this no longer falls back to `index.html` for
-/// unknown paths — the `/` (homepage) and `/run` (present app) routes own the
-/// HTML entry points, so unmatched paths return `404`.
+/// The `/` (homepage) and `/run` (present app) routes own the HTML entry points,
+/// so this serves only real asset files and returns `404` for anything else —
+/// never an `index.html` fallback, which would answer a mistyped asset URL with
+/// a page instead of an error.
 async fn serve_embedded_web_assets(uri: Uri) -> Response {
     let path = uri.path().trim_start_matches('/');
     match static_assets::WebAppAssets::get(path) {

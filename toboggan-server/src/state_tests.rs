@@ -222,10 +222,9 @@ mod tests {
         let talk = create_test_talk();
         let state = create_test_state(talk);
 
-        // Go to last slide (from Init this will go to first slide)
-        state.handle_command(&Command::Last).await;
-
-        // Navigate to last slide properly
+        // One `Last` is enough: from `Init` it transitions straight to `Running`
+        // at `total_slides - 1` (see `test_last_command`). The second call this
+        // used to make was there for a first-slide step that does not exist.
         state.handle_command(&Command::Last).await;
 
         // Try to go next from last slide
@@ -389,7 +388,7 @@ mod tests {
         let state = create_test_state(create_test_talk());
 
         // A render captures the epoch, then a reload lands before it finishes.
-        let epoch = state.pdf_epoch().await;
+        let epoch = state.pdf_render_input().await.0;
         state
             .reload_talk(create_test_talk().add_slide(Slide::new("Fourth Slide")))
             .await
@@ -411,7 +410,7 @@ mod tests {
         );
 
         // A render that started after the reload still commits.
-        let epoch = state.pdf_epoch().await;
+        let epoch = state.pdf_render_input().await.0;
         state
             .store_pdf(
                 epoch,

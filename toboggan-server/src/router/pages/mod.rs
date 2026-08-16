@@ -12,6 +12,7 @@ use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Response};
 use toboggan_cli::OutputFormat;
 use toboggan_core::{SlideKind, Talk};
+use tracing::error;
 
 use crate::services::TalkService;
 
@@ -32,12 +33,25 @@ pub(super) async fn run_app() -> Response {
 }
 
 /// Serves the packaged user guide at `/guide`, rendered once and cached.
+///
+/// A render failure is logged and answered `500` rather than cached as a
+/// success: caching it pinned the error page for the process lifetime, and
+/// returning `200` hid the failure from both the operator's logs and any HTTP
+/// monitoring.
 pub(super) async fn guide() -> Response {
-    static GUIDE_HTML: OnceLock<String> = OnceLock::new();
-    let html = GUIDE_HTML.get_or_init(|| {
-        render_guide().unwrap_or_else(|err| format!("<h1>Guide unavailable</h1><p>{err}</p>"))
-    });
-    Html(html.clone()).into_response()
+    static GUIDE_HTML: OnceLock<Result<String, String>> = OnceLock::new();
+    match GUIDE_HTML.get_or_init(|| render_guide().map_err(|err| err.to_string())) {
+        // `&'static str` from the `OnceLock`, so serving it costs no copy.
+        Ok(html) => Html(html.as_str()).into_response(),
+        Err(err) => {
+            error!("guide render failed: {err}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Html(format!("<h1>Guide unavailable</h1><p>{err}</p>")),
+            )
+                .into_response()
+        }
+    }
 }
 
 /// Serves the guide's bundled `public/` assets (CSS, fonts, images) at
@@ -135,7 +149,11 @@ fn render_homepage(talk: &Talk) -> String {
     )
 }
 
-fn escape(text: &str) -> String {
+/// Escapes the three characters that would break out of HTML text content.
+///
+/// Shared with [`overview`], which renders the same kind of server-side error
+/// page.
+pub(super) fn escape(text: &str) -> String {
     text.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")

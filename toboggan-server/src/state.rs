@@ -52,6 +52,8 @@ pub struct TobogganState {
     terminal_shell: Arc<str>,
     /// Lazily-rendered PDF of the current talk, invalidated on reload.
     pdf_cache: Arc<RwLock<PdfCache>>,
+    /// Held for the duration of a PDF render so only one runs at a time.
+    pdf_render_lock: Arc<tokio::sync::Mutex<()>>,
     /// Lazily-generated slide-overview thumbnails, invalidated on reload.
     thumbnail_service: ThumbnailService,
 }
@@ -70,13 +72,9 @@ impl TobogganState {
             client_service,
             terminal_shell,
             pdf_cache: Arc::new(RwLock::new(PdfCache::default())),
+            pdf_render_lock: Arc::new(tokio::sync::Mutex::new(())),
             thumbnail_service: ThumbnailService::new(),
         }
-    }
-
-    /// Returns a clone of the current talk.
-    pub(crate) async fn talk(&self) -> Talk {
-        self.talk_service.talk().await
     }
 
     /// Returns the cached rendered PDF, if any.
@@ -84,10 +82,26 @@ impl TobogganState {
         self.pdf_cache.read().await.rendered.clone()
     }
 
-    /// The current PDF epoch. Capture this *before* reading the talk to render,
-    /// so any reload that races the render is guaranteed to invalidate it.
-    pub(crate) async fn pdf_epoch(&self) -> u64 {
-        self.pdf_cache.read().await.epoch
+    /// The inputs for one PDF render: the epoch to commit under, and the talk.
+    ///
+    /// Returned together so the ordering cannot be got wrong. The epoch must be
+    /// read *before* the talk: a reload in between then leaves the epoch stale
+    /// and the render is discarded, whereas the reverse order would pair an old
+    /// talk with a fresh epoch and cache a stale PDF as current.
+    pub(crate) async fn pdf_render_input(&self) -> (u64, Talk) {
+        let epoch = self.pdf_cache.read().await.epoch;
+        (epoch, self.talk_service.talk().await)
+    }
+
+    /// Waits for the right to render the PDF.
+    ///
+    /// `typst` compilation is expensive and runs on the blocking pool, so
+    /// without this every request arriving before the first render committed
+    /// started its own — 30 cold requests meant 30 `typst` children and 30 full
+    /// PDFs in memory. Holders re-check the cache after acquiring: the usual
+    /// outcome is that the first renderer filled it while they waited.
+    pub(crate) async fn pdf_render_permit(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.pdf_render_lock.lock().await
     }
 
     /// Stores a rendered PDF, unless a reload has happened since `epoch` was
