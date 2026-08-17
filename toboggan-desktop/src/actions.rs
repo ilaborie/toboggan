@@ -59,8 +59,12 @@ pub(crate) const HELP_GROUPS: &[(&str, &[AppAction])] = &[
 impl AppAction {
     pub(crate) fn from_key(key: &Key, modifiers: Modifiers) -> Option<Self> {
         let action = match key {
-            Key::Named(Named::Space | Named::ArrowDown) => Self::NextStep,
-            Key::Named(Named::ArrowUp) => Self::PreviousStep,
+            // PageDown/PageUp/Backspace are what a presenter remote emits, and
+            // they drive *steps*: `NextStep` moves on to the next slide once a
+            // slide's reveals run out, so the remote walks the whole deck,
+            // whereas `NextSlide` would skip every reveal on the way.
+            Key::Named(Named::Space | Named::ArrowDown | Named::PageDown) => Self::NextStep,
+            Key::Named(Named::ArrowUp | Named::PageUp | Named::Backspace) => Self::PreviousStep,
             Key::Named(Named::ArrowRight) => Self::Next,
             Key::Named(Named::ArrowLeft) => Self::Previous,
             Key::Named(Named::Home) => Self::First,
@@ -116,8 +120,10 @@ impl AppAction {
             Self::Previous => ActionDetails::new(&["←"], "Previous slide"),
             Self::Next => ActionDetails::new(&["→"], "Next slide"),
             Self::Last => ActionDetails::new(&["End"], "Last slide"),
-            Self::PreviousStep => ActionDetails::new(&["↑"], "Previous step"),
-            Self::NextStep => ActionDetails::new(&["↓", "Space"], "Next step"),
+            Self::PreviousStep => {
+                ActionDetails::new(&["↑", "PageUp", "Backspace"], "Previous step")
+            }
+            Self::NextStep => ActionDetails::new(&["↓", "Space", "PageDown"], "Next step"),
             Self::Blink => ActionDetails::new(&["b"], "Bell or blink"),
             Self::ToggleHelp => ActionDetails::new(&["h", "?"], "Toggle this help"),
             Self::ToggleSidebar => ActionDetails::new(&["s"], "Toggle sidebar"),
@@ -162,6 +168,9 @@ mod tests {
                         "↑" => Key::Named(Named::ArrowUp),
                         "↓" => Key::Named(Named::ArrowDown),
                         "Space" => Key::Named(Named::Space),
+                        "PageUp" => Key::Named(Named::PageUp),
+                        "PageDown" => Key::Named(Named::PageDown),
+                        "Backspace" => Key::Named(Named::Backspace),
                         "Esc" => Key::Named(Named::Escape),
                         "F11" => Key::Named(Named::F11),
                         // Modified and multi-key shortcuts carry their modifier

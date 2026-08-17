@@ -7,7 +7,7 @@ use crate::message::Message;
 use crate::widgets::{create_muted_text, create_text};
 
 /// Width of the key column, wide enough for the longest label pair.
-const KEYS_WIDTH: f32 = 140.0;
+const KEYS_WIDTH: f32 = 180.0;
 
 pub(super) fn view() -> Element<'static, Message> {
     let mut help_content = column![create_text("Toboggan Desktop Help", 24.0)];

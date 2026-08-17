@@ -43,9 +43,12 @@ impl AppAction {
             KeyCode::Char('q' | 'Q') => Self::Quit,
             KeyCode::Char('c') if event.modifiers.contains(KeyModifiers::CONTROL) => Self::Quit,
             KeyCode::Char('h' | 'H' | '?') => Self::Help,
-            // Step navigation: Space, Down, Up
-            KeyCode::Down | KeyCode::Char(' ') => Self::NextStep,
-            KeyCode::Up => Self::PreviousStep,
+            // Step navigation: Space, Down, Up — plus what a presenter remote
+            // emits. The remote drives *steps*, not slides: `NextStep` moves on
+            // to the next slide once a slide's reveals run out, so it walks the
+            // whole deck, whereas `NextSlide` would skip every reveal.
+            KeyCode::Down | KeyCode::Char(' ') | KeyCode::PageDown => Self::NextStep,
+            KeyCode::Up | KeyCode::PageUp | KeyCode::Backspace => Self::PreviousStep,
             // Slide navigation: Left, Right
             KeyCode::Left => Self::Previous,
             KeyCode::Right => Self::Next,
@@ -90,8 +93,8 @@ impl AppAction {
             Self::Next => ActionDetails::new(vec!["→"], "Next slide"),
             Self::Last => ActionDetails::new(vec!["End"], "Go to last slide"),
             Self::Goto(_) => ActionDetails::new(vec!["1..n"], "Go to slide n"),
-            Self::PreviousStep => ActionDetails::new(vec!["↑"], "Previous step"),
-            Self::NextStep => ActionDetails::new(vec!["↓", "Space"], "Next step"),
+            Self::PreviousStep => ActionDetails::new(vec!["↑", "PgUp", "Bksp"], "Previous step"),
+            Self::NextStep => ActionDetails::new(vec!["↓", "Space", "PgDn"], "Next step"),
             Self::Blink => ActionDetails::new(vec!["b", "B"], "Bell or Blink"),
             Self::ShowLog => ActionDetails::new(vec!["l", "L"], "Show logs"),
             Self::Close => ActionDetails::new(vec!["Esc"], "Close popup"),
@@ -140,6 +143,18 @@ mod tests {
 
     fn command_for(code: KeyCode) -> Option<Command> {
         AppAction::from_key(KeyEvent::from(code))?.command()
+    }
+
+    /// A presenter remote sends PageUp/PageDown, and it has no other buttons:
+    /// bound to whole slides it could never reach a single reveal.
+    #[test]
+    fn a_remote_walks_the_deck_a_step_at_a_time() {
+        for code in [KeyCode::PageDown, KeyCode::Char(' '), KeyCode::Down] {
+            assert_eq!(command_for(code), Some(Command::NextStep), "{code:?}");
+        }
+        for code in [KeyCode::PageUp, KeyCode::Backspace, KeyCode::Up] {
+            assert_eq!(command_for(code), Some(Command::PreviousStep), "{code:?}");
+        }
     }
 
     /// The number on screen is 1-based; `SlideId` is not.

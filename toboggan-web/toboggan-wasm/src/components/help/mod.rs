@@ -172,7 +172,11 @@ fn display_key(key: &str) -> String {
         "ArrowRight" => "→".to_owned(),
         "ArrowDown" => "↓".to_owned(),
         " " => "Space".to_owned(),
-        other => other.to_ascii_uppercase(),
+        // Letter shortcuts are case-insensitive and read better capitalised;
+        // named keys are already spelled the way a keyboard prints them, and
+        // uppercasing them gave `PAGEDOWN`.
+        other if other.chars().count() == 1 => other.to_ascii_uppercase(),
+        other => other.to_owned(),
     }
 }
 
