@@ -31,13 +31,42 @@
 use std::collections::BTreeMap;
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::Context as _;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use toboggan_core::Date;
 use toboggan_lint::Severity;
 
 use crate::cli::DenyLevel;
+
+/// Reads a duration written as a number of seconds or a humantime string.
+///
+/// The same two spellings a slide's `duration` front matter accepts, and
+/// rejected here rather than at use: this struct is `deny_unknown_fields` so a
+/// typo'd *key* already fails the run, and a typo'd *value* should not be
+/// quietly worth nothing.
+fn deserialize_duration<'de, D>(deserializer: D) -> Result<Option<Duration>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::Error as _;
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Written {
+        Seconds(u64),
+        Text(String),
+    }
+
+    match Option::<Written>::deserialize(deserializer)? {
+        None => Ok(None),
+        Some(Written::Seconds(seconds)) => Ok(Some(Duration::from_secs(seconds))),
+        Some(Written::Text(text)) => humantime::parse_duration(&text)
+            .map(Some)
+            .map_err(|err| D::Error::custom(format!("invalid duration \"{text}\": {err}"))),
+    }
+}
 
 /// Accepted file names within one directory, most-specific first.
 const CONFIG_NAMES: [&str; 2] = [".toboggan.toml", "toboggan.toml"];
@@ -122,6 +151,15 @@ pub(crate) struct LintConfig {
     pub(crate) max_words_per_slide: Option<usize>,
     pub(crate) max_images_per_slide: Option<usize>,
     pub(crate) max_code_lines: Option<usize>,
+    /// Speaking-time budget for the whole talk, as a number of seconds or a
+    /// humantime string like `"45m"` — the same two spellings a slide's
+    /// `duration` front matter accepts.
+    ///
+    /// Enables `structure/over-budget`, which is silent without one.
+    #[serde(default, deserialize_with = "deserialize_duration")]
+    pub(crate) max_duration: Option<Duration>,
+    /// Enables `content/missing-notes`.
+    pub(crate) require_notes: Option<bool>,
     /// Rule ids to switch off. Unknown ids are reported by the linter itself.
     pub(crate) disabled: Option<Vec<String>>,
     /// Per-rule severity overrides, keyed by rule id.
@@ -202,6 +240,8 @@ impl LintConfig {
             max_words_per_slide,
             max_images_per_slide,
             max_code_lines,
+            max_duration,
+            require_notes,
             disabled,
             severity,
         );

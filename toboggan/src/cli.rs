@@ -613,6 +613,11 @@ impl LintArgs {
         if let Some(max) = file.max_code_lines {
             lint.max_code_lines = max;
         }
+        // Both stay `None`/`false` unless the config asks: the two rules they
+        // enable are silent by default, because no deck has a natural length
+        // and plenty deliberately carry no notes.
+        lint.max_duration = file.max_duration;
+        lint.require_notes = file.require_notes.unwrap_or(false);
         lint.disabled.extend(file.disabled.unwrap_or_default());
         lint.severity_overrides
             .extend(file.severity.unwrap_or_default());

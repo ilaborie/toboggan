@@ -1,6 +1,7 @@
 use std::cell::OnceCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use toboggan_core::{Slide, Talk};
 use toboggan_stats::{HtmlDocument, SlideStats};
@@ -22,6 +23,13 @@ pub struct LintConfig {
     pub max_images_per_slide: usize,
     /// Maximum lines in one code block before `code/too-long` fires.
     pub max_code_lines: usize,
+    /// Speaking-time budget for the whole talk. `structure/over-budget` stays
+    /// silent until one is set — a deck has no natural length to be judged
+    /// against, only the slot its author was given.
+    pub max_duration: Option<Duration>,
+    /// Whether every content slide is expected to carry speaker notes.
+    /// Off by default: plenty of decks deliberately have none.
+    pub require_notes: bool,
 }
 
 impl Default for LintConfig {
@@ -34,6 +42,8 @@ impl Default for LintConfig {
             max_images_per_slide: 8,
             // Roughly what stays readable projected at a legible font size.
             max_code_lines: 20,
+            max_duration: None,
+            require_notes: false,
         }
     }
 }
