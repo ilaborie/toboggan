@@ -45,14 +45,16 @@ pub fn lint(talk: &Talk, config: &LintConfig) -> LintReport {
     }
     for slide in &talk.slides {
         for id in slide.lint_disabled.iter().filter(|id| !is_known(id)) {
-            out.push(LintDiagnostic::talk(
+            let mut diagnostic = LintDiagnostic::talk(
                 RuleId(UNKNOWN_RULE),
                 Severity::Warning,
                 format!(
                     "unknown lint rule id `{id}` disabled on slide \"{}\"",
                     slide.title
                 ),
-            ));
+            );
+            diagnostic.source_path.clone_from(&slide.source_path);
+            out.push(diagnostic);
         }
     }
 
@@ -67,6 +69,7 @@ pub fn lint(talk: &Talk, config: &LintConfig) -> LintReport {
     for (index, slide) in talk.slides.iter().enumerate() {
         let slide_ref = Ref::new(index, slide);
         let context = RuleContext::new(talk, slide, &slide_ref, config);
+        let before = out.len();
         for rule in &rules {
             // A rule runs unless it is globally disabled or silenced for this
             // slide via front matter / a `<!-- lint-disable -->` body comment.
@@ -79,6 +82,12 @@ pub fn lint(talk: &Talk, config: &LintConfig) -> LintReport {
             if config.is_enabled(id) && !disabled_here {
                 rule.check_slide(&context, &mut out);
             }
+        }
+        // Everything just pushed came from this slide, so it came from this
+        // slide's file. Stamped centrally rather than in each rule: a rule that
+        // forgot would silently produce a diagnostic nobody can locate.
+        for diagnostic in out.iter_mut().skip(before) {
+            diagnostic.source_path.clone_from(&slide.source_path);
         }
     }
 
@@ -94,6 +103,8 @@ pub fn lint(talk: &Talk, config: &LintConfig) -> LintReport {
 #[cfg(test)]
 #[allow(clippy::expect_used)]
 mod tests {
+    use std::path::{Path, PathBuf};
+
     use toboggan_core::{Content, Slide, SlideKind, Talk};
 
     use super::*;
@@ -416,6 +427,45 @@ mod tests {
             "{:?}",
             ids_in(&report)
         );
+    }
+
+    /// The whole point of `source_path`: a reader has to be able to open the
+    /// file a diagnostic is about. Rules never set it — `lint` stamps it — so
+    /// this covers every rule at once.
+    #[test]
+    fn a_slide_diagnostic_names_the_file_it_came_from() {
+        let slide = Slide::new("T")
+            .with_body(Content::html(r#"<img src="a.png">"#))
+            .with_source_path("slides/1_intro/2-hello.md");
+        let report = lint(&talk_with(vec![slide]), &LintConfig::default());
+        let diagnostic = report
+            .diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.rule == ids::HTML_IMG_MISSING_ALT)
+            .expect("img-missing-alt diagnostic");
+        assert_eq!(
+            diagnostic.source_path.as_deref(),
+            Some(Path::new("slides/1_intro/2-hello.md"))
+        );
+    }
+
+    /// A slide with no file of its own — the implicit part slide a folder gets
+    /// without a `_part.md`, or a talk deserialized from a built artifact —
+    /// must not borrow a neighbour's path.
+    #[test]
+    fn a_slide_without_a_file_gets_no_path() {
+        let with_file = Slide::new("A")
+            .with_body(Content::html(r#"<img src="a.png">"#))
+            .with_source_path("slides/a.md");
+        let without = Slide::new("B").with_body(Content::html(r#"<img src="b.png">"#));
+        let report = lint(&talk_with(vec![with_file, without]), &LintConfig::default());
+        let paths = report
+            .diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.rule == ids::HTML_IMG_MISSING_ALT)
+            .map(|diagnostic| diagnostic.source_path.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(paths, vec![Some(PathBuf::from("slides/a.md")), None]);
     }
 
     /// `disable` takes a `RuleId`, so this cannot drift from the rule's own id.

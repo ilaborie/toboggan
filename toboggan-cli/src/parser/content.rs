@@ -440,6 +440,7 @@ impl SlideContentParser {
                 .collect(),
             quake_terminal_cwd: front_matter.quake_cwd.clone(),
             lint_disabled,
+            source_path: path.map(Path::to_path_buf),
         };
 
         Ok((result, front_matter))

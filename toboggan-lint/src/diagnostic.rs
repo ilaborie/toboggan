@@ -115,6 +115,16 @@ impl LintDiagnostic {
         self.help = Some(help.into());
         self
     }
+
+    /// Attaches the source file the finding refers to.
+    ///
+    /// Rules do not call this: [`crate::lint`] stamps every diagnostic a slide
+    /// produced with that slide's file, so a rule cannot forget to.
+    #[must_use]
+    pub fn with_source_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.source_path = Some(path.into());
+        self
+    }
 }
 
 /// Best-effort plain-text title for a slide.

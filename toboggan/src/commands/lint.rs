@@ -69,17 +69,33 @@ fn print_report(report: &LintReport) {
 #[allow(clippy::print_stdout)]
 fn print_diagnostic(diagnostic: &LintDiagnostic) {
     let label = severity_label(diagnostic.severity);
-    let location = match &diagnostic.slide {
-        Some(slide) => format!("slide {} \"{}\"", slide.display_number, slide.title),
-        None => "talk".to_owned(),
-    };
     println!(
         "{label} [{rule}] {location}: {message}",
         rule = diagnostic.rule.as_str(),
+        location = location_of(diagnostic),
         message = diagnostic.message,
     );
     if let Some(help) = &diagnostic.help {
         println!("      help: {help}");
+    }
+}
+
+/// Names where a diagnostic came from.
+///
+/// Prefers the source file, because that is what the reader has to open — and
+/// what an editor or terminal will turn into a clickable link. The slide number
+/// stays as a suffix so a deck's ordering is still visible, and is all there is
+/// for a slide with no file of its own.
+fn location_of(diagnostic: &LintDiagnostic) -> String {
+    let slide = diagnostic
+        .slide
+        .as_ref()
+        .map(|slide| format!("slide {} \"{}\"", slide.display_number, slide.title));
+    match (&diagnostic.source_path, slide) {
+        (Some(path), Some(slide)) => format!("{} ({slide})", path.display()),
+        (Some(path), None) => path.display().to_string(),
+        (None, Some(slide)) => slide,
+        (None, None) => "talk".to_owned(),
     }
 }
 

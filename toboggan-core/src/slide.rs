@@ -113,6 +113,18 @@ pub struct Slide {
     /// diagnostics are not line-tracked, so a directive covers the whole slide.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub lint_disabled: Vec<String>,
+    /// File this slide was parsed from, as the loader saw it — so a path passed
+    /// relative to the cwd stays relative, which is what both a terminal and a
+    /// CI annotation want.
+    ///
+    /// `None` for slides with no file of their own: a talk deserialized from a
+    /// built artifact, the implicit part slide a folder gets when it has no
+    /// `_part.md`, and anything constructed in code.
+    ///
+    /// Not serialized, like [`Talk::source_dir`]: it describes where the slide
+    /// came from on this machine, not what it is.
+    #[serde(skip)]
+    pub source_path: Option<PathBuf>,
 }
 
 /// Borrowed view over a slide's body content.
@@ -232,6 +244,13 @@ impl Slide {
     #[must_use]
     pub fn with_lint_disabled(mut self, rules: impl IntoIterator<Item = String>) -> Self {
         self.lint_disabled = Vec::from_iter(rules);
+        self
+    }
+
+    /// Records the file this slide was parsed from.
+    #[must_use]
+    pub fn with_source_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.source_path = Some(path.into());
         self
     }
 
@@ -420,6 +439,22 @@ mod tests {
         let slide = Slide::from_markdown("source text", Content::text("rendered text"));
         assert_eq!(slide.body_source.as_deref(), Some("source text"));
         assert!(matches!(slide.body, Content::Text { ref text } if text == "rendered text"));
+    }
+
+    /// `source_path` describes where a slide came from on the machine that
+    /// parsed it. Serializing it would bake one author's absolute paths into a
+    /// `talk.toml` that gets committed and served elsewhere.
+    #[test]
+    fn source_path_stays_out_of_the_serialized_slide() {
+        let slide = Slide::new("T").with_source_path("/home/someone/deck/slides/1.md");
+        let json = serde_json::to_string(&slide).expect("serialize");
+        assert!(
+            !json.contains("source_path") && !json.contains("home/someone"),
+            "source_path leaked into the artifact: {json}"
+        );
+
+        let parsed: Slide = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(parsed.source_path, None);
     }
 
     #[test]

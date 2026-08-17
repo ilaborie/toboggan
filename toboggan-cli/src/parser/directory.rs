@@ -159,7 +159,7 @@ pub(super) fn create_slide_from_file(
         file_path.extension().and_then(|ext| ext.to_str()),
         Some(FILE_HTML | FILE_HTM)
     ) {
-        let slide = create_html_slide(&content, slide_kind, filename);
+        let slide = create_html_slide(&content, slide_kind, filename, file_path);
         (slide, FrontMatter::default())
     } else {
         parse_slide_from_markdown(
@@ -207,7 +207,12 @@ pub(super) fn parse_slide_from_markdown(
     Ok((slide, front_matter))
 }
 
-fn create_html_slide(content: &str, slide_kind: SlideKind, filename: &str) -> Slide {
+fn create_html_slide(
+    content: &str,
+    slide_kind: SlideKind,
+    filename: &str,
+    file_path: &Path,
+) -> Slide {
     let html_content = Content::html(content.trim());
 
     let slide = match slide_kind {
@@ -216,7 +221,7 @@ fn create_html_slide(content: &str, slide_kind: SlideKind, filename: &str) -> Sl
         SlideKind::Standard => Slide::new(filename),
     };
 
-    slide.with_body(html_content)
+    slide.with_body(html_content).with_source_path(file_path)
 }
 
 pub(super) fn parse_frontmatter(content: &str, file_path: &str) -> Result<FrontMatter> {
