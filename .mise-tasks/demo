@@ -11,4 +11,4 @@ mise build:web
 
 # Build the folder in-memory and serve with live reload (unified CLI default action)
 echo "🚀 Starting server at http://localhost:8080"
-cargo run -p toboggan -- "$DEMO_DIR"
+cargo run -p toboggan -- --path "$DEMO_DIR"

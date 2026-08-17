@@ -4,4 +4,4 @@
 set -eu
 
 echo "📐 Linting example presentations..."
-cargo run -q -p toboggan -- lint examples/toboggan-guide/slides
+cargo run -q -p toboggan -- lint --path examples/toboggan-guide/slides

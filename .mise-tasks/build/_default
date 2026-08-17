@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-#MISE description="Build all components: Rust, web, WASM, iOS, Android, and Rehearsal"
+#MISE description="Build all components: Rust, web, WASM, iOS, and Android"
 
 set -eu
 
 echo "🚀 Running comprehensive build for all platforms..."
 
-# Run Rust builds (including ESP32 and WASM)
+# Run Rust builds (including WASM)
 echo "==================== RUST BUILDS ===================="
 mise build:rust
 
@@ -21,17 +21,13 @@ mise build:ios
 echo "==================== ANDROID BUILD =================="
 mise build:android
 
-# The unified `toboggan` binary is the primary entry point (dispatches to all
-# subcommands); the standalone binaries below remain for direct/legacy use.
+# `toboggan` is the only binary in the workspace; every other crate is a library
+# it dispatches to, so there is nothing else to install.
 cargo install --path toboggan
-cargo install --path toboggan-cli
-cargo install --path toboggan-server
-cargo install --path toboggan-desktop
-cargo install --path toboggan-tui
 
 echo ""
 echo "🎉 All platform builds completed successfully!"
-echo "✅ Rust: all crates + ESP32 + WASM"
+echo "✅ Rust: all crates + WASM"
 echo "✅ Web: npm build (TypeScript + Vite)"
 echo "✅ iOS: Rust targets + Swift bindings"
 echo "✅ Android: Rust targets + Kotlin bindings"
