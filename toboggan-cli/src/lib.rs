@@ -9,7 +9,7 @@ pub mod error;
 pub use self::error::{Result, TobogganCliError};
 
 pub mod parser;
-use parser::FolderParser;
+use parser::{FolderParser, Overrides};
 
 pub mod output;
 
@@ -36,6 +36,8 @@ pub struct TalkMetadata {
     pub date: Date,
     pub footer: Option<String>,
     pub head: Option<String>,
+    /// BCP 47 language tag for the deck; see [`toboggan_core::Talk::lang`].
+    pub lang: Option<String>,
     /// Default working directory for the `QuakeTerminal` overlay (talk-level fallback).
     pub default_terminal_cwd: Option<String>,
     /// Source directory of the talk; used to resolve relative quake cwds.
@@ -49,6 +51,7 @@ impl Default for TalkMetadata {
             date: Date::today(),
             footer: None,
             head: None,
+            lang: None,
             default_terminal_cwd: None,
             source_dir: None,
         }
@@ -68,6 +71,7 @@ impl ParseResult {
         talk.date = self.talk_metadata.date;
         talk.footer.clone_from(&self.talk_metadata.footer);
         talk.head.clone_from(&self.talk_metadata.head);
+        talk.lang.clone_from(&self.talk_metadata.lang);
         talk.default_terminal_cwd
             .clone_from(&self.talk_metadata.default_terminal_cwd);
         talk.source_dir = self
@@ -245,7 +249,11 @@ pub fn parse_presentation(input: &Path, settings: &Settings) -> Result<ParseResu
     debug!("Processing folder-based talk from {}", input.display());
 
     let parser = FolderParser::new(input.to_path_buf(), settings.theme.clone())?;
-    let mut parse_result = parser.parse(settings.title.clone(), settings.date)?;
+    let mut parse_result = parser.parse(Overrides {
+        title: settings.title.clone(),
+        date: settings.date,
+        lang: settings.lang.clone(),
+    })?;
 
     if !settings.no_counter {
         add_counters_to_slides(&mut parse_result);
@@ -340,6 +348,7 @@ mod tests {
             date: Date::today(),
             footer: None,
             head: None,
+            lang: None,
             default_terminal_cwd: None,
             source_dir: None,
         };
@@ -398,6 +407,7 @@ mod tests {
             date: Date::today(),
             footer: None,
             head: None,
+            lang: None,
             default_terminal_cwd: None,
             source_dir: None,
         };

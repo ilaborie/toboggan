@@ -59,6 +59,16 @@ pub struct Settings {
     )]
     pub date: Option<Date>,
 
+    /// BCP 47 language tag for the deck, e.g. `fr`.
+    ///
+    /// Takes precedence over the `lang` in `_cover.md` front matter. Becomes the
+    /// `lang` attribute on every page Toboggan renders.
+    #[clap(
+        long,
+        help = "Deck language tag (e.g. fr); overrides the cover frontmatter"
+    )]
+    pub lang: Option<String>,
+
     /// Syntax highlighting theme for code blocks.
     ///
     /// Available themes: `base16-ocean.dark`, `base16-ocean.light`, `base16-mocha.dark`,

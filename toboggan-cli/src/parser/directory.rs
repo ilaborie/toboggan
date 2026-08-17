@@ -313,6 +313,7 @@ pub(super) fn process_talk_metadata(
             .unwrap_or_else(Date::today);
         // The cover's frontmatter is the natural place for talk-level defaults.
         metadata.default_terminal_cwd = front_matter.quake_cwd;
+        metadata.lang = front_matter.lang;
     }
 
     if let Some(footer) = toboggan_dir.get_footer()? {

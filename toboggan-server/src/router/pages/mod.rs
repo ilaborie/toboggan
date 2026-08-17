@@ -83,6 +83,7 @@ fn render_guide() -> anyhow::Result<String> {
 
 fn render_homepage(talk: &Talk) -> String {
     let title = escape(&talk.title);
+    let lang = escape(talk.lang());
     let date = talk.date.to_string();
     let total = talk.slides.len();
     let parts = talk
@@ -98,7 +99,7 @@ fn render_homepage(talk: &Talk) -> String {
 
     format!(
         r#"<!doctype html>
-<html lang="en">
+<html lang="{lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

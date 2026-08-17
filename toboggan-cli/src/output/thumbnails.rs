@@ -175,6 +175,7 @@ fn content_text(content: &Content) -> Option<String> {
 
 fn render_overview(talk: &Talk, entries: &[SlideEntry], search: bool) -> String {
     let title = escape(&talk.title);
+    let lang = escape(talk.lang());
 
     // Emit a part divider whenever the part name changes, then the card.
     let mut last_part: Option<&str> = None;
@@ -214,7 +215,7 @@ fn render_overview(talk: &Talk, entries: &[SlideEntry], search: bool) -> String 
 
     format!(
         r#"<!doctype html>
-<html lang="en">
+<html lang="{lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

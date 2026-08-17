@@ -69,6 +69,13 @@ pub struct FrontMatter {
     /// Lint rule ids to silence for this slide (e.g. `["html/img-missing-alt"]`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub disabled_rules: Vec<String>,
+
+    /// BCP 47 language tag for the deck, read from `_cover.md`.
+    ///
+    /// Talk-level, like `date` and `quake_cwd`: the cover's front matter is
+    /// where a deck states things about itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lang: Option<String>,
 }
 
 impl FrontMatter {
@@ -78,6 +85,17 @@ impl FrontMatter {
             style: self.style.clone(),
         })
     }
+}
+
+/// Talk-level values a caller supplies in place of what the deck declares.
+///
+/// A struct rather than positional arguments: `title` and `lang` are both
+/// `Option<String>`, and a caller that swapped them would compile.
+#[derive(Debug, Clone, Default)]
+pub struct Overrides {
+    pub title: Option<String>,
+    pub date: Option<Date>,
+    pub lang: Option<String>,
 }
 
 pub struct FolderParser {
@@ -94,17 +112,20 @@ impl FolderParser {
         })
     }
 
-    pub fn parse(
-        &self,
-        title_override: Option<String>,
-        date_override: Option<Date>,
-    ) -> Result<ParseResult> {
+    /// Parses the folder, applying `overrides` over what the deck declares.
+    ///
+    /// # Errors
+    /// Returns an error if the folder cannot be read or a slide fails to parse.
+    pub fn parse(&self, overrides: Overrides) -> Result<ParseResult> {
         let mut talk_metadata = process_talk_metadata(&self.toboggan_dir, &self.theme)?;
-        if let Some(title) = title_override {
+        if let Some(title) = overrides.title {
             talk_metadata.title = title;
         }
-        if let Some(date) = date_override {
+        if let Some(date) = overrides.date {
             talk_metadata.date = date;
+        }
+        if let Some(lang) = overrides.lang {
+            talk_metadata.lang = Some(lang);
         }
 
         let slides = process_all_entries(&self.toboggan_dir, &self.theme)?;
@@ -140,7 +161,7 @@ mod tests {
         create_test_file(dir_path, "slide1.md", "# First Slide\n\nContent here.")?;
 
         let parser = FolderParser::new(dir_path.to_path_buf(), "base16-ocean.light".to_owned())?;
-        let result = parser.parse(None, None)?;
+        let result = parser.parse(Overrides::default())?;
         let talk = result.to_talk();
 
         assert_eq!(result.talk_metadata.title, "Test Presentation");
@@ -162,7 +183,7 @@ mod tests {
         create_test_file(&part_dir, "slide1.md", "# Content Slide")?;
 
         let parser = FolderParser::new(dir_path.to_path_buf(), "base16-ocean.light".to_owned())?;
-        let result = parser.parse(None, None)?;
+        let result = parser.parse(Overrides::default())?;
         let talk = result.to_talk();
 
         // Should have part slide + content slide
@@ -181,7 +202,11 @@ mod tests {
 
         let parser = FolderParser::new(dir_path.to_path_buf(), "base16-ocean.light".to_owned())?;
         let custom_date = Date::new(2024, 12, 25).expect("valid date");
-        let result = parser.parse(Some("Override Title".to_owned()), Some(custom_date))?;
+        let result = parser.parse(Overrides {
+            title: Some("Override Title".to_owned()),
+            date: Some(custom_date),
+            ..Overrides::default()
+        })?;
         let _talk = result.to_talk();
 
         assert_eq!(result.talk_metadata.title, "Override Title");
@@ -220,7 +245,7 @@ mod tests {
         )?;
 
         let parser = FolderParser::new(dir_path.to_path_buf(), "base16-ocean.light".to_owned())?;
-        let result = parser.parse(None, None)?;
+        let result = parser.parse(Overrides::default())?;
         let talk = result.to_talk();
 
         // Should have 3 slides (cover, slide1 and slide3, not slide2)
@@ -271,7 +296,7 @@ mod tests {
         )?;
 
         let parser = FolderParser::new(dir_path.to_path_buf(), "base16-ocean.light".to_owned())?;
-        let result = parser.parse(None, None)?;
+        let result = parser.parse(Overrides::default())?;
         let talk = result.to_talk();
 
         // Should have 2 slides (cover and content slide, not the part slide)
@@ -318,7 +343,7 @@ mod tests {
         )?;
 
         let parser = FolderParser::new(dir_path.to_path_buf(), "base16-ocean.light".to_owned())?;
-        let result = parser.parse(None, None)?;
+        let result = parser.parse(Overrides::default())?;
         let talk = result.to_talk();
 
         // Should have exactly 3 slides: cover + part slide + content slide

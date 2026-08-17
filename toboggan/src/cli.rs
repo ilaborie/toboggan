@@ -119,6 +119,10 @@ pub(crate) struct BuildOptions {
     #[arg(short, long, value_parser = parse_date)]
     pub(crate) date: Option<Date>,
 
+    /// Deck language tag, e.g. `fr` [default: en, or the cover's frontmatter]
+    #[arg(long)]
+    pub(crate) lang: Option<String>,
+
     /// Syntax-highlighting theme for code blocks [default: base16-ocean.light]
     #[arg(long)]
     pub(crate) theme: Option<String>,
@@ -147,6 +151,7 @@ impl BuildOptions {
         self.title = self.title.take().or(config.title);
         self.date = self.date.or(config.date);
         self.theme = self.theme.take().or(config.theme);
+        self.lang = self.lang.take().or(config.lang);
         self.wpm = self.wpm.or(config.wpm);
         self.no_counter |= config.no_counter.unwrap_or(false);
         self.exclude_notes_from_duration |= config.exclude_notes_from_duration.unwrap_or(false);
@@ -168,6 +173,7 @@ impl BuildOptions {
             output: None,
             title: self.title,
             date: self.date,
+            lang: self.lang,
             theme: self.theme.unwrap_or_else(|| DEFAULT_THEME.to_owned()),
             list_themes: false,
             format: None,

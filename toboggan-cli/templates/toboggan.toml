@@ -24,6 +24,12 @@
 # title = "{{title}}"
 # date = "{{date}}"
 
+# Language of the deck, as a BCP 47 tag. It becomes the `lang` attribute on
+# every page Toboggan renders, which is what tells a screen reader how to
+# pronounce the deck and a browser how to hyphenate it. `slides/_cover.md` can
+# set it in its frontmatter instead; this wins.
+# lang = "en"
+
 # Syntax-highlighting theme for code blocks. `toboggan build --list-themes`
 # prints the available names.
 # theme = "base16-ocean.light"

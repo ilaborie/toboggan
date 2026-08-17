@@ -10,6 +10,14 @@ pub struct Talk {
     pub footer: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub head: Option<String>,
+    /// BCP 47 language tag for the deck, e.g. `fr` or `pt-BR`.
+    ///
+    /// Becomes the `lang` attribute on every page Toboggan renders. It is what
+    /// tells a screen reader how to pronounce the deck and a browser which
+    /// hyphenation and quotation rules to apply, so a French talk announced as
+    /// English is read aloud as gibberish. `None` leaves the default, `en`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lang: Option<String>,
     /// Default working directory for the `QuakeTerminal` overlay, used when a slide
     /// does not declare its own. Relative paths resolve against [`Talk::source_dir`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -33,10 +41,17 @@ impl Talk {
             date,
             footer,
             head,
+            lang: None,
             default_terminal_cwd: None,
             source_dir: None,
             slides,
         }
+    }
+
+    /// The deck's language tag, falling back to `en`.
+    #[must_use]
+    pub fn lang(&self) -> &str {
+        self.lang.as_deref().unwrap_or("en")
     }
 
     #[must_use]
@@ -54,6 +69,12 @@ impl Talk {
     #[must_use]
     pub fn with_head(mut self, head: impl Into<String>) -> Self {
         self.head = Some(head.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_lang(mut self, lang: impl Into<String>) -> Self {
+        self.lang = Some(lang.into());
         self
     }
 
@@ -85,6 +106,9 @@ pub struct TalkResponse {
     pub footer: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub head: Option<String>,
+    /// BCP 47 language tag; see [`Talk::lang`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lang: Option<String>,
     pub titles: Vec<String>,
     /// Step counts per slide (for clients that display step progress)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -98,6 +122,7 @@ impl Default for TalkResponse {
             date: Date::today(),
             footer: None,
             head: None,
+            lang: None,
             titles: vec![],
             step_counts: vec![],
         }
@@ -116,6 +141,7 @@ impl From<&Talk> for TalkResponse {
             date: value.date,
             footer: value.footer.clone(),
             head: value.head.clone(),
+            lang: value.lang.clone(),
             titles: value.slides.iter().map(|it| it.title.to_string()).collect(),
             step_counts: vec![], // Populated by server with SlideStats
         }
@@ -129,6 +155,7 @@ impl From<Talk> for TalkResponse {
             date,
             footer,
             head,
+            lang,
             default_terminal_cwd: _,
             source_dir: _,
             slides,
@@ -140,6 +167,7 @@ impl From<Talk> for TalkResponse {
             date,
             footer,
             head,
+            lang,
             titles,
             step_counts: vec![], // Populated by server with SlideStats
         }

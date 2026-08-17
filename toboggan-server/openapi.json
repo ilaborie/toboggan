@@ -803,6 +803,13 @@
               "null"
             ]
           },
+          "lang": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "BCP 47 language tag; see [`Talk::lang`]."
+          },
           "step_counts": {
             "type": "array",
             "items": {

@@ -15,6 +15,7 @@ use crate::{
     StateClassMapper, ToastType, TobogganApi, TobogganFooterElement, TobogganHelpElement,
     TobogganQuakeTerminalElement, TobogganSlideElement, TobogganToastElement, WasmElement,
     create_html_element, inject_head_html, install_focus_release_on_outside_click, play_tada,
+    set_document_lang,
 };
 
 /// Holds metadata about the presentation
@@ -330,6 +331,7 @@ async fn handle_connection_status(
 
                 // Inject custom head HTML if provided
                 inject_head_html(talk.head.as_deref());
+                set_document_lang(talk.lang.as_deref());
             }
             // Report what actually failed, and what the presenter will see: the
             // slide counter stays at 0 and the deck's `_head.html` (fonts, custom
@@ -414,6 +416,7 @@ async fn handle_talk_change(
 
             // Inject custom head HTML if provided
             inject_head_html(talk.head.as_deref());
+            set_document_lang(talk.lang.as_deref());
         }
         Err(err) => {
             error!("Failed to refetch talk after TalkChange:", err.to_string());

@@ -117,7 +117,7 @@ pub(super) fn generate_html(talk: &Talk, custom_head_html: Option<&str>) -> Resu
     // Build the complete HTML document
     let html = format!(
         r#"<!doctype html>
-<html lang="en">
+<html lang="{lang}">
 
 <head>
     <meta charset="UTF-8" />
@@ -147,6 +147,7 @@ pub(super) fn generate_html(talk: &Talk, custom_head_html: Option<&str>) -> Resu
 </body>
 
 </html>"#,
+        lang = escape_html(talk.lang()),
         title = escape_html(&talk.title),
         reset_css = RESET_CSS,
         main_css = MAIN_CSS,
@@ -279,6 +280,24 @@ mod tests {
         let script = html.find("<script>").expect("script");
         let last_slide = html.find(r#"id="slide-2""#).expect("slide");
         assert!(last_slide < script, "the navigator comes after the slides");
+
+        Ok(())
+    }
+
+    /// The `lang` attribute is what tells a screen reader how to pronounce the
+    /// deck, so a French talk must not go out announcing itself as English.
+    #[test]
+    fn the_deck_declares_its_own_language() -> anyhow::Result<()> {
+        let talk = Talk::new("Peut-on RIIR de tout ?").with_lang("fr");
+        let html = String::from_utf8(generate_html(&talk, None)?)?;
+        assert!(html.contains(r#"<html lang="fr">"#), "{}", &html[..120]);
+
+        let untagged = Talk::new("A deck");
+        let html = String::from_utf8(generate_html(&untagged, None)?)?;
+        assert!(
+            html.contains(r#"<html lang="en">"#),
+            "unset falls back to en"
+        );
 
         Ok(())
     }

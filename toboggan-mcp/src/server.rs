@@ -361,6 +361,7 @@ fn default_settings(root: &Path) -> toboggan_cli::Settings {
         output: None,
         title: None,
         date: None,
+        lang: None,
         theme: "base16-ocean.light".to_owned(),
         list_themes: false,
         format: None,

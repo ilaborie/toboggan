@@ -177,6 +177,21 @@ pub fn apply_slide_styles(container: &Element, style: &Style) {
     }
 }
 
+/// Sets the page's language from the deck.
+///
+/// The served shell is a static `index.html` that can only say `lang="en"`; the
+/// deck's own language does not exist until the talk has been fetched. Left at
+/// the default, a screen reader reads a French deck aloud with an English voice,
+/// and the browser hyphenates it by English rules.
+pub fn set_document_lang(lang: Option<&str>) {
+    let Some(root) = document().document_element() else {
+        return;
+    };
+    if root.set_attribute("lang", lang.unwrap_or("en")).is_err() {
+        error!("Failed to set the page language");
+    }
+}
+
 /// Injects custom head HTML into document.head
 /// Removes any previously injected elements and adds new ones with data-toboggan-head marker
 pub fn inject_head_html(head_html: Option<&str>) {

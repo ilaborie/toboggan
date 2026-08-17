@@ -123,6 +123,7 @@ pub(crate) struct Config {
 pub(crate) struct BuildConfig {
     pub(crate) title: Option<String>,
     pub(crate) date: Option<Date>,
+    pub(crate) lang: Option<String>,
     pub(crate) theme: Option<String>,
     pub(crate) no_counter: Option<bool>,
     pub(crate) wpm: Option<u16>,
@@ -206,6 +207,7 @@ impl BuildConfig {
             weaker,
             title,
             date,
+            lang,
             theme,
             no_counter,
             wpm,
