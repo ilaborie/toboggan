@@ -448,3 +448,106 @@ async fn handle_ws_message(
         }
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use toboggan_core::SlideId;
+
+    use super::*;
+
+    /// Drives one server frame through the dispatcher and returns whatever it
+    /// forwarded to the application.
+    async fn dispatch(frame: &str) -> Vec<CommunicationMessage> {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let last_ping = Arc::new(Mutex::new(None));
+        let client_id = Arc::new(RwLock::new(None));
+
+        handle_ws_message(
+            Message::Text(frame.into()),
+            &tx,
+            Arc::clone(&last_ping),
+            Arc::clone(&client_id),
+        )
+        .await;
+
+        drop(tx);
+        let mut out = Vec::new();
+        while let Some(message) = rx.recv().await {
+            out.push(message);
+        }
+        out
+    }
+
+    #[tokio::test]
+    async fn a_state_notification_reaches_the_application() {
+        let state = State::Running {
+            current: SlideId::new(2),
+            current_step: 1,
+        };
+        let frame = serde_json::to_string(&Notification::state(state)).expect("serialize");
+
+        match dispatch(&frame).await.as_slice() {
+            [CommunicationMessage::StateChange { state }] => {
+                assert_eq!(state.current(), Some(SlideId::new(2)));
+            }
+            other => panic!("expected one StateChange, got {other:?}"),
+        }
+    }
+
+    /// A reload is not a state change: clients have to refetch the talk and the
+    /// slides, so it must arrive as its own message rather than being folded in.
+    #[tokio::test]
+    async fn a_talk_change_is_distinguishable_from_a_state_change() {
+        let frame =
+            serde_json::to_string(&Notification::talk_change(State::default())).expect("serialize");
+
+        assert!(
+            matches!(
+                dispatch(&frame).await.as_slice(),
+                [CommunicationMessage::TalkChange { .. }]
+            ),
+            "TalkChange must not be delivered as a StateChange"
+        );
+    }
+
+    /// `Pong` is the heartbeat and carries no application meaning; forwarding it
+    /// would wake every client on a timer for nothing.
+    #[tokio::test]
+    async fn a_pong_is_absorbed() {
+        let frame = serde_json::to_string(&Notification::PONG).expect("serialize");
+        assert!(dispatch(&frame).await.is_empty());
+    }
+
+    /// The registration reply carries the id the server will use for this client
+    /// and has to be published, not just recorded internally.
+    #[tokio::test]
+    async fn registration_publishes_the_assigned_id() {
+        // Written as a wire frame rather than built from a `ClientId`: the id is
+        // server-assigned and has no public constructor here, which is the point
+        // — this checks the id the server sent survives the trip to the app.
+        let frame = r#"{"type":"Registered","client_id":{"idx":3,"version":1}}"#;
+        let expected = match serde_json::from_str::<Notification>(frame).expect("parse") {
+            Notification::Registered { client_id } => client_id,
+            other => panic!("fixture is not a Registered frame: {other:?}"),
+        };
+
+        match dispatch(frame).await.as_slice() {
+            [CommunicationMessage::Registered { client_id }] => assert_eq!(*client_id, expected),
+            other => panic!("expected Registered, got {other:?}"),
+        }
+    }
+
+    /// A frame the client cannot parse must not take the connection down with
+    /// it — a server that learns a new notification kind should degrade to
+    /// ignoring it, not disconnect everyone.
+    #[tokio::test]
+    async fn an_unparseable_frame_is_ignored() {
+        assert!(
+            dispatch("{\"type\":\"SomethingFromTheFuture\"}")
+                .await
+                .is_empty()
+        );
+        assert!(dispatch("not json at all").await.is_empty());
+    }
+}
