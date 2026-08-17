@@ -12,6 +12,9 @@ pub(crate) use self::terminal::*;
 mod quake_terminal;
 pub(crate) use self::quake_terminal::*;
 
+mod presenter;
+pub(crate) use self::presenter::*;
+
 mod help;
 pub(crate) use self::help::*;
 

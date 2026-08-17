@@ -96,6 +96,15 @@ impl CommunicationService {
         });
     }
 
+    /// Renames this client, before it connects.
+    ///
+    /// The name is what `/api/clients` and the connect/disconnect toasts show,
+    /// so a presenter can tell the projector, their phone and their own second
+    /// window apart.
+    pub(crate) fn set_client_name(&mut self, name: &str) {
+        name.clone_into(&mut self.client_name);
+    }
+
     fn send_status(&self, status: ConnectionStatus) {
         debug!("Connection status:", status.to_string());
         let _ = self

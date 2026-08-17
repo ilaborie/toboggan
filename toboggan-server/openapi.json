@@ -809,6 +809,18 @@
           "date": {
             "$ref": "#/components/schemas/Date"
           },
+          "durations": {
+            "type": "array",
+            "items": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64",
+              "minimum": 0
+            },
+            "description": "Planned speaking time per slide, in seconds, from each slide's\n`duration` front matter. `None` where the author did not say.\n\nParallel to `titles`, and here rather than fetched per slide because the\npresenter view needs the *whole* plan to work out whether the talk is\nrunning early or late — one number per slide is far less than the deck."
+          },
           "footer": {
             "type": [
               "string",

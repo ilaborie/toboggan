@@ -24,10 +24,22 @@ pub(super) async fn homepage(State(talk_service): State<TalkService>) -> Html<St
 
 /// Serves the embedded present/run single-page app at `/run`.
 pub(super) async fn run_app() -> Response {
-    match super::static_assets::WebAppAssets::get("index.html") {
-        Some(content) => {
-            super::static_assets::asset_response("index.html", content.data.into_owned())
-        }
+    embedded_page("index.html")
+}
+
+/// Serves the presenter view at `/presenter`.
+///
+/// A second page of the same application, not a second client: it opens its own
+/// socket, follows the same broadcast state and drives the deck with the same
+/// keys. Two windows, one talk — which is the point, since the presenter's
+/// screen and the projector are two different screens.
+pub(super) async fn presenter_app() -> Response {
+    embedded_page("presenter.html")
+}
+
+fn embedded_page(name: &'static str) -> Response {
+    match super::static_assets::WebAppAssets::get(name) {
+        Some(content) => super::static_assets::asset_response(name, content.data.into_owned()),
         None => (StatusCode::NOT_FOUND, "web app not built").into_response(),
     }
 }
@@ -134,6 +146,7 @@ fn render_homepage(talk: &Talk) -> String {
     </div>
     <nav class="links">
       <a class="btn primary" href="/run">▶ Run the presentation</a>
+      <a class="btn" href="/presenter">🎙 Presenter view</a>
       <a class="btn" href="/slides">🗂 Slide overview</a>
       <a class="btn" href="/guide">📖 User guide</a>
       <a class="btn" href="/download.pdf">⬇ Download PDF</a>

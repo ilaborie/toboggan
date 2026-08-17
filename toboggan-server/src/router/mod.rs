@@ -50,6 +50,7 @@ pub fn routes_with_cors(
         // and the on-demand PDF download.
         .route("/", get(pages::homepage))
         .route("/run", get(pages::run_app))
+        .route("/presenter", get(pages::presenter_app))
         .route("/guide", get(pages::guide))
         .route("/guide/public/{*path}", get(pages::guide_asset))
         .route("/download.pdf", get(pages::pdf::download_pdf))

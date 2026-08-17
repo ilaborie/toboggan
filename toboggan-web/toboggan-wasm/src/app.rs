@@ -4,7 +4,7 @@ use std::rc::Rc;
 use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use gloo::console::{debug, error, info};
-use toboggan_core::{ClientId, ClientRole, Command, SlideId, State};
+use toboggan_core::{ClientId, ClientRole, Command, Slide, SlideId, State};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use wasm_bindgen_futures::spawn_local;
@@ -13,9 +13,9 @@ use web_sys::HtmlElement;
 use crate::{
     AppConfig, CommunicationMessage, CommunicationService, ConnectionStatus, KeyboardService,
     StateClassMapper, ToastType, TobogganApi, TobogganFooterElement, TobogganHelpElement,
-    TobogganQuakeTerminalElement, TobogganSlideElement, TobogganToastElement, WasmElement,
-    create_html_element, inject_head_html, install_focus_release_on_outside_click, play_tada,
-    set_document_lang,
+    TobogganPresenterElement, TobogganQuakeTerminalElement, TobogganSlideElement,
+    TobogganToastElement, WasmElement, create_html_element, inject_head_html,
+    install_focus_release_on_outside_click, play_tada, set_document_lang,
 };
 
 /// Holds metadata about the presentation
@@ -46,6 +46,11 @@ struct TobogganElements {
     toast: TobogganToastElement,
     quake: TobogganQuakeTerminalElement,
     help: TobogganHelpElement,
+    /// The speaker's own view, on `/presenter` only. `None` on the deck the
+    /// room is watching, which is what makes the two pages one app: the
+    /// connection, the keyboard and the state handling are shared, and only
+    /// what surrounds the current slide differs.
+    presenter: Option<TobogganPresenterElement>,
 }
 
 /// Everything the message handlers share.
@@ -94,6 +99,7 @@ pub(crate) struct App {
     rx_action: Option<UnboundedReceiver<Command>>,
     tx_cmd: Option<UnboundedSender<Command>>,
     root_element: Option<Rc<HtmlElement>>,
+    presenter_view: bool,
 }
 
 impl App {
@@ -126,7 +132,20 @@ impl App {
             rx_action: Some(rx_action),
             tx_cmd: Some(tx_cmd),
             root_element: None,
+            presenter_view: false,
         }
+    }
+
+    /// Renders the speaker's view — notes, the next slide, a clock — instead of
+    /// the deck.
+    ///
+    /// The client name changes with it, because `/api/clients` and the
+    /// connect/disconnect toasts are how a presenter tells the projector, the
+    /// phone and their own second window apart.
+    pub(crate) fn into_presenter_view(mut self) -> Self {
+        self.presenter_view = true;
+        self.com.borrow_mut().set_client_name("Presenter View");
+        self
     }
 }
 
@@ -156,31 +175,49 @@ impl WasmElement for App {
 
         {
             let mut elements = self.elements.borrow_mut();
-
-            let el = create_html_element("div");
-            el.set_class_name("toboggan-slide");
             elements.slide.set_api_base_url(self.api.base_url());
-            elements.slide.render(&el);
-            host.append_child(&el).unwrap_throw();
+
+            if self.presenter_view {
+                // The presenter view owns the layout and hands back the pane the
+                // current slide belongs in — the same slide component the deck
+                // renders, so there is one renderer and two places to look at it.
+                let mut presenter = TobogganPresenterElement::default();
+                presenter.render(host);
+                match presenter.current_slide_host() {
+                    Some(pane) => elements.slide.render(&pane),
+                    None => error!("Presenter layout has no pane for the current slide"),
+                }
+                // Terminals belong to the deck the room is watching; a second
+                // set here would be a second set of shells.
+                elements.slide.set_preview(true);
+                elements.presenter = Some(presenter);
+            } else {
+                let el = create_html_element("div");
+                el.set_class_name("toboggan-slide");
+                elements.slide.render(&el);
+                host.append_child(&el).unwrap_throw();
+
+                let el = create_html_element("footer");
+                el.set_class_name("toboggan-footer");
+                elements.footer.render(&el);
+                host.append_child(&el).unwrap_throw();
+
+                // The quake terminal mounts itself directly under <body>; the
+                // host element passed here is unused. render() must run before
+                // set_api_base_url since the latter writes into the rendered
+                // state.
+                let placeholder = create_html_element("div");
+                elements.quake.render(&placeholder);
+                elements.quake.set_api_base_url(self.api.base_url());
+            }
 
             let el = create_html_element("div");
             el.set_class_name("toboggan-toast");
             elements.toast.render(&el);
             host.append_child(&el).unwrap_throw();
 
-            let el = create_html_element("footer");
-            el.set_class_name("toboggan-footer");
-            elements.footer.render(&el);
-            host.append_child(&el).unwrap_throw();
-
-            // The quake terminal mounts itself directly under <body>; the host
-            // element passed here is unused. render() must run before
-            // set_api_base_url since the latter writes into the rendered state.
-            let placeholder = create_html_element("div");
-            elements.quake.render(&placeholder);
-            elements.quake.set_api_base_url(self.api.base_url());
-
-            // The help dialog also mounts under <body>; the host is unused.
+            // The help dialog mounts under <body>; the host is unused. Both
+            // views get it — the keys are the same in both.
             let placeholder = create_html_element("div");
             elements.help.render(&placeholder);
         }
@@ -324,6 +361,13 @@ async fn handle_connection_status(status: &ConnectionStatus, session: &Session) 
 
                 let mut elem = session.elements.borrow_mut();
                 elem.footer.set_content(talk.footer.clone());
+                if let Some(presenter) = &elem.presenter {
+                    presenter.set_plan(
+                        talk.titles.len(),
+                        talk.durations.clone(),
+                        talk.step_counts.clone(),
+                    );
+                }
                 drop(elem);
 
                 // Inject custom head HTML if provided
@@ -402,6 +446,13 @@ async fn handle_talk_change(state: State, session: &Session) {
 
             let mut elem = session.elements.borrow_mut();
             elem.footer.set_content(talk.footer.clone());
+            if let Some(presenter) = &elem.presenter {
+                presenter.set_plan(
+                    talk.titles.len(),
+                    talk.durations.clone(),
+                    talk.step_counts.clone(),
+                );
+            }
             drop(elem);
 
             // Inject custom head HTML if provided
@@ -527,7 +578,12 @@ fn update_root_state_class(state: &State, session: &Session) {
 async fn update_slide_display(state: &State, session: &Session) {
     let Some(slide_id) = state.current() else {
         debug!("No current slide, clearing slide component");
-        session.elements.borrow_mut().slide.set_slide(None, 0);
+        let mut elements = session.elements.borrow_mut();
+        elements.slide.set_slide(None, 0);
+        if let Some(presenter) = &mut elements.presenter {
+            presenter.set_next(None);
+            presenter.set_state(state, None);
+        }
         return;
     };
 
@@ -548,9 +604,41 @@ async fn update_slide_display(state: &State, session: &Session) {
     };
 
     let quake_cwd = slide.quake_terminal_cwd.clone();
-    let mut elems = session.elements.borrow_mut();
-    elems.slide.set_slide(Some(slide), current_step);
-    elems.quake.set_slide_cwd(quake_cwd);
+    let notes = slide.notes.clone();
+    {
+        let mut elems = session.elements.borrow_mut();
+        elems.slide.set_slide(Some(slide), current_step);
+        elems.quake.set_slide_cwd(quake_cwd);
+        if let Some(presenter) = &elems.presenter {
+            presenter.set_state(state, Some(&notes));
+        }
+    }
+
+    // The next slide is only fetched for the view that shows one, and only when
+    // the deck actually moves — the borrow above is released first because the
+    // fetch is awaited.
+    if session.elements.borrow().presenter.is_some() {
+        let next = next_slide(session, slide_id).await;
+        if let Some(presenter) = &mut session.elements.borrow_mut().presenter {
+            presenter.set_next(next);
+        }
+    }
+}
+
+/// The slide after `current`, or `None` at the end of the deck.
+async fn next_slide(session: &Session, current: SlideId) -> Option<Slide> {
+    let total = session.meta.borrow().total_slides;
+    let index = current.index() + 1;
+    if index >= total {
+        return None;
+    }
+    match session.api.get_slide(SlideId::new(index)).await {
+        Ok(slide) => Some(slide),
+        Err(err) => {
+            error!("Failed to fetch the next slide:", err.to_string());
+            None
+        }
+    }
 }
 
 /// Shows completion toast if presentation is done

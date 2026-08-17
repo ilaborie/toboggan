@@ -113,6 +113,14 @@ pub struct TalkResponse {
     /// Step counts per slide (for clients that display step progress)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub step_counts: Vec<usize>,
+    /// Planned speaking time per slide, in seconds, from each slide's
+    /// `duration` front matter. `None` where the author did not say.
+    ///
+    /// Parallel to `titles`, and here rather than fetched per slide because the
+    /// presenter view needs the *whole* plan to work out whether the talk is
+    /// running early or late — one number per slide is far less than the deck.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub durations: Vec<Option<u64>>,
 }
 
 impl Default for TalkResponse {
@@ -125,6 +133,7 @@ impl Default for TalkResponse {
             lang: None,
             titles: vec![],
             step_counts: vec![],
+            durations: vec![],
         }
     }
 }
@@ -144,8 +153,14 @@ impl From<&Talk> for TalkResponse {
             lang: value.lang.clone(),
             titles: value.slides.iter().map(|it| it.title.to_string()).collect(),
             step_counts: vec![], // Populated by server with SlideStats
+            durations: value.slides.iter().map(planned_seconds).collect(),
         }
     }
+}
+
+/// A slide's planned speaking time in whole seconds.
+fn planned_seconds(slide: &Slide) -> Option<u64> {
+    slide.duration.map(|duration| duration.as_secs())
 }
 
 impl From<Talk> for TalkResponse {
@@ -161,6 +176,7 @@ impl From<Talk> for TalkResponse {
             slides,
         } = value;
         let titles = slides.iter().map(|it| it.title.to_string()).collect();
+        let durations = slides.iter().map(planned_seconds).collect();
 
         Self {
             title,
@@ -170,6 +186,7 @@ impl From<Talk> for TalkResponse {
             lang,
             titles,
             step_counts: vec![], // Populated by server with SlideStats
+            durations,
         }
     }
 }
