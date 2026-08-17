@@ -9,6 +9,7 @@ use toboggan_core::{ClientConfig, Command as TobogganCommand, SlidesResponse, Ta
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error, info};
 
+use crate::actions::AppAction;
 use crate::message::Message;
 use crate::state::{AppState, parse_slides_markdown};
 use crate::views;
@@ -109,7 +110,7 @@ impl App {
                 Task::none()
             }
 
-            Message::KeyPressed(key, modifiers) => self.handle_keyboard(key, modifiers),
+            Message::KeyPressed(key, modifiers) => self.handle_keyboard(&key, modifiers),
 
             Message::LinkClicked(url) => {
                 info!(?url, "Link clicked");
@@ -373,64 +374,49 @@ impl App {
 
     fn handle_keyboard(
         &mut self,
-        key: keyboard::Key,
+        key: &keyboard::Key,
         modifiers: keyboard::Modifiers,
     ) -> Task<Message> {
-        match key {
-            // Step navigation: Space, ArrowDown → NextStep; ArrowUp → PreviousStep
-            keyboard::Key::Named(keyboard::key::Named::Space | keyboard::key::Named::ArrowDown)
-                if !self.state.show_help =>
-            {
-                self.send_command(TobogganCommand::NextStep)
-            }
-            keyboard::Key::Named(keyboard::key::Named::ArrowUp) if !self.state.show_help => {
-                self.send_command(TobogganCommand::PreviousStep)
-            }
-            // Slide navigation: ArrowRight → Next; ArrowLeft → Previous
-            keyboard::Key::Named(keyboard::key::Named::ArrowRight) if !self.state.show_help => {
-                self.send_command(TobogganCommand::NextSlide)
-            }
-            keyboard::Key::Named(keyboard::key::Named::ArrowLeft) if !self.state.show_help => {
-                self.send_command(TobogganCommand::PreviousSlide)
-            }
-            keyboard::Key::Named(keyboard::key::Named::Home) if !self.state.show_help => {
-                self.send_command(TobogganCommand::First)
-            }
-            keyboard::Key::Named(keyboard::key::Named::End) if !self.state.show_help => {
-                self.send_command(TobogganCommand::Last)
-            }
-            keyboard::Key::Character(character) if character == "h" || character == "?" => {
-                self.state.show_help = !self.state.show_help;
-                Task::none()
-            }
-            keyboard::Key::Character(character) if character == "s" && !self.state.show_help => {
-                self.state.show_sidebar = !self.state.show_sidebar;
-                Task::none()
-            }
-            keyboard::Key::Character(character)
-                if (character == "b" || character == "B") && !self.state.show_help =>
-            {
-                self.send_command(TobogganCommand::Blink)
-            }
-            keyboard::Key::Named(keyboard::key::Named::F11) => {
-                self.state.fullscreen = !self.state.fullscreen;
-                Task::none()
-            }
-            keyboard::Key::Named(keyboard::key::Named::Escape) if self.state.show_help => {
-                self.state.show_help = false;
-                Task::none()
-            }
-            keyboard::Key::Named(keyboard::key::Named::Escape)
-                if self.state.error_message.is_some() =>
-            {
-                self.state.error_message = None;
-                Task::none()
-            }
-            keyboard::Key::Character(character) if character == "q" && modifiers.command() => {
-                iced::window::close(iced::window::Id::unique())
-            }
-            _ => Task::none(),
+        let Some(action) = AppAction::from_key(key, modifiers) else {
+            return Task::none();
+        };
+        if self.state.show_help && !action.ignores_help() {
+            return Task::none();
         }
+
+        if let Some(command) = action.command() {
+            return self.send_command(command);
+        }
+
+        match action {
+            AppAction::ToggleHelp => {
+                self.state.show_help = !self.state.show_help;
+            }
+            AppAction::ToggleSidebar => {
+                self.state.show_sidebar = !self.state.show_sidebar;
+            }
+            AppAction::ToggleFullscreen => {
+                self.state.fullscreen = !self.state.fullscreen;
+            }
+            // One key for both overlays, closing whichever is up.
+            AppAction::CloseOverlay => {
+                if self.state.show_help {
+                    self.state.show_help = false;
+                } else {
+                    self.state.error_message = None;
+                }
+            }
+            AppAction::Quit => return iced::exit(),
+            // Handled above, by `command()`.
+            AppAction::First
+            | AppAction::Previous
+            | AppAction::Next
+            | AppAction::Last
+            | AppAction::PreviousStep
+            | AppAction::NextStep
+            | AppAction::Blink => {}
+        }
+        Task::none()
     }
 }
 

@@ -3,6 +3,7 @@ use iced::Settings;
 use iced::window::icon;
 use toboggan_client::TobogganConfig;
 
+mod actions;
 mod app;
 pub use app::App;
 
