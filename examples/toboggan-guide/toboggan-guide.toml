@@ -2348,6 +2348,7 @@ body_source = '''
 | `--max-clients` | `TOBOGGAN_MAX_CLIENTS` | Concurrent client cap |
 | `--presenter-token` | `TOBOGGAN_PRESENTER_TOKEN` | Let a remote client drive |
 | `--open` | `TOBOGGAN_OPEN` | Open a browser once ready |
+| `--open-presenter` | `TOBOGGAN_OPEN_PRESENTER` | Also open the presenter view |
 | `--watch` | — | Reload when the `.toml` changes |
 
 ```console
@@ -2435,6 +2436,11 @@ raw = '''
 <td>Open a browser once ready</td>
 </tr>
 <tr>
+<td><code>--open-presenter</code></td>
+<td><code>TOBOGGAN_OPEN_PRESENTER</code></td>
+<td>Also open the presenter view</td>
+</tr>
+<tr>
 <td><code>--watch</code></td>
 <td>—</td>
 <td>Reload when the <code>.toml</code> changes</td>
@@ -2474,6 +2480,7 @@ alt = '''
 | `--max-clients` | `TOBOGGAN_MAX_CLIENTS` | Concurrent client cap |
 | `--presenter-token` | `TOBOGGAN_PRESENTER_TOKEN` | Let a remote client drive |
 | `--open` | `TOBOGGAN_OPEN` | Open a browser once ready |
+| `--open-presenter` | `TOBOGGAN_OPEN_PRESENTER` | Also open the presenter view |
 | `--watch` | — | Reload when the `.toml` changes |
 
 ```console
@@ -2540,6 +2547,7 @@ connected client over a WebSocket.
 | --- | --- |
 | `/` | The homepage — links every view of the deck |
 | `/run` | The live presentation (this UI) |
+| `/presenter` | Notes, next slide, timer — for you, not the room |
 | `/api/ws` | Presentation sync WebSocket |
 | `/api/terminal` | Embedded-terminal WebSocket |
 | `/api/talk`, `/api/slides` | REST views of the deck |
@@ -2590,6 +2598,10 @@ connected client over a WebSocket.</p>
 <td>The live presentation (this UI)</td>
 </tr>
 <tr>
+<td><code>/presenter</code></td>
+<td>Notes, next slide, timer — for you, not the room</td>
+</tr>
+<tr>
 <td><code>/api/ws</code></td>
 <td>Presentation sync WebSocket</td>
 </tr>
@@ -2625,6 +2637,7 @@ connected client over a WebSocket.
 | --- | --- |
 | `/` | The homepage — links every view of the deck |
 | `/run` | The live presentation (this UI) |
+| `/presenter` | Notes, next slide, timer — for you, not the room |
 | `/api/ws` | Presentation sync WebSocket |
 | `/api/terminal` | Embedded-terminal WebSocket |
 | `/api/talk`, `/api/slides` | REST views of the deck |
@@ -2640,12 +2653,14 @@ classes = [
 [slides.notes]
 type = "Html"
 raw = """
-<p>State transitions: Init → Running ⇄ Paused → Done. Commands (Next, Previous,
-GoTo, …) arrive over /api/ws and the new state is broadcast to all clients.</p>
+<p>State transitions: Init → Running → Done. Commands (NextSlide, PreviousSlide,
+NextStep, GoTo, …) arrive over /api/ws and the new state is broadcast to every
+client.</p>
 """
 alt = """
-State transitions: Init → Running ⇄ Paused → Done. Commands (Next, Previous,
-GoTo, …) arrive over /api/ws and the new state is broadcast to all clients.
+State transitions: Init → Running → Done. Commands (NextSlide, PreviousSlide,
+NextStep, GoTo, …) arrive over /api/ws and the new state is broadcast to every
+client.
 """
 
 [slides.notes.style]
@@ -2781,6 +2796,114 @@ $ ls slides/
 """
 
 [slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# What you see, what the room sees
+
+`/presenter` is the second window: the deck goes on the projector, this one
+stays on your screen.
+
+- The **current** slide, and the **next** one, so you can see what is coming
+- The **speaker notes** for where you are — everything after `<!-- notes -->`
+- A **clock**, an **elapsed timer** (click it to restart), the slide and reveal
+  counters, and how far ahead or behind your `duration` front matter you are
+
+```console
+$ toboggan -p ./slides/ --open-presenter
+```
+
+> [!TIP]
+> It is the same application as `/run`, on the same socket — the arrow keys
+> drive the deck from either window. Neither one is in charge.
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "5.6 The presenter view"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>What you see, what the room sees</h1>
+<p><code>/presenter</code> is the second window: the deck goes on the projector, this one
+stays on your screen.</p>
+
+<div class="step step-0"><!-- begin step -->
+<ul>
+<li>The <strong>current</strong> slide, and the <strong>next</strong> one, so you can see what is coming</li>
+<li>The <strong>speaker notes</strong> for where you are — everything after <code>&lt;!-- notes --&gt;</code></li>
+<li>A <strong>clock</strong>, an <strong>elapsed timer</strong> (click it to restart), the slide and reveal
+counters, and how far ahead or behind your <code>duration</code> front matter you are</li>
+</ul>
+</div><!-- end step -->
+
+<div class="step step-1"><!-- begin step -->
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan -p ./slides/ --open-presenter
+</span></code></pre>
+<div class="markdown-alert markdown-alert-tip">
+<p class="markdown-alert-title">Tip</p>
+<p>It is the same application as <code>/run</code>, on the same socket — the arrow keys
+drive the deck from either window. Neither one is in charge.</p>
+</div>
+</div><!-- end step -->
+"""
+alt = """
+# What you see, what the room sees
+
+`/presenter` is the second window: the deck goes on the projector, this one
+stays on your screen.
+
+- The **current** slide, and the **next** one, so you can see what is coming
+- The **speaker notes** for where you are — everything after `<!-- notes -->`
+- A **clock**, an **elapsed timer** (click it to restart), the slide and reveal
+  counters, and how far ahead or behind your `duration` front matter you are
+
+```console
+$ toboggan -p ./slides/ --open-presenter
+```
+
+> [!TIP]
+> It is the same application as `/run`, on the same socket — the arrow keys
+> drive the deck from either window. Neither one is in charge.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>The two previews never start a slide's embedded terminals. The shell belongs to
+the deck the room is watching; a second one here would be a different session
+showing different output.</p>
+<p>The pacing readout only appears when the deck declares durations — without a
+plan there is nothing to be late for.</p>
+"""
+alt = """
+The two previews never start a slide's embedded terminals. The shell belongs to
+the deck the room is watching; a second one here would be a different session
+showing different output.
+
+The pacing readout only appears when the deck declares durations — without a
+plan there is nothing to be late for.
+"""
+
+[slides.notes.style]
 classes = [
     "no_title",
     "wide",

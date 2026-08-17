@@ -227,6 +227,13 @@ pub(crate) struct ServeOptions {
     #[arg(long, env = "TOBOGGAN_OPEN")]
     pub(crate) open: bool,
 
+    /// Also open the presenter view — notes, next slide, and a timer
+    ///
+    /// Two windows for one talk: this one on your screen, the deck on the
+    /// projector. Implies `--open`.
+    #[arg(long, env = "TOBOGGAN_OPEN_PRESENTER")]
+    pub(crate) open_presenter: bool,
+
     /// Secret that lets a client not on this machine drive the deck
     ///
     /// Only relevant with `--host` set to something reachable: a client on this
@@ -249,6 +256,7 @@ impl ServeOptions {
         self.shell = self.shell.take().or(config.shell);
         self.presenter_token = self.presenter_token.take().or(config.presenter_token);
         self.open |= config.open.unwrap_or(false);
+        self.open_presenter |= config.open_presenter.unwrap_or(false);
     }
 
     fn into_server_settings(self) -> toboggan_server::ServerSettings {
@@ -264,6 +272,7 @@ impl ServeOptions {
             thumbnails_dir: self.thumbnails_dir,
             shell: self.shell,
             open: self.open,
+            open_presenter: self.open_presenter,
             presenter_token: self.presenter_token,
         }
     }
@@ -396,6 +405,7 @@ impl DefaultArgs {
             (self.serve.shell.is_some(), "--shell"),
             (self.serve.presenter_token.is_some(), "--presenter-token"),
             (self.serve.open, "--open"),
+            (self.serve.open_presenter, "--open-presenter"),
         ] {
             if set {
                 unused.push(flag);

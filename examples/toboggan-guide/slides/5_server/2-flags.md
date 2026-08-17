@@ -16,6 +16,7 @@ classes = ["no_title", "wide"]
 | `--max-clients` | `TOBOGGAN_MAX_CLIENTS` | Concurrent client cap |
 | `--presenter-token` | `TOBOGGAN_PRESENTER_TOKEN` | Let a remote client drive |
 | `--open` | `TOBOGGAN_OPEN` | Open a browser once ready |
+| `--open-presenter` | `TOBOGGAN_OPEN_PRESENTER` | Also open the presenter view |
 | `--watch` | — | Reload when the `.toml` changes |
 
 <!-- pause -->

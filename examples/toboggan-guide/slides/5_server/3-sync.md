@@ -22,11 +22,13 @@ connected client over a WebSocket.
 |---|---|
 | `/` | The homepage — links every view of the deck |
 | `/run` | The live presentation (this UI) |
+| `/presenter` | Notes, next slide, timer — for you, not the room |
 | `/api/ws` | Presentation sync WebSocket |
 | `/api/terminal` | Embedded-terminal WebSocket |
 | `/api/talk`, `/api/slides` | REST views of the deck |
 | `/doc` | Interactive OpenAPI docs |
 
 <!-- notes -->
-State transitions: Init → Running ⇄ Paused → Done. Commands (Next, Previous,
-GoTo, …) arrive over /api/ws and the new state is broadcast to all clients.
+State transitions: Init → Running → Done. Commands (NextSlide, PreviousSlide,
+NextStep, GoTo, …) arrive over /api/ws and the new state is broadcast to every
+client.

@@ -142,6 +142,8 @@ pub(crate) struct ServeConfig {
     pub(crate) thumbnails_dir: Option<PathBuf>,
     pub(crate) shell: Option<String>,
     pub(crate) open: Option<bool>,
+    /// Also open the presenter view — notes, next slide, and a timer.
+    pub(crate) open_presenter: Option<bool>,
     /// Secret that lets a client not on this machine drive the deck.
     ///
     /// Only consulted when the server is reachable from the network — a client
@@ -236,6 +238,7 @@ impl ServeConfig {
             thumbnails_dir,
             shell,
             open,
+            open_presenter,
             presenter_token,
         );
     }

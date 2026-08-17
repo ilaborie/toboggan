@@ -62,14 +62,22 @@ pub async fn launch_with_talk(
         .await
         .with_context(|| format!("Connecting to {addr} ..."))?;
 
-    if settings.open {
-        let url = browse_url(host, port);
-        info!(%url, "Opening presentation in the default browser");
-        tokio::task::spawn_blocking(move || {
-            if let Err(err) = open::that(&url) {
-                warn!(%url, %err, "Could not open the browser");
-            }
-        });
+    if settings.open || settings.open_presenter {
+        // The presenter view goes second so it lands on top: the deck belongs on
+        // the projector, and the window the speaker is left looking at should be
+        // the one with their notes in it.
+        let mut pages = vec![browse_url(host, port, "")];
+        if settings.open_presenter {
+            pages.push(browse_url(host, port, "presenter"));
+        }
+        for url in pages {
+            info!(%url, "Opening in the default browser");
+            tokio::task::spawn_blocking(move || {
+                if let Err(err) = open::that(&url) {
+                    warn!(%url, %err, "Could not open the browser");
+                }
+            });
+        }
     }
 
     let talk_service = TalkService::new(talk).context("build talk service")?;
@@ -143,19 +151,19 @@ fn report_access_posture(host: IpAddr, auth: &PresenterAuth) {
     }
 }
 
-/// Builds the URL `--open` hands to the browser.
+/// Builds a URL `--open` hands to the browser.
 ///
 /// Two things the bind address cannot supply directly: a wildcard bind
 /// (`0.0.0.0` / `::`) is not an address a client can connect to, so it becomes
 /// loopback; and an IPv6 literal needs brackets in a URL authority, which
 /// `SocketAddr`'s `Display` adds and plain interpolation does not.
-fn browse_url(host: IpAddr, port: u16) -> String {
+fn browse_url(host: IpAddr, port: u16, path: &str) -> String {
     let host = match host {
         IpAddr::V4(addr) if addr.is_unspecified() => IpAddr::V4(Ipv4Addr::LOCALHOST),
         IpAddr::V6(addr) if addr.is_unspecified() => IpAddr::V6(Ipv6Addr::LOCALHOST),
         addr => addr,
     };
-    format!("http://{}/", SocketAddr::new(host, port))
+    format!("http://{}/{path}", SocketAddr::new(host, port))
 }
 
 #[instrument]
@@ -270,21 +278,25 @@ mod tests {
     fn browse_url_is_reachable_and_bracketed() {
         // A wildcard bind is not connectable; loopback of the same family is.
         assert_eq!(
-            browse_url(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 8080),
+            browse_url(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 8080, ""),
             "http://127.0.0.1:8080/"
         );
         assert_eq!(
-            browse_url(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 8080),
+            browse_url(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 8080, ""),
             "http://[::1]:8080/"
         );
         // An IPv6 literal needs brackets in the URL authority.
         assert_eq!(
-            browse_url(IpAddr::V6(Ipv6Addr::LOCALHOST), 3000),
+            browse_url(IpAddr::V6(Ipv6Addr::LOCALHOST), 3000, ""),
             "http://[::1]:3000/"
         );
         assert_eq!(
-            browse_url(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10)), 80),
+            browse_url(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10)), 80, ""),
             "http://192.168.1.10:80/"
+        );
+        assert_eq!(
+            browse_url(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080, "presenter"),
+            "http://127.0.0.1:8080/presenter"
         );
     }
 }

@@ -58,6 +58,13 @@ pub struct ServerSettings {
     #[clap(long, env = "TOBOGGAN_OPEN")]
     pub open: bool,
 
+    /// Also open the presenter view — notes, next slide, and a timer
+    ///
+    /// Two windows for one talk: this one on your screen, the deck on the
+    /// projector. Implies `--open`.
+    #[clap(long, env = "TOBOGGAN_OPEN_PRESENTER")]
+    pub open_presenter: bool,
+
     /// Secret that lets a client **not** on this machine drive the deck.
     ///
     /// Only needed when the server is reachable from the network: a connection

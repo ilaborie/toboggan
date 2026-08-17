@@ -71,6 +71,11 @@
 # Open the presentation in a browser once the server is ready.
 # open = false
 
+# Also open the presenter view — notes, the next slide, and a timer. Implies
+# `open`. Two windows for one talk: this one on your screen, the deck on the
+# projector.
+# open-presenter = false
+
 # Secret that lets a client somewhere other than this machine drive the deck.
 # Only relevant with `host` opened up: a client on this machine always presents,
 # and without a token a client on the network can watch but not navigate, and
