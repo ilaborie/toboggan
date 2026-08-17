@@ -1,6 +1,6 @@
 use iced::widget::markdown;
 use toboggan_client::ConnectionStatus;
-use toboggan_core::{Content, Slide, SlideId, State as PresentationState, Talk};
+use toboggan_core::{Slide, SlideId, State as PresentationState, Talk};
 
 /// Cached markdown content for a slide
 #[derive(Debug, Clone, Default)]
@@ -25,22 +25,13 @@ pub(crate) struct AppState {
     pub error_message: Option<String>,
 }
 
-/// Parse Content to markdown text
-fn content_to_markdown_text(content: &Content) -> String {
-    match content {
-        Content::Empty => String::new(),
-        Content::Text { text } => text.clone(),
-        Content::Html { raw, alt, .. } => alt.as_ref().unwrap_or(raw).clone(),
-    }
-}
-
 /// Parse slides into cached markdown items
 pub(crate) fn parse_slides_markdown(slides: &[Slide]) -> Vec<CachedMarkdown> {
     slides
         .iter()
         .map(|slide| {
-            let body_text = content_to_markdown_text(&slide.body);
-            let notes_text = content_to_markdown_text(&slide.notes);
+            let body_text = slide.body.display_text().to_owned();
+            let notes_text = slide.notes.display_text().to_owned();
 
             CachedMarkdown {
                 body_items: markdown::parse(&body_text).collect(),

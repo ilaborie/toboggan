@@ -6,6 +6,7 @@ use axum::extract::State;
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use toboggan_cli::OutputFormat;
+use toboggan_cli::scaffold::slugify;
 use toboggan_core::Talk;
 use tracing::{error, info};
 
@@ -129,24 +130,5 @@ fn cleanup_input(input: &Path, slides: Option<&Path>) {
         && let Err(err) = std::fs::remove_file(input)
     {
         tracing::debug!("could not remove {}: {err}", input.display());
-    }
-}
-
-fn slugify(title: &str) -> String {
-    let slug = title
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() {
-                ch.to_ascii_lowercase()
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>();
-    let trimmed = slug.trim_matches('-');
-    if trimmed.is_empty() {
-        "presentation".to_owned()
-    } else {
-        trimmed.to_owned()
     }
 }

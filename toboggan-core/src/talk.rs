@@ -127,3 +127,23 @@ impl From<Talk> for TalkResponse {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Content, Slide};
+
+    /// An untitled slide contributes an empty name, not a placeholder that
+    /// every client then renders as if it were the author's own title.
+    #[test]
+    fn untitled_slides_do_not_get_a_placeholder_title() {
+        let mut talk = Talk::new("Deck");
+        talk.slides = vec![Slide {
+            title: Content::Empty,
+            ..Default::default()
+        }];
+
+        let response = TalkResponse::from(talk);
+        assert_eq!(response.titles, vec![String::new()]);
+    }
+}

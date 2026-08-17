@@ -1,7 +1,7 @@
 use std::cell::OnceCell;
 use std::collections::{HashMap, HashSet};
 
-use toboggan_core::{Content, Slide, Talk};
+use toboggan_core::{Slide, Talk};
 use toboggan_stats::{HtmlDocument, SlideStats};
 
 use crate::diagnostic::{LintDiagnostic, RuleId, Severity, SlideRef};
@@ -133,9 +133,5 @@ pub trait Rule: Send + Sync {
 /// Returns the rendered HTML (or plain text) of a slide body for inspection.
 #[must_use]
 pub(crate) fn body_html(slide: &Slide) -> &str {
-    match &slide.body {
-        Content::Html { raw, .. } => raw,
-        Content::Text { text } => text,
-        Content::Empty => "",
-    }
+    slide.body.raw_html()
 }
