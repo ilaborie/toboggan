@@ -1,8 +1,7 @@
 use toboggan_core::SlideKind;
-use toboggan_stats::HtmlDocument;
 
 use crate::diagnostic::{LintDiagnostic, RuleId, Severity};
-use crate::rule::{Rule, RuleContext, body_html};
+use crate::rule::{Rule, RuleContext};
 
 /// Cover and part (section) slides should not contain reveal steps.
 pub(crate) struct PauseInPart;
@@ -22,7 +21,7 @@ impl Rule for PauseInPart {
             SlideKind::Part => "part",
             SlideKind::Standard => return,
         };
-        let steps = HtmlDocument::parse_fragment(body_html(context.slide)).count_steps();
+        let steps = context.body_doc().count_steps();
         if steps > 0 {
             out.push(
                 LintDiagnostic::slide(
@@ -50,7 +49,7 @@ impl Rule for EmptyStep {
     }
 
     fn check_slide(&self, context: &RuleContext<'_>, out: &mut Vec<LintDiagnostic>) {
-        let empty = HtmlDocument::parse_fragment(body_html(context.slide)).count_empty_steps();
+        let empty = context.body_doc().count_empty_steps();
         if empty > 0 {
             out.push(
                 LintDiagnostic::slide(
@@ -78,7 +77,7 @@ impl Rule for TooManySteps {
     }
 
     fn check_slide(&self, context: &RuleContext<'_>, out: &mut Vec<LintDiagnostic>) {
-        let steps = HtmlDocument::parse_fragment(body_html(context.slide)).count_steps();
+        let steps = context.body_doc().count_steps();
         let max = context.config.max_steps_per_slide;
         if steps > max {
             out.push(

@@ -32,6 +32,16 @@ static LIST_ITEM_SELECTOR: LazyLock<Selector> =
 static NESTED_STEP_SELECTOR: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse(".step .step").expect("nested step selector should be valid"));
 
+/// Pre-compiled selector for `script` elements
+#[allow(clippy::expect_used)]
+static SCRIPT_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("script").expect("script selector should be valid"));
+
+/// Pre-compiled selector for `h1` elements
+#[allow(clippy::expect_used)]
+static H1_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("h1").expect("h1 selector should be valid"));
+
 /// Tags whose content should be excluded from text extraction
 const EXCLUDED_TAGS: &[&str] = &["style", "script", "svg", "figure"];
 
@@ -69,6 +79,22 @@ impl HtmlDocument {
     #[must_use]
     pub fn count_list_items(&self) -> usize {
         self.document.select(&LIST_ITEM_SELECTOR).count()
+    }
+
+    /// Whether the fragment contains a raw `<script>` element.
+    ///
+    /// Asks the parsed tree rather than searching the source for `<script`,
+    /// which also matched the text of an HTML comment and forced a full
+    /// lowercased copy of the body to be allocated for every check.
+    #[must_use]
+    pub fn has_script(&self) -> bool {
+        self.document.select(&SCRIPT_SELECTOR).next().is_some()
+    }
+
+    /// Whether the fragment contains an `<h1>` element.
+    #[must_use]
+    pub fn has_h1(&self) -> bool {
+        self.document.select(&H1_SELECTOR).next().is_some()
     }
 
     /// Count `.step` elements nested inside another `.step`.

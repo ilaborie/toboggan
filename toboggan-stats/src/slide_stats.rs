@@ -3,10 +3,8 @@ use std::time::Duration;
 
 use toboggan_core::{Content, Slide, SlideKind, Talk};
 
-use crate::analysis::{
-    count_images_in_html, count_list_items_in_html, count_steps_from_content, count_words,
-    extract_text_from_html, strip_slide_counter,
-};
+use crate::analysis::{count_words, strip_slide_counter};
+use crate::html::HtmlDocument;
 
 /// Statistics for a single slide
 #[derive(Debug, Clone, Default)]
@@ -37,14 +35,13 @@ impl SlideStats {
         let body_analysis = analyze_content(&slide.body, false);
         let notes_analysis = analyze_content(&slide.notes, false);
 
-        // Count steps from body content
-        let steps = count_steps_from_content(&slide.body);
-
         Self {
             words: title_analysis.words + body_analysis.words,
             bullets: title_analysis.bullets + body_analysis.bullets + notes_analysis.bullets,
             images: title_analysis.images + body_analysis.images + notes_analysis.images,
-            steps,
+            // Steps are a body-only concept: a `<!-- pause -->` in a title or in
+            // notes does not produce a reveal.
+            steps: body_analysis.steps,
             notes_words: notes_analysis.words,
         }
     }
@@ -204,8 +201,17 @@ struct ContentAnalysis {
     words: usize,
     bullets: usize,
     images: usize,
+    steps: usize,
 }
 
+/// Analyses one piece of content with a **single** HTML parse.
+///
+/// The convenience helpers in [`crate::analysis`] each parse the fragment they
+/// are given, so calling four of them on one slide body parsed it four times —
+/// and `from_slide_with_options` runs this for title, body and notes and then
+/// counted steps separately, for ten parses of the same three strings. The
+/// linter calls `SlideStats::from_slide` twice per slide on top of that. Parse
+/// once here and read every count off the same document.
 fn analyze_content(content: &Content, strip_counter: bool) -> ContentAnalysis {
     let mut analysis = ContentAnalysis::default();
 
@@ -222,13 +228,16 @@ fn analyze_content(content: &Content, strip_counter: bool) -> ContentAnalysis {
             analysis.words = count_words(&text_to_analyze);
         }
         Content::Html { raw, alt, style: _ } => {
-            let mut text = extract_text_from_html(raw);
+            let document = HtmlDocument::parse_fragment(raw);
+
+            let mut text = document.extract_text();
             if strip_counter {
                 text = strip_slide_counter(&text);
             }
             analysis.words = count_words(&text);
-            analysis.bullets = count_list_items_in_html(raw);
-            analysis.images = count_images_in_html(raw);
+            analysis.bullets = document.count_list_items();
+            analysis.images = document.count_images();
+            analysis.steps = document.count_steps();
 
             // Also count alt text if present
             if let Some(alt_text) = alt {

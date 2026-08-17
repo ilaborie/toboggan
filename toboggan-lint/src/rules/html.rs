@@ -1,7 +1,5 @@
-use toboggan_stats::HtmlDocument;
-
 use crate::diagnostic::{LintDiagnostic, RuleId, Severity};
-use crate::rule::{Rule, RuleContext, body_html};
+use crate::rule::{Rule, RuleContext};
 
 /// Nested `.step` elements break the frontend reveal logic.
 pub(crate) struct NestedStep;
@@ -16,7 +14,7 @@ impl Rule for NestedStep {
     }
 
     fn check_slide(&self, context: &RuleContext<'_>, out: &mut Vec<LintDiagnostic>) {
-        let nested = HtmlDocument::parse_fragment(body_html(context.slide)).count_nested_steps();
+        let nested = context.body_doc().count_nested_steps();
         if nested > 0 {
             out.push(
                 LintDiagnostic::slide(
@@ -44,8 +42,7 @@ impl Rule for ImgMissingAlt {
     }
 
     fn check_slide(&self, context: &RuleContext<'_>, out: &mut Vec<LintDiagnostic>) {
-        let missing =
-            HtmlDocument::parse_fragment(body_html(context.slide)).count_images_without_alt();
+        let missing = context.body_doc().count_images_without_alt();
         if missing > 0 {
             out.push(
                 LintDiagnostic::slide(
@@ -73,10 +70,7 @@ impl Rule for RawScript {
     }
 
     fn check_slide(&self, context: &RuleContext<'_>, out: &mut Vec<LintDiagnostic>) {
-        if body_html(context.slide)
-            .to_ascii_lowercase()
-            .contains("<script")
-        {
+        if context.body_doc().has_script() {
             out.push(
                 LintDiagnostic::slide(
                     self.id(),
@@ -108,7 +102,7 @@ impl Rule for HeadingH1 {
         let slide = context.slide;
         let title_rendered = !matches!(slide.title, toboggan_core::Content::Empty)
             && !slide.style.classes.iter().any(|class| class == "no_title");
-        if title_rendered && body_html(slide).to_ascii_lowercase().contains("<h1") {
+        if title_rendered && context.body_doc().has_h1() {
             out.push(
                 LintDiagnostic::slide(
                     self.id(),

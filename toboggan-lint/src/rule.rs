@@ -1,6 +1,8 @@
+use std::cell::OnceCell;
 use std::collections::{HashMap, HashSet};
 
 use toboggan_core::{Content, Slide, Talk};
+use toboggan_stats::{HtmlDocument, SlideStats};
 
 use crate::diagnostic::{LintDiagnostic, RuleId, Severity, SlideRef};
 
@@ -59,6 +61,14 @@ impl LintConfig {
 }
 
 /// Per-slide context passed to [`Rule::check_slide`].
+///
+/// Carries the slide's parsed body and its statistics so the rules can share
+/// them. Every rule used to derive its own: three `pause` rules and two `html`
+/// rules each parsed the body, and the two `content` rules each built a fresh
+/// `SlideStats`, which itself parsed the body several times over. That is more
+/// than twenty `scraper` parses of the same string for one slide, on every
+/// `toboggan lint` and on every `GET /api/talk`. Both are computed at most once
+/// here, and only when a rule actually asks.
 pub struct RuleContext<'a> {
     /// The whole talk (for cross-references such as resolved cwds).
     pub talk: &'a Talk,
@@ -68,6 +78,40 @@ pub struct RuleContext<'a> {
     pub slide_ref: &'a SlideRef,
     /// Active configuration.
     pub config: &'a LintConfig,
+    body_doc: OnceCell<HtmlDocument>,
+    stats: OnceCell<SlideStats>,
+}
+
+impl<'a> RuleContext<'a> {
+    /// Builds a context for one slide.
+    #[must_use]
+    pub fn new(
+        talk: &'a Talk,
+        slide: &'a Slide,
+        slide_ref: &'a SlideRef,
+        config: &'a LintConfig,
+    ) -> Self {
+        Self {
+            talk,
+            slide,
+            slide_ref,
+            config,
+            body_doc: OnceCell::new(),
+            stats: OnceCell::new(),
+        }
+    }
+
+    /// The slide body, parsed once per slide.
+    pub fn body_doc(&self) -> &HtmlDocument {
+        self.body_doc
+            .get_or_init(|| HtmlDocument::parse_fragment(body_html(self.slide)))
+    }
+
+    /// The slide's statistics, computed once per slide.
+    pub fn stats(&self) -> &SlideStats {
+        self.stats
+            .get_or_init(|| SlideStats::from_slide(self.slide))
+    }
 }
 
 /// A lint rule. Most rules implement [`Rule::check_slide`]; cross-slide rules

@@ -1,5 +1,4 @@
 use toboggan_core::SlideKind;
-use toboggan_stats::SlideStats;
 
 use crate::diagnostic::{LintDiagnostic, RuleId, Severity};
 use crate::rule::{Rule, RuleContext};
@@ -20,7 +19,7 @@ impl Rule for ExcessiveWords {
         if context.slide.kind != SlideKind::Standard {
             return;
         }
-        let words = SlideStats::from_slide(context.slide).words;
+        let words = context.stats().words;
         let max = context.config.max_words_per_slide;
         if words > max {
             out.push(
@@ -49,7 +48,7 @@ impl Rule for TooManyImages {
     }
 
     fn check_slide(&self, context: &RuleContext<'_>, out: &mut Vec<LintDiagnostic>) {
-        let images = SlideStats::from_slide(context.slide).images;
+        let images = context.stats().images;
         let max = context.config.max_images_per_slide;
         if images > max {
             out.push(

@@ -66,12 +66,7 @@ pub fn lint(talk: &Talk, config: &LintConfig) -> LintReport {
     // Per-slide rules.
     for (index, slide) in talk.slides.iter().enumerate() {
         let slide_ref = Ref::new(index, slide);
-        let context = RuleContext {
-            talk,
-            slide,
-            slide_ref: &slide_ref,
-            config,
-        };
+        let context = RuleContext::new(talk, slide, &slide_ref, config);
         for rule in &rules {
             // A rule runs unless it is globally disabled or silenced for this
             // slide via front matter / a `<!-- lint-disable -->` body comment.
