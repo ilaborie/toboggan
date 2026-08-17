@@ -7,6 +7,9 @@ pub use self::components::*;
 mod dom;
 pub use self::dom::*;
 
+mod key_capture;
+pub use self::key_capture::*;
+
 pub mod errors;
 
 mod render;

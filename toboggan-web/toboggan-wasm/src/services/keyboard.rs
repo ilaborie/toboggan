@@ -8,6 +8,8 @@ use toboggan_core::Command;
 use wasm_bindgen::JsCast;
 use web_sys::KeyboardEvent;
 
+use crate::{deck_keys_captured, typing_into_editable};
+
 #[derive(Debug, Clone)]
 pub(crate) struct KeyboardMapping(HashMap<&'static str, Command>);
 
@@ -54,6 +56,15 @@ impl KeyboardService {
 
         let listener = EventListener::new(&window(), "keydown", move |event| {
             if let Some(keyboard_event) = event.dyn_ref::<KeyboardEvent>() {
+                // The deck's bindings are bare keys — `space`, the arrows — which
+                // are also just characters someone may be typing. This handler
+                // sits on `window` and used to fire for every one of them, so a
+                // `space` at the quake terminal's shell prompt advanced the
+                // slide as well, and the slide change restarted the session the
+                // presenter was working in.
+                if deck_keys_captured() || typing_into_editable(keyboard_event) {
+                    return;
+                }
                 let key = keyboard_event.key();
                 if let Some(action) = mapping.get(&key) {
                     if tx.unbounded_send(action).is_err() {
