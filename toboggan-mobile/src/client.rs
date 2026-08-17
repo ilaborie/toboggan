@@ -1,6 +1,6 @@
 //! UniFFI-compatible Toboggan client wrapper.
 
-#![allow(clippy::print_stdout, clippy::missing_panics_doc, clippy::expect_used)]
+#![allow(clippy::missing_panics_doc)]
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -54,21 +54,24 @@ impl TobogganClient {
         client_name: String,
         handler: Arc<dyn ClientNotificationHandler>,
     ) -> Self {
-        println!("using {config:#?}");
-
         let ClientConfig {
             url,
             max_retries,
             retry_delay,
         } = config;
 
-        // Convert HTTP URL to WebSocket URL
-        let websocket_url = if url.starts_with("http://") {
-            format!("ws://{}/api/ws", url.trim_start_matches("http://"))
-        } else if url.starts_with("https://") {
-            format!("wss://{}/api/ws", url.trim_start_matches("https://"))
-        } else {
-            panic!("invalid url '{url}', expected 'http(s)://<host>:<port>'");
+        // Convert HTTP URL to WebSocket URL.
+        //
+        // An unrecognised scheme used to `panic!` here. This constructor is
+        // called across the UniFFI boundary, where a panic unwinds into foreign
+        // code and takes the host app down — for a mistyped server address, and
+        // with nothing shown to the user. The URL is passed through instead: the
+        // connection then fails and is reported through the handler's connection
+        // status, which the app already surfaces as an error.
+        let websocket_url = match url.split_once("://") {
+            Some(("http", rest)) => format!("ws://{rest}/api/ws"),
+            Some(("https", rest)) => format!("wss://{rest}/api/ws"),
+            _ => url.clone(),
         };
 
         let websocket_config = TobogganWebsocketConfig {
@@ -100,11 +103,17 @@ impl TobogganClient {
             talk_rx.clone(),
         );
 
-        // Create tokio runtime
+        // Create tokio runtime.
+        //
+        // Scoped rather than allowed for the whole module: unlike the URL above
+        // this genuinely has no local recovery — without a runtime the client
+        // cannot do anything at all — and it fails only if the OS refuses to
+        // give us a thread, at which point the app is over regardless.
+        #[allow(clippy::expect_used)]
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
-            .expect("having a tokio runtime");
+            .expect("the OS should be able to start the client's worker threads");
 
         Self {
             slides_rx,
@@ -123,7 +132,6 @@ impl TobogganClient {
             core.connect().await;
             // Slides are automatically synced via watch channel - no manual update needed
         });
-        println!("connected");
     }
 
     /// Check if the client is connected.

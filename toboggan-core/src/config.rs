@@ -1,6 +1,34 @@
+use core::sync::atomic::{AtomicU8, Ordering};
+
 use serde::{Deserialize, Serialize};
 
 use crate::Duration;
+
+/// Advances when the platform RNG is unavailable, so successive retries still
+/// differ from one another.
+static JITTER_FALLBACK: AtomicU8 = AtomicU8::new(0);
+
+/// A jitter fraction in `[0.0, 0.2)`, applied to the backoff delay.
+///
+/// Jitter exists so that a room full of clients that dropped at the same moment
+/// do not all reconnect at the same moment. The RNG failure used to be
+/// discarded with `let _`, which left the byte at its initial zero — no jitter
+/// at all, and the schedule back to the synchronised one this is meant to break
+/// up, with nothing to say it had happened.
+///
+/// The fallback is not random and does not decorrelate two clients, but it does
+/// advance on every call, so at least a single client's retries spread out. The
+/// stride is coprime with 20 so it walks the whole range rather than a few
+/// values of it.
+#[allow(clippy::cast_precision_loss)]
+fn jitter_fraction() -> f32 {
+    let mut random_byte = [0u8; 1];
+    let value = match getrandom::fill(&mut random_byte) {
+        Ok(()) => random_byte[0],
+        Err(_) => JITTER_FALLBACK.fetch_add(7, Ordering::Relaxed),
+    };
+    f32::from(value % 20) / 100.0
+}
 
 pub trait ClientConfig {
     fn api_url(&self) -> &str;
@@ -66,11 +94,7 @@ impl RetryConfig {
         let mut delay = delay.min(max_ms as f32) as u64;
 
         if self.use_jitter {
-            // Add up to 20% jitter
-            let mut random_byte = [0u8; 1];
-            let _ = getrandom::fill(&mut random_byte);
-            let jitter = f32::from(random_byte[0] % 20) / 100.0;
-            delay = (delay as f32 * (1.0 + jitter)) as u64;
+            delay = (delay as f32 * (1.0 + jitter_fraction())) as u64;
         }
 
         delay
