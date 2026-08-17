@@ -19,6 +19,8 @@ pub struct LintConfig {
     pub max_words_per_slide: usize,
     /// Maximum images before `content/too-many-images` fires.
     pub max_images_per_slide: usize,
+    /// Maximum lines in one code block before `code/too-long` fires.
+    pub max_code_lines: usize,
 }
 
 impl Default for LintConfig {
@@ -29,6 +31,8 @@ impl Default for LintConfig {
             max_steps_per_slide: 20,
             max_words_per_slide: 120,
             max_images_per_slide: 8,
+            // Roughly what stays readable projected at a legible font size.
+            max_code_lines: 20,
         }
     }
 }

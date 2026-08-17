@@ -610,6 +610,9 @@ impl LintArgs {
         if let Some(max) = file.max_images_per_slide {
             lint.max_images_per_slide = max;
         }
+        if let Some(max) = file.max_code_lines {
+            lint.max_code_lines = max;
+        }
         lint.disabled.extend(file.disabled.unwrap_or_default());
         lint.severity_overrides
             .extend(file.severity.unwrap_or_default());

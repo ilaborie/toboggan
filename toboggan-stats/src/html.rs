@@ -42,8 +42,27 @@ static SCRIPT_SELECTOR: LazyLock<Selector> =
 static H1_SELECTOR: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("h1").expect("h1 selector should be valid"));
 
+/// Pre-compiled selector for code blocks (`<code>` inside a `<pre>`)
+#[allow(clippy::expect_used)]
+static CODE_BLOCK_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("pre code").expect("code block selector should be valid"));
+
 /// Tags whose content should be excluded from text extraction
 const EXCLUDED_TAGS: &[&str] = &["style", "script", "svg", "figure"];
+
+/// Prefix comrak puts on a fenced block's language class.
+const LANGUAGE_CLASS_PREFIX: &str = "language-";
+
+/// A fenced or indented code block found in slide content.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CodeBlock {
+    /// The fence's language, from the `language-*` class comrak emits.
+    /// `None` for a block written without one (or an indented block, which
+    /// cannot carry a language at all).
+    pub language: Option<String>,
+    /// Lines of code, ignoring a trailing newline.
+    pub lines: usize,
+}
 
 /// Wrapper around `scraper::Html` for convenient HTML querying
 #[derive(Debug)]
@@ -134,6 +153,31 @@ impl HtmlDocument {
                     .is_none_or(|alt| alt.trim().is_empty())
             })
             .count()
+    }
+
+    /// Every code block in the fragment, with its language and line count.
+    ///
+    /// One pass serving both code rules, so a slide's body is walked once
+    /// rather than once per question asked about it.
+    #[must_use]
+    pub fn code_blocks(&self) -> Vec<CodeBlock> {
+        self.document
+            .select(&CODE_BLOCK_SELECTOR)
+            .map(|block| {
+                let language = block
+                    .value()
+                    .classes()
+                    .find_map(|class| class.strip_prefix(LANGUAGE_CLASS_PREFIX))
+                    .map(str::to_owned);
+                // `text()` concatenates the highlighter's per-token spans back
+                // into the original source, so the newlines survive.
+                let source = block.text().collect::<String>();
+                CodeBlock {
+                    language,
+                    lines: source.trim_end_matches('\n').lines().count(),
+                }
+            })
+            .collect()
     }
 
     /// Extract text content, excluding content from style, script, svg, and figure tags

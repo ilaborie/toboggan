@@ -1,8 +1,12 @@
+pub(crate) mod code;
 pub(crate) mod content;
 pub(crate) mod html;
 pub(crate) mod pause;
 pub(crate) mod structure;
 pub(crate) mod terminal;
+
+#[cfg(test)]
+pub(crate) mod test_support;
 
 #[cfg(feature = "spell")]
 pub(crate) mod spelling;
@@ -45,6 +49,12 @@ pub mod ids {
     pub const STRUCTURE_TITLE_MISSING: RuleId = RuleId("structure/title-missing");
     /// Two parts sharing a name.
     pub const STRUCTURE_DUPLICATE_PART_NAME: RuleId = RuleId("structure/duplicate-part-name");
+    /// Two content slides sharing a title.
+    pub const STRUCTURE_DUPLICATE_SLIDE_TITLE: RuleId = RuleId("structure/duplicate-slide-title");
+    /// A code block longer than `max_code_lines`.
+    pub const CODE_TOO_LONG: RuleId = RuleId("code/too-long");
+    /// A code block with no language on its fence.
+    pub const CODE_NO_LANGUAGE: RuleId = RuleId("code/no-language");
     /// More words than `max_words_per_slide`.
     pub const CONTENT_EXCESSIVE_WORDS: RuleId = RuleId("content/excessive-words");
     /// More images than `max_images_per_slide`.
@@ -76,8 +86,11 @@ pub fn all_rules() -> Vec<Box<dyn Rule>> {
         Box::new(structure::EmptySlide),
         Box::new(structure::TitleMissing),
         Box::new(structure::DuplicatePartName),
+        Box::new(structure::DuplicateSlideTitle),
         Box::new(content::ExcessiveWords),
         Box::new(content::TooManyImages),
+        Box::new(code::CodeTooLong),
+        Box::new(code::CodeNoLanguage),
     ];
     // Spell checking is opt-in at compile time (it needs the `typos` CLI at
     // runtime). Disable it for a run with `--no-spell`; it cannot be silenced by

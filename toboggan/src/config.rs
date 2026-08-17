@@ -121,6 +121,7 @@ pub(crate) struct LintConfig {
     pub(crate) max_steps_per_slide: Option<usize>,
     pub(crate) max_words_per_slide: Option<usize>,
     pub(crate) max_images_per_slide: Option<usize>,
+    pub(crate) max_code_lines: Option<usize>,
     /// Rule ids to switch off. Unknown ids are reported by the linter itself.
     pub(crate) disabled: Option<Vec<String>>,
     /// Per-rule severity overrides, keyed by rule id.
@@ -200,6 +201,7 @@ impl LintConfig {
             max_steps_per_slide,
             max_words_per_slide,
             max_images_per_slide,
+            max_code_lines,
             disabled,
             severity,
         );
