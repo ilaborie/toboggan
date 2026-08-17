@@ -318,6 +318,7 @@ impl DefaultArgs {
             output: None,
             format: None,
             no_stats: false,
+            list_themes: false,
             build: self.build,
         }
     }
@@ -403,6 +404,10 @@ pub(crate) struct BuildArgs {
     #[arg(long)]
     pub(crate) no_stats: bool,
 
+    /// Print the syntax-highlighting theme names accepted by `--theme` and exit
+    #[arg(long)]
+    pub(crate) list_themes: bool,
+
     #[command(flatten)]
     pub(crate) build: BuildOptions,
 }
@@ -414,6 +419,9 @@ impl BuildArgs {
         let mut settings = self.build.into_cli_settings(input, self.no_stats);
         settings.output = self.output;
         settings.format = self.format;
+        // Handled before the deck is read, so it works from anywhere — which is
+        // what the scaffolded `toboggan.toml` tells the user to expect.
+        settings.list_themes = self.list_themes;
         settings
     }
 }

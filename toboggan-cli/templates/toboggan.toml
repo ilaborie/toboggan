@@ -77,7 +77,7 @@
 
 # Change a rule's severity instead of disabling it.
 # [lint.severity]
-# "slide/too-many-words" = "info"
+# "content/excessive-words" = "info"
 
 # Note on the boolean keys above (no-counter, open, no-spell, …): a flag can turn
 # one on, but cannot turn one back off if it is enabled here. If you need it off
