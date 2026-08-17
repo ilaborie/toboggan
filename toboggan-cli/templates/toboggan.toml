@@ -66,10 +66,25 @@
 # Skip spell checking (it runs via the `typos` CLI when that is installed).
 # no-spell = false
 
+# How the report is rendered: human, json, github, or sarif. `github` prints
+# workflow commands, which a GitHub Actions run turns into annotations on the
+# slide files themselves; `sarif` feeds code scanning.
+# format = "human"
+
 # Per-slide budgets before the corresponding rule complains.
 # max-steps-per-slide = 20
 # max-words-per-slide = 120
 # max-images-per-slide = 8
+# max-code-lines = 20
+
+# Two rules stay silent until you set these, because no deck has a natural
+# length and plenty deliberately carry no speaker notes.
+#
+# max-duration is the slot you were given; `structure/over-budget` compares it
+# against the `duration` your slides declare in their front matter. Seconds or
+# a humantime string.
+# max-duration = "45m"
+# require-notes = true
 
 # Rules to switch off entirely, by id. `toboggan lint` names the id of every
 # diagnostic it reports, and an unknown id here is reported rather than ignored.

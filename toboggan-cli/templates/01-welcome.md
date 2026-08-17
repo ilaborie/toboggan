@@ -2,8 +2,6 @@
 title = "Welcome"
 +++
 
-# Welcome 👋
-
 - Write slides as Markdown files in `slides/`
 - Group them into numbered part folders
 
