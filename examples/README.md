@@ -98,9 +98,13 @@ comments.
 `github-pages/pages.yml` shows the composite action in use:
 
 ```yaml
-- uses: ilaborie/toboggan@v1
+- uses: ilaborie/toboggan@v0.1.0
   with:
     folder: ./slides
     outputs: html,pdf,thumbnails
-    deploy-pages: true
+    out-dir: dist
 ```
+
+The action only *builds* — `folder`, `outputs`, `out-dir` and `version` are its
+whole input set. Publishing is a separate step; `github-pages/pages.yml` hands
+`out-dir` to `actions/upload-pages-artifact`.

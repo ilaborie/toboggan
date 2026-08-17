@@ -1,5 +1,5 @@
 title = "Toboggan — User Guide"
-date = "2026-08-16"
+date = "2026-08-17"
 footer = """
 <style>
   /* Rendered inside the footer's shadow root, so styles are scoped to :host.
@@ -3025,15 +3025,15 @@ kind = "Standard"
 body_source = """
 # Publish to the web
 
-A composite **GitHub Action** builds your deck and ships it to GitHub Pages —
-single-file HTML, a PDF handout, and the searchable thumbnail overview:
+A composite **GitHub Action** builds your deck into single-file HTML, a PDF
+handout, and the searchable thumbnail overview — ready for GitHub Pages:
 
 ```yaml
-- uses: ilaborie/toboggan@v1
+- uses: ilaborie/toboggan@v0.1.0
   with:
     folder: ./slides
     outputs: html,pdf,thumbnails
-    deploy-pages: true
+    out-dir: dist
 ```
 
 It downloads the prebuilt `toboggan` binary for a pinned release, plus `typst`,
@@ -3058,13 +3058,13 @@ text = "6.4 Publish to the web"
 type = "Html"
 raw = """
 <h1>Publish to the web</h1>
-<p>A composite <strong>GitHub Action</strong> builds your deck and ships it to GitHub Pages —
-single-file HTML, a PDF handout, and the searchable thumbnail overview:</p>
-<pre style="background-color:#eff1f5;"><code class="language-yaml"><span style="color:#4f5b66;">- </span><span style="color:#bf616a;">uses</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">ilaborie/toboggan@v1
+<p>A composite <strong>GitHub Action</strong> builds your deck into single-file HTML, a PDF
+handout, and the searchable thumbnail overview — ready for GitHub Pages:</p>
+<pre style="background-color:#eff1f5;"><code class="language-yaml"><span style="color:#4f5b66;">- </span><span style="color:#bf616a;">uses</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">ilaborie/toboggan@v0.1.0
 </span><span style="color:#4f5b66;">  </span><span style="color:#bf616a;">with</span><span style="color:#4f5b66;">:
 </span><span style="color:#4f5b66;">    </span><span style="color:#bf616a;">folder</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">./slides
 </span><span style="color:#4f5b66;">    </span><span style="color:#bf616a;">outputs</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">html,pdf,thumbnails
-</span><span style="color:#4f5b66;">    </span><span style="color:#bf616a;">deploy-pages</span><span style="color:#4f5b66;">: </span><span style="color:#d08770;">true
+</span><span style="color:#4f5b66;">    </span><span style="color:#bf616a;">out-dir</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">dist
 </span></code></pre>
 
 <div class="step step-0"><!-- begin step -->
@@ -3080,15 +3080,15 @@ audience gets.</p>
 alt = """
 # Publish to the web
 
-A composite **GitHub Action** builds your deck and ships it to GitHub Pages —
-single-file HTML, a PDF handout, and the searchable thumbnail overview:
+A composite **GitHub Action** builds your deck into single-file HTML, a PDF
+handout, and the searchable thumbnail overview — ready for GitHub Pages:
 
 ```yaml
-- uses: ilaborie/toboggan@v1
+- uses: ilaborie/toboggan@v0.1.0
   with:
     folder: ./slides
     outputs: html,pdf,thumbnails
-    deploy-pages: true
+    out-dir: dist
 ```
 
 It downloads the prebuilt `toboggan` binary for a pinned release, plus `typst`,
