@@ -30,6 +30,12 @@
 # set it in its frontmatter instead; this wins.
 # lang = "en"
 
+# Base URL the exported HTML is served from, for `toboggan build -o deck.html`.
+# The deck's `public/` assets are referenced relative to the exported file by
+# default (and copied next to it), which is right on a GitHub Pages project page
+# as well as at a site root. Set this only if they must be addressed absolutely.
+# base-url = "/my-talk/"
+
 # Syntax-highlighting theme for code blocks. `toboggan build --list-themes`
 # prints the available names.
 # theme = "base16-ocean.light"

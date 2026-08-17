@@ -69,6 +69,18 @@ pub struct Settings {
     )]
     pub lang: Option<String>,
 
+    /// Base URL the exported HTML will be served from.
+    ///
+    /// Only meaningful for the HTML export, where it resolves the deck's
+    /// `public/` assets. Empty — the default — leaves them relative to the
+    /// exported file, which is right whenever `public/` travels with it. Set it
+    /// for a deploy that serves the file from a known path, e.g. `/my-talk/`.
+    #[clap(
+        long,
+        help = "Base URL the exported HTML is served from (e.g. /my-talk/)"
+    )]
+    pub base_url: Option<String>,
+
     /// Syntax highlighting theme for code blocks.
     ///
     /// Available themes: `base16-ocean.dark`, `base16-ocean.light`, `base16-mocha.dark`,

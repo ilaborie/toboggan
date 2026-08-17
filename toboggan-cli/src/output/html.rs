@@ -87,8 +87,14 @@ fn render_slide(slide: &Slide) -> String {
 ///
 /// * `talk` - The presentation data
 /// * `custom_head_html` - Optional custom HTML to insert at the end of the `<head>` element
+/// * `base_url` - Where the export will be served from, used to resolve the
+///   deck's assets; empty means "beside the file"
 #[allow(clippy::unnecessary_wraps)]
-pub(super) fn generate_html(talk: &Talk, custom_head_html: Option<&str>) -> Result<Vec<u8>> {
+pub(super) fn generate_html(
+    talk: &Talk,
+    custom_head_html: Option<&str>,
+    base_url: &str,
+) -> Result<Vec<u8>> {
     // Render all slides. Each carries an `id`, so `deck.html#slide-12` opens on
     // that slide — with the navigator running, and by scrolling to it without.
     let slides_html =
@@ -158,7 +164,9 @@ pub(super) fn generate_html(talk: &Talk, custom_head_html: Option<&str>) -> Resu
         navigate_js = NAVIGATE_JS
     );
 
-    Ok(html.into_bytes())
+    // Rewritten over the whole document rather than per slide: a deck's
+    // `_head.html` links its stylesheet exactly the way a slide embeds an image.
+    Ok(super::assets::rewrite_asset_urls(&html, base_url).into_bytes())
 }
 
 #[cfg(test)]
@@ -235,7 +243,7 @@ mod tests {
         };
         talk.slides.push(slide);
 
-        let html_bytes = generate_html(&talk, None)?;
+        let html_bytes = generate_html(&talk, None, "")?;
         let html = String::from_utf8_lossy(&html_bytes);
 
         // Check basic structure
@@ -270,7 +278,7 @@ mod tests {
         talk.slides.push(Slide::new("One"));
         talk.slides.push(Slide::new("Two"));
 
-        let html = String::from_utf8(generate_html(&talk, None)?)?;
+        let html = String::from_utf8(generate_html(&talk, None, "")?)?;
 
         assert!(html.contains("<script>"), "the navigator ships inline");
         assert!(html.contains(r#"id="slide-1""#));
@@ -289,11 +297,11 @@ mod tests {
     #[test]
     fn the_deck_declares_its_own_language() -> anyhow::Result<()> {
         let talk = Talk::new("Peut-on RIIR de tout ?").with_lang("fr");
-        let html = String::from_utf8(generate_html(&talk, None)?)?;
+        let html = String::from_utf8(generate_html(&talk, None, "")?)?;
         assert!(html.contains(r#"<html lang="fr">"#), "{}", &html[..120]);
 
         let untagged = Talk::new("A deck");
-        let html = String::from_utf8(generate_html(&untagged, None)?)?;
+        let html = String::from_utf8(generate_html(&untagged, None, "")?)?;
         assert!(
             html.contains(r#"<html lang="en">"#),
             "unset falls back to en"
@@ -308,7 +316,7 @@ mod tests {
     #[test]
     fn presentation_mode_never_reaches_print() -> anyhow::Result<()> {
         let talk = Talk::new("Test");
-        let html = String::from_utf8(generate_html(&talk, None)?)?;
+        let html = String::from_utf8(generate_html(&talk, None, "")?)?;
 
         let screen_only = html
             .find("@media screen")
@@ -329,7 +337,7 @@ mod tests {
         let custom_html = r#"<meta name="author" content="Test Author">
     <script>console.log('Custom script');</script>"#;
 
-        let html_bytes = generate_html(&talk, Some(custom_html))?;
+        let html_bytes = generate_html(&talk, Some(custom_html), "")?;
         let html = String::from_utf8_lossy(&html_bytes);
 
         // Check custom HTML is present in head

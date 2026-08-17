@@ -22,6 +22,9 @@ pub mod display;
 
 pub mod stats;
 
+/// The one directory a deck's assets live in, beside its slides folder.
+const PUBLIC_DIR: &str = "public";
+
 #[derive(Debug, Clone)]
 pub enum SlideProcessingResult {
     Processed(Slide),
@@ -289,7 +292,11 @@ fn display_results(parse_result: &ParseResult, settings: &Settings) -> Result<()
 fn write_output(parse_result: &ParseResult, output: &Path, settings: &Settings) -> Result<()> {
     let format = settings.resolve_format();
     let talk = parse_result.to_talk();
-    let serialized = output::serialize_talk(&talk, format)?;
+    let serialized = output::serialize_talk(
+        &talk,
+        format,
+        settings.base_url.as_deref().unwrap_or_default(),
+    )?;
 
     write_talk(output, &serialized)?;
 
@@ -309,7 +316,81 @@ fn write_output(parse_result: &ParseResult, output: &Path, settings: &Settings) 
         eprintln!("\n⚠️  No slides were processed successfully. File not written.");
     }
 
+    if matches!(format, OutputFormat::Html) {
+        copy_public_assets(&talk, output)?;
+    }
+
     Ok(())
+}
+
+/// Copies the deck's `public/` next to an exported HTML file.
+///
+/// The export references its assets relative to itself (see
+/// [`output::serialize_talk`]), which is only true once they are actually
+/// there. Without this the file is published with every image 404ing — which is
+/// what the GitHub Action has been doing.
+///
+/// Nothing to do for a deck with no `public/`, and nothing to do when the
+/// directory is already where it needs to be, which is the case for an export
+/// written into the deck root.
+#[allow(clippy::print_stderr)]
+fn copy_public_assets(talk: &Talk, output: &Path) -> Result<()> {
+    let Some(source) = output::deck_root(talk).map(|root| root.join(PUBLIC_DIR)) else {
+        return Ok(());
+    };
+    if !source.is_dir() {
+        return Ok(());
+    }
+
+    let destination = output
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(PUBLIC_DIR);
+    if same_directory(&source, &destination) {
+        return Ok(());
+    }
+
+    let count = copy_dir(&source, &destination)?;
+    eprintln!(
+        "📦 Copied {count} asset(s) to {} so the deck's images resolve",
+        destination.display()
+    );
+    Ok(())
+}
+
+/// Whether two paths name the same directory, as far as the filesystem knows.
+///
+/// Compared after canonicalising, so `deck/public` and `./deck/../deck/public`
+/// are recognised as one and the copy is skipped rather than attempting to copy
+/// a directory onto itself.
+fn same_directory(left: &Path, right: &Path) -> bool {
+    match (left.canonicalize(), right.canonicalize()) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => false,
+    }
+}
+
+/// Recursively copies `source` into `destination`, returning the file count.
+fn copy_dir(source: &Path, destination: &Path) -> Result<usize> {
+    std::fs::create_dir_all(destination)
+        .map_err(|err| TobogganCliError::create_file(destination.to_path_buf(), err))?;
+
+    let entries = std::fs::read_dir(source)
+        .map_err(|err| TobogganCliError::read_file(source.to_path_buf(), err))?;
+
+    let mut count = 0;
+    for entry in entries {
+        let entry = entry.map_err(|err| TobogganCliError::read_file(source.to_path_buf(), err))?;
+        let from = entry.path();
+        let to = destination.join(entry.file_name());
+        if from.is_dir() {
+            count += copy_dir(&from, &to)?;
+        } else {
+            std::fs::copy(&from, &to).map_err(|err| TobogganCliError::create_file(to, err))?;
+            count += 1;
+        }
+    }
+    Ok(count)
 }
 
 fn write_talk(out: &Path, content: &[u8]) -> Result<()> {

@@ -67,18 +67,13 @@ const GUIDE_TOML: &str = include_str!("../../../../examples/toboggan-guide/tobog
 
 fn render_guide() -> anyhow::Result<String> {
     let talk = toml::from_str::<Talk>(GUIDE_TOML)?;
-    let bytes = toboggan_cli::output::serialize_talk(&talk, OutputFormat::Html)
+    // The guide's own assets are served at `/guide/public/`, not `/public/`, so
+    // that is the base its export is rendered against. This used to be a pair of
+    // string replacements here; the renderer does it now, and does it for every
+    // spelling of the URL rather than the one the guide happens to use.
+    let bytes = toboggan_cli::output::serialize_talk(&talk, OutputFormat::Html, "/guide/")
         .map_err(|err| anyhow::anyhow!("{err}"))?;
-    let html = String::from_utf8(bytes)?;
-    // The guide's `_head.html` links assets relative to the deck root (e.g.
-    // `<link href="./public/style.css">`); rebase those `href`/`src` attributes
-    // onto the `/guide/public/` route so they resolve when the guide is served at
-    // `/guide` rather than `/public`. Anchor on the attribute (not a bare
-    // `./public/`) so the guide's own documentation — which shows commands like
-    // `--public-dir ./public/` in code blocks — is left untouched.
-    Ok(html
-        .replace("href=\"./public/", "href=\"/guide/public/")
-        .replace("src=\"./public/", "src=\"/guide/public/"))
+    Ok(String::from_utf8(bytes)?)
 }
 
 fn render_homepage(talk: &Talk) -> String {

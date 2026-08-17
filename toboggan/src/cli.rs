@@ -123,6 +123,10 @@ pub(crate) struct BuildOptions {
     #[arg(long)]
     pub(crate) lang: Option<String>,
 
+    /// Base URL the exported HTML is served from, e.g. `/my-talk/`
+    #[arg(long)]
+    pub(crate) base_url: Option<String>,
+
     /// Syntax-highlighting theme for code blocks [default: base16-ocean.light]
     #[arg(long)]
     pub(crate) theme: Option<String>,
@@ -152,6 +156,7 @@ impl BuildOptions {
         self.date = self.date.or(config.date);
         self.theme = self.theme.take().or(config.theme);
         self.lang = self.lang.take().or(config.lang);
+        self.base_url = self.base_url.take().or(config.base_url);
         self.wpm = self.wpm.or(config.wpm);
         self.no_counter |= config.no_counter.unwrap_or(false);
         self.exclude_notes_from_duration |= config.exclude_notes_from_duration.unwrap_or(false);
@@ -174,6 +179,7 @@ impl BuildOptions {
             title: self.title,
             date: self.date,
             lang: self.lang,
+            base_url: self.base_url,
             theme: self.theme.unwrap_or_else(|| DEFAULT_THEME.to_owned()),
             list_themes: false,
             format: None,
