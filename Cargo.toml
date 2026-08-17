@@ -12,7 +12,8 @@ members = [
   "toboggan-mcp",
   "toboggan",
 ]
-exclude = ["toboggan-py"]
+# `toboggan-web` is its own workspace (wasm32-only crates, built by wasm-pack).
+exclude = ["toboggan-py", "toboggan-web"]
 resolver = "2"
 
 [workspace.package]

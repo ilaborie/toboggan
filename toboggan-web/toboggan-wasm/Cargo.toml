@@ -18,10 +18,6 @@ crate-type = ["cdylib", "rlib"]
 # default.
 wasm-opt = ["-Os", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]
 
-[workspace]
-# This empty workspace table prevents the package from inheriting workspace settings
-
-
 [dependencies]
 toboggan-core = { path = "../../toboggan-core", features = ["js"] }
 
@@ -69,47 +65,5 @@ console_error_panic_hook = "0.1.7"
 
 [dev-dependencies]
 
-[lints.rust]
-unsafe_code = "deny"
-elided_lifetimes_in_paths = "warn"
-trivial_numeric_casts = "warn"
-unused_import_braces = "warn"
-unused_lifetimes = "warn"
-unused_qualifications = "warn"
-unreachable_pub = "warn"
-missing_docs = "allow"
-
-[lints.clippy]
-perf = { level = "warn", priority = -1 }
-pedantic = { level = "warn", priority = -1 }
-
-undocumented_unsafe_blocks = "deny"
-
-dbg_macro = "warn"
-empty_line_after_doc_comments = "warn"
-expect_used = "warn"
-if_then_some_else_none = "warn"
-indexing_slicing = "warn"
-large_include_file = "warn"
-min_ident_chars = "warn"
-print_stderr = "warn"
-print_stdout = "warn"
-rc_buffer = "warn"
-rc_mutex = "warn"
-redundant_clone = "warn"
-redundant_type_annotations = "warn"
-rest_pat_in_fully_bound_structs = "warn"
-str_to_string = "warn"
-unnecessary_safety_doc = "warn"
-unwrap_used = "warn"
-
-new_without_default = "allow"
-module_name_repetitions = "allow"
-
-# WASM size optimizations
-[profile.release]
-opt-level = "z"   # Optimize for size even more aggressively
-lto = "fat"       # More aggressive LTO
-codegen-units = 1 # Single codegen unit for better optimization
-panic = "abort"   # Smaller panic handling
-strip = true      # Strip symbols for smaller size
+[lints]
+workspace = true

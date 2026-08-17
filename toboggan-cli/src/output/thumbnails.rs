@@ -117,8 +117,14 @@ fn compile_first_page_png(
         )));
     }
 
-    if slides_dir.is_some() {
-        let _ = std::fs::remove_file(&input);
+    // Best-effort, but not silent: this scratch file is written into the user's
+    // own slides folder, so a failure to remove it leaves `.toboggan-thumb.typ`
+    // sitting there with nothing to explain it. The other two typst call sites
+    // already log; this one discarded the error entirely.
+    if slides_dir.is_some()
+        && let Err(err) = std::fs::remove_file(&input)
+    {
+        tracing::debug!("could not remove {}: {err}", input.display());
     }
     let first_page = dir.path().join("page-1.png");
     std::fs::copy(&first_page, png)

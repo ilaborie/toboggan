@@ -100,7 +100,8 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: toboggan-web/toboggan-wasm
+          # The workspace root is `toboggan-web`; the crate is a member of it.
+          workspaces: toboggan-web
 
       - name: Format (nightly)
         run: cargo +nightly fmt --all --check

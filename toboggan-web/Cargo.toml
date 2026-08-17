@@ -1,0 +1,62 @@
+[workspace]
+members = ["toboggan-wasm"]
+resolver = "3"
+
+# The wasm crates cannot join the root workspace: they build for
+# `wasm32-unknown-unknown` against a web-sys surface that does not exist on a
+# host target, and `wasm-pack` drives them separately. They can still share one
+# lint policy rather than each carrying a copy — the copy this replaces had
+# already drifted from the root's, dropping `missing-errors-doc` and gaining
+# `new_without_default` without either being a deliberate difference.
+#
+# Keep in step with the root `Cargo.toml`; `new_without_default` below is the
+# one intentional addition, for the `Default`-implementing element types.
+[workspace.lints.rust]
+unsafe_code = "deny"
+elided_lifetimes_in_paths = "warn"
+trivial_numeric_casts = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+unused_qualifications = "warn"
+unreachable_pub = "warn"
+missing_docs = "allow"
+
+[workspace.lints.clippy]
+perf = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+
+undocumented_unsafe_blocks = "deny"
+
+dbg_macro = "warn"
+empty_line_after_doc_comments = "warn"
+expect_used = "warn"
+if_then_some_else_none = "warn"
+indexing_slicing = "warn"
+large_include_file = "warn"
+min_ident_chars = "warn"
+print_stderr = "warn"
+print_stdout = "warn"
+rc_buffer = "warn"
+rc_mutex = "warn"
+redundant_clone = "warn"
+redundant_type_annotations = "warn"
+rest_pat_in_fully_bound_structs = "warn"
+str_to_string = "warn"
+unnecessary_safety_doc = "warn"
+unwrap_used = "warn"
+
+missing-errors-doc = "allow"
+module_name_repetitions = "allow"
+new_without_default = "allow"
+
+# Size optimizations for the shipped bundle.
+#
+# These have to live at the workspace root: cargo ignores `[profile]` in a
+# member manifest, so leaving them in `toboggan-wasm/Cargo.toml` after it became
+# a member would have silently shipped a much larger `.wasm`.
+[profile.release]
+opt-level = "z"   # Optimize for size even more aggressively
+lto = "fat"       # More aggressive LTO
+codegen-units = 1 # Single codegen unit for better optimization
+panic = "abort"   # Smaller panic handling
+strip = true      # Strip symbols for smaller size
