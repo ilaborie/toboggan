@@ -7,7 +7,7 @@ use tracing::{debug, info};
 
 use crate::connection_handler::ConnectionHandler;
 use crate::effects::{self, EffectKey, Effects, LayoutAreas};
-use crate::events::{AppAction, AppEvent};
+use crate::events::{AppAction, AppEvent, goto_command};
 
 #[derive(Debug, Clone, Default)]
 pub(crate) enum AppDialog {
@@ -28,6 +28,8 @@ pub struct AppState {
     pub(crate) presentation_state: State,
 
     pub(crate) dialog: AppDialog,
+    /// The slide number typed so far, waiting on `Enter`.
+    pub(crate) goto_target: Option<usize>,
     pub(crate) terminal_size: (u16, u16),
 
     pub(crate) effects: Effects,
@@ -44,6 +46,7 @@ impl AppState {
             slides,
             presentation_state: State::Init,
             dialog: AppDialog::None,
+            goto_target: None,
             terminal_size: (80, 24),
             effects: Effects::default(),
             layout_areas: LayoutAreas::default(),
@@ -144,6 +147,22 @@ impl AppState {
         action: AppAction,
         connection_handler: &ConnectionHandler,
     ) -> ControlFlow<()> {
+        match action {
+            AppAction::Digit(digit) => {
+                self.push_goto_digit(digit);
+                return ControlFlow::Continue(());
+            }
+            AppAction::GotoTyped => {
+                if let Some(number) = self.goto_target.take() {
+                    connection_handler.send_command(&goto_command(number));
+                }
+                return ControlFlow::Continue(());
+            }
+            // Anything else abandons a half-typed number rather than leaving it
+            // to land on some later `Enter`.
+            _ => self.goto_target = None,
+        }
+
         let was_no_dialog = matches!(self.dialog, AppDialog::None);
         self.dialog = match action {
             AppAction::Close => AppDialog::None,
@@ -169,6 +188,19 @@ impl AppState {
         ControlFlow::Continue(())
     }
 
+    /// Appends a digit to the slide number being typed.
+    ///
+    /// Four digits is more slides than a talk has ever had, and the cap is what
+    /// stops a leaned-on key from overflowing the running multiplication.
+    fn push_goto_digit(&mut self, digit: u8) {
+        const MAX_GOTO_TARGET: usize = 9_999;
+
+        let typed = self.goto_target.unwrap_or(0) * 10 + usize::from(digit);
+        if typed <= MAX_GOTO_TARGET {
+            self.goto_target = Some(typed);
+        }
+    }
+
     fn handle_notification(&mut self, notification: Notification) {
         match notification {
             Notification::State { state } | Notification::TalkChange { state } => {
@@ -185,6 +217,13 @@ impl AppState {
             Notification::Error { message } => {
                 self.dialog = AppDialog::Error(message);
             }
+        }
+    }
+
+    #[cfg(test)]
+    fn type_goto(&mut self, digits: &str) {
+        for digit in digits.chars().filter_map(|ch| ch.to_digit(10)) {
+            self.push_goto_digit(u8::try_from(digit).unwrap_or(0));
         }
     }
 
@@ -227,5 +266,31 @@ impl AppState {
                 effects::step_reveal_effect(slide_area),
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_state() -> AppState {
+        AppState::new(TalkResponse::default(), vec![])
+    }
+
+    /// Nine slides was the ceiling: one keystroke, one jump, and no way to
+    /// reach the tenth. Digits accumulate now.
+    #[test]
+    fn digits_accumulate_into_one_slide_number() {
+        let mut state = empty_state();
+        state.type_goto("127");
+        assert_eq!(state.goto_target, Some(127));
+    }
+
+    /// A leaned-on key would otherwise overflow the running multiplication.
+    #[test]
+    fn digits_past_the_cap_are_dropped_rather_than_wrapping() {
+        let mut state = empty_state();
+        state.type_goto("99999999");
+        assert_eq!(state.goto_target, Some(9_999));
     }
 }

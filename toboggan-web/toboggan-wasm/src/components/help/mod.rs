@@ -119,11 +119,13 @@ fn build_help_html(mapping: &KeyboardMapping) -> String {
 
     // Split by where the key takes effect: "Navigation" drives the presentation
     // for everyone connected, "Display" only changes this screen.
-    push_section(
-        &mut out,
-        "Navigation",
-        &build_rows(mapping, |action| matches!(action, KeyAction::Send(_))),
+    let mut navigation = build_rows(mapping, |action| matches!(action, KeyAction::Send(_)));
+    // Written out rather than grouped from the mapping: ten digit keys would
+    // render as a row of ten `<kbd>`s that says nothing about how they combine.
+    navigation.push_str(
+        "<dt><kbd>0</kbd>…<kbd>9</kbd> <kbd>Enter</kbd></dt><dd>Go to slide by number</dd>",
     );
+    push_section(&mut out, "Navigation", &navigation);
     push_section(
         &mut out,
         "Display",
@@ -201,6 +203,8 @@ fn action_label(action: &KeyAction) -> &'static str {
         KeyAction::ToggleFullscreen => "Fullscreen",
         KeyAction::Blank(BlankScreen::Black) => "Blank the screen",
         KeyAction::Blank(BlankScreen::White) => "White out the screen",
+        // Written out by hand in `build_help_html`; see there.
+        KeyAction::Digit(_) | KeyAction::GotoTyped => "",
     }
 }
 

@@ -83,6 +83,49 @@ fn insert_blank(body: &HtmlElement, screen: BlankScreen) {
     }
 }
 
+/// Marks the badge showing the slide number being typed.
+const GOTO_ID: &str = "toboggan-goto";
+
+/// Sits above the blanking overlay, deliberately: a presenter who has blanked
+/// the screen to take a question is exactly the one about to jump somewhere,
+/// and they still need to see what they are typing.
+const GOTO_STYLE: &str = "position:fixed;bottom:1.5rem;right:1.5rem;z-index:2147483647;\
+padding:.3rem .8rem;border-radius:.4rem;background:rgba(0,0,0,.78);color:#fff;\
+font:600 1.4rem/1.2 system-ui,sans-serif";
+
+/// Shows the slide number being typed, or takes the badge away.
+///
+/// Without it the digits go nowhere visible: the presenter types `1`, then `2`,
+/// watches nothing happen, and has no way to tell whether the deck is listening
+/// or whether they have already jumped somewhere.
+pub fn show_goto_pending(number: Option<usize>) {
+    let Some(body) = document().body() else {
+        return;
+    };
+    let existing = document().get_element_by_id(GOTO_ID);
+
+    let Some(number) = number else {
+        if let Some(badge) = existing {
+            let _ = body.remove_child(&badge);
+        }
+        return;
+    };
+
+    let badge = if let Some(badge) = existing {
+        badge
+    } else {
+        let badge = create_html_element("div");
+        badge.set_id(GOTO_ID);
+        let _ = badge.set_attribute("style", GOTO_STYLE);
+        if body.append_child(&badge).is_err() {
+            error!("Failed to show the slide number being typed");
+            return;
+        }
+        badge.into()
+    };
+    badge.set_text_content(Some(&format!("→ {number}")));
+}
+
 /// Puts the page into fullscreen, or takes it out.
 ///
 /// Must be called from inside the keydown handler: browsers only grant

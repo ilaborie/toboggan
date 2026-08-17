@@ -14,7 +14,7 @@ pub(crate) enum AppEvent {
     Error(String),
 }
 
-#[derive(Debug, Clone, Copy, derive_more::Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, derive_more::Display)]
 pub(crate) enum AppAction {
     // Slide navigation
     First,
@@ -22,7 +22,9 @@ pub(crate) enum AppAction {
     Next,
     Last,
     #[display("Slide {_0}")]
-    Goto(u8),
+    Digit(u8),
+    #[display("Go to slide")]
+    GotoTyped,
     // Step navigation
     PreviousStep,
     NextStep,
@@ -55,11 +57,10 @@ impl AppAction {
             KeyCode::Home => Self::First,
             KeyCode::End => Self::Last,
             KeyCode::Char('b' | 'B') => Self::Blink,
-            KeyCode::Char(ch @ '1'..='9') =>
-            {
-                #[allow(clippy::expect_used)]
-                Self::Goto(ch.to_string().parse().expect("1..=9 should parse"))
-            }
+            // Digits accumulate and Enter jumps, so a deck is not limited to
+            // the nine slides a single keystroke can reach.
+            KeyCode::Char(ch @ '0'..='9') => Self::Digit(digit_of(ch)),
+            KeyCode::Enter => Self::GotoTyped,
             KeyCode::Char('l' | 'L') => Self::ShowLog,
             KeyCode::Esc => Self::Close,
             _ => {
@@ -75,7 +76,7 @@ impl AppAction {
             Self::Previous => "←",
             Self::Next => "→",
             Self::Last => "End",
-            Self::Goto(_) => "1..n",
+            Self::Digit(_) | Self::GotoTyped => "0..9",
             Self::PreviousStep => "↑",
             Self::NextStep => "↓",
             Self::Blink => "b",
@@ -92,7 +93,9 @@ impl AppAction {
             Self::Previous => ActionDetails::new(vec!["←"], "Previous slide"),
             Self::Next => ActionDetails::new(vec!["→"], "Next slide"),
             Self::Last => ActionDetails::new(vec!["End"], "Go to last slide"),
-            Self::Goto(_) => ActionDetails::new(vec!["1..n"], "Go to slide n"),
+            Self::Digit(_) | Self::GotoTyped => {
+                ActionDetails::new(vec!["0..9", "Enter"], "Go to slide n")
+            }
             Self::PreviousStep => ActionDetails::new(vec!["↑", "PgUp", "Bksp"], "Previous step"),
             Self::NextStep => ActionDetails::new(vec!["↓", "Space", "PgDn"], "Next step"),
             Self::Blink => ActionDetails::new(vec!["b", "B"], "Bell or Blink"),
@@ -112,17 +115,34 @@ impl AppAction {
             Self::PreviousStep => Command::PreviousStep,
             Self::NextStep => Command::NextStep,
             Self::Blink => Command::Blink,
-            // The presenter types the number they can see on the slide, and
-            // `SlideId` is a 0-based index. Passing one straight to the other
-            // sent every jump one slide too far.
-            Self::Goto(number) => Command::GoTo {
-                slide: SlideId::new(usize::from(number).saturating_sub(1)),
-            },
-            Self::ShowLog | Self::Close | Self::Quit | Self::Help => {
+            // The typed slide number lives in `AppState`, which turns it into a
+            // `GoTo` once `Enter` closes it — a single digit is not a command.
+            Self::Digit(_)
+            | Self::GotoTyped
+            | Self::ShowLog
+            | Self::Close
+            | Self::Quit
+            | Self::Help => {
                 return None;
             }
         };
         Some(cmd)
+    }
+}
+
+/// The value of an ASCII digit, or `0` for anything else — which
+/// [`AppAction::from_key`] has already ruled out.
+fn digit_of(character: char) -> u8 {
+    u8::try_from(character.to_digit(10).unwrap_or(0)).unwrap_or(0)
+}
+
+/// The command that jumps to a slide the presenter typed.
+///
+/// They type the number printed on the slide, and `SlideId` is a 0-based index:
+/// passing one straight to the other used to send every jump one slide too far.
+pub(crate) fn goto_command(number: usize) -> Command {
+    Command::GoTo {
+        slide: SlideId::new(number.saturating_sub(1)),
     }
 }
 
@@ -161,16 +181,31 @@ mod tests {
     #[test]
     fn typing_a_slide_number_goes_to_that_slide() {
         assert_eq!(
-            command_for(KeyCode::Char('1')),
-            Some(Command::GoTo {
+            goto_command(1),
+            Command::GoTo {
                 slide: SlideId::FIRST
-            })
+            }
         );
         assert_eq!(
-            command_for(KeyCode::Char('3')),
-            Some(Command::GoTo {
-                slide: SlideId::new(2)
-            })
+            goto_command(12),
+            Command::GoTo {
+                slide: SlideId::new(11)
+            }
+        );
+    }
+
+    /// A digit is not a command on its own: it is one keystroke of a number
+    /// that only becomes a jump when `Enter` closes it.
+    #[test]
+    fn a_digit_carries_its_value_and_sends_nothing() {
+        assert_eq!(
+            AppAction::from_key(KeyEvent::from(KeyCode::Char('7'))),
+            Some(AppAction::Digit(7))
+        );
+        assert_eq!(command_for(KeyCode::Char('7')), None);
+        assert_eq!(
+            AppAction::from_key(KeyEvent::from(KeyCode::Enter)),
+            Some(AppAction::GotoTyped)
         );
     }
 }

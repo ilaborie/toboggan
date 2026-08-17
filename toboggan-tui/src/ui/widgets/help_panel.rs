@@ -30,7 +30,7 @@ impl Widget for &HelpPanel {
                 AppAction::Previous,
                 AppAction::Next,
                 AppAction::Last,
-                AppAction::Goto(1),
+                AppAction::Digit(0),
             ],
         ));
 
