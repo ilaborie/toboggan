@@ -61,7 +61,10 @@ impl InnerContent {
             let options = default_options();
             format_commonmark(elt, &options, &mut buffer).map_err(|err| {
                 TobogganCliError::FormatCommonmark {
-                    src: miette::NamedSource::new(source.name, format!("{data:?}")),
+                    src: std::sync::Arc::new(miette::NamedSource::new(
+                        source.name,
+                        format!("{data:?}"),
+                    )),
                     span: SourceSpan::from((0, 1)),
                     message: err.to_string(),
                 }
@@ -784,7 +787,7 @@ Content with inline CSS."#;
     }
 
     #[test]
-    fn test_code_comment_transformation() -> Result<()> {
+    fn test_code_comment_transformation() -> anyhow::Result<()> {
         use std::fs;
 
         use tempfile::tempdir;
@@ -838,7 +841,7 @@ Content after code.";
     }
 
     #[test]
-    fn test_code_comment_comprehensive_integration() -> Result<()> {
+    fn test_code_comment_comprehensive_integration() -> anyhow::Result<()> {
         use std::fs;
 
         use tempfile::tempdir;

@@ -1,5 +1,6 @@
 use std::io;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use miette::{Diagnostic, NamedSource, SourceSpan};
 
@@ -37,6 +38,16 @@ pub enum TobogganCliError {
     )]
     InvalidCodeEmbed { path: PathBuf, reason: String },
 
+    #[display("Failed to write to standard output")]
+    #[diagnostic(
+        code(toboggan_cli::write_stdout),
+        help(
+            "Usually a broken pipe: the output was piped into a command that exited first, \
+             such as `toboggan stats | head`"
+        )
+    )]
+    WriteStdout { source: io::Error },
+
     #[display("Failed to create file: {}", path.display())]
     #[diagnostic(
         code(toboggan_cli::create_file),
@@ -60,7 +71,7 @@ pub enum TobogganCliError {
     )]
     ParseMarkdown {
         #[source_code]
-        src: NamedSource<String>,
+        src: Arc<NamedSource<String>>,
         #[label("error occurred here")]
         span: SourceSpan,
         message: String,
@@ -73,11 +84,11 @@ pub enum TobogganCliError {
     )]
     ParseFrontmatter {
         #[source_code]
-        src: NamedSource<String>,
+        src: Arc<NamedSource<String>>,
         #[label("invalid TOML syntax")]
         span: SourceSpan,
 
-        source: toml::de::Error,
+        source: Box<toml::de::Error>,
     },
 
     #[display("Failed to format markdown file: {}", src.name())]
@@ -87,7 +98,7 @@ pub enum TobogganCliError {
     )]
     FormatCommonmark {
         #[source_code]
-        src: NamedSource<String>,
+        src: Arc<NamedSource<String>>,
         #[label("formatting failed here")]
         span: SourceSpan,
         message: String,
@@ -182,7 +193,7 @@ impl TobogganCliError {
         message: String,
     ) -> Self {
         Self::ParseMarkdown {
-            src: NamedSource::new(file_path, content),
+            src: Arc::new(NamedSource::new(file_path, content)),
             span,
             message,
         }
@@ -195,8 +206,9 @@ impl TobogganCliError {
         span: SourceSpan,
         source: toml::de::Error,
     ) -> Self {
+        let source = Box::new(source);
         Self::ParseFrontmatter {
-            src: NamedSource::new(file_path, content),
+            src: Arc::new(NamedSource::new(file_path, content)),
             span,
             source,
         }
@@ -210,7 +222,7 @@ impl TobogganCliError {
         message: String,
     ) -> Self {
         Self::FormatCommonmark {
-            src: NamedSource::new(file_path, content),
+            src: Arc::new(NamedSource::new(file_path, content)),
             span,
             message,
         }
@@ -236,6 +248,11 @@ impl TobogganCliError {
     #[must_use]
     pub fn write_file(path: PathBuf, source: io::Error) -> Self {
         Self::WriteFile { path, source }
+    }
+
+    #[must_use]
+    pub fn write_stdout(source: io::Error) -> Self {
+        Self::WriteStdout { source }
     }
 
     #[must_use]
@@ -287,15 +304,6 @@ impl From<serde_saphyr::Error> for TobogganCliError {
         Self::Serialize {
             format: "YAML".to_owned(),
             message: source.to_string(),
-        }
-    }
-}
-
-impl From<io::Error> for TobogganCliError {
-    fn from(source: io::Error) -> Self {
-        Self::ReadFile {
-            path: PathBuf::from("<unknown>"),
-            source,
         }
     }
 }

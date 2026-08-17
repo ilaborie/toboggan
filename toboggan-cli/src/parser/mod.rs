@@ -120,7 +120,7 @@ mod tests {
     use crate::parser::directory::create_test_file;
 
     #[test]
-    fn test_folder_parser_basic() -> Result<()> {
+    fn test_folder_parser_basic() -> anyhow::Result<()> {
         let temp_dir = tempdir()?;
         let dir_path = temp_dir.path();
 
@@ -143,7 +143,7 @@ mod tests {
     }
 
     #[test]
-    fn test_folder_parser_with_part() -> Result<()> {
+    fn test_folder_parser_with_part() -> anyhow::Result<()> {
         let temp_dir = tempdir()?;
         let dir_path = temp_dir.path();
 
@@ -166,7 +166,7 @@ mod tests {
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_folder_parser_with_overrides() -> Result<()> {
+    fn test_folder_parser_with_overrides() -> anyhow::Result<()> {
         let temp_dir = tempdir()?;
         let dir_path = temp_dir.path();
 
@@ -184,7 +184,7 @@ mod tests {
     }
 
     #[test]
-    fn test_skip_slides_functionality() -> Result<()> {
+    fn test_skip_slides_functionality() -> anyhow::Result<()> {
         let temp_dir = tempdir()?;
         let dir_path = temp_dir.path();
 
@@ -241,7 +241,7 @@ mod tests {
     }
 
     #[test]
-    fn test_skip_part_slide() -> Result<()> {
+    fn test_skip_part_slide() -> anyhow::Result<()> {
         let temp_dir = tempdir()?;
         let dir_path = temp_dir.path();
 
@@ -288,7 +288,7 @@ mod tests {
     }
 
     #[test]
-    fn test_part_md_appears_only_once() -> Result<()> {
+    fn test_part_md_appears_only_once() -> anyhow::Result<()> {
         let temp_dir = tempdir()?;
         let dir_path = temp_dir.path();
 

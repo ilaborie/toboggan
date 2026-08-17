@@ -1,5 +1,3 @@
-#![allow(clippy::result_large_err)]
-
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
@@ -214,7 +212,8 @@ pub fn run(settings: &Settings) -> Result<()> {
     if let Some(output) = &settings.output {
         write_output(&parse_result, output, settings)?;
     } else {
-        display::suggest_output_file(&mut std::io::stdout())?;
+        display::suggest_output_file(&mut std::io::stdout())
+            .map_err(TobogganCliError::write_stdout)?;
     }
 
     Ok(())
@@ -257,7 +256,9 @@ pub fn parse_presentation(input: &Path, settings: &Settings) -> Result<ParseResu
 
 fn display_results(parse_result: &ParseResult, settings: &Settings) -> Result<()> {
     let display_formatter = display::DisplayFormatter::new();
-    display_formatter.display_results(parse_result, &mut std::io::stdout())?;
+    display_formatter
+        .display_results(parse_result, &mut std::io::stdout())
+        .map_err(TobogganCliError::write_stdout)?;
 
     if !settings.no_stats {
         let stats = stats::PresentationStats::from_parse_result(
@@ -265,10 +266,12 @@ fn display_results(parse_result: &ParseResult, settings: &Settings) -> Result<()
             settings.wpm,
             !settings.exclude_notes_from_duration,
         );
-        stats.display(
-            &mut std::io::stdout(),
-            display::DisplayConfig::should_use_colors(),
-        )?;
+        stats
+            .display(
+                &mut std::io::stdout(),
+                display::DisplayConfig::should_use_colors(),
+            )
+            .map_err(TobogganCliError::write_stdout)?;
     }
 
     Ok(())

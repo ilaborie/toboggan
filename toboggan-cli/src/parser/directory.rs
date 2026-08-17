@@ -313,14 +313,16 @@ pub(super) fn process_talk_metadata(
     if let Some(footer) = toboggan_dir.get_footer()? {
         let path = footer.path();
         debug!("Processing footer: {}", path.display());
-        let content = fs::read_to_string(&path)?;
+        let content = fs::read_to_string(&path)
+            .map_err(|err| TobogganCliError::read_file(path.clone(), err))?;
         metadata.footer = Some(content);
     }
 
     if let Some(head) = toboggan_dir.get_head()? {
         let path = head.path();
         debug!("Processing head: {}", path.display());
-        let content = fs::read_to_string(&path)?;
+        let content = fs::read_to_string(&path)
+            .map_err(|err| TobogganCliError::read_file(path.clone(), err))?;
         metadata.head = Some(content);
     }
 
