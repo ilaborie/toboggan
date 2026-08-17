@@ -1,6 +1,7 @@
 pub(crate) mod code;
 pub(crate) mod content;
 pub(crate) mod html;
+pub(crate) mod link;
 pub(crate) mod pause;
 pub(crate) mod structure;
 pub(crate) mod terminal;
@@ -55,6 +56,8 @@ pub mod ids {
     pub const CODE_TOO_LONG: RuleId = RuleId("code/too-long");
     /// A code block with no language on its fence.
     pub const CODE_NO_LANGUAGE: RuleId = RuleId("code/no-language");
+    /// An image or download that is not in the deck's `public/` directory.
+    pub const LINK_BROKEN: RuleId = RuleId("link/broken");
     /// More words than `max_words_per_slide`.
     pub const CONTENT_EXCESSIVE_WORDS: RuleId = RuleId("content/excessive-words");
     /// More images than `max_images_per_slide`.
@@ -91,6 +94,7 @@ pub fn all_rules() -> Vec<Box<dyn Rule>> {
         Box::new(content::TooManyImages),
         Box::new(code::CodeTooLong),
         Box::new(code::CodeNoLanguage),
+        Box::new(link::BrokenLink),
     ];
     // Spell checking is opt-in at compile time (it needs the `typos` CLI at
     // runtime). Disable it for a run with `--no-spell`; it cannot be silenced by

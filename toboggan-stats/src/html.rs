@@ -47,6 +47,11 @@ static H1_SELECTOR: LazyLock<Selector> =
 static CODE_BLOCK_SELECTOR: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("pre code").expect("code block selector should be valid"));
 
+/// Pre-compiled selector for `a` elements
+#[allow(clippy::expect_used)]
+static ANCHOR_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("a").expect("anchor selector should be valid"));
+
 /// Tags whose content should be excluded from text extraction
 const EXCLUDED_TAGS: &[&str] = &["style", "script", "svg", "figure"];
 
@@ -153,6 +158,24 @@ impl HtmlDocument {
                     .is_none_or(|alt| alt.trim().is_empty())
             })
             .count()
+    }
+
+    /// Every `src` an `<img>` points at, in document order.
+    #[must_use]
+    pub fn image_sources(&self) -> Vec<&str> {
+        self.document
+            .select(&IMG_SELECTOR)
+            .filter_map(|img| img.value().attr("src"))
+            .collect()
+    }
+
+    /// Every `href` an `<a>` points at, in document order.
+    #[must_use]
+    pub fn link_targets(&self) -> Vec<&str> {
+        self.document
+            .select(&ANCHOR_SELECTOR)
+            .filter_map(|anchor| anchor.value().attr("href"))
+            .collect()
     }
 
     /// Every code block in the fragment, with its language and line count.

@@ -1,5 +1,6 @@
 use std::cell::OnceCell;
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 
 use toboggan_core::{Slide, Talk};
 use toboggan_stats::{HtmlDocument, SlideStats};
@@ -84,6 +85,7 @@ pub struct RuleContext<'a> {
     pub config: &'a LintConfig,
     body_doc: OnceCell<HtmlDocument>,
     stats: OnceCell<SlideStats>,
+    public_dir: OnceCell<Option<PathBuf>>,
 }
 
 impl<'a> RuleContext<'a> {
@@ -102,7 +104,28 @@ impl<'a> RuleContext<'a> {
             config,
             body_doc: OnceCell::new(),
             stats: OnceCell::new(),
+            public_dir: OnceCell::new(),
         }
+    }
+
+    /// The deck's `public/` directory, looked up once per slide.
+    ///
+    /// Checks beside the slides folder first and then inside it, matching how
+    /// the CLI finds the directory it serves at `/public`: `-p deck` and
+    /// `-p deck/slides` are both accepted, and they put `public/` in different
+    /// places relative to `Talk::source_dir`.
+    pub fn public_dir(&self) -> Option<&Path> {
+        self.public_dir
+            .get_or_init(|| {
+                let source_dir = Path::new(self.talk.source_dir.as_deref()?);
+                let sibling = source_dir.parent().map(|parent| parent.join("public"));
+                let child = source_dir.join("public");
+                sibling
+                    .into_iter()
+                    .chain(std::iter::once(child))
+                    .find(|candidate| candidate.is_dir())
+            })
+            .as_deref()
     }
 
     /// The slide body, parsed once per slide.
