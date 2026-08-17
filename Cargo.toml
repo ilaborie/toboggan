@@ -12,10 +12,11 @@ members = [
   "toboggan-mcp",
   "toboggan",
 ]
-exclude = ["toboggan-esp32", "toboggan-py"]
+exclude = ["toboggan-py"]
 resolver = "2"
 
 [workspace.package]
+version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT OR Apache-2.0"

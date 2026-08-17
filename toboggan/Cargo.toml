@@ -1,6 +1,6 @@
 [package]
 name = "toboggan"
-version = "0.1.0"
+version.workspace = true
 description = "Unified Toboggan command: build, serve, lint, and author presentations"
 edition.workspace = true
 rust-version.workspace = true

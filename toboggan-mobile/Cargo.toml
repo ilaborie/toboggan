@@ -1,6 +1,6 @@
 [package]
 name = "toboggan-mobile"
-version = "0.1.0"
+version.workspace = true
 description = "Mobile library for Toboggan presentations with UniFFI bindings for Swift and Kotlin"
 edition.workspace = true
 rust-version.workspace = true

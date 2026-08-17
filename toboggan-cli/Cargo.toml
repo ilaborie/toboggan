@@ -1,20 +1,16 @@
 [package]
 name = "toboggan-cli"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
-description = "Command-line interface for creating and converting Toboggan presentation files"
-keywords = ["presentation", "slides", "markdown", "toml", "cli"]
-categories = ["command-line-utilities", "text-processing"]
+description = "Folder parser and renderers (toml/json/yaml/html/typst) behind the Toboggan CLI"
+keywords = ["presentation", "slides", "markdown", "toml", "parser"]
+categories = ["text-processing"]
 repository = "https://github.com/ilaborie/toboggan"
 documentation = "https://docs.rs/toboggan-cli"
 readme = "README.md"
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-
-[[bin]]
-name = "toboggan-cli"
-path = "src/main.rs"
 
 [dependencies]
 toboggan-core = { path = "../toboggan-core", features = ["std"] }
@@ -24,7 +20,6 @@ toml = { workspace = true }
 serde_json = { workspace = true }
 serde-saphyr = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
 clap = { workspace = true, features = ["env", "derive"] }
 serde = { workspace = true, features = ["derive"] }
 miette = { workspace = true, features = ["fancy"] }

@@ -1,6 +1,6 @@
 [package]
 name = "toboggan-desktop"
-version = "0.1.0"
+version.workspace = true
 description = "Cross-platform desktop application for Toboggan presentations using iced"
 edition.workspace = true
 rust-version.workspace = true

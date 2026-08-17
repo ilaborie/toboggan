@@ -6889,7 +6889,6 @@ dependencies = [
  "toboggan-stats",
  "toml",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

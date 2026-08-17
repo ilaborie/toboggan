@@ -1,6 +1,6 @@
 [package]
 name = "toboggan-client"
-version = "0.1.0"
+version.workspace = true
 description = "Async WebSocket and HTTP client library for connecting to Toboggan presentation servers"
 edition.workspace = true
 rust-version.workspace = true

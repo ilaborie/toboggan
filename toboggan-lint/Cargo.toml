@@ -1,6 +1,6 @@
 [package]
 name = "toboggan-lint"
-version = "0.1.0"
+version.workspace = true
 description = "Lints for Toboggan presentations (bad HTML, misused pause/terminal, structure, content)"
 edition.workspace = true
 rust-version.workspace = true
