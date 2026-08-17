@@ -109,8 +109,11 @@ impl AppAction {
             Self::PreviousStep => Command::PreviousStep,
             Self::NextStep => Command::NextStep,
             Self::Blink => Command::Blink,
-            Self::Goto(id) => Command::GoTo {
-                slide: SlideId::new(usize::from(id)),
+            // The presenter types the number they can see on the slide, and
+            // `SlideId` is a 0-based index. Passing one straight to the other
+            // sent every jump one slide too far.
+            Self::Goto(number) => Command::GoTo {
+                slide: SlideId::new(usize::from(number).saturating_sub(1)),
             },
             Self::ShowLog | Self::Close | Self::Quit | Self::Help => {
                 return None;
@@ -128,5 +131,31 @@ pub(crate) struct ActionDetails {
 impl ActionDetails {
     pub(crate) fn new(keys: Vec<&'static str>, description: &'static str) -> Self {
         Self { keys, description }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn command_for(code: KeyCode) -> Option<Command> {
+        AppAction::from_key(KeyEvent::from(code))?.command()
+    }
+
+    /// The number on screen is 1-based; `SlideId` is not.
+    #[test]
+    fn typing_a_slide_number_goes_to_that_slide() {
+        assert_eq!(
+            command_for(KeyCode::Char('1')),
+            Some(Command::GoTo {
+                slide: SlideId::FIRST
+            })
+        );
+        assert_eq!(
+            command_for(KeyCode::Char('3')),
+            Some(Command::GoTo {
+                slide: SlideId::new(2)
+            })
+        );
     }
 }

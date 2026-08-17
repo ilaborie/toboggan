@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{ClientId, SlideId};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(tag = "command")]
 pub enum Command {
