@@ -8,42 +8,65 @@ use toboggan_core::Command;
 use wasm_bindgen::JsCast;
 use web_sys::KeyboardEvent;
 
-use crate::{deck_keys_captured, typing_into_editable};
+use crate::{
+    BlankScreen, deck_keys_captured, toggle_blank, toggle_fullscreen, typing_into_editable,
+};
+
+/// What a key does.
+///
+/// Not every binding is a server command. Fullscreen and a blank screen belong
+/// to the screen in front of the presenter, not to the presentation, and the
+/// server has no notion of either — so a mapping that could only hold a
+/// [`Command`] could not express them at all.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum KeyAction {
+    /// Sent to the server, which broadcasts the result to every client.
+    Send(Command),
+    /// Handled in this tab.
+    ToggleFullscreen,
+    /// Handled in this tab.
+    Blank(BlankScreen),
+}
 
 #[derive(Debug, Clone)]
-pub(crate) struct KeyboardMapping(HashMap<&'static str, Command>);
+pub(crate) struct KeyboardMapping(HashMap<&'static str, KeyAction>);
 
 impl Default for KeyboardMapping {
     fn default() -> Self {
         let mapping = HashMap::from([
-            ("ArrowLeft", Command::PreviousSlide),
-            ("ArrowUp", Command::PreviousStep),
-            ("ArrowRight", Command::NextSlide),
-            ("ArrowDown", Command::NextStep),
-            (" ", Command::NextStep),
+            ("ArrowLeft", KeyAction::Send(Command::PreviousSlide)),
+            ("ArrowUp", KeyAction::Send(Command::PreviousStep)),
+            ("ArrowRight", KeyAction::Send(Command::NextSlide)),
+            ("ArrowDown", KeyAction::Send(Command::NextStep)),
+            (" ", KeyAction::Send(Command::NextStep)),
             // What a presenter remote emits. Bound to the *step* commands, not
             // the slide ones: `NextStep` moves on to the next slide once a
             // slide's reveals run out, so the remote walks the whole deck,
             // whereas `NextSlide` would make every reveal unreachable from it.
-            ("PageDown", Command::NextStep),
-            ("PageUp", Command::PreviousStep),
-            ("Backspace", Command::PreviousStep),
-            ("Home", Command::First),
-            ("End", Command::Last),
-            ("b", Command::Blink),
-            ("B", Command::Blink),
+            ("PageDown", KeyAction::Send(Command::NextStep)),
+            ("PageUp", KeyAction::Send(Command::PreviousStep)),
+            ("Backspace", KeyAction::Send(Command::PreviousStep)),
+            ("Home", KeyAction::Send(Command::First)),
+            ("End", KeyAction::Send(Command::Last)),
+            ("b", KeyAction::Send(Command::Blink)),
+            ("B", KeyAction::Send(Command::Blink)),
+            ("f", KeyAction::ToggleFullscreen),
+            ("F", KeyAction::ToggleFullscreen),
+            (".", KeyAction::Blank(BlankScreen::Black)),
+            ("w", KeyAction::Blank(BlankScreen::White)),
+            ("W", KeyAction::Blank(BlankScreen::White)),
         ]);
         Self(mapping)
     }
 }
 
 impl KeyboardMapping {
-    pub(crate) fn get(&self, key: &str) -> Option<Command> {
+    pub(crate) fn get(&self, key: &str) -> Option<KeyAction> {
         self.0.get(key).cloned()
     }
 
-    pub(crate) fn entries(&self) -> impl Iterator<Item = (&'static str, &Command)> {
-        self.0.iter().map(|(key, cmd)| (*key, cmd))
+    pub(crate) fn entries(&self) -> impl Iterator<Item = (&'static str, &KeyAction)> {
+        self.0.iter().map(|(key, action)| (*key, action))
     }
 }
 
@@ -80,13 +103,23 @@ impl KeyboardService {
                         return;
                     }
                     let key = keyboard_event.key();
-                    if let Some(action) = mapping.get(&key) {
-                        keyboard_event.prevent_default();
-                        if tx.unbounded_send(action).is_err() {
-                            error!("Failed to send keyboard action");
-                        }
-                    } else {
+                    let Some(action) = mapping.get(&key) else {
                         debug!("No mapping for key:", &key);
+                        return;
+                    };
+                    keyboard_event.prevent_default();
+                    // The local actions run right here rather than going out
+                    // over the channel: a browser only grants fullscreen off a
+                    // user gesture, and a task that runs after this handler
+                    // returns no longer has one.
+                    match action {
+                        KeyAction::Send(command) => {
+                            if tx.unbounded_send(command).is_err() {
+                                error!("Failed to send keyboard action");
+                            }
+                        }
+                        KeyAction::ToggleFullscreen => toggle_fullscreen(),
+                        KeyAction::Blank(screen) => toggle_blank(screen),
                     }
                 }
             });

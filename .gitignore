@@ -81,3 +81,6 @@ idea.md
 *.local.*
 TODO.md
 logo/AppIcons.zip
+
+# Playwright MCP browser-session artifacts (page snapshots, console logs).
+.playwright-mcp/

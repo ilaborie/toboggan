@@ -15,5 +15,8 @@ pub mod errors;
 mod render;
 pub use self::render::*;
 
+mod screen;
+pub use self::screen::*;
+
 mod timer;
 pub use self::timer::*;
