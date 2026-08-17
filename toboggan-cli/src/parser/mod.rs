@@ -35,8 +35,15 @@ pub const FRONT_MATTER_DELIMITER: &str = "+++";
 const DEFAULT_SLIDE_TITLE: &str = "<No Title>";
 const DEFAULT_PART_TITLE: &str = "Untitled Part";
 
+/// TOML front matter at the top of a slide file, between `+++` fences.
+///
+/// `deny_unknown_fields` to match `toboggan.toml`, which has always been
+/// strict. Without it a misspelled key — `classe`, `duration_` — parsed
+/// happily and did nothing at all, and the author's only clue was that the
+/// slide did not look right. An unknown key is now a parse error with a span
+/// pointing at it.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct FrontMatter {
     pub title: Option<String>,
     pub skip: bool,
@@ -446,6 +453,39 @@ title = "Test Slide"
 "#;
         let frontmatter: FrontMatter = toml::from_str(toml_content).expect("TOML should parse");
         assert_eq!(frontmatter.duration, None);
+    }
+
+    /// A misspelled key used to parse happily and do nothing, leaving the author
+    /// with a slide that just did not look right and no way to find out why.
+    #[test]
+    fn an_unknown_key_is_rejected_and_named() {
+        let error = toml::from_str::<FrontMatter>("classe = [\"two-cols\"]\n")
+            .expect_err("an unknown key must not parse");
+        assert!(
+            error.to_string().contains("classe"),
+            "the error has to name the offending key: {error}"
+        );
+    }
+
+    /// The near-misses that motivate the strictness: singular/plural and a
+    /// trailing separator are exactly what a hand-typed key gets wrong.
+    #[test]
+    fn known_keys_still_parse() {
+        let frontmatter = toml::from_str::<FrontMatter>(
+            r#"
+title = "T"
+skip = false
+classes = ["two-cols"]
+style = "color: red"
+duration = "2m"
+hidden_in = ["pdf"]
+quake_cwd = "."
+disabled_rules = ["html/img-missing-alt"]
+"#,
+        )
+        .expect("every documented key must parse");
+        assert_eq!(frontmatter.title.as_deref(), Some("T"));
+        assert_eq!(frontmatter.disabled_rules, vec!["html/img-missing-alt"]);
     }
 }
 

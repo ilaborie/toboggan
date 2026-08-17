@@ -77,7 +77,14 @@ pub enum TobogganCliError {
         message: String,
     },
 
-    #[display("Failed to parse frontmatter in file: {}", src.name())]
+    /// Carries `toml`'s own message rather than only naming the file.
+    ///
+    /// The span and `source_code` give miette a snippet, but most callers only
+    /// ever see `Display` — the folder parser collects per-file failures into
+    /// strings — and "failed to parse frontmatter in 1-hello.md" does not tell
+    /// an author which key is wrong. `message()` is the reason without toml's
+    /// own snippet, which miette already draws.
+    #[display("Failed to parse frontmatter in file {}: {}", src.name(), source.message())]
     #[diagnostic(
         code(toboggan_cli::parse_frontmatter),
         help("Frontmatter must be valid TOML format between '+++' markers")
@@ -85,7 +92,7 @@ pub enum TobogganCliError {
     ParseFrontmatter {
         #[source_code]
         src: Arc<NamedSource<String>>,
-        #[label("invalid TOML syntax")]
+        #[label("{}", source.message())]
         span: SourceSpan,
 
         source: Box<toml::de::Error>,
