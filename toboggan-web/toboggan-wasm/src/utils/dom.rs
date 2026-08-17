@@ -3,7 +3,7 @@ use gloo::utils::{document, window};
 use toboggan_core::{Content, Style};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::prelude::*;
-use web_sys::{AddEventListenerOptions, Element, HtmlElement, KeyboardEvent};
+use web_sys::{AddEventListenerOptions, Element, Event, EventTarget, HtmlElement, KeyboardEvent};
 
 fn escape_html(html: &str) -> String {
     let div = document()
@@ -15,6 +15,12 @@ fn escape_html(html: &str) -> String {
 
 /// Whether `event` targets an editable control (form field or `contenteditable`),
 /// where bare-key shortcuts should defer to normal typing.
+///
+/// Looks only at `event.target`, which the DOM **retargets** to the shadow host
+/// for an event that started inside a shadow root — so this deliberately does
+/// not see the terminal's hidden textarea, and backtick keeps toggling the quake
+/// overlay while the shell has focus. Use [`typing_into_editable`] where the
+/// question is "is the user typing", not "what did the event name".
 #[must_use]
 pub fn is_editable_target(event: &KeyboardEvent) -> bool {
     let Some(target) = event.target() else {
@@ -23,10 +29,98 @@ pub fn is_editable_target(event: &KeyboardEvent) -> bool {
     let Ok(element) = target.dyn_into::<HtmlElement>() else {
         return false;
     };
-    if element.is_content_editable() {
-        return true;
+    is_editable_element(&element)
+}
+
+/// Whether `event` is the user typing into an editable control, wherever that
+/// control lives.
+///
+/// Unlike [`is_editable_target`] this walks `composedPath()`, which crosses
+/// shadow boundaries. That is the difference that matters for the terminals:
+/// rioterm reads keystrokes from a hidden textarea inside the terminal's shadow
+/// root, so from a listener on `window` the event's target is the shadow host —
+/// an ordinary `<div>`. Judging by the target alone, typing `space` at a shell
+/// prompt looked exactly like pressing `space` on a slide.
+#[must_use]
+pub fn typing_into_editable(event: &KeyboardEvent) -> bool {
+    event
+        .composed_path()
+        .iter()
+        .filter_map(|node| node.dyn_into::<HtmlElement>().ok())
+        .any(|element| is_editable_element(&element))
+}
+
+fn is_editable_element(element: &HtmlElement) -> bool {
+    element.is_content_editable()
+        || matches!(element.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT")
+}
+
+/// Releases keyboard focus when a click lands outside the focused widget.
+///
+/// A terminal keeps focus in a hidden textarea, and the deck's keys are
+/// deliberately inert while it does. Browsers only move focus when the click
+/// lands on something focusable, and a slide is a plain `<div>` — so without
+/// this, clicking off a slide's terminal left it holding the keyboard and the
+/// presenter with a deck that no longer answered its arrow keys and no obvious
+/// way out. The quake overlay has its own exit (its toggle key, or a click
+/// outside it); an inline terminal had none.
+///
+/// `document.activeElement` is already retargeted to the outermost shadow host,
+/// which is exactly the granularity wanted here: a click anywhere inside the
+/// focused terminal — its canvas, its title bar — keeps the focus, and only a
+/// click outside it releases.
+pub fn install_focus_release_on_outside_click() {
+    let closure = Closure::<dyn FnMut(_)>::new(move |event: Event| {
+        let Some(focused) = document().active_element() else {
+            return;
+        };
+        if focused.tag_name() == "BODY" {
+            return;
+        }
+        let focused: &EventTarget = focused.as_ref();
+        let inside = event
+            .composed_path()
+            .iter()
+            .any(|node| node.dyn_ref::<EventTarget>() == Some(focused));
+        if !inside {
+            blur_active_element();
+        }
+    });
+
+    let options = AddEventListenerOptions::new();
+    options.set_capture(true);
+    if document()
+        .add_event_listener_with_callback_and_add_event_listener_options(
+            "click",
+            closure.as_ref().unchecked_ref(),
+            &options,
+        )
+        .is_err()
+    {
+        error!("Failed to register focus-release listener");
     }
-    matches!(element.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT")
+    closure.forget();
+}
+
+/// Blurs whatever currently has focus, descending through shadow roots.
+///
+/// `document.activeElement` stops at a shadow host, so a plain `blur()` on it
+/// leaves the real target — rioterm's hidden textarea, several roots down —
+/// still focused. Closing the quake terminal has to actually give focus back:
+/// while that textarea holds it, [`typing_into_editable`] rightly reports the
+/// user as typing and the deck's keys stay inert.
+pub fn blur_active_element() {
+    let mut active = document().active_element();
+    while let Some(element) = active {
+        let next = element.shadow_root().and_then(|root| root.active_element());
+        if next.is_none() {
+            if let Ok(html) = element.dyn_into::<HtmlElement>() {
+                let _ = html.blur();
+            }
+            return;
+        }
+        active = next;
+    }
 }
 
 /// Installs a page-lifetime capture-phase `keydown` listener on `window`.

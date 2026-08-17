@@ -4,11 +4,15 @@ use std::rc::Rc;
 use gloo::console::{debug, info};
 use gloo::utils::document;
 use toboggan_core::TerminalConfig;
-use wasm_bindgen::UnwrapThrowExt;
-use web_sys::HtmlElement;
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::{JsCast, UnwrapThrowExt};
+use web_sys::{AddEventListenerOptions, Event, EventTarget, HtmlElement};
 
 use crate::components::{TobogganTerminalElement, WasmElement};
-use crate::{create_html_element, install_capture_keydown, is_editable_target};
+use crate::{
+    blur_active_element, create_html_element, install_capture_keydown, is_editable_target,
+    set_deck_keys_captured,
+};
 
 const CSS: &str = include_str!("style.css");
 const STYLE_MARKER_ATTR: &str = "data-toboggan-quake-style";
@@ -109,6 +113,7 @@ impl WasmElement for TobogganQuakeTerminalElement {
         }));
 
         register_toggle_listener(Rc::clone(&state));
+        register_click_outside_listener(Rc::clone(&state));
         self.state = Some(state);
     }
 }
@@ -149,6 +154,46 @@ fn register_toggle_listener(state: Rc<RefCell<QuakeState>>) {
     });
 }
 
+/// Closes the overlay when a click lands anywhere outside it.
+///
+/// The overlay only covers the top of the viewport, so the rest of the slide
+/// stays clickable while it is down. Clicking there is the natural "I am done
+/// with the terminal" gesture, and it is the only way out other than the toggle
+/// key — the deck's own keys stay inert until one of the two happens.
+///
+/// Capture phase on the document, and `composedPath` rather than `target`,
+/// because a click inside the terminal is retargeted to its shadow host and
+/// would otherwise be indistinguishable from a click on the overlay's edge.
+fn register_click_outside_listener(state: Rc<RefCell<QuakeState>>) {
+    let closure = Closure::<dyn FnMut(_)>::new(move |event: Event| {
+        let inside = {
+            let quake = state.borrow();
+            if !quake.is_open {
+                return;
+            }
+            let overlay: &EventTarget = quake.overlay.as_ref();
+            event
+                .composed_path()
+                .iter()
+                .any(|node| node.dyn_ref::<EventTarget>() == Some(overlay))
+        };
+        if !inside {
+            toggle(&state);
+        }
+    });
+
+    let options = AddEventListenerOptions::new();
+    options.set_capture(true);
+    document()
+        .add_event_listener_with_callback_and_add_event_listener_options(
+            "click",
+            closure.as_ref().unchecked_ref(),
+            &options,
+        )
+        .unwrap_throw();
+    closure.forget();
+}
+
 fn toggle(state_rc: &Rc<RefCell<QuakeState>>) {
     let (will_open, needs_start) = {
         let state = state_rc.borrow();
@@ -164,12 +209,20 @@ fn toggle(state_rc: &Rc<RefCell<QuakeState>>) {
 
     let mut state = state_rc.borrow_mut();
     state.is_open = will_open;
+    // While the overlay is down every key belongs to the shell, including the
+    // ones the deck binds. Releasing the deck's bindings here rather than in the
+    // key handler keeps "who owns the keyboard" tied to what is on screen.
+    set_deck_keys_captured(will_open);
     let class_list = state.overlay.class_list();
     if will_open {
         let _ = class_list.add_1("open");
         info!("🎮 QuakeTerminal opened");
     } else {
         let _ = class_list.remove_1("open");
+        // The session keeps running for an instant reopen, so its hidden
+        // textarea keeps focus unless we take it back — and while it has focus
+        // the deck reads every key as typing and ignores it.
+        blur_active_element();
         debug!("QuakeTerminal closed");
     }
 }
