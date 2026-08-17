@@ -312,7 +312,14 @@ impl<H: NotificationHandler + 'static> TobogganClientCore<H> {
                 CommunicationMessage::Error { error } => {
                     handler.on_error(error);
                 }
-                CommunicationMessage::Registered { client_id } => {
+                CommunicationMessage::Registered { client_id, role } => {
+                    // The grant is logged rather than handed to the handler:
+                    // `NotificationHandler` is mirrored into generated UniFFI
+                    // bindings, and widening it would mean regenerating the iOS
+                    // surface for something no foreign caller reads yet.
+                    // `WebSocketClient` publishes the role for the clients that
+                    // do act on it.
+                    tracing::debug!(?client_id, ?role, "Registered");
                     handler.on_registered(client_id);
                 }
                 CommunicationMessage::ClientConnected { client_id, name } => {

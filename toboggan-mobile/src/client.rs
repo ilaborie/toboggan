@@ -16,7 +16,13 @@ use crate::types::{Command, Slide, State, Talk};
 /// Client configuration for connecting to a Toboggan server.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct ClientConfig {
-    /// The server URL, like `http://localhost:8080`
+    /// The server URL, like `http://localhost:8080`.
+    ///
+    /// May carry a presenter token — `http://192.168.1.10:8080/?token=s3cr3t`,
+    /// exactly as the server prints it. A phone is never on the machine running
+    /// the server, so without a token it registers as audience and its buttons
+    /// do nothing; carrying the token in the URL means the one string the user
+    /// already has to type is the whole configuration.
     pub url: String,
 
     /// The maximum number of retries if the connection is not working
@@ -24,6 +30,24 @@ pub struct ClientConfig {
 
     /// The delay between retries
     pub retry_delay: Duration,
+}
+
+/// Splits a configured URL into the server address and a presenter token.
+///
+/// Only `token` is understood; anything else in the query string is dropped
+/// along with it, because what remains has to be usable as the base of both the
+/// REST and WebSocket URLs.
+fn split_presenter_token(url: &str) -> (String, Option<String>) {
+    let Some((base, query)) = url.split_once('?') else {
+        return (url.to_owned(), None);
+    };
+    let token = query.split('&').find_map(|pair| {
+        let value = pair.strip_prefix("token=")?;
+        (!value.is_empty()).then(|| value.to_owned())
+    });
+    // A URL written as `http://host:8080/?token=…` leaves a trailing slash the
+    // API paths would double up.
+    (base.trim_end_matches('/').to_owned(), token)
 }
 
 /// The Toboggan client for mobile platforms.
@@ -59,6 +83,7 @@ impl TobogganClient {
             max_retries,
             retry_delay,
         } = config;
+        let (url, presenter_token) = split_presenter_token(&url);
 
         // Convert HTTP URL to WebSocket URL.
         //
@@ -79,6 +104,7 @@ impl TobogganClient {
             max_retries: max_retries as usize,
             retry_delay,
             max_retry_delay: retry_delay * max_retries,
+            presenter_token,
         };
 
         // Create watch channels for slides and talk (shared between core and adapter)

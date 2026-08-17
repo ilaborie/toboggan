@@ -116,6 +116,10 @@ pub struct BaseClientConfig {
     pub api_url: String,
     pub websocket_url: String,
     pub retry: RetryConfig,
+    /// Secret offered at registration so a client that is not on the server's
+    /// own machine may still drive the deck. `None` on the usual local
+    /// connection, where being local is credential enough.
+    pub presenter_token: Option<String>,
 }
 
 impl BaseClientConfig {
@@ -127,6 +131,7 @@ impl BaseClientConfig {
             api_url,
             websocket_url,
             retry: RetryConfig::default(),
+            presenter_token: None,
         }
     }
 
@@ -138,6 +143,19 @@ impl BaseClientConfig {
     #[must_use]
     pub fn with_retry(mut self, retry: RetryConfig) -> Self {
         self.retry = retry;
+        self
+    }
+
+    /// Offers a presenter token on this connection.
+    ///
+    /// An empty token is dropped rather than sent: it can only be refused, and
+    /// it comes from a flag or an environment variable that was set to nothing.
+    #[must_use]
+    pub fn with_presenter_token(mut self, token: Option<&str>) -> Self {
+        self.presenter_token = token
+            .map(str::trim)
+            .filter(|token| !token.is_empty())
+            .map(str::to_owned);
         self
     }
 }

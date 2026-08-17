@@ -17,6 +17,7 @@ use crate::TobogganState;
 
 mod api;
 mod pages;
+mod presenter;
 mod static_assets;
 mod terminal_ws;
 mod ws;
@@ -159,11 +160,109 @@ fn create_cors_layer(allowed_origins: Option<&[String]>) -> CorsLayer {
 #[cfg(test)]
 #[allow(clippy::expect_used)]
 mod tests {
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
     use axum::body::Body;
+    use axum::extract::ConnectInfo;
     use axum::http::Request;
+    use toboggan_core::{Command, Slide, Talk};
     use tower::ServiceExt as _;
 
     use super::*;
+    use crate::services::{ClientService, TalkService};
+
+    const REMOTE: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 42)), 51_000);
+    const LOCAL: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 51_000);
+
+    fn test_router() -> Router {
+        let talk = Talk::new("Test Talk").add_slide(Slide::cover("Cover"));
+        let talk_service = TalkService::new(talk).expect("build talk service");
+        let state = TobogganState::new(talk_service, ClientService::new(100), "sh".into());
+        routes(None, OpenApi::default()).with_state(state)
+    }
+
+    /// Builds a request as if it had arrived over TCP from `peer`.
+    ///
+    /// Production inserts this extension via
+    /// `into_make_service_with_connect_info`; a `oneshot` has no socket, so the
+    /// test supplies what the socket would have.
+    fn request_from(peer: SocketAddr, mut request: Request<Body>) -> Request<Body> {
+        request.extensions_mut().insert(ConnectInfo(peer));
+        request
+    }
+
+    /// The whole point of the presenter gate. `/api/terminal` spawns a shell on
+    /// the machine running the server; a laptop on the same wifi must not be
+    /// able to ask for one.
+    #[tokio::test]
+    async fn the_network_cannot_open_a_shell() {
+        let response = test_router()
+            .oneshot(request_from(
+                REMOTE,
+                Request::get("/api/terminal?cmd=id")
+                    .body(Body::empty())
+                    .expect("build request"),
+            ))
+            .await
+            .expect("serve request");
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn the_network_cannot_move_the_deck() {
+        let command = serde_json::to_vec(&Command::NextSlide).expect("serialize command");
+        let response = test_router()
+            .oneshot(request_from(
+                REMOTE,
+                Request::post("/api/command")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(command))
+                    .expect("build request"),
+            ))
+            .await
+            .expect("serve request");
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    /// …while the machine running the server is unaffected, which is the whole
+    /// of the everyday workflow.
+    #[tokio::test]
+    async fn this_machine_still_drives_the_deck() {
+        let command = serde_json::to_vec(&Command::NextSlide).expect("serialize command");
+        let response = test_router()
+            .oneshot(request_from(
+                LOCAL,
+                Request::post("/api/command")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(command))
+                    .expect("build request"),
+            ))
+            .await
+            .expect("serve request");
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    /// Watching is not gated: the audience URL has to keep working, or the
+    /// gate would have turned a security fix into a broken feature.
+    #[tokio::test]
+    async fn the_network_can_still_watch() {
+        for path in ["/api/talk", "/api/slides", "/health"] {
+            let response = test_router()
+                .oneshot(request_from(
+                    REMOTE,
+                    Request::get(path)
+                        .body(Body::empty())
+                        .expect("build request"),
+                ))
+                .await
+                .expect("serve request");
+
+            assert_eq!(response.status(), StatusCode::OK, "{path} should be public");
+        }
+    }
 
     /// The deck's own assets must never be reused without asking the server:
     /// an author editing `public/slide.css` mid-talk otherwise keeps seeing the

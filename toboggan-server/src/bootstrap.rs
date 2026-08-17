@@ -8,8 +8,8 @@ use tracing::{info, instrument, warn};
 use utoipa::openapi::OpenApi;
 
 use crate::{
-    ClientService, ServerSettings, Settings, TalkService, TobogganState, WatchConfig, WatchTarget,
-    routes_with_cors, start_watch_task,
+    ClientService, PresenterAuth, ServerSettings, Settings, TalkService, TobogganState,
+    WatchConfig, WatchTarget, routes_with_cors, start_watch_task,
 };
 
 /// Loads the talk from `settings.talk` and serves it.
@@ -77,7 +77,10 @@ pub async fn launch_with_talk(
     let cleanup_service = client_service.clone();
     let terminal_shell = settings.resolve_shell();
     info!(%terminal_shell, "Embedded terminals will use this shell");
-    let state = TobogganState::new(talk_service, client_service, terminal_shell.into());
+    let auth = PresenterAuth::new(settings.presenter_token.as_deref());
+    report_access_posture(host, &auth);
+    let state =
+        TobogganState::new(talk_service, client_service, terminal_shell.into()).with_auth(auth);
 
     // A pre-generated overview directory (`--thumbnails-dir`) seeds the cache as
     // ready; otherwise the overview is generated lazily on the first request.
@@ -116,6 +119,28 @@ pub async fn launch_with_talk(
     info!("Server shutdown complete");
 
     Ok(())
+}
+
+/// Says out loud who will be able to drive the deck.
+///
+/// Worth a line in the log because the answer changes with `--host`, and the
+/// case that changes it is the one an author reaches for five minutes before a
+/// talk — "let the room open it on their laptops" — without meaning to also
+/// offer the room a shell.
+fn report_access_posture(host: IpAddr, auth: &PresenterAuth) {
+    if host.is_loopback() {
+        info!("Only this machine can reach the server, so every client presents");
+    } else if auth.has_token() {
+        info!(
+            "Reachable from the network: clients present from this machine, \
+             or with the presenter token"
+        );
+    } else {
+        warn!(
+            "Reachable from the network: remote clients are read-only and cannot open \
+             terminals. Pass --presenter-token to let one drive the deck."
+        );
+    }
 }
 
 /// Builds the URL `--open` hands to the browser.

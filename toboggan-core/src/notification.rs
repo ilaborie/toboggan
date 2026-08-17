@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{ClientId, State};
+use crate::{ClientId, ClientRole, State};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -19,9 +19,16 @@ pub enum Notification {
     TalkChange {
         state: State,
     },
-    /// Sent to the registering client with their assigned ID
+    /// Sent to the registering client with their assigned ID and the role the
+    /// server granted them.
+    ///
+    /// The role is told rather than asked for: a client cannot know whether it
+    /// may drive the deck until the server has looked at where it connected
+    /// from, so this is where a UI learns to hide its navigation controls.
     Registered {
         client_id: ClientId,
+        #[serde(default)]
+        role: ClientRole,
     },
     /// Broadcast when a client connects
     ClientConnected {
@@ -55,8 +62,8 @@ impl Notification {
     }
 
     #[must_use]
-    pub fn registered(client_id: ClientId) -> Self {
-        Self::Registered { client_id }
+    pub fn registered(client_id: ClientId, role: ClientRole) -> Self {
+        Self::Registered { client_id, role }
     }
 
     #[must_use]

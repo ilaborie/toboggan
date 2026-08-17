@@ -1,3 +1,6 @@
+mod auth;
+pub use self::auth::PresenterAuth;
+
 mod settings;
 pub use self::settings::*;
 

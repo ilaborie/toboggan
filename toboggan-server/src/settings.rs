@@ -57,6 +57,14 @@ pub struct ServerSettings {
     /// Open the presentation in the default browser once the server is ready
     #[clap(long, env = "TOBOGGAN_OPEN")]
     pub open: bool,
+
+    /// Secret that lets a client **not** on this machine drive the deck.
+    ///
+    /// Only needed when the server is reachable from the network: a connection
+    /// from this machine always presents. Remote clients pass it as
+    /// `?token=…` (`/run?token=…`, and the WebSocket picks it up from there).
+    #[clap(long, env = "TOBOGGAN_PRESENTER_TOKEN")]
+    pub presenter_token: Option<String>,
 }
 
 /// `toboggan serve`'s settings: which talk file to serve, and how.

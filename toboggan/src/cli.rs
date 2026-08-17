@@ -226,6 +226,13 @@ pub(crate) struct ServeOptions {
     /// Open the presentation in the default browser once the server is ready
     #[arg(long, env = "TOBOGGAN_OPEN")]
     pub(crate) open: bool,
+
+    /// Secret that lets a client not on this machine drive the deck
+    ///
+    /// Only relevant with `--host` set to something reachable: a client on this
+    /// machine always presents. Remote clients pass it as `?token=…`.
+    #[arg(long, env = "TOBOGGAN_PRESENTER_TOKEN")]
+    pub(crate) presenter_token: Option<String>,
 }
 
 impl ServeOptions {
@@ -240,6 +247,7 @@ impl ServeOptions {
         self.public_dir = self.public_dir.take().or(config.public_dir);
         self.thumbnails_dir = self.thumbnails_dir.take().or(config.thumbnails_dir);
         self.shell = self.shell.take().or(config.shell);
+        self.presenter_token = self.presenter_token.take().or(config.presenter_token);
         self.open |= config.open.unwrap_or(false);
     }
 
@@ -256,6 +264,7 @@ impl ServeOptions {
             thumbnails_dir: self.thumbnails_dir,
             shell: self.shell,
             open: self.open,
+            presenter_token: self.presenter_token,
         }
     }
 }
@@ -385,6 +394,7 @@ impl DefaultArgs {
             (self.serve.public_dir.is_some(), "--public-dir"),
             (self.serve.thumbnails_dir.is_some(), "--thumbnails-dir"),
             (self.serve.shell.is_some(), "--shell"),
+            (self.serve.presenter_token.is_some(), "--presenter-token"),
             (self.serve.open, "--open"),
         ] {
             if set {
@@ -521,11 +531,20 @@ pub(crate) struct ClientArgs {
     /// Server port to connect to
     #[arg(long, default_value_t = DEFAULT_PORT)]
     pub(crate) port: u16,
+
+    /// Presenter token, when the server is on another machine
+    ///
+    /// Not needed for the usual `--host localhost`: a client on the server's
+    /// own machine always presents. Without it, a client connecting across the
+    /// network can watch but not navigate.
+    #[arg(long, env = "TOBOGGAN_PRESENTER_TOKEN")]
+    pub(crate) presenter_token: Option<String>,
 }
 
 impl From<ClientArgs> for TobogganConfig {
     fn from(args: ClientArgs) -> Self {
         TobogganConfig::new(&args.host, args.port)
+            .with_presenter_token(args.presenter_token.as_deref())
     }
 }
 

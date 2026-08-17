@@ -1,10 +1,10 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use gloo::console::{debug, error, info};
-use toboggan_core::{ClientId, Command, SlideId, State};
+use toboggan_core::{ClientId, ClientRole, Command, SlideId, State};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use wasm_bindgen_futures::spawn_local;
@@ -46,6 +46,43 @@ struct TobogganElements {
     toast: TobogganToastElement,
     quake: TobogganQuakeTerminalElement,
     help: TobogganHelpElement,
+}
+
+/// Everything the message handlers share.
+///
+/// A struct rather than the same seven handles threaded through four functions
+/// that each wanted almost all of them: the signatures had come to differ only
+/// by which handle a given one happened not to need, which is not a distinction
+/// worth carrying in a parameter list.
+///
+/// `Cell`/`RefCell` rather than `Rc<RefCell<_>>` per field, because the whole
+/// context is shared as one `Rc` — the interior mutability is still per field.
+struct Session {
+    api: Rc<TobogganApi>,
+    elements: Rc<RefCell<TobogganElements>>,
+    root_element: Rc<HtmlElement>,
+    tx_cmd: UnboundedSender<Command>,
+    recovery: RefCell<RecoveryState>,
+    meta: RefCell<PresentationMeta>,
+    /// The id the server assigned, once it has.
+    client_id: Cell<Option<ClientId>>,
+    /// What the server granted this client. Starts as presenter: the everyday
+    /// deck is served from the machine it is presented on, and the handshake
+    /// corrects this within a round trip when it is not. Starting as audience
+    /// would make the first keypresses after load do nothing on an ordinary
+    /// local deck.
+    role: Cell<ClientRole>,
+}
+
+impl Session {
+    /// Whether this client may send commands that move the deck.
+    fn presents(&self) -> bool {
+        self.role.get().is_presenter()
+    }
+
+    fn toast(&self, kind: ToastType, message: &str) {
+        self.elements.borrow().toast.toast(kind, message);
+    }
 }
 
 pub(crate) struct App {
@@ -158,18 +195,26 @@ impl WasmElement for App {
             com.borrow_mut().connect();
         });
 
-        let tx_cmd = self.tx_cmd.take().unwrap_throw();
-        let presentation_meta = Rc::new(RefCell::new(PresentationMeta::default()));
-        let client_id: Rc<RefCell<Option<ClientId>>> = Rc::new(RefCell::new(None));
+        let session = Rc::new(Session {
+            api: self.api.clone(),
+            elements: self.elements.clone(),
+            root_element,
+            tx_cmd: self.tx_cmd.take().unwrap_throw(),
+            recovery: RefCell::new(RecoveryState::default()),
+            meta: RefCell::new(PresentationMeta::default()),
+            client_id: Cell::new(None),
+            role: Cell::new(ClientRole::Presenter),
+        });
 
         // Register beforeunload listener to send Unregister command
         {
-            let client_id = Rc::clone(&client_id);
-            let tx_cmd = tx_cmd.clone();
+            let session = Rc::clone(&session);
             let window = web_sys::window().unwrap_throw();
             let closure = Closure::<dyn FnMut(_)>::new(move |_: web_sys::BeforeUnloadEvent| {
-                if let Some(id) = *client_id.borrow() {
-                    let _ = tx_cmd.unbounded_send(Command::Unregister { client: id });
+                if let Some(id) = session.client_id.get() {
+                    let _ = session
+                        .tx_cmd
+                        .unbounded_send(Command::Unregister { client: id });
                 }
             });
             window
@@ -178,112 +223,64 @@ impl WasmElement for App {
             closure.forget();
         }
 
-        spawn_local(handle_messages(
-            self.api.clone(),
-            rx_msg,
-            self.elements.clone(),
-            tx_cmd.clone(),
-            root_element,
-            presentation_meta,
-            client_id,
-        ));
-
-        spawn_local(handle_actions(rx_action, self.elements.clone(), tx_cmd));
+        spawn_local(handle_messages(rx_msg, Rc::clone(&session)));
+        spawn_local(handle_actions(rx_action, session));
     }
 }
 
-async fn handle_messages(
-    api: Rc<TobogganApi>,
-    mut rx: UnboundedReceiver<CommunicationMessage>,
-    elements: Rc<RefCell<TobogganElements>>,
-    tx_cmd: UnboundedSender<Command>,
-    root_element: Rc<HtmlElement>,
-    presentation_meta: Rc<RefCell<PresentationMeta>>,
-    client_id: Rc<RefCell<Option<ClientId>>>,
-) {
-    let recovery_state = Rc::new(RefCell::new(RecoveryState::default()));
-
+async fn handle_messages(mut rx: UnboundedReceiver<CommunicationMessage>, session: Rc<Session>) {
     while let Some(msg) = rx.next().await {
         match msg {
             CommunicationMessage::ConnectionStatusChange { status } => {
-                handle_connection_status(
-                    &status,
-                    &api,
-                    &elements,
-                    &tx_cmd,
-                    &recovery_state,
-                    &presentation_meta,
-                )
-                .await;
+                handle_connection_status(&status, &session).await;
             }
             CommunicationMessage::StateChange { state } => {
-                handle_state_change(
-                    state,
-                    &api,
-                    &elements,
-                    &root_element,
-                    &tx_cmd,
-                    &recovery_state,
-                    &presentation_meta,
-                )
-                .await;
+                handle_state_change(state, &session).await;
             }
             CommunicationMessage::TalkChange { state } => {
-                handle_talk_change(
-                    state,
-                    &api,
-                    &elements,
-                    &root_element,
-                    &tx_cmd,
-                    &recovery_state,
-                    &presentation_meta,
-                )
-                .await;
+                handle_talk_change(state, &session).await;
             }
             CommunicationMessage::Error { error } => {
-                elements.borrow().toast.toast(ToastType::Error, &error);
+                session.toast(ToastType::Error, &error);
                 // The only error that can reach us while still in `Init` is a
                 // rejected `?slide=N` (the overview links to a slide the deck no
                 // longer has). Start from the first slide rather than leaving the
                 // page blank.
                 let jump_failed = {
-                    let mut recovery = recovery_state.borrow_mut();
+                    let mut recovery = session.recovery.borrow_mut();
                     std::mem::take(&mut recovery.pending_url_goto)
                 };
-                if jump_failed {
+                if jump_failed && session.presents() {
                     info!("Slide from URL was rejected, starting from the first slide");
-                    let _ = tx_cmd.unbounded_send(Command::First);
+                    let _ = session.tx_cmd.unbounded_send(Command::First);
                 }
             }
-            CommunicationMessage::Registered { client_id: id } => {
-                *client_id.borrow_mut() = Some(id);
+            CommunicationMessage::Registered {
+                client_id: id,
+                role,
+            } => {
+                session.client_id.set(Some(id));
+                session.role.set(role);
+                if !role.is_presenter() {
+                    session.toast(
+                        ToastType::Info,
+                        "Following along — this client cannot drive the deck",
+                    );
+                }
             }
             CommunicationMessage::ClientConnected { name, .. } => {
-                elements
-                    .borrow()
-                    .toast
-                    .toast(ToastType::Info, &format!("{name} connected"));
+                session.toast(ToastType::Info, &format!("{name} connected"));
             }
             CommunicationMessage::ClientDisconnected { name, .. } => {
-                elements
-                    .borrow()
-                    .toast
-                    .toast(ToastType::Info, &format!("{name} disconnected"));
+                session.toast(ToastType::Info, &format!("{name} disconnected"));
             }
         }
     }
 }
 
-async fn handle_connection_status(
-    status: &ConnectionStatus,
-    api: &Rc<TobogganApi>,
-    elements: &Rc<RefCell<TobogganElements>>,
-    _tx_cmd: &UnboundedSender<Command>,
-    recovery_state: &Rc<RefCell<RecoveryState>>,
-    presentation_meta: &Rc<RefCell<PresentationMeta>>,
-) {
+async fn handle_connection_status(status: &ConnectionStatus, session: &Session) {
     {
-        let elems = elements.borrow();
+        let elems = session.elements.borrow();
 
         match status {
             ConnectionStatus::Connecting => {
@@ -316,16 +313,16 @@ async fn handle_connection_status(
 
     if matches!(status, ConnectionStatus::Connected) {
         // Mark that we should attempt recovery when we receive the next state
-        recovery_state.borrow_mut().pending_restoration = true;
+        session.recovery.borrow_mut().pending_restoration = true;
 
         // Register command is sent automatically by CommunicationService
 
-        match api.get_talk().await {
+        match session.api.get_talk().await {
             Ok(talk) => {
                 // Update presentation metadata with total slides count
-                presentation_meta.borrow_mut().total_slides = talk.titles.len();
+                session.meta.borrow_mut().total_slides = talk.titles.len();
 
-                let mut elem = elements.borrow_mut();
+                let mut elem = session.elements.borrow_mut();
                 elem.footer.set_content(talk.footer.clone());
                 drop(elem);
 
@@ -345,72 +342,65 @@ async fn handle_connection_status(
     }
 }
 
-async fn handle_state_change(
-    state: State,
-    api: &Rc<TobogganApi>,
-    elements: &Rc<RefCell<TobogganElements>>,
-    root_element: &Rc<HtmlElement>,
-    tx_cmd: &UnboundedSender<Command>,
-    recovery_state: &Rc<RefCell<RecoveryState>>,
-    presentation_meta: &Rc<RefCell<PresentationMeta>>,
-) {
+async fn handle_state_change(state: State, session: &Session) {
     // Auto-start presentation when in Init state. If the URL carries `?slide=N`
     // (e.g. opened from the slide overview), jump straight to that slide.
+    //
+    // Starting the deck is itself a command, so an audience client must not try:
+    // the server would refuse it and the page would sit in `Init` — blank —
+    // for the whole talk. It waits for the presenter to start instead, and the
+    // broadcast state change brings it along.
     if matches!(state, State::Init) {
+        if !session.presents() {
+            info!("Waiting for the presenter to start");
+            session.toast(ToastType::Info, "Waiting for the presenter to start…");
+            return;
+        }
         if let Some(index) = slide_from_url() {
             info!("Starting at slide from URL");
-            recovery_state.borrow_mut().pending_url_goto = true;
-            let _ = tx_cmd.unbounded_send(Command::GoTo {
+            session.recovery.borrow_mut().pending_url_goto = true;
+            let _ = session.tx_cmd.unbounded_send(Command::GoTo {
                 slide: SlideId::new(index),
             });
         } else {
             info!("Auto-starting presentation from Init state");
-            let _ = tx_cmd.unbounded_send(Command::First);
+            let _ = session.tx_cmd.unbounded_send(Command::First);
         }
         return;
     }
 
     // We left `Init`, so the URL jump landed and needs no fallback.
-    recovery_state.borrow_mut().pending_url_goto = false;
+    session.recovery.borrow_mut().pending_url_goto = false;
 
-    // Try to restore previous slide position after reconnection
-    if try_restore_slide_position(&state, elements, tx_cmd, recovery_state) {
+    // Try to restore previous slide position after reconnection. Also a command,
+    // so also presenter-only — an audience client simply takes whatever state
+    // the server sends it on reconnect, which is the right answer anyway.
+    if session.presents() && try_restore_slide_position(&state, session) {
         return; // We'll receive a new StateChange after GoTo command
     }
 
     // Save current state for future reconnection recovery
-    recovery_state.borrow_mut().last_known_state = Some(state.clone());
+    session.recovery.borrow_mut().last_known_state = Some(state.clone());
 
     // Update UI to reflect current state
-    update_root_state_class(&state, root_element, presentation_meta);
-    update_slide_display(&state, api, elements).await;
-    show_completion_toast_if_done(&state, elements);
+    update_root_state_class(&state, session);
+    update_slide_display(&state, session).await;
+    show_completion_toast_if_done(&state, session);
 }
 
-async fn handle_talk_change(
-    state: State,
-    api: &Rc<TobogganApi>,
-    elements: &Rc<RefCell<TobogganElements>>,
-    root_element: &Rc<HtmlElement>,
-    _tx_cmd: &UnboundedSender<Command>,
-    recovery_state: &Rc<RefCell<RecoveryState>>,
-    presentation_meta: &Rc<RefCell<PresentationMeta>>,
-) {
+async fn handle_talk_change(state: State, session: &Session) {
     info!("📝 Presentation updated, reloading talk metadata");
 
     // Notify user that presentation was updated
-    elements
-        .borrow()
-        .toast
-        .toast(ToastType::Info, "📝 Presentation updated");
+    session.toast(ToastType::Info, "📝 Presentation updated");
 
     // Re-fetch talk metadata
-    match api.get_talk().await {
+    match session.api.get_talk().await {
         Ok(talk) => {
             // Update presentation metadata with total slides count
-            presentation_meta.borrow_mut().total_slides = talk.titles.len();
+            session.meta.borrow_mut().total_slides = talk.titles.len();
 
-            let mut elem = elements.borrow_mut();
+            let mut elem = session.elements.borrow_mut();
             elem.footer.set_content(talk.footer.clone());
             drop(elem);
 
@@ -420,20 +410,17 @@ async fn handle_talk_change(
         }
         Err(err) => {
             error!("Failed to refetch talk after TalkChange:", err.to_string());
-            elements
-                .borrow()
-                .toast
-                .toast(ToastType::Error, "Failed to reload presentation metadata");
+            session.toast(ToastType::Error, "Failed to reload presentation metadata");
         }
     }
 
     // Save current state for future re-connection recovery
-    recovery_state.borrow_mut().last_known_state = Some(state.clone());
+    session.recovery.borrow_mut().last_known_state = Some(state.clone());
 
     // Update UI to reflect current state (server has already adjusted slide position)
-    update_root_state_class(&state, root_element, presentation_meta);
-    update_slide_display(&state, api, elements).await;
-    show_completion_toast_if_done(&state, elements);
+    update_root_state_class(&state, session);
+    update_slide_display(&state, session).await;
+    show_completion_toast_if_done(&state, session);
 }
 
 /// Reads a `slide=N` parameter from the page URL query string, if present.
@@ -450,13 +437,8 @@ fn slide_from_url() -> Option<usize> {
 
 /// Attempts to restore slide position after re-connection
 /// Returns true if restoration was attempted (caller should return early)
-fn try_restore_slide_position(
-    state: &State,
-    elements: &Rc<RefCell<TobogganElements>>,
-    tx_cmd: &UnboundedSender<Command>,
-    recovery_state: &Rc<RefCell<RecoveryState>>,
-) -> bool {
-    let mut recovery = recovery_state.borrow_mut();
+fn try_restore_slide_position(state: &State, session: &Session) -> bool {
+    let mut recovery = session.recovery.borrow_mut();
 
     // Not pending restoration? Nothing to do
     if !recovery.pending_restoration {
@@ -491,12 +473,13 @@ fn try_restore_slide_position(
     );
 
     // Send GoTo command to restore position
-    elements.borrow().toast.toast(
+    session.toast(
         ToastType::Info,
         &format!("Restoring to slide {slide_id}..."),
     );
 
-    if tx_cmd
+    if session
+        .tx_cmd
         .unbounded_send(Command::GoTo { slide: slide_id })
         .is_err()
     {
@@ -512,11 +495,8 @@ fn try_restore_slide_position(
 }
 
 /// Updates root element CSS class to reflect current state
-fn update_root_state_class(
-    state: &State,
-    root_element: &HtmlElement,
-    presentation_meta: &Rc<RefCell<PresentationMeta>>,
-) {
+fn update_root_state_class(state: &State, session: &Session) {
+    let root_element = session.root_element.as_ref();
     let state_class = state.to_css_class();
     let current_classes = root_element.class_name();
 
@@ -536,7 +516,7 @@ fn update_root_state_class(
 
     // Update CSS custom properties for slide tracking
     let current_slide = state.current().map_or(0, SlideId::display_number);
-    let total_slides = presentation_meta.borrow().total_slides;
+    let total_slides = session.meta.borrow().total_slides;
 
     let style = root_element.style();
     let _ = style.set_property("--current-slide", &current_slide.to_string());
@@ -544,14 +524,10 @@ fn update_root_state_class(
 }
 
 /// Fetches and displays the slide corresponding to current state
-async fn update_slide_display(
-    state: &State,
-    api: &Rc<TobogganApi>,
-    elements: &Rc<RefCell<TobogganElements>>,
-) {
+async fn update_slide_display(state: &State, session: &Session) {
     let Some(slide_id) = state.current() else {
         debug!("No current slide, clearing slide component");
-        elements.borrow_mut().slide.set_slide(None, 0);
+        session.elements.borrow_mut().slide.set_slide(None, 0);
         return;
     };
 
@@ -566,34 +542,44 @@ async fn update_slide_display(
         current_step
     );
 
-    let Ok(slide) = api.get_slide(slide_id).await else {
+    let Ok(slide) = session.api.get_slide(slide_id).await else {
         error!("Failed to fetch slide", slide_id.display_number());
         return;
     };
 
     let quake_cwd = slide.quake_terminal_cwd.clone();
-    let mut elems = elements.borrow_mut();
+    let mut elems = session.elements.borrow_mut();
     elems.slide.set_slide(Some(slide), current_step);
     elems.quake.set_slide_cwd(quake_cwd);
 }
 
 /// Shows completion toast if presentation is done
-fn show_completion_toast_if_done(state: &State, elements: &Rc<RefCell<TobogganElements>>) {
+fn show_completion_toast_if_done(state: &State, session: &Session) {
     if matches!(state, State::Done { .. }) {
         debug!("Showing done toast");
-        let elements = elements.borrow();
-        elements.toast.toast(ToastType::Success, "🎉 Done");
+        session.toast(ToastType::Success, "🎉 Done");
         play_tada();
     }
 }
 
-async fn handle_actions(
-    mut rx: UnboundedReceiver<Command>,
-    _elements: Rc<RefCell<TobogganElements>>,
-    tx_cmd: UnboundedSender<Command>,
-) {
+/// Forwards the keyboard's deck commands, unless this client may not drive.
+///
+/// Checked here rather than in the keyboard service because this is the only
+/// place a refusal can be *shown*: a presenter whose laptop registered as
+/// audience needs to be told why the arrow keys do nothing, and the server's own
+/// refusal would arrive as one error toast per keystroke.
+///
+/// Only server-bound commands pass through this channel — fullscreen and
+/// blanking are handled in the key handler itself — so an audience member keeps
+/// the controls that belong to their own screen.
+async fn handle_actions(mut rx: UnboundedReceiver<Command>, session: Rc<Session>) {
     while let Some(cmd) = rx.next().await {
-        if tx_cmd.unbounded_send(cmd).is_err() {
+        if !session.presents() {
+            debug!("Ignoring a command from a client that is not presenting");
+            session.toast(ToastType::Info, "This client is watching, not presenting");
+            continue;
+        }
+        if session.tx_cmd.unbounded_send(cmd).is_err() {
             error!("Failed to send command");
         }
     }

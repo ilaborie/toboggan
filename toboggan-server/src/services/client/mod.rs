@@ -1,7 +1,7 @@
 use std::net::IpAddr;
 use std::time::Duration;
 
-use toboggan_core::{ClientId, ClientsResponse, Notification, Timestamp};
+use toboggan_core::{ClientId, ClientRole, ClientsResponse, Notification, Timestamp};
 use tokio::sync::watch;
 use tracing::info;
 
@@ -32,6 +32,7 @@ impl ClientService {
         &self,
         name: String,
         ip_addr: IpAddr,
+        role: ClientRole,
         initial_notification: Notification,
     ) -> Result<(ClientId, watch::Receiver<Notification>), ApiError> {
         // Cleanup before checking capacity
@@ -46,7 +47,7 @@ impl ClientService {
 
         let Some(client_id) = self
             .repository
-            .insert(name.clone(), ip_addr, connected_at, tx)
+            .insert(name.clone(), ip_addr, role, connected_at, tx)
             .await
         else {
             return Err(ApiError::TooManyClients);
@@ -63,6 +64,7 @@ impl ClientService {
             ?client_id,
             %name,
             %ip_addr,
+            ?role,
             active_clients,
             "Client registered"
         );

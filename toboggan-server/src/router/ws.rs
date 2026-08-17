@@ -6,7 +6,7 @@ use axum::extract::{ConnectInfo, FromRef, State};
 use axum::response::Response;
 use futures::{SinkExt, StreamExt};
 use toboggan_core::timeouts::HEARTBEAT_INTERVAL;
-use toboggan_core::{ClientId, Command, Notification};
+use toboggan_core::{ClientId, ClientRole, Command, Notification};
 use tokio::sync::{mpsc, watch};
 use tracing::{error, info, warn};
 
@@ -29,27 +29,31 @@ async fn handle_websocket(socket: WebSocket, state: TobogganState, ip_addr: IpAd
     let client_service = ClientService::from_ref(&state);
 
     // Wait for Register command from client
-    let (client_id, client_name, notification_rx) = loop {
+    let (client_id, client_name, client_role, notification_rx) = loop {
         match ws_receiver.next().await {
             Some(Ok(Message::Text(text))) => match serde_json::from_str::<Command>(&text) {
-                Ok(Command::Register { name }) => {
+                Ok(Command::Register { name, token }) => {
+                    // The handshake is where the role is settled, once: the
+                    // socket's peer address cannot change under it, so there is
+                    // no need to re-derive it per command.
+                    let role = state.role_for(ip_addr, token.as_deref());
                     let initial_notification = TalkService::from_ref(&state)
                         .create_initial_notification()
                         .await;
                     match client_service
-                        .register_client(name.clone(), ip_addr, initial_notification)
+                        .register_client(name.clone(), ip_addr, role, initial_notification)
                         .await
                     {
                         Ok((id, rx)) => {
                             // Send Registered notification to this client
-                            let registered = Notification::registered(id);
+                            let registered = Notification::registered(id, role);
                             if let Ok(msg) = serde_json::to_string(&registered)
                                 && ws_sender.send(Message::Text(msg.into())).await.is_err()
                             {
                                 error!("Failed to send Registered notification");
                                 return;
                             }
-                            break (id, name, rx);
+                            break (id, name, role, rx);
                         }
                         Err(err) => {
                             error!("Failed to register client: {err}");
@@ -77,7 +81,7 @@ async fn handle_websocket(socket: WebSocket, state: TobogganState, ip_addr: IpAd
         }
     };
 
-    info!(?client_id, %client_name, %ip_addr, "Client registered via WebSocket");
+    info!(?client_id, %client_name, %ip_addr, ?client_role, "Client registered via WebSocket");
 
     // Send initial state after registration
     if let Err(()) = send_initial_state(&mut ws_sender, &state, client_id).await {
@@ -92,8 +96,13 @@ async fn handle_websocket(socket: WebSocket, state: TobogganState, ip_addr: IpAd
         spawn_notification_watcher_task(notification_rx, notification_tx.clone(), client_id);
     let sender_task =
         spawn_notification_sender_task(notification_rx_internal, ws_sender, client_id);
-    let receiver_task =
-        spawn_message_receiver_task(ws_receiver, state.clone(), error_notification_tx, client_id);
+    let receiver_task = spawn_message_receiver_task(
+        ws_receiver,
+        state.clone(),
+        error_notification_tx,
+        client_id,
+        client_role,
+    );
     let heartbeat_task = spawn_heartbeat_task(notification_tx, client_id, HEARTBEAT_INTERVAL);
 
     tokio::select! {
@@ -190,6 +199,7 @@ fn spawn_message_receiver_task(
     state: TobogganState,
     error_notification_tx: mpsc::UnboundedSender<Notification>,
     client_id: ClientId,
+    client_role: ClientRole,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         while let Some(msg) = ws_receiver.next().await {
@@ -209,6 +219,18 @@ fn spawn_message_receiver_task(
                                     "Client unregistering itself, closing connection"
                                 );
                                 break;
+                            }
+
+                            // An audience client is not disconnected for trying
+                            // — a stale tab, or a reconnect from a laptop that
+                            // moved off the presenter's machine, is a mistake
+                            // rather than an attack. It is told, and ignored.
+                            if command.drives_the_deck() && !client_role.is_presenter() {
+                                warn!(?client_id, ?command, "Refused a command from the audience");
+                                let refusal =
+                                    Notification::error("This client is watching, not presenting");
+                                let _ = error_notification_tx.send(refusal);
+                                continue;
                             }
 
                             let _notification = state.handle_command(&command).await;

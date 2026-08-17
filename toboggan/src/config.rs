@@ -142,6 +142,11 @@ pub(crate) struct ServeConfig {
     pub(crate) thumbnails_dir: Option<PathBuf>,
     pub(crate) shell: Option<String>,
     pub(crate) open: Option<bool>,
+    /// Secret that lets a client not on this machine drive the deck.
+    ///
+    /// Only consulted when the server is reachable from the network — a client
+    /// on this machine always presents.
+    pub(crate) presenter_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -231,6 +236,7 @@ impl ServeConfig {
             thumbnails_dir,
             shell,
             open,
+            presenter_token,
         );
     }
 }

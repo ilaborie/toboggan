@@ -8,6 +8,36 @@ use crate::Timestamp;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ClientId(DefaultKey);
 
+/// Which side of the projector a connection is on.
+///
+/// Navigation is shared state — every presenter drives the same deck — so this
+/// is not about whose deck it is. It is about the two things a spectator must
+/// not be able to do: move the presentation, and open a shell on the machine
+/// hosting it.
+///
+/// [`Self::Audience`] is the default deliberately. A role that arrives unset,
+/// from an older client or a hand-written frame, is the one that can do the
+/// least.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub enum ClientRole {
+    /// Drives the deck, and may open the embedded terminals.
+    Presenter,
+    /// Follows along. Read-only.
+    #[default]
+    Audience,
+}
+
+impl ClientRole {
+    /// Whether this role may send commands and open terminals.
+    #[must_use]
+    pub const fn is_presenter(self) -> bool {
+        matches!(self, Self::Presenter)
+    }
+}
+
 #[cfg(feature = "openapi")]
 mod client_openapi {
     use std::borrow::Cow;
@@ -56,6 +86,9 @@ pub struct ClientInfo {
     #[cfg_attr(feature = "openapi", schema(value_type = String))]
     pub ip_addr: IpAddr,
     pub connected_at: Timestamp,
+    /// What the server granted this client at registration.
+    #[serde(default)]
+    pub role: ClientRole,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

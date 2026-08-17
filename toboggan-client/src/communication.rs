@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
 use toboggan_core::timeouts::PING_PERIOD;
-use toboggan_core::{ClientId, Command, Notification, State};
+use toboggan_core::{ClientId, ClientRole, Command, Notification, State};
 use tokio::net::TcpStream;
 use tokio::sync::{Mutex, mpsc};
 use tokio::task::JoinHandle;
@@ -36,13 +36,30 @@ pub enum ConnectionStatus {
 
 #[derive(Debug, Clone)]
 pub enum CommunicationMessage {
-    ConnectionStatusChange { status: ConnectionStatus },
-    StateChange { state: State },
-    TalkChange { state: State },
-    Registered { client_id: ClientId },
-    ClientConnected { client_id: ClientId, name: String },
-    ClientDisconnected { client_id: ClientId, name: String },
-    Error { error: String },
+    ConnectionStatusChange {
+        status: ConnectionStatus,
+    },
+    StateChange {
+        state: State,
+    },
+    TalkChange {
+        state: State,
+    },
+    Registered {
+        client_id: ClientId,
+        role: ClientRole,
+    },
+    ClientConnected {
+        client_id: ClientId,
+        name: String,
+    },
+    ClientDisconnected {
+        client_id: ClientId,
+        name: String,
+    },
+    Error {
+        error: String,
+    },
 }
 
 #[derive(Clone)]
@@ -170,6 +187,7 @@ impl WebSocketClient {
         // Send Register command with client name
         let _ = self.tx_cmd.send(Command::Register {
             name: self.client_name.clone(),
+            token: self.config.presenter_token.clone(),
         });
 
         self.start_pinging();
@@ -299,6 +317,7 @@ async fn reconnect_with_channel(
     });
     let _ = tx_cmd.send(Command::Register {
         name: client_name.to_owned(),
+        token: config.presenter_token.clone(),
     });
 
     tokio::spawn(handle_outgoing_commands(rx_cmd, write));
@@ -431,12 +450,18 @@ async fn handle_ws_message(
         Notification::Blink => {
             info!("🔔 Blink");
         }
-        Notification::Registered { client_id: id } => {
-            info!(?id, "✅ Registered");
+        Notification::Registered {
+            client_id: id,
+            role,
+        } => {
+            info!(?id, ?role, "✅ Registered");
             if let Ok(mut guard) = client_id.write() {
                 *guard = Some(id);
             }
-            let _ = tx.send(CommunicationMessage::Registered { client_id: id });
+            let _ = tx.send(CommunicationMessage::Registered {
+                client_id: id,
+                role,
+            });
         }
         Notification::ClientConnected { client_id, name } => {
             info!(?client_id, %name, "👋 Client connected");
@@ -526,14 +551,31 @@ mod tests {
         // Written as a wire frame rather than built from a `ClientId`: the id is
         // server-assigned and has no public constructor here, which is the point
         // — this checks the id the server sent survives the trip to the app.
-        let frame = r#"{"type":"Registered","client_id":{"idx":3,"version":1}}"#;
+        let frame = r#"{"type":"Registered","client_id":{"idx":3,"version":1},"role":"Presenter"}"#;
         let expected = match serde_json::from_str::<Notification>(frame).expect("parse") {
-            Notification::Registered { client_id } => client_id,
+            Notification::Registered { client_id, .. } => client_id,
             other => panic!("fixture is not a Registered frame: {other:?}"),
         };
 
         match dispatch(frame).await.as_slice() {
-            [CommunicationMessage::Registered { client_id }] => assert_eq!(*client_id, expected),
+            [CommunicationMessage::Registered { client_id, role }] => {
+                assert_eq!(*client_id, expected);
+                assert_eq!(*role, ClientRole::Presenter);
+            }
+            other => panic!("expected Registered, got {other:?}"),
+        }
+    }
+
+    /// The role the server granted has to reach the app, not just the id: a
+    /// client that cannot drive the deck needs to say so rather than let the
+    /// presenter discover it by pressing a key that does nothing.
+    #[tokio::test]
+    async fn registration_publishes_the_granted_role() {
+        let frame = r#"{"type":"Registered","client_id":{"idx":1,"version":1},"role":"Audience"}"#;
+        match dispatch(frame).await.as_slice() {
+            [CommunicationMessage::Registered { role, .. }] => {
+                assert_eq!(*role, ClientRole::Audience);
+            }
             other => panic!("expected Registered, got {other:?}"),
         }
     }

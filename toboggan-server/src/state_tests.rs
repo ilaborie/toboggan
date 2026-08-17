@@ -4,7 +4,7 @@ mod tests {
     use std::sync::Arc;
 
     use axum::extract::FromRef;
-    use toboggan_core::{Command, Date, Notification, Slide, SlideId, State, Talk};
+    use toboggan_core::{ClientRole, Command, Date, Notification, Slide, SlideId, State, Talk};
 
     use crate::state::CachedPdf;
     use crate::{ClientService, TalkService, TobogganState};
@@ -32,6 +32,7 @@ mod tests {
         let notification = state
             .handle_command(&Command::Register {
                 name: "Test Client".to_owned(),
+                token: None,
             })
             .await;
 
@@ -59,7 +60,12 @@ mod tests {
             .create_initial_notification()
             .await;
         let (client_id, _rx) = ClientService::from_ref(&state)
-            .register_client("Test Client".to_owned(), ip_addr, initial_notification)
+            .register_client(
+                "Test Client".to_owned(),
+                ip_addr,
+                ClientRole::Presenter,
+                initial_notification,
+            )
             .await
             .expect("register client");
 
@@ -87,7 +93,12 @@ mod tests {
             .create_initial_notification()
             .await;
         let (client_id, _rx) = client_service
-            .register_client("Test Client".to_owned(), ip_addr, initial_notification)
+            .register_client(
+                "Test Client".to_owned(),
+                ip_addr,
+                ClientRole::Presenter,
+                initial_notification,
+            )
             .await
             .expect("register client");
 

@@ -177,6 +177,27 @@ pub fn apply_slide_styles(container: &Element, style: &Style) {
     }
 }
 
+/// The presenter token this page was opened with, if any.
+///
+/// Read from `?token=` on the page's own URL, because that is where the server
+/// puts it when it prints the presenter link — one string to copy onto a phone
+/// or a second laptop, rather than a field to fill in. A page opened without one
+/// is an audience member, which is the right default for a link shared with a
+/// room.
+///
+/// Not stored anywhere: the token stays in the URL, so closing the tab forgets
+/// it and sharing the *audience* URL cannot leak it by accident.
+#[must_use]
+pub fn presenter_token() -> Option<String> {
+    let search = window().location().search().ok()?;
+    let query = search.strip_prefix('?').unwrap_or(&search);
+    query.split('&').find_map(|pair| {
+        let value = pair.strip_prefix("token=")?;
+        let value = String::from(js_sys::decode_uri_component(value).ok()?);
+        (!value.is_empty()).then_some(value)
+    })
+}
+
 /// Sets the page's language from the deck.
 ///
 /// The served shell is a static `index.html` that can only say `lang="en"`; the

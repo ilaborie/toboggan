@@ -12,9 +12,9 @@ use wasm_bindgen::UnwrapThrowExt;
 use wasm_bindgen_futures::spawn_local;
 
 use crate::config::WebSocketConfig;
-use crate::play_chime;
 use crate::services::{CommunicationMessage, ConnectionStatus};
 use crate::utils::Timer;
+use crate::{play_chime, presenter_token};
 
 const PING_INTERVAL_MS: u32 = 60_000; // 1 minute
 
@@ -74,9 +74,12 @@ impl CommunicationService {
         self.start_pinging();
         self.send_status(ConnectionStatus::Connected);
 
-        // Send Register command with client name
+        // Send Register command with client name, and the token this page was
+        // opened with — re-read rather than cached, so a reconnect after the URL
+        // changed offers what the URL says now.
         let _ = self.tx_cmd.unbounded_send(Command::Register {
             name: self.client_name.clone(),
+            token: presenter_token(),
         });
 
         // Handle outgoing messages
@@ -259,9 +262,13 @@ fn process_message(message: Message, tx: &UnboundedSender<CommunicationMessage>)
         Notification::Blink => {
             play_chime();
         }
-        Notification::Registered { client_id } => {
-            info!("Registered with id", format!("{client_id:?}"));
-            let _ = tx.unbounded_send(CommunicationMessage::Registered { client_id });
+        Notification::Registered { client_id, role } => {
+            info!(
+                "Registered with id",
+                format!("{client_id:?}"),
+                format!("{role:?}")
+            );
+            let _ = tx.unbounded_send(CommunicationMessage::Registered { client_id, role });
         }
         Notification::ClientConnected { client_id, name } => {
             info!("Client connected:", &name, "id:", format!("{client_id:?}"));

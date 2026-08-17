@@ -17,7 +17,7 @@ use web_sys::{Element, HtmlElement, KeyboardEvent, Node, ResizeObserver, ShadowR
 
 use self::rioterm::{CanvasRenderer, OpenOptions, RioTermHandle, RioTheme, Terminal};
 use crate::components::WasmElement;
-use crate::{create_and_append_element, create_shadow_root_with_style, dom_try};
+use crate::{create_and_append_element, create_shadow_root_with_style, dom_try, presenter_token};
 
 const CSS: &str = include_str!("style.css");
 const DEFAULT_FONT_SIZE: f64 = 22.0;
@@ -713,6 +713,14 @@ fn build_terminal_ws_url(
     if let Some(cmd) = &config.cmd {
         url.push_str("&cmd=");
         url.push_str(&String::from(js_sys::encode_uri_component(cmd)));
+    }
+
+    // Opening a shell is presenter-only, and a browser cannot put a header on a
+    // WebSocket — so the token travels here, in the same query string as the
+    // rest of the session's parameters.
+    if let Some(token) = presenter_token() {
+        url.push_str("&token=");
+        url.push_str(&String::from(js_sys::encode_uri_component(&token)));
     }
 
     url

@@ -11,6 +11,7 @@ use serde::Deserialize;
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
+use super::presenter::Presenter;
 use crate::TobogganState;
 
 #[derive(Debug, Deserialize)]
@@ -31,7 +32,17 @@ fn default_rows() -> u16 {
     24
 }
 
+/// Opens a shell on the machine running the server.
+///
+/// The most dangerous route in the project, and the reason the presenter gate
+/// exists: it spawns `$SHELL -ic <whatever the client asked for>` in a
+/// client-supplied directory. Unguarded on a reachable port that is remote code
+/// execution on the presenter's laptop, so `Presenter` is not optional here.
+///
+/// A browser cannot set headers on a `WebSocket`, so a remote presenter's token
+/// travels in the query string — see [`super::presenter`].
 pub(super) async fn terminal_websocket_handler(
+    _: Presenter,
     ws: WebSocketUpgrade,
     State(state): State<TobogganState>,
     Query(params): Query<TerminalParams>,

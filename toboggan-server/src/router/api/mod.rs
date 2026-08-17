@@ -10,6 +10,7 @@ use toboggan_core::{
 };
 use tracing::{info, warn};
 
+use super::presenter::Presenter;
 use crate::TobogganState;
 use crate::services::{ClientService, TalkService};
 
@@ -60,7 +61,13 @@ pub(super) async fn get_slide_by_index(
         .ok_or(StatusCode::NOT_FOUND)
 }
 
+/// Drives the deck over plain HTTP.
+///
+/// `Presenter` first, and before `Json`: the gate has to run before the body is
+/// read, so a refused caller is told `403` rather than having its command
+/// parsed and validated first.
 pub(super) async fn post_command(
+    _: Presenter,
     State(state): State<TobogganState>,
     Json(command): Json<Command>,
 ) -> impl IntoResponse {
@@ -85,7 +92,13 @@ pub(super) async fn post_command(
     Json(result)
 }
 
+/// Lists who is connected — names, roles and **IP addresses**.
+///
+/// Gated for that last one: the audience has no business enumerating the rest
+/// of the audience, and this is an operator's view of the room rather than a
+/// part of the presentation.
 pub(super) async fn get_clients(
+    _: Presenter,
     State(client_service): State<ClientService>,
 ) -> Json<ClientsResponse> {
     let clients = client_service.connected_clients().await;

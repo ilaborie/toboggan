@@ -2,7 +2,7 @@ use std::net::IpAddr;
 use std::sync::Arc;
 
 use slotmap::SlotMap;
-use toboggan_core::{ClientId, ClientInfo, ClientsResponse, Notification, Timestamp};
+use toboggan_core::{ClientId, ClientInfo, ClientRole, ClientsResponse, Notification, Timestamp};
 use tokio::sync::{RwLock, watch};
 use tracing::debug;
 
@@ -36,6 +36,7 @@ impl ClientRepository {
         &self,
         name: String,
         ip_addr: IpAddr,
+        role: ClientRole,
         connected_at: Timestamp,
         sender: watch::Sender<Notification>,
     ) -> Option<ClientId> {
@@ -53,6 +54,7 @@ impl ClientRepository {
                 name,
                 ip_addr,
                 connected_at,
+                role,
             };
             ClientEntry { info, sender }
         });

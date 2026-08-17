@@ -71,6 +71,13 @@
 # Open the presentation in a browser once the server is ready.
 # open = false
 
+# Secret that lets a client somewhere other than this machine drive the deck.
+# Only relevant with `host` opened up: a client on this machine always presents,
+# and without a token a client on the network can watch but not navigate, and
+# cannot open the embedded terminals. Remote clients pass it in the URL —
+# `http://<your-ip>:8080/run?token=…`.
+# presenter-token = "change-me"
+
 [lint]
 # Severity at or above which `toboggan lint` exits non-zero: info, warning, error.
 # deny = "error"

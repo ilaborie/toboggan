@@ -903,7 +903,7 @@ classes = [
 ]
 
 [[slides.terminals]]
-cwd = "./slides/2_directives"
+cwd = "examples/toboggan-guide/slides/2_directives"
 
 [[slides]]
 kind = "Standard"
@@ -2346,6 +2346,7 @@ body_source = '''
 | `--shell` | `TOBOGGAN_SHELL` | Shell for embedded terminals |
 | `--allowed-origins` | `TOBOGGAN_CORS_ORIGINS` | Comma-separated CORS origins |
 | `--max-clients` | `TOBOGGAN_MAX_CLIENTS` | Concurrent client cap |
+| `--presenter-token` | `TOBOGGAN_PRESENTER_TOKEN` | Let a remote client drive |
 | `--open` | `TOBOGGAN_OPEN` | Open a browser once ready |
 | `--watch` | — | Reload when the `.toml` changes |
 
@@ -2359,6 +2360,10 @@ $ toboggan serve -p ./my-talk.toml \
 > [!TIP]
 > `--shell` picks which shell the live terminals spawn — point it at `fish`
 > to show off your real prompt, or `sh` for a clean, portable demo.
+
+> [!WARNING]
+> Opening `--host` to the network makes the deck read-only for everyone but
+> this machine. Add `--presenter-token` to let your phone drive it too.
 '''
 
 [slides.style]
@@ -2420,6 +2425,11 @@ raw = '''
 <td>Concurrent client cap</td>
 </tr>
 <tr>
+<td><code>--presenter-token</code></td>
+<td><code>TOBOGGAN_PRESENTER_TOKEN</code></td>
+<td>Let a remote client drive</td>
+</tr>
+<tr>
 <td><code>--open</code></td>
 <td><code>TOBOGGAN_OPEN</code></td>
 <td>Open a browser once ready</td>
@@ -2443,6 +2453,11 @@ raw = '''
 <p><code>--shell</code> picks which shell the live terminals spawn — point it at <code>fish</code>
 to show off your real prompt, or <code>sh</code> for a clean, portable demo.</p>
 </div>
+<div class="markdown-alert markdown-alert-warning">
+<p class="markdown-alert-title">Warning</p>
+<p>Opening <code>--host</code> to the network makes the deck read-only for everyone but
+this machine. Add <code>--presenter-token</code> to let your phone drive it too.</p>
+</div>
 </div><!-- end step -->
 '''
 alt = '''
@@ -2457,6 +2472,7 @@ alt = '''
 | `--shell` | `TOBOGGAN_SHELL` | Shell for embedded terminals |
 | `--allowed-origins` | `TOBOGGAN_CORS_ORIGINS` | Comma-separated CORS origins |
 | `--max-clients` | `TOBOGGAN_MAX_CLIENTS` | Concurrent client cap |
+| `--presenter-token` | `TOBOGGAN_PRESENTER_TOKEN` | Let a remote client drive |
 | `--open` | `TOBOGGAN_OPEN` | Open a browser once ready |
 | `--watch` | — | Reload when the `.toml` changes |
 
@@ -2470,6 +2486,10 @@ $ toboggan serve -p ./my-talk.toml \
 > [!TIP]
 > `--shell` picks which shell the live terminals spawn — point it at `fish`
 > to show off your real prompt, or `sh` for a clean, portable demo.
+
+> [!WARNING]
+> Opening `--host` to the network makes the deck read-only for everyone but
+> this machine. Add `--presenter-token` to let your phone drive it too.
 '''
 
 [slides.body.style]
@@ -2484,11 +2504,16 @@ raw = """
 <p>Any of these can live in <code>toboggan.toml</code> under <code>[serve]</code> instead of being typed
 every time. <code>--watch</code> is the one flag with no env var — watching a built file is
 a dev-loop choice, not deployment configuration.</p>
+<p>The token exists because <code>--shell</code> is real: the embedded terminals spawn a shell
+on <em>this</em> machine, and the room should not be able to ask for one.</p>
 """
 alt = """
 Any of these can live in `toboggan.toml` under `[serve]` instead of being typed
 every time. `--watch` is the one flag with no env var — watching a built file is
 a dev-loop choice, not deployment configuration.
+
+The token exists because `--shell` is real: the embedded terminals spawn a shell
+on *this* machine, and the room should not be able to ask for one.
 """
 
 [slides.notes.style]
@@ -2684,7 +2709,7 @@ classes = [
 ]
 
 [[slides.terminals]]
-cwd = "./slides/5_server"
+cwd = "examples/toboggan-guide/slides/5_server"
 
 [[slides]]
 kind = "Standard"

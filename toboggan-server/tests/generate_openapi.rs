@@ -80,10 +80,23 @@ impl TestServer for TobogganTestServer {
         }
     }
 
+    /// Serves with connection info, exactly as `launch_with_talk` does.
+    ///
+    /// Not a detail: the presenter gate reads the peer address to decide whether
+    /// a caller may drive the deck, and a service built without it has no peer
+    /// address to read — so `POST /api/command` would be refused here while
+    /// working in production, and the generated document would record the wrong
+    /// response.
     async fn launch(&self, listener: TcpListener) -> Result<(), Self::Error> {
         listener.set_nonblocking(true)?;
         let listener = tokio::net::TcpListener::from_std(listener)?;
-        axum::serve(listener, self.router.clone().into_make_service()).await
+        axum::serve(
+            listener,
+            self.router
+                .clone()
+                .into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        )
+        .await
     }
 }
 
@@ -204,6 +217,7 @@ async fn test_command_operations(app: &mut TestClient<TobogganTestServer>) -> an
     // Test register command
     let register_command = Command::Register {
         name: "Test Client".to_owned(),
+        token: None,
     };
     let _register_response = app
         .post("/api/command")?
