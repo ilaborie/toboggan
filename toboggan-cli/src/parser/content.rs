@@ -426,6 +426,7 @@ impl SlideContentParser {
             notes: self.notes(&renderer)?,
             body_source: self.body_source(),
             hidden_in: front_matter.hidden_in.clone(),
+            duration: front_matter.duration,
             terminals: self
                 .terminals()
                 .into_iter()

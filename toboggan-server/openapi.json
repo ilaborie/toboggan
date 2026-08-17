@@ -592,6 +592,16 @@
             "description": "Raw markdown source of the slide body, used by non-HTML exporters.\n\nWhen `Some`, `body` is expected to be the rendered projection of this\nsource — `Slide::from_markdown` is the constructor that pairs them\nconsistently; ad-hoc construction must uphold that invariant.",
             "default": null
           },
+          "duration": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Speaking time the author planned for this slide, from the front matter\n`duration`.\n\nSerialized as whole seconds so a built artifact stays readable and\nround-trips; the front matter accepts either a number of seconds or a\nhumantime string like `\"2m 30s\"`.",
+            "default": null,
+            "minimum": 0
+          },
           "hidden_in": {
             "type": "array",
             "items": {

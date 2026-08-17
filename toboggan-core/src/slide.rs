@@ -1,10 +1,41 @@
 use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
 use crate::{Content, Talk, TerminalConfig};
+
+/// Serializes an optional [`Duration`] as whole seconds.
+///
+/// `Duration`'s own serde representation is a `{ secs, nanos }` table, which in
+/// a `talk.toml` an author may read is noise. Slide durations are authored in
+/// seconds or humantime strings and never need sub-second precision.
+mod duration_secs {
+    use std::time::Duration;
+
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    // `&Option<T>` rather than `Option<&T>`: serde's `with` module contract
+    // fixes this signature.
+    #[allow(clippy::ref_option)]
+    pub(super) fn serialize<S: Serializer>(
+        value: &Option<Duration>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        match value {
+            Some(duration) => serializer.serialize_some(&duration.as_secs()),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Duration>, D::Error> {
+        Ok(Option::<u64>::deserialize(deserializer)?.map(Duration::from_secs))
+    }
+}
 
 /// A type-safe identifier for slides in a presentation.
 ///
@@ -103,6 +134,19 @@ pub struct Slide {
     /// Targets this slide should be excluded from. Empty means visible everywhere.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub hidden_in: BTreeSet<RenderTarget>,
+    /// Speaking time the author planned for this slide, from the front matter
+    /// `duration`.
+    ///
+    /// Serialized as whole seconds so a built artifact stays readable and
+    /// round-trips; the front matter accepts either a number of seconds or a
+    /// humantime string like `"2m 30s"`.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "duration_secs"
+    )]
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<u64>))]
+    pub duration: Option<Duration>,
     /// Working directory for the `QuakeTerminal` overlay when this slide is active.
     /// If unset, falls back to [`Talk::default_terminal_cwd`], then to the server cwd.
     /// Resolved against [`Talk::source_dir`] when relative.
@@ -251,6 +295,13 @@ impl Slide {
     #[must_use]
     pub fn with_source_path(mut self, path: impl Into<PathBuf>) -> Self {
         self.source_path = Some(path.into());
+        self
+    }
+
+    /// Sets the speaking time planned for this slide.
+    #[must_use]
+    pub fn with_duration(mut self, duration: Duration) -> Self {
+        self.duration = Some(duration);
         self
     }
 
@@ -455,6 +506,27 @@ mod tests {
 
         let parsed: Slide = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(parsed.source_path, None);
+    }
+
+    /// A plain scalar of seconds, not `Duration`'s `{ secs, nanos }` pair — a
+    /// built `talk.toml` is something an author may read and hand-edit.
+    #[test]
+    fn duration_round_trips_as_seconds() {
+        let slide = Slide::new("T").with_duration(Duration::from_secs(150));
+        let json = serde_json::to_string(&slide).expect("serialize");
+        assert!(
+            json.contains(r#""duration":150"#),
+            "expected plain seconds, got: {json}"
+        );
+
+        let parsed: Slide = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(parsed.duration, Some(Duration::from_secs(150)));
+    }
+
+    #[test]
+    fn a_slide_without_a_duration_serializes_no_key() {
+        let json = serde_json::to_string(&Slide::new("T")).expect("serialize");
+        assert!(!json.contains("duration"), "unexpected key in: {json}");
     }
 
     #[test]

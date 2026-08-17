@@ -10,6 +10,19 @@ use toboggan_stats::{PresentationStats as CoreStats, SlideStats};
 
 use crate::{ParseResult, SlideProcessingResult};
 
+/// Speaking time the author declared, as opposed to the one estimated from a
+/// word count.
+///
+/// Carries the slide count as well as the sum, because a total that covers
+/// three slides out of thirty is not a plan and must not be presented as one.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PlannedDuration {
+    /// Sum of every declared `duration`.
+    pub total: Duration,
+    /// How many slides declared one.
+    pub slides: usize,
+}
+
 /// Presentation statistics with display capabilities
 #[derive(Debug, Clone, Default)]
 pub struct PresentationStats {
@@ -19,6 +32,8 @@ pub struct PresentationStats {
     pub wpm: u16,
     /// Whether to include notes in duration calculation
     pub include_notes_in_duration: bool,
+    /// Speaking time declared in slide front matter.
+    pub planned: PlannedDuration,
 }
 
 impl PresentationStats {
@@ -28,6 +43,7 @@ impl PresentationStats {
             core: CoreStats::default(),
             wpm,
             include_notes_in_duration,
+            planned: PlannedDuration::default(),
         }
     }
 
@@ -66,6 +82,11 @@ impl PresentationStats {
                     stats.core.total_images += slide_stats.images;
                     stats.core.total_steps += slide_stats.steps;
                     stats.core.total_notes_words += slide_stats.notes_words;
+
+                    if let Some(duration) = slide.duration {
+                        stats.planned.total += duration;
+                        stats.planned.slides += 1;
+                    }
 
                     // Add to current part or create implicit "Introduction"
                     if current_part.is_none() && !has_slides_before_first_part {
@@ -282,6 +303,9 @@ impl PresentationStats {
                 "minutes".green(),
                 self.wpm.to_string().yellow()
             )?;
+            if let Some(line) = self.planned_line() {
+                writeln!(writer, "  • {}", line.green())?;
+            }
         } else {
             writeln!(writer, "Overview:")?;
             writeln!(writer, "  • Total slides: {}", self.core.total_slides)?;
@@ -308,8 +332,37 @@ impl PresentationStats {
                 "  • Estimated duration: {}:{:02} minutes ({} WPM)",
                 minutes, seconds, self.wpm
             )?;
+            if let Some(line) = self.planned_line() {
+                writeln!(writer, "  • {line}")?;
+            }
         }
         Ok(())
+    }
+
+    /// Describes the speaking time the author declared, or `None` when no slide
+    /// declared any.
+    ///
+    /// Says how many slides the total covers whenever that is not all of them:
+    /// "18:00 over 12 slides" next to a 30-slide deck reads very differently
+    /// from a plan for the whole talk, and the difference is the author's cue
+    /// that the rest is unbudgeted.
+    fn planned_line(&self) -> Option<String> {
+        if self.planned.slides == 0 {
+            return None;
+        }
+        let minutes = self.planned.total.as_secs() / 60;
+        let seconds = self.planned.total.as_secs() % 60;
+        let coverage = if self.planned.slides == self.core.total_slides {
+            String::new()
+        } else {
+            format!(
+                " (over {} of {} slides)",
+                self.planned.slides, self.core.total_slides
+            )
+        };
+        Some(format!(
+            "Planned duration: {minutes}:{seconds:02} minutes{coverage}"
+        ))
     }
 
     fn write_part_breakdown<W: Write>(
@@ -596,6 +649,69 @@ mod tests {
             total_in_parts, stats.core.total_slides,
             "All slides should be in parts"
         );
+    }
+
+    fn stats_for(slides: Vec<Slide>) -> PresentationStats {
+        let parse_result = ParseResult {
+            talk_metadata: TalkMetadata {
+                title: "T".to_owned(),
+                date: toboggan_core::Date::today(),
+                footer: None,
+                head: None,
+                default_terminal_cwd: None,
+                source_dir: None,
+            },
+            slides: slides
+                .into_iter()
+                .map(SlideProcessingResult::Processed)
+                .collect(),
+        };
+        PresentationStats::from_parse_result(&parse_result, 150, false)
+    }
+
+    #[test]
+    fn declared_durations_are_summed() {
+        let stats = stats_for(vec![
+            Slide::new("A").with_duration(Duration::from_secs(150)),
+            Slide::new("B").with_duration(Duration::from_secs(90)),
+            Slide::new("C"),
+        ]);
+        assert_eq!(stats.planned.total, Duration::from_mins(4));
+        assert_eq!(stats.planned.slides, 2);
+    }
+
+    /// A total that covers part of the deck has to say so — otherwise "planned
+    /// duration: 4:00" on a 30-slide talk reads as a plan for the whole thing.
+    #[test]
+    fn a_partial_plan_says_how_much_it_covers() {
+        let stats = stats_for(vec![
+            Slide::new("A").with_duration(Duration::from_secs(150)),
+            Slide::new("B").with_duration(Duration::from_secs(90)),
+            Slide::new("C"),
+        ]);
+        assert_eq!(
+            stats.planned_line().as_deref(),
+            Some("Planned duration: 4:00 minutes (over 2 of 3 slides)")
+        );
+    }
+
+    #[test]
+    fn a_complete_plan_is_stated_without_a_caveat() {
+        let stats = stats_for(vec![
+            Slide::new("A").with_duration(Duration::from_secs(150)),
+            Slide::new("B").with_duration(Duration::from_secs(90)),
+        ]);
+        assert_eq!(
+            stats.planned_line().as_deref(),
+            Some("Planned duration: 4:00 minutes")
+        );
+    }
+
+    /// Decks that declare nothing must not grow an empty line.
+    #[test]
+    fn no_declared_duration_means_no_line() {
+        let stats = stats_for(vec![Slide::new("A"), Slide::new("B")]);
+        assert_eq!(stats.planned_line(), None);
     }
 
     #[test]
