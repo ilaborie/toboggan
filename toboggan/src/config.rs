@@ -38,7 +38,7 @@ use serde::{Deserialize, Deserializer};
 use toboggan_core::Date;
 use toboggan_lint::Severity;
 
-use crate::cli::DenyLevel;
+use crate::cli::{DenyLevel, LintFormat};
 
 /// Reads a duration written as a number of seconds or a humantime string.
 ///
@@ -160,6 +160,8 @@ pub(crate) struct LintConfig {
     pub(crate) max_duration: Option<Duration>,
     /// Enables `content/missing-notes`.
     pub(crate) require_notes: Option<bool>,
+    /// How the report is rendered: `human`, `json`, `github` or `sarif`.
+    pub(crate) format: Option<LintFormat>,
     /// Rule ids to switch off. Unknown ids are reported by the linter itself.
     pub(crate) disabled: Option<Vec<String>>,
     /// Per-rule severity overrides, keyed by rule id.
@@ -242,6 +244,7 @@ impl LintConfig {
             max_code_lines,
             max_duration,
             require_notes,
+            format,
             disabled,
             severity,
         );

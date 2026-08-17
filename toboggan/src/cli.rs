@@ -334,6 +334,7 @@ impl DefaultArgs {
         LintArgs {
             path: self.path,
             deny: None,
+            format: None,
             json: false,
             no_spell: false,
             build: self.build,
@@ -572,8 +573,12 @@ pub(crate) struct LintArgs {
     #[arg(long, value_enum)]
     pub(crate) deny: Option<DenyLevel>,
 
-    /// Output the report as JSON
-    #[arg(long)]
+    /// How to render the report [default: human]
+    #[arg(long, value_enum)]
+    pub(crate) format: Option<LintFormat>,
+
+    /// Output the report as JSON (shorthand for `--format json`)
+    #[arg(long, conflicts_with = "format")]
     pub(crate) json: bool,
 
     /// Skip spell checking (runs by default via the `typos` CLI when available)
@@ -584,12 +589,27 @@ pub(crate) struct LintArgs {
     pub(crate) build: BuildOptions,
 }
 
+/// How `toboggan lint` renders its report.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, clap::ValueEnum)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum LintFormat {
+    /// Coloured lines for a terminal
+    #[default]
+    Human,
+    /// The `LintReport` as JSON
+    Json,
+    /// GitHub Actions workflow commands, which become inline PR annotations
+    Github,
+    /// SARIF 2.1.0, for GitHub code scanning and other analysis tools
+    Sarif,
+}
+
 /// Everything `lint` needs once the flags and the config file are merged.
 pub(crate) struct ResolvedLint {
     pub(crate) input: PathBuf,
     pub(crate) settings: toboggan_cli::Settings,
     pub(crate) deny: DenyLevel,
-    pub(crate) json: bool,
+    pub(crate) format: LintFormat,
     pub(crate) lint: toboggan_lint::LintConfig,
 }
 
@@ -627,11 +647,19 @@ impl LintArgs {
             lint.disable(toboggan_lint::rules::ids::SPELLING_TYPO);
         }
 
+        // `--json` predates `--format` and still works. clap rejects passing
+        // both, so the precedence here only ever picks one of them.
+        let format = if self.json {
+            Some(LintFormat::Json)
+        } else {
+            self.format
+        };
+
         ResolvedLint {
             input,
             settings,
             deny: self.deny.or(file.deny).unwrap_or(DenyLevel::Error),
-            json: self.json,
+            format: format.or(file.format).unwrap_or_default(),
             lint,
         }
     }
