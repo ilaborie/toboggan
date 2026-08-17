@@ -97,3 +97,99 @@ impl Rule for DuplicateCwd {
         }
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use toboggan_core::{Slide, TerminalConfig};
+
+    use super::*;
+    use crate::diagnostic::SlideRef;
+    use crate::rule::{LintConfig, RuleContext};
+    use crate::rules::test_support::{fires, slide_diagnostics};
+
+    /// Runs `rule` over `slide` as part of `talk`, which these rules consult
+    /// for the deck-level terminal default.
+    fn diagnostics_in(rule: &dyn Rule, talk: &toboggan_core::Talk) -> Vec<LintDiagnostic> {
+        let slide = talk.slides.first().expect("a slide");
+        let slide_ref = SlideRef::new(0, slide);
+        let config = LintConfig::default();
+        let context = RuleContext::new(talk, slide, &slide_ref, &config);
+        let mut out = Vec::new();
+        rule.check_slide(&context, &mut out);
+        out
+    }
+
+    fn talk_with(slide: Slide) -> toboggan_core::Talk {
+        let mut talk = toboggan_core::Talk::new("Test");
+        talk.slides = vec![slide];
+        talk
+    }
+
+    #[test]
+    fn a_part_with_a_terminal_is_reported() {
+        let part = Slide::part("Section").with_terminal(TerminalConfig::new("/tmp"));
+        assert!(fires(&TerminalInPart, &part));
+    }
+
+    /// A terminal on a content slide is the normal case and must stay quiet;
+    /// so must a part slide that simply has none.
+    #[test]
+    fn terminals_elsewhere_are_fine() {
+        let standard = Slide::new("T").with_terminal(TerminalConfig::new("/tmp"));
+        assert!(!fires(&TerminalInPart, &standard));
+        assert!(!fires(&TerminalInPart, &Slide::part("Section")));
+    }
+
+    /// Without a cwd anywhere, the server silently falls back to its own
+    /// working directory — which is wherever the presenter happened to launch
+    /// it, and never what the slide meant.
+    #[test]
+    fn a_terminal_with_no_cwd_anywhere_is_reported() {
+        let slide = Slide::new("T").with_terminal(TerminalConfig::new("/tmp"));
+        assert_eq!(diagnostics_in(&UnresolvedCwd, &talk_with(slide)).len(), 1);
+    }
+
+    #[test]
+    fn a_slide_cwd_resolves() {
+        let slide = Slide::new("T")
+            .with_terminal(TerminalConfig::new("/tmp"))
+            .with_quake_terminal_cwd("/tmp/demo");
+        assert!(diagnostics_in(&UnresolvedCwd, &talk_with(slide)).is_empty());
+    }
+
+    /// The deck-level default is the whole reason this rule needs the talk and
+    /// not just the slide.
+    #[test]
+    fn the_talk_default_resolves_too() {
+        let slide = Slide::new("T").with_terminal(TerminalConfig::new("/tmp"));
+        let mut talk = talk_with(slide);
+        talk.default_terminal_cwd = Some("/tmp/demo".to_owned());
+        assert!(diagnostics_in(&UnresolvedCwd, &talk).is_empty());
+    }
+
+    /// A slide with no terminals has nothing to resolve, so the rule must not
+    /// complain about the missing cwd it does not need.
+    #[test]
+    fn a_slide_without_terminals_is_not_asked_for_a_cwd() {
+        assert!(diagnostics_in(&UnresolvedCwd, &talk_with(Slide::new("T"))).is_empty());
+    }
+
+    /// Two terminals on one cwd render two panes onto the same directory,
+    /// which is a copy-paste artifact rather than a layout anyone wants.
+    #[test]
+    fn two_terminals_on_one_directory_are_reported() {
+        let slide = Slide::new("T")
+            .with_terminal(TerminalConfig::new("/tmp/demo"))
+            .with_terminal(TerminalConfig::new("/tmp/demo"));
+        assert_eq!(slide_diagnostics(&DuplicateCwd, &slide).len(), 1);
+    }
+
+    #[test]
+    fn distinct_directories_are_fine() {
+        let slide = Slide::new("T")
+            .with_terminal(TerminalConfig::new("/tmp/one"))
+            .with_terminal(TerminalConfig::new("/tmp/two"));
+        assert!(!fires(&DuplicateCwd, &slide));
+    }
+}

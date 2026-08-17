@@ -92,3 +92,56 @@ impl Rule for TooManySteps {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use toboggan_core::{Content, Slide};
+
+    use super::*;
+    use crate::rules::test_support::{fires, only, slide_diagnostics};
+
+    const STEP: &str = r#"<div class="step">reveal</div>"#;
+
+    fn with_body(mut slide: Slide, body: &str) -> Slide {
+        slide.body = Content::html(body);
+        slide
+    }
+
+    /// A cover or a part is on screen as a whole; revealing it in pieces has
+    /// nothing to reveal. The message names the kind, so both are checked.
+    #[test]
+    fn a_step_on_a_cover_or_part_is_reported() {
+        for (slide, name) in [
+            (Slide::cover("Deck"), "cover"),
+            (Slide::part("Section"), "part"),
+        ] {
+            let diagnostics = slide_diagnostics(&PauseInPart, &with_body(slide, STEP));
+            let message = &only(&diagnostics).message;
+            assert!(message.starts_with(name), "{message}");
+        }
+    }
+
+    #[test]
+    fn steps_on_a_content_slide_are_the_point() {
+        assert!(!fires(&PauseInPart, &with_body(Slide::new("T"), STEP)));
+    }
+
+    /// A stray `<!-- pause -->` renders a step with nothing in it: the deck
+    /// gains a keypress that changes nothing on screen.
+    #[test]
+    fn a_step_revealing_nothing_is_reported() {
+        let slide = with_body(Slide::new("T"), r#"<div class="step"></div>"#);
+        assert!(fires(&EmptyStep, &slide));
+    }
+
+    /// An element with no text still reveals something — an image, a diagram —
+    /// so whitespace-only is the boundary, not "no text".
+    #[test]
+    fn a_step_holding_only_an_element_is_not_empty() {
+        let slide = with_body(
+            Slide::new("T"),
+            r#"<div class="step"><img src="a.png" alt="a"></div>"#,
+        );
+        assert!(!fires(&EmptyStep, &slide));
+    }
+}
