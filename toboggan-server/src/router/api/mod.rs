@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use toboggan_core::{
     ClientsResponse, Command, Notification, SlideId, SlidesResponse, TalkResponse,
 };
-use toboggan_stats::SlideStats;
 use tracing::{info, warn};
 
 use crate::TobogganState;
@@ -28,15 +27,10 @@ pub(super) async fn get_talk(
 ) -> impl IntoResponse {
     let talk = talk_service.talk().await;
 
-    // Calculate step counts from slides before converting to response
-    let step_counts: Vec<usize> = talk
-        .slides
-        .iter()
-        .map(|slide| SlideStats::from_slide(slide).steps)
-        .collect();
-
-    let mut result = TalkResponse::from(talk);
-    result.step_counts = step_counts;
+    let mut result = TalkResponse::from(talk.as_ref());
+    // Computed when the deck loaded, not per request: deriving them here meant
+    // several HTML parses per slide on every call.
+    result.step_counts = talk_service.step_counts().await.to_vec();
 
     if !param.footer {
         result.footer.take();

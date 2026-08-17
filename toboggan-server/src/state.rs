@@ -88,7 +88,7 @@ impl TobogganState {
     /// read *before* the talk: a reload in between then leaves the epoch stale
     /// and the render is discarded, whereas the reverse order would pair an old
     /// talk with a fresh epoch and cache a stale PDF as current.
-    pub(crate) async fn pdf_render_input(&self) -> (u64, Talk) {
+    pub(crate) async fn pdf_render_input(&self) -> (u64, Arc<Talk>) {
         let epoch = self.pdf_cache.read().await.epoch;
         (epoch, self.talk_service.talk().await)
     }

@@ -70,7 +70,7 @@ fn pdf_response(bytes: &[u8], slug: &str) -> Response {
 }
 
 /// Renders the talk to Typst, then compiles it to PDF in a blocking task.
-async fn render_pdf(talk: Talk) -> anyhow::Result<Vec<u8>> {
+async fn render_pdf(talk: Arc<Talk>) -> anyhow::Result<Vec<u8>> {
     let typst_source = toboggan_cli::output::serialize_talk(&talk, OutputFormat::Typst)
         .map_err(|err| anyhow::anyhow!("{err}"))?;
     // Compile with the deck as the project root so slides that reference

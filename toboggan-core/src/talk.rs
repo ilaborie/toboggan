@@ -104,6 +104,24 @@ impl Default for TalkResponse {
     }
 }
 
+impl From<&Talk> for TalkResponse {
+    /// Builds a response without consuming the talk.
+    ///
+    /// `TalkResponse` carries titles, not slides, so the server can answer
+    /// `GET /api/talk` from a shared talk instead of deep-cloning every slide's
+    /// rendered HTML per request just to throw it away.
+    fn from(value: &Talk) -> Self {
+        Self {
+            title: value.title.clone(),
+            date: value.date,
+            footer: value.footer.clone(),
+            head: value.head.clone(),
+            titles: value.slides.iter().map(|it| it.title.to_string()).collect(),
+            step_counts: vec![], // Populated by server with SlideStats
+        }
+    }
+}
+
 impl From<Talk> for TalkResponse {
     fn from(value: Talk) -> Self {
         let Talk {

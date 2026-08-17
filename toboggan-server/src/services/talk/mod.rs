@@ -6,10 +6,38 @@ use toboggan_stats::SlideStats;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
+/// A loaded talk together with the values derived from it.
+///
+/// Both fields are behind an `Arc` so a reader can take a snapshot without
+/// copying the deck. `GET /api/talk` and `GET /api/slides` used to deep-clone
+/// every slide — rendered HTML and all — on every request, and `/api/talk` then
+/// recomputed `SlideStats` for each of them on top of that, which is itself
+/// several HTML parses per slide. Step counts are a function of the slides, so
+/// they are computed once when a deck is loaded.
+#[derive(Clone)]
+struct LoadedTalk {
+    talk: Arc<Talk>,
+    step_counts: Arc<[usize]>,
+}
+
+impl LoadedTalk {
+    fn new(talk: Talk) -> Self {
+        let step_counts = talk
+            .slides
+            .iter()
+            .map(|slide| SlideStats::from_slide(slide).steps)
+            .collect();
+        Self {
+            talk: Arc::new(talk),
+            step_counts,
+        }
+    }
+}
+
 /// Service for managing talk content and presentation state
 #[derive(Clone)]
 pub struct TalkService {
-    talk: Arc<RwLock<Talk>>,
+    talk: Arc<RwLock<LoadedTalk>>,
     current_state: Arc<RwLock<State>>,
 }
 
@@ -37,7 +65,7 @@ impl TalkService {
         let current_state = Arc::new(RwLock::new(current_state));
 
         Ok(Self {
-            talk: Arc::new(RwLock::new(talk)),
+            talk: Arc::new(RwLock::new(LoadedTalk::new(talk))),
             current_state,
         })
     }
@@ -45,24 +73,29 @@ impl TalkService {
     /// Returns the talk title
     pub async fn title(&self) -> String {
         let talk = self.talk.read().await;
-        talk.title.clone()
+        talk.talk.title.clone()
     }
 
-    /// Returns a clone of the talk
-    pub async fn talk(&self) -> Talk {
-        self.talk.read().await.clone()
+    /// Returns a shared handle to the current talk.
+    pub async fn talk(&self) -> Arc<Talk> {
+        Arc::clone(&self.talk.read().await.talk)
+    }
+
+    /// Returns the per-slide reveal-step counts, computed when the deck loaded.
+    pub async fn step_counts(&self) -> Arc<[usize]> {
+        Arc::clone(&self.talk.read().await.step_counts)
     }
 
     /// Returns a clone of all slides
     pub async fn slides(&self) -> Vec<Slide> {
         let talk = self.talk.read().await;
-        talk.slides.clone()
+        talk.talk.slides.clone()
     }
 
     /// Returns a slide by its index
     pub async fn slide_by_index(&self, slide_id: SlideId) -> Option<Slide> {
         let talk = self.talk.read().await;
-        talk.slides.get(slide_id.index()).cloned()
+        talk.talk.slides.get(slide_id.index()).cloned()
     }
 
     /// Returns the current presentation state
@@ -110,13 +143,13 @@ impl TalkService {
         let current_slide_id = state.current().unwrap_or(SlideId::FIRST);
 
         let old_talk = self.talk.read().await;
-        let current_slide = old_talk.slides.get(current_slide_id.index());
+        let current_slide = old_talk.talk.slides.get(current_slide_id.index());
 
         // Preserve slide position: by title -> by index -> fallback to first
         let new_slide_id = Self::preserve_slide_position(
             current_slide,
             current_slide_id,
-            &old_talk.slides,
+            &old_talk.talk.slides,
             &new_talk.slides,
         );
 
@@ -134,7 +167,7 @@ impl TalkService {
 
         // Replace the talk
         let mut talk = self.talk.write().await;
-        *talk = new_talk;
+        *talk = LoadedTalk::new(new_talk);
         drop(talk);
 
         // Return TalkChange notification
@@ -147,7 +180,7 @@ impl TalkService {
 
     async fn total_slides(&self) -> usize {
         let talk = self.talk.read().await;
-        talk.slides.len()
+        talk.talk.slides.len()
     }
 
     /// Returns total slides count, or None if empty (for early return pattern)
