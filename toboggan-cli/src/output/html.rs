@@ -16,6 +16,11 @@ const SLIDE_CSS: &str =
 // Print CSS for one slide per page
 const PRINT_CSS: &str = include_str!("../print.css");
 
+// Keyboard navigation for the exported file. Inlined, like the stylesheets: an
+// export is handed around as a single file and shown from a lectern with no
+// guarantee of a network.
+const NAVIGATE_JS: &str = include_str!("../navigate.js");
+
 /// Escape HTML special characters
 fn escape_html(text: &str) -> String {
     text.replace('&', "&amp;")
@@ -84,14 +89,20 @@ fn render_slide(slide: &Slide) -> String {
 /// * `custom_head_html` - Optional custom HTML to insert at the end of the `<head>` element
 #[allow(clippy::unnecessary_wraps)]
 pub(super) fn generate_html(talk: &Talk, custom_head_html: Option<&str>) -> Result<Vec<u8>> {
-    // Render all slides
+    // Render all slides. Each carries an `id`, so `deck.html#slide-12` opens on
+    // that slide — with the navigator running, and by scrolling to it without.
     let slides_html =
         talk.slides
             .iter()
-            .map(render_slide)
-            .fold(String::new(), |mut acc, slide_html| {
+            .enumerate()
+            .fold(String::new(), |mut acc, (index, slide)| {
                 use std::fmt::Write;
-                let _ = write!(acc, r#"<div class="toboggan-slide">{slide_html}</div>"#);
+                let number = index + 1;
+                let slide_html = render_slide(slide);
+                let _ = write!(
+                    acc,
+                    r#"<div class="toboggan-slide" id="slide-{number}">{slide_html}</div>"#
+                );
                 acc
             });
 
@@ -130,6 +141,9 @@ pub(super) fn generate_html(talk: &Talk, custom_head_html: Option<&str>) -> Resu
     <main>
 {slides_html}
     </main>
+    <script>
+{navigate_js}
+    </script>
 </body>
 
 </html>"#,
@@ -139,13 +153,15 @@ pub(super) fn generate_html(talk: &Talk, custom_head_html: Option<&str>) -> Resu
         slide_css = adapted_slide_css,
         print_css = PRINT_CSS,
         custom_head = custom_head,
-        slides_html = slides_html
+        slides_html = slides_html,
+        navigate_js = NAVIGATE_JS
     );
 
     Ok(html.into_bytes())
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
     use toboggan_core::{Date, Style};
 
@@ -224,7 +240,7 @@ mod tests {
         // Check basic structure
         assert!(html.contains("<!doctype html>"));
         assert!(html.contains("<title>Test Presentation</title>"));
-        assert!(html.contains(r#"<div class="toboggan-slide">"#));
+        assert!(html.contains(r#"<div class="toboggan-slide" id="slide-1">"#));
         assert!(html.contains(r#"<section class="cover""#));
         assert!(html.contains("<h2>Welcome</h2>"));
         assert!(html.contains("<p>Hello World</p>"));
@@ -241,6 +257,47 @@ mod tests {
                 "exported HTML must be self-contained, found `{attribute}`"
             );
         }
+
+        Ok(())
+    }
+
+    /// The export is a file someone opens from a lectern, so the navigator has
+    /// to be in it — not fetched — and every slide has to be addressable.
+    #[test]
+    fn the_export_carries_its_own_navigation() -> anyhow::Result<()> {
+        let mut talk = Talk::new("Test");
+        talk.slides.push(Slide::new("One"));
+        talk.slides.push(Slide::new("Two"));
+
+        let html = String::from_utf8(generate_html(&talk, None)?)?;
+
+        assert!(html.contains("<script>"), "the navigator ships inline");
+        assert!(html.contains(r#"id="slide-1""#));
+        assert!(html.contains(r#"id="slide-2""#));
+        // Nothing may run before the slides exist: the script reads them on the
+        // way in, and mounting it in <head> would find an empty document.
+        let script = html.find("<script>").expect("script");
+        let last_slide = html.find(r#"id="slide-2""#).expect("slide");
+        assert!(last_slide < script, "the navigator comes after the slides");
+
+        Ok(())
+    }
+
+    /// Presentation mode is opt-in from the script and screen-only, so a deck
+    /// opened with scripting off — and the PDF export, which renders this same
+    /// document — still get every slide and every step.
+    #[test]
+    fn presentation_mode_never_reaches_print() -> anyhow::Result<()> {
+        let talk = Talk::new("Test");
+        let html = String::from_utf8(generate_html(&talk, None)?)?;
+
+        let screen_only = html
+            .find("@media screen")
+            .expect("presentation mode is screen-only");
+        let gate = html
+            .find("html.toboggan-js")
+            .expect("presentation mode is gated on the script having run");
+        assert!(screen_only < gate);
 
         Ok(())
     }
