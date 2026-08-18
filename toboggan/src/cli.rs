@@ -801,6 +801,7 @@ fn parse_date(input: &str) -> Result<Date, String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
     use clap::CommandFactory as _;
 
@@ -814,5 +815,23 @@ mod tests {
     #[test]
     fn cli_definition_is_valid() {
         Cli::command().debug_assert();
+    }
+
+    /// `toboggan mcp init` and `toboggan new` both register this binary with
+    /// Claude Code, and neither can start a server this CLI refuses to parse.
+    /// They emitted `--dir` for a flag named `--path`, so every scaffolded deck
+    /// shipped an MCP server that died at argument parsing — invisible from
+    /// this side, because nothing ever ran the argv it wrote.
+    #[test]
+    fn mcp_registration_args_parse() {
+        let registered = std::iter::once("toboggan")
+            .chain(toboggan_mcp::SERVER_ARGS)
+            .chain(std::iter::once("/tmp/deck"));
+
+        let cli = Cli::try_parse_from(registered).expect("the argv we register must parse");
+        let Some(Commands::Mcp(mcp)) = cli.command else {
+            panic!("expected the mcp subcommand, got {:?}", cli.command);
+        };
+        assert_eq!(mcp.path.as_deref(), Some(Path::new("/tmp/deck")));
     }
 }

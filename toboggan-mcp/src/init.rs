@@ -1,6 +1,15 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// The argv prefix this binary is registered with, before the deck directory.
+///
+/// Shared by all three registration paths — `claude mcp add`, the printed
+/// fallback, and `.mcp.json` — because they disagreed once: they emitted
+/// `--dir` after the flag was renamed to `--path`, so every scaffolded deck
+/// shipped an MCP server that failed at argument parsing. `toboggan`'s
+/// `mcp_registration_args_parse` test drives this through the real CLI.
+pub const SERVER_ARGS: [&str; 2] = ["mcp", "--path"];
+
 /// Registers this binary as the `toboggan` MCP server for Claude Code.
 ///
 /// Prefers `claude mcp add`, falling back to printing the configuration to add
@@ -18,8 +27,7 @@ pub fn mcp_init(root: &Path) -> anyhow::Result<()> {
     let status = Command::new("claude")
         .args(["mcp", "add", "toboggan", "--"])
         .arg(&exe)
-        .arg("mcp")
-        .arg("--dir")
+        .args(SERVER_ARGS)
         .arg(&root)
         .status();
 
@@ -46,7 +54,11 @@ pub fn mcp_init(root: &Path) -> anyhow::Result<()> {
 fn print_manual_config(exe: &Path, root: &Path) {
     println!("Add the server to your Claude Code MCP config:");
     println!("  command: {}", exe.display());
-    println!("  args:    [\"mcp\", \"--dir\", \"{}\"]", root.display());
+    let [command, flag] = SERVER_ARGS;
+    println!(
+        "  args:    [\"{command}\", \"{flag}\", \"{}\"]",
+        root.display()
+    );
 }
 
 /// Writes a project-local `.mcp.json` in `project` registering this binary as
@@ -96,7 +108,10 @@ pub fn write_mcp_json(project: &Path, slides: &Path) -> anyhow::Result<PathBuf> 
         .ok_or_else(|| anyhow::anyhow!("{}: `mcpServers` is not an object", path.display()))?;
     servers.insert(
         "toboggan".to_owned(),
-        serde_json::json!({ "command": exe, "args": ["mcp", "--dir", dir] }),
+        serde_json::json!({
+            "command": exe,
+            "args": [SERVER_ARGS[0], SERVER_ARGS[1], dir],
+        }),
     );
 
     let body = serde_json::to_string_pretty(&config)?;
