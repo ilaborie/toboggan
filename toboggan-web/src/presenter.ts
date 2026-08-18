@@ -1,6 +1,6 @@
 import init, { start_presenter_app } from "../toboggan-wasm/pkg/toboggan_wasm";
 
-import { appConfig } from "./boot";
+import { appConfig, loadWasm } from "./boot";
 import "./reset.css";
 import "./main.css";
 
@@ -8,7 +8,9 @@ import "./main.css";
 // not preload the terminal font — and `state.css` styles the full-screen deck,
 // which this page is not.
 document.addEventListener("DOMContentLoaded", async () => {
-	await init();
+	if (!(await loadWasm(init))) {
+		return;
+	}
 
 	const elt = document.querySelector("main");
 	if (!elt) {

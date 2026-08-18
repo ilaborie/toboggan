@@ -1,13 +1,15 @@
 import init, { start_app } from "../toboggan-wasm/pkg/toboggan_wasm";
 
-import { appConfig, ensureTerminalFontLoaded } from "./boot";
+import { appConfig, ensureTerminalFontLoaded, loadWasm } from "./boot";
 import "./reset.css";
 import "./main.css";
 import "./state.css";
 
 // Initialize the application when the DOM is loaded
 document.addEventListener("DOMContentLoaded", async () => {
-	await init();
+	if (!(await loadWasm(init))) {
+		return;
+	}
 
 	// The terminal renders to a <canvas>, which silently falls back to a system
 	// font if the web font isn't loaded yet. Fetch the faces up front so the

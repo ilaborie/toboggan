@@ -4,6 +4,7 @@ use std::rc::Rc;
 use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use gloo::console::{debug, error, info};
+use gloo::utils::document;
 use toboggan_core::{ClientId, ClientRole, Command, Slide, SlideId, State};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, UnwrapThrowExt};
@@ -214,7 +215,21 @@ impl WasmElement for App {
             let el = create_html_element("div");
             el.set_class_name("toboggan-toast");
             elements.toast.render(&el);
-            host.append_child(&el).unwrap_throw();
+            if self.presenter_view {
+                // The presenter layout attaches a shadow root to `host` and has
+                // no <slot>, so a light-DOM child of `host` never renders. The
+                // toast went there anyway, which meant the presenter view could
+                // not show *any* message — including "Following along — this
+                // client cannot drive the deck", the one that explains why the
+                // keys stopped working.
+                document()
+                    .body()
+                    .map(|body| body.append_child(&el))
+                    .transpose()
+                    .unwrap_throw();
+            } else {
+                host.append_child(&el).unwrap_throw();
+            }
 
             // The help dialog mounts under <body>; the host is unused. Both
             // views get it — the keys are the same in both.

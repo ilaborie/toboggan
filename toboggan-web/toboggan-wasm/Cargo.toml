@@ -63,6 +63,12 @@ console_error_panic_hook = "0.1.7"
 # compiled to wasm), bound from Rust in components/terminal/rioterm.rs. It is a
 # JS dependency, declared in toboggan-web/package.json — nothing to add here.
 
+# No dev-dependencies: this crate cannot host a unit test. Its bindings
+# `require("rioterm")`, which only a bundler resolves, so `wasm-bindgen-test`
+# fails to load the module in both Node and a browser. Logic worth testing is
+# kept in `toboggan-core` instead — see `accumulate_goto` and `goto_command`,
+# which both clients now share — and the rendered result is covered by the
+# Playwright suite in `toboggan-web/tests`.
 [dev-dependencies]
 
 [lints]

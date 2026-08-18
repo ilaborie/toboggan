@@ -9,6 +9,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use gloo::console::error;
 use gloo::events::EventListener;
 use gloo::timers::callback::Interval;
 use toboggan_core::{Content, Slide, SlideId, State};
@@ -263,7 +264,24 @@ impl WasmElement for TobogganPresenterElement {
 </div>"#,
         );
 
-        let find = |selector: &str| layout.query_selector(selector).ok().flatten();
+        // Each miss is named. This used to be `.ok().flatten()`, which folded a
+        // malformed selector and an absent element into the same `None`, and
+        // the six below were then matched as a tuple — so one missing element
+        // blanked the clock, the timer, the progress bar, the slide counter,
+        // the step counter and the pacing together, with nothing in the
+        // console. Every selector here is matched against markup written a
+        // hundred lines above, so it fires exactly when someone edits that.
+        let find = |selector: &str| match layout.query_selector(selector) {
+            Ok(Some(element)) => Some(element),
+            Ok(None) => {
+                error!("Presenter layout is missing an element:", selector);
+                None
+            }
+            Err(err) => {
+                error!("Presenter layout selector is not valid:", selector, err);
+                None
+            }
+        };
         // The slide component attaches its shadow root to whatever host it is
         // handed, so the host has to be an element we are willing to give away
         // entirely — hence `.fit` inside the pane rather than the pane itself.
@@ -273,8 +291,11 @@ impl WasmElement for TobogganPresenterElement {
 
         let mut next = TobogganSlideElement::default();
         next.set_preview(true);
-        if let Some(next_host) = &next_host {
-            next.render(next_host);
+        match &next_host {
+            Some(next_host) => next.render(next_host),
+            // Not silent: without this the "next slide" pane simply never
+            // renders, which reads as "there is no next slide".
+            None => error!("Presenter layout has no pane for the next slide"),
         }
 
         let status = match (

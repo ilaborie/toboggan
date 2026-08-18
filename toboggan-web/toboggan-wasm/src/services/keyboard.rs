@@ -1,10 +1,13 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use futures::channel::mpsc::UnboundedSender;
 use gloo::console::{debug, error, info};
 use gloo::events::{EventListener, EventListenerOptions};
+use gloo::timers::callback::Timeout;
 use gloo::utils::window;
-use toboggan_core::{Command, SlideId};
+use toboggan_core::{Command, accumulate_goto, goto_command};
 use wasm_bindgen::JsCast;
 use web_sys::KeyboardEvent;
 
@@ -33,19 +36,12 @@ pub(crate) enum KeyAction {
     GotoTyped,
 }
 
-/// The largest slide number that can be typed.
+/// How long a half-typed slide number waits for its next digit.
 ///
-/// Four digits is more slides than a talk has ever had, and the cap is what
-/// stops a leaned-on key from overflowing the running multiplication.
-const MAX_GOTO_TARGET: usize = 9_999;
-
-/// The presenter types the number printed on the slide; `SlideId` is a 0-based
-/// index.
-fn goto_command(number: usize) -> Command {
-    Command::GoTo {
-        slide: SlideId::new(number.saturating_sub(1)),
-    }
-}
+/// Without an expiry the number and its badge lived until `Enter`, `Escape` or
+/// a navigation key — so a `1` typed by accident sat on the projected screen
+/// indefinitely, and the next `Enter` jumped to whatever it had accumulated.
+const GOTO_TIMEOUT_MS: u32 = 2_000;
 
 #[derive(Debug, Clone)]
 pub(crate) struct KeyboardMapping(HashMap<&'static str, KeyAction>);
@@ -115,8 +111,9 @@ impl KeyboardService {
     pub(crate) fn start(&mut self) {
         let tx = self.tx.clone();
         let mapping = self.mapping.clone();
-        // The slide number typed so far, if any.
+        // The slide number typed so far, if any, and the timer that forgets it.
         let mut pending_goto: Option<usize> = None;
+        let expiry: Rc<RefCell<Option<Timeout>>> = Rc::new(RefCell::new(None));
 
         // Every key the deck binds already means something to the browser:
         // space and the arrows scroll, PageUp/PageDown page, Backspace used to
@@ -136,6 +133,16 @@ impl KeyboardService {
                     if deck_keys_captured() || typing_into_editable(keyboard_event) {
                         return;
                     }
+                    // A modified key belongs to the browser. Without this,
+                    // Ctrl+F and Cmd+F reached `mapping.get("f")`, toggled
+                    // fullscreen, and `prevent_default`ed find-in-page. Shift is
+                    // not a modifier here: `F` is a binding of its own.
+                    if keyboard_event.ctrl_key()
+                        || keyboard_event.meta_key()
+                        || keyboard_event.alt_key()
+                    {
+                        return;
+                    }
                     let key = keyboard_event.key();
                     let Some(action) = mapping.get(&key) else {
                         // `Esc` is the help dialog's, which closes on it
@@ -143,6 +150,7 @@ impl KeyboardService {
                         // consumed, only to drop a half-typed slide number.
                         if key == "Escape" && pending_goto.take().is_some() {
                             show_goto_pending(None);
+                            *expiry.borrow_mut() = None;
                         }
                         debug!("No mapping for key:", &key);
                         return;
@@ -158,6 +166,7 @@ impl KeyboardService {
                             // than leaving it to land on the next `Enter`.
                             if pending_goto.take().is_some() {
                                 show_goto_pending(None);
+                                *expiry.borrow_mut() = None;
                             }
                             if tx.unbounded_send(command).is_err() {
                                 error!("Failed to send keyboard action");
@@ -166,15 +175,20 @@ impl KeyboardService {
                         KeyAction::ToggleFullscreen => toggle_fullscreen(),
                         KeyAction::Blank(screen) => toggle_blank(screen),
                         KeyAction::Digit(digit) => {
-                            let typed = pending_goto.unwrap_or(0) * 10 + usize::from(digit);
-                            if typed <= MAX_GOTO_TARGET {
+                            if let Some(typed) = accumulate_goto(pending_goto, digit) {
                                 pending_goto = Some(typed);
                                 show_goto_pending(Some(typed));
+                                // Restarted on every digit, so typing keeps the
+                                // number alive and stopping lets it go.
+                                *expiry.borrow_mut() = Some(Timeout::new(GOTO_TIMEOUT_MS, || {
+                                    show_goto_pending(None);
+                                }));
                             }
                         }
                         KeyAction::GotoTyped => {
                             if let Some(number) = pending_goto.take() {
                                 show_goto_pending(None);
+                                *expiry.borrow_mut() = None;
                                 if tx.unbounded_send(goto_command(number)).is_err() {
                                     error!("Failed to send keyboard action");
                                 }

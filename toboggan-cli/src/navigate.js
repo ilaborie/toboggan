@@ -68,7 +68,14 @@
 		if (document.fullscreenElement) {
 			document.exitFullscreen();
 		} else {
-			document.documentElement.requestFullscreen().catch(() => {});
+			document.documentElement.requestFullscreen().catch((error) => {
+				// An empty catch here left the presenter pressing `f` in front of
+				// the room with no way to tell "the key is not bound" from "the
+				// browser said no" — which it does for a missing user gesture, a
+				// `fullscreen` permissions-policy in an iframe, or Safari on a
+				// non-video element.
+				console.error("Toboggan: the browser refused fullscreen", error);
+			});
 		}
 	}
 
@@ -90,6 +97,12 @@
 	};
 
 	addEventListener("keydown", (event) => {
+		// A modified key belongs to the browser, not the deck. Without this,
+		// Cmd+F and Ctrl+F toggled fullscreen and swallowed find-in-page — the
+		// main way anyone navigates a single-file export.
+		if (event.ctrlKey || event.metaKey || event.altKey) {
+			return;
+		}
 		const action = actions[event.key];
 		if (!action) {
 			return;
