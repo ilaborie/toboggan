@@ -599,6 +599,127 @@ classes = [
 ]
 
 [[slides]]
+kind = "Standard"
+body_source = """
+# Images and assets
+
+Anything that is not a slide lives in `public/`, a sibling of `slides/`:
+
+    my-talk/
+    ├── public/
+    │   ├── diagram.webp
+    │   └── style.css
+    └── slides/
+
+It is served at `/public/`, so that is how a slide asks for it:
+
+```markdown
+![Architecture](/public/diagram.webp)
+```
+
+> [!WARNING]
+> The leading `/public/` is not optional. Slides render at `/run`, and only
+> `/public/` is mapped to a directory — so `![…](diagram.webp)` asks for
+> `/diagram.webp`, which nothing serves. The `link/broken` lint rule catches
+> exactly this, and says where the file actually is.
+
+`toboggan build -o deck.html` copies `public/` next to the exported file, so a
+deck stays self-contained when you publish it.
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "1.4 Images and assets"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Images and assets</h1>
+<p>Anything that is not a slide lives in <code>public/</code>, a sibling of <code>slides/</code>:</p>
+<pre style="background-color:#eff1f5;"><code><span style="color:#4f5b66;">my-talk/
+</span><span style="color:#4f5b66;">├── public/
+</span><span style="color:#4f5b66;">│   ├── diagram.webp
+</span><span style="color:#4f5b66;">│   └── style.css
+</span><span style="color:#4f5b66;">└── slides/
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<p>It is served at <code>/public/</code>, so that is how a slide asks for it:</p>
+<pre style="background-color:#eff1f5;"><code class="language-markdown"><span style="color:#d08770;">![Architecture](/public/diagram.webp)
+</span></code></pre>
+<div class="markdown-alert markdown-alert-warning">
+<p class="markdown-alert-title">Warning</p>
+<p>The leading <code>/public/</code> is not optional. Slides render at <code>/run</code>, and only
+<code>/public/</code> is mapped to a directory — so <code>![…](diagram.webp)</code> asks for
+<code>/diagram.webp</code>, which nothing serves. The <code>link/broken</code> lint rule catches
+exactly this, and says where the file actually is.</p>
+</div>
+<p><code>toboggan build -o deck.html</code> copies <code>public/</code> next to the exported file, so a
+deck stays self-contained when you publish it.</p>
+</div><!-- end step -->
+"""
+alt = """
+# Images and assets
+
+Anything that is not a slide lives in `public/`, a sibling of `slides/`:
+
+    my-talk/
+    ├── public/
+    │   ├── diagram.webp
+    │   └── style.css
+    └── slides/
+
+It is served at `/public/`, so that is how a slide asks for it:
+
+```markdown
+![Architecture](/public/diagram.webp)
+```
+
+> [!WARNING]
+> The leading `/public/` is not optional. Slides render at `/run`, and only
+> `/public/` is mapped to a directory — so `![…](diagram.webp)` asks for
+> `/diagram.webp`, which nothing serves. The `link/broken` lint rule catches
+> exactly this, and says where the file actually is.
+
+`toboggan build -o deck.html` copies `public/` next to the exported file, so a
+deck stays self-contained when you publish it.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>This is the single most common way a deck breaks between the laptop and the
+projector: the image is right there on disk, the URL is one segment off, and the
+slide renders with a broken image icon in front of the room.</p>
+<p><code>--public-dir</code> overrides the location if the folder is somewhere else.</p>
+"""
+alt = """
+This is the single most common way a deck breaks between the laptop and the
+projector: the image is right there on disk, the URL is one segment off, and the
+slide renders with a broken image icon in front of the room.
+
+`--public-dir` overrides the location if the folder is somewhere else.
+"""
+
+[slides.notes.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
 kind = "Part"
 body_source = """
 # Directives
@@ -929,9 +1050,10 @@ fn main() {
 ```
 
 > [!IMPORTANT]
-> The path is resolved against the **deck folder** — the one you pass to `-p` —
-> never against the slide file or your shell's current directory. So the same
-> embed resolves identically wherever you run the build from.
+> The path resolves against the **deck root** — the folder *containing* the one
+> you pass to `-p`, never the slide file and never your shell's current
+> directory. So `snippets/` sits **beside** `slides/`, not inside it, and the
+> same embed resolves identically wherever you run the build from.
 
 Absolute paths and `..` are refused: an embed cannot reach outside the deck.
 """
@@ -966,9 +1088,10 @@ raw = """
 </span></code></pre>
 <div class="markdown-alert markdown-alert-important">
 <p class="markdown-alert-title">Important</p>
-<p>The path is resolved against the <strong>deck folder</strong> — the one you pass to <code>-p</code> —
-never against the slide file or your shell's current directory. So the same
-embed resolves identically wherever you run the build from.</p>
+<p>The path resolves against the <strong>deck root</strong> — the folder <em>containing</em> the one
+you pass to <code>-p</code>, never the slide file and never your shell's current
+directory. So <code>snippets/</code> sits <strong>beside</strong> <code>slides/</code>, not inside it, and the
+same embed resolves identically wherever you run the build from.</p>
 </div>
 <p>Absolute paths and <code>..</code> are refused: an embed cannot reach outside the deck.</p>
 </div><!-- end step -->
@@ -995,9 +1118,10 @@ fn main() {
 ```
 
 > [!IMPORTANT]
-> The path is resolved against the **deck folder** — the one you pass to `-p` —
-> never against the slide file or your shell's current directory. So the same
-> embed resolves identically wherever you run the build from.
+> The path resolves against the **deck root** — the folder *containing* the one
+> you pass to `-p`, never the slide file and never your shell's current
+> directory. So `snippets/` sits **beside** `slides/`, not inside it, and the
+> same embed resolves identically wherever you run the build from.
 
 Absolute paths and `..` are refused: an embed cannot reach outside the deck.
 """
@@ -2109,12 +2233,17 @@ $ toboggan lint -p ./slides/
 | Flag | Purpose |
 | --- | --- |
 | `--deny <level>` | Exit non-zero at/above `info`/`warning`/`error` (CI gates) |
-| `--json` | Emit a machine-readable `LintReport` |
+| `--format human` | Coloured lines for a terminal (the default) |
+| `--format github` | Workflow commands, which become inline PR annotations |
+| `--format sarif` | SARIF 2.1.0, for GitHub code scanning |
+| `--format json` | The `LintReport` as JSON (`--json` is a shorthand) |
 | `--no-spell` | Skip spell-checking (it runs by default via the `typos` binary) |
 
 > [!TIP]
-> The linter is a library (`toboggan-lint`) — the same rules power the MCP
-> `lint` tool, so an LLM editing the deck sees exactly what CI sees.
+> Diagnostics carry the file they came from, so `--format github` annotates the
+> offending slide in a pull request. The linter is a library (`toboggan-lint`) —
+> the same rules power the MCP `lint` tool, so an LLM editing the deck sees
+> exactly what CI sees.
 """
 
 [slides.style]
@@ -2152,8 +2281,20 @@ section dividers, nested steps, images without <code>alt</code>, oversized slide
 <td>Exit non-zero at/above <code>info</code>/<code>warning</code>/<code>error</code> (CI gates)</td>
 </tr>
 <tr>
-<td><code>--json</code></td>
-<td>Emit a machine-readable <code>LintReport</code></td>
+<td><code>--format human</code></td>
+<td>Coloured lines for a terminal (the default)</td>
+</tr>
+<tr>
+<td><code>--format github</code></td>
+<td>Workflow commands, which become inline PR annotations</td>
+</tr>
+<tr>
+<td><code>--format sarif</code></td>
+<td>SARIF 2.1.0, for GitHub code scanning</td>
+</tr>
+<tr>
+<td><code>--format json</code></td>
+<td>The <code>LintReport</code> as JSON (<code>--json</code> is a shorthand)</td>
 </tr>
 <tr>
 <td><code>--no-spell</code></td>
@@ -2163,8 +2304,10 @@ section dividers, nested steps, images without <code>alt</code>, oversized slide
 </table>
 <div class="markdown-alert markdown-alert-tip">
 <p class="markdown-alert-title">Tip</p>
-<p>The linter is a library (<code>toboggan-lint</code>) — the same rules power the MCP
-<code>lint</code> tool, so an LLM editing the deck sees exactly what CI sees.</p>
+<p>Diagnostics carry the file they came from, so <code>--format github</code> annotates the
+offending slide in a pull request. The linter is a library (<code>toboggan-lint</code>) —
+the same rules power the MCP <code>lint</code> tool, so an LLM editing the deck sees
+exactly what CI sees.</p>
 </div>
 </div><!-- end step -->
 """
@@ -2183,15 +2326,295 @@ $ toboggan lint -p ./slides/
 | Flag | Purpose |
 | --- | --- |
 | `--deny <level>` | Exit non-zero at/above `info`/`warning`/`error` (CI gates) |
-| `--json` | Emit a machine-readable `LintReport` |
+| `--format human` | Coloured lines for a terminal (the default) |
+| `--format github` | Workflow commands, which become inline PR annotations |
+| `--format sarif` | SARIF 2.1.0, for GitHub code scanning |
+| `--format json` | The `LintReport` as JSON (`--json` is a shorthand) |
 | `--no-spell` | Skip spell-checking (it runs by default via the `typos` binary) |
 
 > [!TIP]
-> The linter is a library (`toboggan-lint`) — the same rules power the MCP
-> `lint` tool, so an LLM editing the deck sees exactly what CI sees.
+> Diagnostics carry the file they came from, so `--format github` annotates the
+> offending slide in a pull request. The linter is a library (`toboggan-lint`) —
+> the same rules power the MCP `lint` tool, so an LLM editing the deck sees
+> exactly what CI sees.
 """
 
 [slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Configure the deck once
+
+Every flag can live in a `toboggan.toml` beside your slides instead:
+
+```toml
+default-command = "serve"   # what a bare `toboggan` does
+
+[build]
+theme = "Monokai"
+wpm = 130
+
+[serve]
+open-presenter = true
+
+[lint]
+max-duration = "45m"
+```
+
+Files are read from the deck directory, then each parent, then
+`~/.config/toboggan/config.toml` — so a repo of several talks shares a house
+style and one talk overrides it. Strongest first:
+
+    CLI flag  >  TOBOGGAN_*  >  nearest toboggan.toml  >  …  >  user global  >  default
+
+> [!TIP]
+> An unknown key is an **error**, not a silent no-op — so a typo tells you
+> instead of quietly doing nothing. `toboggan new` writes a file listing every
+> setting, commented out with its default.
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "4.6 toboggan.toml"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Configure the deck once</h1>
+<p>Every flag can live in a <code>toboggan.toml</code> beside your slides instead:</p>
+<pre style="background-color:#eff1f5;"><code class="language-toml"><span style="color:#4f5b66;">default-command = &quot;serve&quot;   # what a bare `toboggan` does
+</span><span style="color:#4f5b66;">
+</span><span style="color:#4f5b66;">[build]
+</span><span style="color:#4f5b66;">theme = &quot;Monokai&quot;
+</span><span style="color:#4f5b66;">wpm = 130
+</span><span style="color:#4f5b66;">
+</span><span style="color:#4f5b66;">[serve]
+</span><span style="color:#4f5b66;">open-presenter = true
+</span><span style="color:#4f5b66;">
+</span><span style="color:#4f5b66;">[lint]
+</span><span style="color:#4f5b66;">max-duration = &quot;45m&quot;
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<p>Files are read from the deck directory, then each parent, then
+<code>~/.config/toboggan/config.toml</code> — so a repo of several talks shares a house
+style and one talk overrides it. Strongest first:</p>
+<pre style="background-color:#eff1f5;"><code><span style="color:#4f5b66;">CLI flag  &gt;  TOBOGGAN_*  &gt;  nearest toboggan.toml  &gt;  …  &gt;  user global  &gt;  default
+</span></code></pre>
+<div class="markdown-alert markdown-alert-tip">
+<p class="markdown-alert-title">Tip</p>
+<p>An unknown key is an <strong>error</strong>, not a silent no-op — so a typo tells you
+instead of quietly doing nothing. <code>toboggan new</code> writes a file listing every
+setting, commented out with its default.</p>
+</div>
+</div><!-- end step -->
+"""
+alt = """
+# Configure the deck once
+
+Every flag can live in a `toboggan.toml` beside your slides instead:
+
+```toml
+default-command = "serve"   # what a bare `toboggan` does
+
+[build]
+theme = "Monokai"
+wpm = 130
+
+[serve]
+open-presenter = true
+
+[lint]
+max-duration = "45m"
+```
+
+Files are read from the deck directory, then each parent, then
+`~/.config/toboggan/config.toml` — so a repo of several talks shares a house
+style and one talk overrides it. Strongest first:
+
+    CLI flag  >  TOBOGGAN_*  >  nearest toboggan.toml  >  …  >  user global  >  default
+
+> [!TIP]
+> An unknown key is an **error**, not a silent no-op — so a typo tells you
+> instead of quietly doing nothing. `toboggan new` writes a file listing every
+> setting, commented out with its default.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>The precedence order is the useful part: you can put <code>open-presenter = true</code> in
+the deck and still say <code>--port 9000</code> for one run without editing anything.</p>
+<p>Boolean keys are the one asymmetry — a flag can turn something on, but cannot
+turn it back off if the file enabled it. Comment it out for a single run.</p>
+"""
+alt = """
+The precedence order is the useful part: you can put `open-presenter = true` in
+the deck and still say `--port 9000` for one run without editing anything.
+
+Boolean keys are the one asymmetry — a flag can turn something on, but cannot
+turn it back off if the file enabled it. Comment it out for a single run.
+"""
+
+[slides.notes.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# When the rule is wrong
+
+Sometimes a slide is meant to be dense. Silence a rule for that one slide:
+
+```markdown
+<!-- lint-disable content/excessive-words -->
+```
+
+Or in its front matter, which is easier to see when you come back to it:
+
+```toml
++++
+title = "The whole API"
+disabled_rules = ["content/excessive-words", "code/too-long"]
++++
+```
+
+Deck-wide, in `toboggan.toml`:
+
+```toml
+[lint]
+disabled = ["spelling/typo"]
+
+[lint.severity]
+"content/excessive-words" = "info"
+```
+
+> [!TIP]
+> Prefer lowering a severity to disabling a rule: an `info` still tells you the
+> slide is dense, it just stops failing the build. An unknown rule id is
+> reported rather than ignored, so a renamed rule cannot silently stop applying.
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "4.7 Silencing a rule"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>When the rule is wrong</h1>
+<p>Sometimes a slide is meant to be dense. Silence a rule for that one slide:</p>
+<pre style="background-color:#eff1f5;"><code class="language-markdown"><span style="color:#a7adba;">&lt;!-- lint-disable content/excessive-words --&gt;
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<p>Or in its front matter, which is easier to see when you come back to it:</p>
+<pre style="background-color:#eff1f5;"><code class="language-toml"><span style="color:#4f5b66;">+++
+</span><span style="color:#4f5b66;">title = &quot;The whole API&quot;
+</span><span style="color:#4f5b66;">disabled_rules = [&quot;content/excessive-words&quot;, &quot;code/too-long&quot;]
+</span><span style="color:#4f5b66;">+++
+</span></code></pre>
+</div><!-- end step -->
+
+<div class="step step-1"><!-- begin step -->
+<p>Deck-wide, in <code>toboggan.toml</code>:</p>
+<pre style="background-color:#eff1f5;"><code class="language-toml"><span style="color:#4f5b66;">[lint]
+</span><span style="color:#4f5b66;">disabled = [&quot;spelling/typo&quot;]
+</span><span style="color:#4f5b66;">
+</span><span style="color:#4f5b66;">[lint.severity]
+</span><span style="color:#4f5b66;">&quot;content/excessive-words&quot; = &quot;info&quot;
+</span></code></pre>
+<div class="markdown-alert markdown-alert-tip">
+<p class="markdown-alert-title">Tip</p>
+<p>Prefer lowering a severity to disabling a rule: an <code>info</code> still tells you the
+slide is dense, it just stops failing the build. An unknown rule id is
+reported rather than ignored, so a renamed rule cannot silently stop applying.</p>
+</div>
+</div><!-- end step -->
+"""
+alt = """
+# When the rule is wrong
+
+Sometimes a slide is meant to be dense. Silence a rule for that one slide:
+
+```markdown
+<!-- lint-disable content/excessive-words -->
+```
+
+Or in its front matter, which is easier to see when you come back to it:
+
+```toml
++++
+title = "The whole API"
+disabled_rules = ["content/excessive-words", "code/too-long"]
++++
+```
+
+Deck-wide, in `toboggan.toml`:
+
+```toml
+[lint]
+disabled = ["spelling/typo"]
+
+[lint.severity]
+"content/excessive-words" = "info"
+```
+
+> [!TIP]
+> Prefer lowering a severity to disabling a rule: an `info` still tells you the
+> slide is dense, it just stops failing the build. An unknown rule id is
+> reported rather than ignored, so a renamed rule cannot silently stop applying.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>Suppression is per slide, not per line: diagnostics are not line-tracked, so a
+directive covers the whole slide it appears on.</p>
+<p>Every diagnostic prints the id you would use here, so you never have to go
+looking for the name.</p>
+"""
+alt = """
+Suppression is per slide, not per line: diagnostics are not line-tracked, so a
+directive covers the whole slide it appears on.
+
+Every diagnostic prints the id you would use here, so you never have to go
+looking for the name.
+"""
+
+[slides.notes.style]
 classes = [
     "no_title",
     "wide",
@@ -2901,6 +3324,309 @@ showing different output.
 
 The pacing readout only appears when the deck declares durations — without a
 plan there is nothing to be late for.
+"""
+
+[slides.notes.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Driving the deck
+
+| Key | Does |
+| --- | --- |
+| `→` `←` | Next / previous slide |
+| `↓` `↑` `Space` | Next / previous **step** |
+| `PageDown` `PageUp` `Backspace` | The same — what a presenter remote sends |
+| `Home` `End` | First / last slide |
+| digits then `⏎` | Go to that slide number |
+| `f` | Fullscreen |
+| `.` `w` | Blank the screen, black or white |
+| `b` | Blink — flash every other client |
+| `` ` `` | The quake terminal |
+| `F1` | This list, in the browser |
+
+> [!TIP]
+> A clicker sends `PageUp`/`PageDown`, and those are bound to **steps** rather
+> than slides on purpose: `NextStep` moves on to the next slide once a slide's
+> reveals run out, so the remote walks the whole deck instead of skipping every
+> build.
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "5.7 Keyboard"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Driving the deck</h1>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>→</code> <code>←</code></td>
+<td>Next / previous slide</td>
+</tr>
+<tr>
+<td><code>↓</code> <code>↑</code> <code>Space</code></td>
+<td>Next / previous <strong>step</strong></td>
+</tr>
+<tr>
+<td><code>PageDown</code> <code>PageUp</code> <code>Backspace</code></td>
+<td>The same — what a presenter remote sends</td>
+</tr>
+<tr>
+<td><code>Home</code> <code>End</code></td>
+<td>First / last slide</td>
+</tr>
+<tr>
+<td>digits then <code>⏎</code></td>
+<td>Go to that slide number</td>
+</tr>
+<tr>
+<td><code>f</code></td>
+<td>Fullscreen</td>
+</tr>
+<tr>
+<td><code>.</code> <code>w</code></td>
+<td>Blank the screen, black or white</td>
+</tr>
+<tr>
+<td><code>b</code></td>
+<td>Blink — flash every other client</td>
+</tr>
+<tr>
+<td><code>`</code></td>
+<td>The quake terminal</td>
+</tr>
+<tr>
+<td><code>F1</code></td>
+<td>This list, in the browser</td>
+</tr>
+</tbody>
+</table>
+
+<div class="step step-0"><!-- begin step -->
+<div class="markdown-alert markdown-alert-tip">
+<p class="markdown-alert-title">Tip</p>
+<p>A clicker sends <code>PageUp</code>/<code>PageDown</code>, and those are bound to <strong>steps</strong> rather
+than slides on purpose: <code>NextStep</code> moves on to the next slide once a slide's
+reveals run out, so the remote walks the whole deck instead of skipping every
+build.</p>
+</div>
+</div><!-- end step -->
+"""
+alt = """
+# Driving the deck
+
+| Key | Does |
+| --- | --- |
+| `→` `←` | Next / previous slide |
+| `↓` `↑` `Space` | Next / previous **step** |
+| `PageDown` `PageUp` `Backspace` | The same — what a presenter remote sends |
+| `Home` `End` | First / last slide |
+| digits then `⏎` | Go to that slide number |
+| `f` | Fullscreen |
+| `.` `w` | Blank the screen, black or white |
+| `b` | Blink — flash every other client |
+| `` ` `` | The quake terminal |
+| `F1` | This list, in the browser |
+
+> [!TIP]
+> A clicker sends `PageUp`/`PageDown`, and those are bound to **steps** rather
+> than slides on purpose: `NextStep` moves on to the next slide once a slide's
+> reveals run out, so the remote walks the whole deck instead of skipping every
+> build.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p><code>.</code> and <code>w</code> are for the moment someone asks a question and you want the room
+looking at you instead of at the slide. They are handled in the tab, not on the
+server, so blanking your screen does not blank anyone else's.</p>
+<p>The <code>F1</code> dialog is generated from the keymap itself, so it cannot fall out of
+date with what the keys actually do.</p>
+"""
+alt = """
+`.` and `w` are for the moment someone asks a question and you want the room
+looking at you instead of at the slide. They are handled in the tab, not on the
+server, so blanking your screen does not blank anyone else's.
+
+The `F1` dialog is generated from the keymap itself, so it cannot fall out of
+date with what the keys actually do.
+"""
+
+[slides.notes.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# The same deck, elsewhere
+
+The browser is not the only client. Against a running server:
+
+```console
+$ toboggan tui        # a terminal
+$ toboggan desktop    # a native window
+```
+
+Everything stays in sync — press `→` in the terminal and the projector moves,
+because the deck is shared state rather than each client's own view.
+
+|  | Notes | Next slide | Timer | Terminals |
+| --- | :-: | :-: | :-: | :-: |
+| `/run` | — | — | — | ✅ |
+| `/presenter` | ✅ | ✅ | ✅ | — |
+| `toboggan tui` | ✅ | ✅ | — | — |
+| `toboggan desktop` | ✅ | — | — | — |
+
+> [!WARNING]
+> A client on another machine can watch, but not navigate, and cannot open a
+> terminal. Give it `--presenter-token` to let it drive.
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "5.8 Other clients"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>The same deck, elsewhere</h1>
+<p>The browser is not the only client. Against a running server:</p>
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan tui        # a terminal
+</span><span style="color:#4f5b66;">$ toboggan desktop    # a native window
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<p>Everything stays in sync — press <code>→</code> in the terminal and the projector moves,
+because the deck is shared state rather than each client's own view.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th align="center">Notes</th>
+<th align="center">Next slide</th>
+<th align="center">Timer</th>
+<th align="center">Terminals</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/run</code></td>
+<td align="center">—</td>
+<td align="center">—</td>
+<td align="center">—</td>
+<td align="center">✅</td>
+</tr>
+<tr>
+<td><code>/presenter</code></td>
+<td align="center">✅</td>
+<td align="center">✅</td>
+<td align="center">✅</td>
+<td align="center">—</td>
+</tr>
+<tr>
+<td><code>toboggan tui</code></td>
+<td align="center">✅</td>
+<td align="center">✅</td>
+<td align="center">—</td>
+<td align="center">—</td>
+</tr>
+<tr>
+<td><code>toboggan desktop</code></td>
+<td align="center">✅</td>
+<td align="center">—</td>
+<td align="center">—</td>
+<td align="center">—</td>
+</tr>
+</tbody>
+</table>
+<div class="markdown-alert markdown-alert-warning">
+<p class="markdown-alert-title">Warning</p>
+<p>A client on another machine can watch, but not navigate, and cannot open a
+terminal. Give it <code>--presenter-token</code> to let it drive.</p>
+</div>
+</div><!-- end step -->
+"""
+alt = """
+# The same deck, elsewhere
+
+The browser is not the only client. Against a running server:
+
+```console
+$ toboggan tui        # a terminal
+$ toboggan desktop    # a native window
+```
+
+Everything stays in sync — press `→` in the terminal and the projector moves,
+because the deck is shared state rather than each client's own view.
+
+|  | Notes | Next slide | Timer | Terminals |
+| --- | :-: | :-: | :-: | :-: |
+| `/run` | — | — | — | ✅ |
+| `/presenter` | ✅ | ✅ | ✅ | — |
+| `toboggan tui` | ✅ | ✅ | — | — |
+| `toboggan desktop` | ✅ | — | — | — |
+
+> [!WARNING]
+> A client on another machine can watch, but not navigate, and cannot open a
+> terminal. Give it `--presenter-token` to let it drive.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>The terminal client is genuinely useful over ssh, and it was the presenter view
+before <code>/presenter</code> existed.</p>
+<p>The mobile clients speak the same protocol through the <code>toboggan-mobile</code> crate,
+which is the same Rust talking to Swift and Kotlin over UniFFI.</p>
+"""
+alt = """
+The terminal client is genuinely useful over ssh, and it was the presenter view
+before `/presenter` existed.
+
+The mobile clients speak the same protocol through the `toboggan-mobile` crate,
+which is the same Rust talking to Swift and Kotlin over UniFFI.
 """
 
 [slides.notes.style]
