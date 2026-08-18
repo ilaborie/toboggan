@@ -1,84 +1,129 @@
+<div align="center">
+
+<img src="logo/logo.png" alt="Toboggan" width="160">
+
 # Toboggan 🛝
 
-A modern, multi-platform presentation system built in Rust with real-time synchronization across devices.
+**Write a talk in Markdown. Serve it. Present it from anywhere in the room.**
 
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
+[![CI](https://github.com/ilaborie/toboggan/actions/workflows/ci.yml/badge.svg)](https://github.com/ilaborie/toboggan/actions/workflows/ci.yml)
+[![Release](https://github.com/ilaborie/toboggan/actions/workflows/release.yml/badge.svg)](https://github.com/ilaborie/toboggan/actions/workflows/release.yml)
+[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](#license)
 [![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org)
 
-## Overview
+</div>
 
-Toboggan is a presentation system that allows you to create, serve, and control slide-based presentations across multiple platforms. Write your slides in Markdown or TOML, serve them via a WebSocket-enabled server, and present from any client - web browser, terminal, desktop app, or mobile device.
+## What it is
 
-**Note**: This is an educational and fun project created to explore Rust's capabilities across different platforms - from embedded systems to web browsers. While fully functional, it's designed primarily for learning and experimentation rather than production use. It's a playground to demonstrate how Rust can target everything from microcontrollers to iOS apps!
-
-## Key Features
-
-- **📝 Simple Content Creation**: Write presentations in Markdown or TOML format
-- **🔄 Real-time Synchronization**: Multi-client synchronization via WebSocket protocol
-- **🌐 Multi-platform Clients**: Web, Terminal, Desktop, iOS, and embedded support
-- **🎯 Educational Focus**: Perfect for exploring Rust ecosystem
-
-## Quick Start
-
-### Install from source
+A deck is a folder of Markdown files. `toboggan` builds it, serves it over
+WebSocket + REST, and every connected client stays on the same slide and the
+same reveal — a browser on the projector, a terminal on your laptop, a phone in
+your hand.
 
 ```bash
-# Clone the repository
+toboggan -p my-talk     # build in memory, serve, reload on save
+```
+
+<div align="center">
+  <img src="docs/screenshots/deck.png" alt="A Toboggan deck open in a browser" width="840">
+</div>
+
+That one command covers the whole authoring loop. There are also exporters (a
+self-contained HTML deck, a PDF, a thumbnail overview), a presentation linter, a
+presenter view with notes and a timer, and an MCP server for writing slides with
+an LLM.
+
+> **Note**: this is an educational and fun project, built to explore how far
+> Rust reaches — the same domain crate drives an axum server, a WebAssembly
+> browser client, a ratatui terminal, an iced desktop window, and an iOS app
+> over UniFFI. It works, and it has given real talks, but it is a playground
+> first.
+
+## Install
+
+### From a release (recommended)
+
+Releases publish `x86_64-unknown-linux-gnu` and `aarch64-apple-darwin` binaries:
+
+```bash
+# Linux x86_64 / macOS Apple Silicon — pick your target
+target=aarch64-apple-darwin
+curl -fsSL "https://github.com/ilaborie/toboggan/releases/latest/download/toboggan-$target.tar.gz" \
+  | tar -xz -C ~/.local/bin
+toboggan --version
+```
+
+> [!WARNING]
+> **Do not run `cargo install toboggan`.** The name `toboggan` on crates.io
+> belongs to an unrelated project; you will get a stranger's binary that happens
+> to share the name, and every command below will fail on unrecognised
+> arguments. This project is not published to crates.io.
+
+### From source
+
+Building from source needs the web toolchain too: `toboggan-server` embeds
+`toboggan-web/dist` at compile time, and its `build.rs` fails when that folder is
+absent.
+
+```bash
 git clone https://github.com/ilaborie/toboggan
 cd toboggan
-
-# Build the unified CLI (and the embedded web frontend)
-mise build:web
+mise build:web              # wasm-pack + pnpm → toboggan-web/dist
 cargo install --path toboggan
 ```
 
-Everything is driven by the single **`toboggan`** command.
-
-### Create a presentation
+## Quick start
 
 ```bash
-# Scaffold a new deck (creates slides/, public/, a mise.toml, and a jj repo)
-toboggan new --path my-talk --title "My Presentation"
-```
+# Scaffold a deck: slides/, public/, toboggan.toml, a jj repo, MCP + skill wiring
+toboggan new -p my-talk --title "My Presentation"
 
-### Serve and present
-
-```bash
-# Build the folder in-memory and serve it with live reload (the default action)
-# --path defaults to the current directory, so `cd my-talk && toboggan` also works
+# Build it in memory and serve it, reloading whenever a file changes.
+# -p defaults to ".", so `cd my-talk && toboggan` also works.
 toboggan -p my-talk
-
-# Open the homepage (links to run, slide overview, guide, PDF, API docs)
-open http://localhost:8080
-
-# Present from the terminal or desktop instead
-toboggan tui
-toboggan desktop
 ```
 
-### Read the guide
+Then open:
 
-Toboggan ships with a full authoring guide, served alongside any deck:
+| Route | What it is |
+| --- | --- |
+| `/` | Homepage — links to everything below |
+| `/run` | The deck. This is what goes on the projector |
+| `/presenter` | Notes, the next slide, a timer and pacing |
+| `/slides` | Thumbnail overview with search |
+| `/guide` | The full authoring guide, served with any deck |
+| `/download.pdf` | The deck as a PDF (needs `typst`) |
+| `/doc` | OpenAPI reference for the REST API |
+
+The guide's source lives in [`examples/toboggan-guide/`](examples/toboggan-guide)
+— a real Toboggan deck you can read on disk, or lint and build like any other.
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `toboggan -p <folder>` | Build + serve with a folder watch (the default action) |
+| `toboggan watch -p <folder>` | The default action, named explicitly |
+| `toboggan build -p <folder> -o out.{toml,json,yaml,html,typ}` | Build to a file |
+| `toboggan serve -p <talk.toml>` | Serve an already-built talk (a **file**, not a folder) |
+| `toboggan new -p <dir>` | Scaffold a presentation |
+| `toboggan lint -p <folder>` | Lint the deck (`--format`, `--deny`, `--no-spell`) |
+| `toboggan stats -p <folder>` | Word counts and duration estimates |
+| `toboggan pdf -p <folder>` | Render a PDF (needs `typst`) |
+| `toboggan thumbnails -p <folder>` | Per-slide PNGs + `overview.html` + search |
+| `toboggan tui` / `toboggan desktop` | Clients against a running server |
+| `toboggan openapi` | Emit the bundled OpenAPI document |
+| `toboggan mcp [serve\|init]` | MCP authoring server, or install it for Claude Code |
+| `toboggan skills` | Install the authoring skill for Claude Code |
+| `toboggan completion <shell>` | Print a completion script (bash/zsh/fish/…) |
 
 ```bash
-# Serve any presentation, then open the guide route
-toboggan -p my-talk
-open http://localhost:8080/guide
+toboggan build -p ./my-talk/slides -o talk.html   # a single navigable file
+toboggan lint  -p ./my-talk/slides --format github
+toboggan pdf   -p ./my-talk/slides
 ```
 
-The guide's source lives in [`examples/toboggan-guide/`](examples/toboggan-guide) — a
-real Toboggan deck you can read on disk or lint/build like any other.
-
-### Build, lint, export
-
-```bash
-toboggan build -p ./my-talk/slides -o talk.toml   # toml/json/yaml/html/typst
-toboggan lint -p ./my-talk/slides                 # presentation linter
-toboggan pdf -p ./my-talk/slides                  # PDF (needs `typst`)
-toboggan thumbnails -p ./my-talk/slides           # per-slide overview + search
-```
-
-### Configure a deck
+## Configure a deck
 
 `toboggan new` writes a `toboggan.toml` listing every setting, commented out with
 its default — it is the reference for what can be configured. Anything you can
@@ -92,7 +137,7 @@ theme = "Monokai"
 wpm = 130
 
 [serve]
-open = true
+open-presenter = true
 ```
 
 Files are read from the deck directory, then each parent directory, then
@@ -105,226 +150,196 @@ CLI flag  >  TOBOGGAN_* env var  >  nearest toboggan.toml  >  … >  user global
 
 An unknown key is an error rather than a silent no-op, so a typo tells you.
 
-### Author with an LLM
+## Present
 
-`toboggan new` already writes a project-local `.mcp.json` and installs the authoring
-skill by default (opt out with `--no-mcp` / `--no-skill`). For an existing deck, wire
-them up manually:
+The server binds to `127.0.0.1` by default, and a client connecting from the
+machine running the server may drive the deck. Open it to the room with
+`--host 0.0.0.0` and the rule changes:
 
-```bash
-toboggan mcp init     # register the MCP authoring server with Claude Code
-toboggan skills       # install the authoring skill
+| | `/`, `/run`, `/api/talk` | navigation | `/api/terminal` |
+| --- | --- | --- | --- |
+| from this machine | ✅ | ✅ | ✅ |
+| from the network | ✅ | ✗ | ✗ |
+| from the network, with `--presenter-token` | ✅ | ✅ | ✅ |
+
+The embedded terminals spawn a real shell on the presenter's machine, so the
+room gets to watch and nothing more. A second device joins as a presenter by
+carrying the token: `http://<your-ip>:8080/run?token=…`.
+
+See [SECURITY.md](SECURITY.md) for the full posture.
+
+### The presenter view
+
+`/presenter` is the same application as `/run` with the things a presenter needs
+around it — the next slide, the notes for where you are, and a status strip with
+the clock, an elapsed timer, deck progress, and how far ahead or behind the
+deck's declared `duration` you are running. Both previews are laid out at
+projector width and painted small, so a line that wraps here wraps in the room.
+
+<div align="center">
+  <img src="docs/screenshots/presenter.png" alt="The Toboggan presenter view: current slide, next slide, notes and a status strip" width="840">
+</div>
+
+`--open-presenter` opens both windows at once: this one on your screen, the deck
+on the projector.
+
+### Clients
+
+Every client speaks the same WebSocket protocol and stays in sync with the rest.
+
+| | Web `/run` | Web `/presenter` | TUI | Desktop | iOS / Android |
+| --- | :-: | :-: | :-: | :-: | :-: |
+| Slides and step reveals | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Speaker notes | — | ✅ | ✅ | ✅ | — |
+| Next-slide preview | — | ✅ | ✅ | — | — |
+| Elapsed timer and pacing | — | ✅ | — | — | — |
+| Embedded terminals | ✅ | — | — | — | — |
+| Presenter remote (PageUp/PageDown) | ✅ | ✅ | ✅ | ✅ | — |
+| Go to slide by number | ✅ | ✅ | ✅ | — | — |
+| Fullscreen | ✅ `f` | — | n/a | ✅ `F11` | — |
+| Blank the screen | ✅ `.` `w` | — | — | — | — |
+| Help overlay | ✅ `F1` | — | ✅ `h` | ✅ `h` | — |
+
+- **Web** (`toboggan-web`) — TypeScript + WebAssembly, embedded in the binary.
+  `/run` is the deck; `/presenter` is the same application with notes, the next
+  slide and a timer around it. Open both with `--open-presenter`.
+- **Terminal** (`toboggan tui`) — [ratatui]; renders slides as text, with notes,
+  a next-slide preview and a slide list. Good over ssh.
+- **Desktop** (`toboggan desktop`) — a native [iced] window.
+- **iOS** (`TobogganApp/`) — SwiftUI over the `toboggan-mobile` crate via
+  [uniffi]. The same crate backs Android through `toboggan-android`.
+
+## Use in CI
+
+This repository publishes a composite action that builds a deck into artifacts
+you can deploy:
+
+```yaml
+- uses: ilaborie/toboggan@v0.1.0
+  with:
+    folder: ./slides          # default ./slides
+    outputs: html,pdf,thumbnails
+    out-dir: dist             # default dist
+    base-url: ""              # only for absolute asset URLs
+    version: v0.1.0           # release of toboggan to install
 ```
 
-### Shell completions
-
-Generate a completion script for your shell (`bash`, `zsh`, `fish`, `elvish`,
-`powershell`) and drop it where your shell looks for completions:
-
-```bash
-toboggan completion fish > ~/.config/fish/completions/toboggan.fish
-toboggan completion zsh  > ~/.zfunc/_toboggan   # ensure ~/.zfunc is on $fpath
-toboggan completion bash > /etc/bash_completion.d/toboggan
-```
-
-## Building
-
-### Prerequisites
-
-- Rust 1.95+ (2024 edition)
-- Node.js 20+ (for web frontend)
-- `mise` (optional, for task automation)
-- `typst` (optional, for `pdf` and `thumbnails`)
-
-### Build all components
-
-```bash
-# Using mise (recommended)
-mise check  # Format, lint, and test
-mise build  # Build all components
-
-# Or using cargo directly
-cargo build --release
-cargo test
-cargo fmt
-cargo clippy
-```
-
-### Platform-specific builds
-
-#### Web (WASM)
-
-```bash
-mise build:wasm
-# Or manually:
-cd toboggan-web/toboggan-wasm
-wasm-pack build --target web --release
-```
-
-#### iOS
-
-```bash
-mise build:ios
-# Or manually:
-cd toboggan-mobile
-./build.sh
-```
-
-#### Desktop
-
-```bash
-cargo build -p toboggan-desktop --release
-```
-
-#### Terminal UI
-
-```bash
-cargo build -p toboggan-tui --release
-```
+A complete Pages workflow lives in
+[`examples/github-pages/pages.yml`](examples/github-pages/pages.yml). This repo
+uses the action on itself — see
+[`.github/workflows/pages.yml`](.github/workflows/pages.yml), which publishes
+the guide deck.
 
 ## Architecture
 
-Toboggan is designed as a modular system with clear separation of concerns. The architecture follows Clean Architecture principles with well-defined boundaries between components.
+```mermaid
+flowchart LR
+  MD["slides/*.md"] --> CLI[toboggan-cli<br/>parser + renderers]
+  CLI --> CORE[toboggan-core<br/>Talk · Slide · Content]
+  CORE --> SRV[toboggan-server<br/>axum · WS + REST]
+  CLI -.-> OUT["html · typst · pdf<br/>thumbnails"]
+  CORE --> LINT[toboggan-lint]
+  CORE --> STATS[toboggan-stats]
+  CORE --> MCP[toboggan-mcp]
 
-### Workspace Components
+  SRV <-->|WebSocket| WEB["toboggan-web<br/>(wasm)"]
+  SRV <-->|WebSocket| CLIENT[toboggan-client]
+  CLIENT --> TUI[toboggan-tui]
+  CLIENT --> DESK[toboggan-desktop]
+  CLIENT --> MOB["toboggan-mobile<br/>(uniffi)"]
+  MOB --> IOS[TobogganApp<br/>SwiftUI]
+  MOB --> AND[toboggan-android]
+```
 
-Workspace members:
+`toboggan-core` holds the domain model and the wire protocol, and depends on
+nothing else in the workspace. Everything else — the parser, the server, the
+linter, and every client — is built around it.
+
+### Workspace members
 
 ```
 toboggan/
-├── toboggan-core/       # Domain model (Talk, Slide, Content, …)
+├── toboggan-core/       # Domain model (Talk, Slide, Content, Command, …)
 ├── toboggan-stats/      # Word/step/image counts and HTML inspection
 ├── toboggan-cli/        # Folder parser + renderers (toml/json/yaml/html/typst) + thumbnails
-├── toboggan-server/     # Axum WebSocket/REST server, homepage, PDF, guide
+├── toboggan-server/     # Axum WebSocket/REST server, homepage, presenter view, PDF, guide
 ├── toboggan-lint/       # Library-first presentation linter (rules + LintReport)
 ├── toboggan-mcp/        # rmcp stdio MCP server (outline/stats/lint/scaffold/mutations)
-├── toboggan-client/     # Shared client library with WebSocket support
-├── toboggan-tui/        # Terminal UI client using ratatui
-├── toboggan-desktop/    # Native desktop app using iced
+├── toboggan-client/     # Shared client library: connection, reconnection, dispatch
+├── toboggan-tui/        # Terminal client using ratatui
+├── toboggan-desktop/    # Native desktop client using iced
 ├── toboggan-mobile/     # iOS/Android Rust library with UniFFI bindings
-└── toboggan/            # The unified `toboggan` CLI binary that dispatches to all of the above
+└── toboggan/            # The one binary in the workspace; dispatches to all of the above
 ```
 
 Companion directories outside the Cargo workspace:
 
 ```
-├── toboggan-web/        # TypeScript + WASM web frontend (built into the embedded dist)
+├── toboggan-web/        # TypeScript + WASM web client (built into the embedded dist)
 ├── TobogganApp/         # Native iOS app (SwiftUI)
-├── toboggan-esp32/      # ESP32 embedded client (excluded from the workspace)
+├── toboggan-android/    # Android host app for the mobile crate
 └── toboggan-py/         # Python bindings (excluded from the workspace)
 ```
 
-### Core Design Principles
+## Protocol
 
-- **WebSocket Protocol**: JSON-based real-time communication
-- **Memory Safety**: Zero (direct) unsafe code, comprehensive error handling
-- **Cross-platform**: Single codebase targeting multiple platforms
-- **Modular Design**: Clear separation between server, clients, and core logic
+Clients and server exchange JSON over `/api/ws`: a client sends a `Command`, the
+server broadcasts a `Notification` to everyone. The authoritative list is the
+code — [`Command`](toboggan-core/src/command.rs) and
+[`Notification`](toboggan-core/src/notification.rs) — and the REST surface is
+documented at `/doc` on a running server, or via `toboggan openapi`.
 
-## Client Applications
+A session in outline:
 
-Toboggan supports multiple client types, each optimized for different use cases and platforms.
+```jsonc
+// client → server
+{"command": "Register", "name": "tui", "token": "…"}   // token optional
+{"command": "NextStep"}                                 // First Last GoTo
+                                                        // NextSlide PreviousSlide
+                                                        // NextStep PreviousStep
+                                                        // Blink Unregister Ping
 
-### Web Browser (`toboggan-web`)
+// server → client
+{"notification": "Registered", "client_id": 1, "role": "Presenter"}
+{"notification": "State", "state": {…}}                 // broadcast on every change
+```
 
-- **Technology**: TypeScript frontend with WASM client
-- **Features**: Modern web interface, keyboard shortcuts, responsive design
-- **Usage**: Open `http://localhost:8080` when server is running
-- **Platform**: Any modern web browser
-
-### Terminal UI (`toboggan-tui`)
-
-- **Technology**: [ratatui](https://ratatui.rs/) with crossterm
-- **Features**: Full-featured terminal interface, presenter view, slide navigation
-- **Usage**: `cargo run -p toboggan-tui`
-- **Platform**: Linux, macOS, Windows terminals
-
-### Desktop Application (`toboggan-desktop`)
-
-- **Technology**: [iced](https://github.com/iced-rs/iced) native GUI framework
-- **Features**: Native desktop experience with system integration
-- **Usage**: `cargo run -p toboggan-desktop`
-- **Platform**: Linux, macOS, Windows native
-
-### iOS Application (`TobogganApp/`)
-
-- **Technology**: SwiftUI with Rust core via UniFFI
-- **Features**: Native iOS interface, gesture controls, AirPlay support
-- **Usage**: Build and run from Xcode
-- **Platform**: iOS 16+ devices and simulator
-
-### Embedded Client (`toboggan-esp32`)
-
-- **Technology**: ESP-IDF with embedded-graphics
-- **Hardware**: ESP32-S3-BOX-3B development board
-- **Features**: WiFi connectivity, LCD display, LED indicators
-- **Platform**: ESP32 microcontrollers
-
-## WebSocket Protocol
-
-Toboggan uses a simple JSON-based WebSocket protocol for real-time synchronization:
-
-### Commands (Client → Server)
-
-- `Next`, `Previous`, `First`, `Last` - Navigation
-- `Goto { slide: N }` - Jump to specific slide
-- `Play`, `Pause`, `Resume` - Presentation control
-- `Register { client_id }` - Client registration
-
-### Notifications (Server → Clients)
-
-- `State { current_slide, state }` - Presentation state updates
-- `Error { message }` - Error notifications
-- `Pong` - Heartbeat response
+A client *offers* a token; it never claims a role. The server decides, and tells
+the client what it got in `Registered`.
 
 ## Development
 
-### Running tests
+### Prerequisites
+
+- Rust 1.95+ (2024 edition)
+- Node.js 22+ and `pnpm` (for the web client)
+- [`mise`](https://mise.jdx.dev) (optional, for task automation)
+- `typst` (optional, for `pdf` and `thumbnails`)
+
+### Everyday commands
 
 ```bash
-cargo test              # All tests
-cargo nextest run      # Faster parallel tests
-cargo test -p toboggan-core  # Specific crate
+mise check        # fmt + clippy + nextest, both workspaces — run this before pushing
+mise build:web    # rebuild the embedded web dist (wasm-pack + vite)
+mise serve        # build + serve examples/riir-folder with live reload
+
+cargo +nightly fmt --all                                    # the repo formats on nightly
+cargo clippy --all-targets --all-features -- -D warnings
+cargo nextest run
+cargo test --doc
 ```
 
-### Code quality
+The web client is a **separate Cargo workspace**, so `--workspace` from the root
+does not reach it:
 
 ```bash
-cargo fmt              # Format code
-cargo clippy           # Lint code
-mise check            # All checks
+cd toboggan-web/toboggan-wasm
+cargo clippy --all-targets --target wasm32-unknown-unknown -- -D warnings
 ```
 
-### Documentation
-
-```bash
-cargo doc --open      # Generate and open docs
-```
-
-## Contributing
-
-We welcome contributions to Toboggan! Here's how you can help:
-
-### Getting Started
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feat/my-feature`
-3. Make your changes following the project guidelines
-4. Run tests: `mise check` or `cargo test`
-5. Submit a pull request
-
-> **Before you push (especially with jj):** the `prek` checks are installed as
-> *git* hooks, which **jj does not run**. Run `mise check` (or `prek run
-> --all-files`) yourself before pushing. CI re-runs the Rust gate on every push
-> and pull request regardless.
-
-### Development Guidelines
-
-- **Code Quality**: All code must pass `cargo fmt`, `cargo clippy`, and tests
-- **Safety**: No `unsafe` code allowed (enforced by lints)
-- **Error Handling**: Use `Result` and `Option`, avoid `unwrap()` in favor of `expect()`
-- **Documentation**: Document public APIs and complex logic
-- **Testing**: Add tests for new features and bug fixes
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request — in
+particular the note about `prek` hooks, which are *git* hooks and therefore do
+not run under jj.
 
 ## License
 
@@ -337,40 +352,35 @@ at your option.
 
 ## Acknowledgments
 
-Built with excellent Rust crates including:
+Built with excellent Rust crates, including:
 
-**Core Infrastructure**
+**Core** — [tokio], [axum], [serde], [anyhow], [miette], [comrak], [clap],
+[tracing], [jiff], [toml]
 
-- [tokio](https://github.com/tokio-rs/tokio) - Async runtime powering the server and clients
-- [axum](https://github.com/tokio-rs/axum) - Web framework for the REST API and WebSocket server
-- [serde](https://github.com/serde-rs/serde) - Serialization framework for all data structures
-- [anyhow](https://github.com/dtolnay/anyhow) - Flexible error handling across the project
+**Clients** — [wasm-bindgen], [gloo], [rioterm], [ratatui], [crossterm], [iced],
+[uniffi]
 
-**Client Platforms**
+**Networking** — [tokio-tungstenite], [reqwest], [tower-http]
 
-- [wasm-bindgen](https://github.com/rustwasm/wasm-bindgen) - WebAssembly bindings for browser
-- [web-sys](https://github.com/rustwasm/wasm-bindgen) - Browser API bindings for WASM
-- [gloo](https://github.com/rustwasm/gloo) - Toolkit for building WASM applications
-- [ratatui](https://github.com/ratatui-org/ratatui) - Terminal UI framework
-- [crossterm](https://github.com/crossterm-rs/crossterm) - Cross-platform terminal manipulation
-- [iced](https://github.com/iced-rs/iced) - Native desktop GUI framework
-- [uniffi](https://github.com/mozilla/uniffi-rs) - Rust-Swift interoperability for iOS
-- [esp-idf-svc](https://github.com/esp-rs/esp-idf-svc) - ESP-IDF services for ESP32
-- [embedded-graphics](https://github.com/embedded-graphics/embedded-graphics) - 2D graphics for embedded displays
-- [mipidsi](https://github.com/almindor/mipidsi) - MIPI Display Interface driver
+And many more that make Rust development a joy.
 
-**Networking & Communication**
-
-- [tokio-tungstenite](https://github.com/snapview/tokio-tungstenite) - Async WebSocket implementation
-- [reqwest](https://github.com/seanmonstar/reqwest) - HTTP client for API calls
-- [tower-http](https://github.com/tower-rs/tower-http) - HTTP middleware and services
-
-**Utilities**
-
-- [clap](https://github.com/clap-rs/clap) - Command-line argument parsing
-- [tracing](https://github.com/tokio-rs/tracing) - Structured application logging
-- [jiff](https://github.com/BurntSushi/jiff) - Date and time handling
-- [toml](https://github.com/toml-rs/toml) - TOML configuration parsing
-- [comrak](https://github.com/kivikakk/comrak) - Markdown parsing and rendering
-
-And many more amazing crates that make Rust development a joy!
+[tokio]: https://github.com/tokio-rs/tokio
+[axum]: https://github.com/tokio-rs/axum
+[serde]: https://github.com/serde-rs/serde
+[anyhow]: https://github.com/dtolnay/anyhow
+[miette]: https://github.com/zkat/miette
+[comrak]: https://github.com/kivikakk/comrak
+[clap]: https://github.com/clap-rs/clap
+[tracing]: https://github.com/tokio-rs/tracing
+[jiff]: https://github.com/BurntSushi/jiff
+[toml]: https://github.com/toml-rs/toml
+[wasm-bindgen]: https://github.com/rustwasm/wasm-bindgen
+[gloo]: https://github.com/rustwasm/gloo
+[rioterm]: https://github.com/raphamorim/rio
+[ratatui]: https://ratatui.rs/
+[crossterm]: https://github.com/crossterm-rs/crossterm
+[iced]: https://github.com/iced-rs/iced
+[uniffi]: https://github.com/mozilla/uniffi-rs
+[tokio-tungstenite]: https://github.com/snapview/tokio-tungstenite
+[reqwest]: https://github.com/seanmonstar/reqwest
+[tower-http]: https://github.com/tower-rs/tower-http
