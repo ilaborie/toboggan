@@ -91,29 +91,36 @@
 	max-block-size: clamp(128px, 26dvb, 300px);
 }
 
-/* The slide previews render into these, each with its own shadow root, so the
-   deck's styles stay inside them and the presenter chrome stays outside. */
-.screen > * {
+/* The slide renders *into* this element — the slide component attaches its own
+   shadow root to the host it is handed, so the host must be an element the
+   presenter chrome does not otherwise use. Styling `.screen > *` instead would
+   match nothing at all, because the slide's `<section>` is behind that shadow
+   boundary rather than beside it. */
+.fit {
 	min-block-size: 0;
 	overflow: hidden;
 	/* A slide sizes itself against the viewport, because normally it *is* the
-	   viewport. Here it is a pane, so it is told to fill that instead — these
-	   inherit across the shadow boundary the deck's own styles cannot cross. */
+	   viewport. Here it is a pane, so it is told to fill that instead. Custom
+	   properties inherit across the shadow boundary the deck's own selectors
+	   cannot cross, which is why these work and a descendant rule would not. */
 	--slide-width: 100%;
 	--slide-width-wide: 100%;
 }
 
 /* The next-slide pane is a thumbnail, and a deck's type is sized for a room.
-   `zoom` rather than `transform: scale()` because zoom changes the layout the
-   slide is laid out *into*, so long lines wrap where they would on a small
-   screen instead of running off the side of a shrunken full-width slide. */
-.next .screen > * {
+   `zoom` rather than `transform: scale()` because zoom changes the box the
+   slide is laid out *into*: at 0.3 the slide lays itself out against a
+   pane-width/0.3 rectangle and is painted at pane width, so long lines wrap
+   where they would on a small screen instead of running off the side.
+   Applied to `.fit` and not to `.screen`, which would shrink the frame and the
+   16:9 ratio along with the slide. */
+.next .fit {
 	zoom: 0.3;
 }
 
 /* Roughly the ratio between this pane and a projector, so the presenter's copy
    breaks its lines where the room's does. */
-.now .screen > * {
+.now .fit {
 	zoom: 0.55;
 }
 

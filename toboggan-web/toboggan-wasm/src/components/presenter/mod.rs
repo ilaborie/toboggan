@@ -247,10 +247,10 @@ impl WasmElement for TobogganPresenterElement {
         let layout: Element = dom_try!(create_and_append_element(&root, "div"), "presenter layout");
         layout.set_class_name("layout");
         layout.set_inner_html(
-            r#"<div class="now"><div class="pane screen"></div></div>
+            r#"<div class="now"><div class="pane screen"><div class="fit"></div></div></div>
 <div class="aside">
   <p class="label">Next</p>
-  <div class="next"><div class="pane screen"></div></div>
+  <div class="next"><div class="pane screen"><div class="fit"></div></div></div>
   <div class="pane notes"></div>
 </div>
 <div class="status">
@@ -264,8 +264,12 @@ impl WasmElement for TobogganPresenterElement {
         );
 
         let find = |selector: &str| layout.query_selector(selector).ok().flatten();
-        let current_host = find(".now .screen").and_then(|el| el.dyn_into::<HtmlElement>().ok());
-        let next_host = find(".next .screen").and_then(|el| el.dyn_into::<HtmlElement>().ok());
+        // The slide component attaches its shadow root to whatever host it is
+        // handed, so the host has to be an element we are willing to give away
+        // entirely — hence `.fit` inside the pane rather than the pane itself.
+        // Scaling the pane would scale its frame and its aspect ratio with it.
+        let current_host = find(".now .fit").and_then(|el| el.dyn_into::<HtmlElement>().ok());
+        let next_host = find(".next .fit").and_then(|el| el.dyn_into::<HtmlElement>().ok());
 
         let mut next = TobogganSlideElement::default();
         next.set_preview(true);
