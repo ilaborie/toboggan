@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use toboggan_client::{TobogganClientCore, TobogganWebsocketConfig};
-use toboggan_core::{Slide as CoreSlide, TalkResponse};
+use toboggan_core::{Secret, Slide as CoreSlide, TalkResponse};
 use tokio::runtime::Runtime;
 use tokio::sync::{Mutex, watch};
 
@@ -37,14 +37,16 @@ pub struct ClientConfig {
 /// Only `token` is understood; anything else in the query string is dropped
 /// along with it, because what remains has to be usable as the base of both the
 /// REST and WebSocket URLs.
-fn split_presenter_token(url: &str) -> (String, Option<String>) {
+fn split_presenter_token(url: &str) -> (String, Option<Secret>) {
     let Some((base, query)) = url.split_once('?') else {
         return (url.to_owned(), None);
     };
-    let token = query.split('&').find_map(|pair| {
-        let value = pair.strip_prefix("token=")?;
-        (!value.is_empty()).then(|| value.to_owned())
-    });
+    // `Secret::from_query_value` decodes it, which this used not to do at all:
+    // a token with a space or a `+` reached the server as different text than
+    // the web client sent, and only one of them could match.
+    let token = query
+        .split('&')
+        .find_map(|pair| Secret::from_query_value(pair.strip_prefix("token=")?));
     // A URL written as `http://host:8080/?token=…` leaves a trailing slash the
     // API paths would double up.
     (base.trim_end_matches('/').to_owned(), token)

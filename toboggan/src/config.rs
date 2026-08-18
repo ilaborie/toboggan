@@ -35,7 +35,7 @@ use std::time::Duration;
 
 use anyhow::Context as _;
 use serde::{Deserialize, Deserializer};
-use toboggan_core::Date;
+use toboggan_core::{Date, Secret};
 use toboggan_lint::Severity;
 
 use crate::cli::{DenyLevel, LintFormat};
@@ -148,7 +148,7 @@ pub(crate) struct ServeConfig {
     ///
     /// Only consulted when the server is reachable from the network — a client
     /// on this machine always presents.
-    pub(crate) presenter_token: Option<String>,
+    pub(crate) presenter_token: Option<Secret>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

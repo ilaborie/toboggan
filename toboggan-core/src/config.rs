@@ -2,7 +2,7 @@ use core::sync::atomic::{AtomicU8, Ordering};
 
 use serde::{Deserialize, Serialize};
 
-use crate::Duration;
+use crate::{Duration, Secret};
 
 /// Advances when the platform RNG is unavailable, so successive retries still
 /// differ from one another.
@@ -145,7 +145,7 @@ pub struct BaseClientConfig {
     /// Secret offered at registration so a client that is not on the server's
     /// own machine may still drive the deck. `None` on the usual local
     /// connection, where being local is credential enough.
-    pub presenter_token: Option<String>,
+    pub presenter_token: Option<Secret>,
 }
 
 impl BaseClientConfig {
@@ -179,12 +179,10 @@ impl BaseClientConfig {
     ///
     /// An empty token is dropped rather than sent: it can only be refused, and
     /// it comes from a flag or an environment variable that was set to nothing.
+    /// [`Secret::new`] is what decides that, on both sides of the wire.
     #[must_use]
-    pub fn with_presenter_token(mut self, token: Option<&str>) -> Self {
-        self.presenter_token = token
-            .map(str::trim)
-            .filter(|token| !token.is_empty())
-            .map(str::to_owned);
+    pub fn with_presenter_token(mut self, token: Option<Secret>) -> Self {
+        self.presenter_token = token.and_then(|token| Secret::new(token.expose()));
         self
     }
 }

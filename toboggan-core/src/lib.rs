@@ -37,3 +37,6 @@ pub use self::terminal::*;
 
 mod client;
 pub use self::client::*;
+
+mod secret;
+pub use self::secret::*;

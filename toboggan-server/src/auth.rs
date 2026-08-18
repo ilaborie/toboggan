@@ -1,6 +1,6 @@
 //! Who is allowed to drive the deck.
 //!
-//! The rule is one sentence: **a connection from this machine presents, and a
+//! The rule is one sentence: **a connection over loopback presents, and a
 //! connection from anywhere else presents only if it carries the token.**
 //!
 //! That keeps the everyday case free of ceremony — the server binds to
@@ -14,33 +14,45 @@
 //! A reverse proxy. Behind one, every connection arrives from the proxy — which
 //! is usually loopback — so every client would present. Put a token on it, or
 //! do not put a presentation server behind a proxy.
+//!
+//! A forwarded port. `ssh -L 8080:localhost:8080` makes a remote user's traffic
+//! arrive over loopback, so they present without a token. Anyone who can open
+//! that tunnel can already run commands on the machine, so this is a statement
+//! of scope rather than a hole — but it is why the rule above says *loopback*
+//! and not *this machine*.
+//!
+//! A page in the presenter's own browser. Script on any origin can make
+//! requests to `127.0.0.1`, and they arrive over loopback like everything else.
+//! That is [`crate::router`]'s origin guard, not this module's.
 
 use std::net::IpAddr;
-use std::sync::Arc;
 
-use toboggan_core::ClientRole;
+use toboggan_core::{ClientRole, Secret};
 
 /// The server's answer to "may this connection drive the deck?".
 ///
 /// Cheap to clone: it is pulled out of the shared state on every request.
 #[derive(Debug, Clone, Default)]
 pub struct PresenterAuth {
-    token: Option<Arc<str>>,
+    token: Option<Secret>,
 }
 
 impl PresenterAuth {
     /// Builds the gate from `--presenter-token`.
     ///
-    /// An empty token is treated as none: an unset environment variable and one
-    /// set to the empty string should not mean two different security postures,
-    /// and `""` as a shared secret is not one.
+    /// What counts as a usable token is [`Secret::new`]'s decision, so the
+    /// token the server is configured with and the token a client offers are
+    /// normalised the same way. They were not, once: this side was trimmed and
+    /// the offered side was not, so a token pasted with a trailing space could
+    /// not match the token it was equal to.
     #[must_use]
-    pub fn new(token: Option<&str>) -> Self {
-        let token = token
-            .map(str::trim)
-            .filter(|token| !token.is_empty())
-            .map(Arc::from);
-        Self { token }
+    pub fn new(token: Option<Secret>) -> Self {
+        // Re-normalised rather than trusted: `--presenter-token ""` and an
+        // environment variable set to nothing both arrive as a `Secret` that
+        // holds no secret, and they must mean the same as not passing it.
+        Self {
+            token: token.and_then(|token| Secret::new(token.expose())),
+        }
     }
 
     /// Whether a remote client can become a presenter at all.
@@ -55,16 +67,14 @@ impl PresenterAuth {
         if is_local(peer) {
             return ClientRole::Presenter;
         }
-        match (self.token.as_deref(), offered) {
-            (Some(expected), Some(offered)) if tokens_match(expected, offered) => {
-                ClientRole::Presenter
-            }
+        match (self.token.as_ref(), offered) {
+            (Some(expected), Some(offered)) if expected.matches(offered) => ClientRole::Presenter,
             _ => ClientRole::Audience,
         }
     }
 }
 
-/// Whether `peer` is this machine.
+/// Whether `peer` reached us over loopback.
 ///
 /// The IPv6 arm is not paranoia: a dual-stack listener reports an IPv4 client
 /// as `::ffff:127.0.0.1`, and [`std::net::Ipv6Addr::is_loopback`] is `false`
@@ -77,24 +87,6 @@ fn is_local(peer: IpAddr) -> bool {
             addr.is_loopback() || addr.to_ipv4_mapped().is_some_and(|addr| addr.is_loopback())
         }
     }
-}
-
-/// Compares two tokens without stopping at the first difference.
-///
-/// A short-circuiting `==` answers a wrong guess faster the earlier it is
-/// wrong, which over enough attempts tells a guesser how much of the prefix
-/// they have right. Folding every byte costs nothing here and removes the
-/// question.
-fn tokens_match(expected: &str, offered: &str) -> bool {
-    let expected = expected.as_bytes();
-    let offered = offered.as_bytes();
-    // `zip` stops at the shorter of the two, so the lengths are folded in
-    // separately rather than compared up front.
-    let mut difference = expected.len() ^ offered.len();
-    for (expected, offered) in expected.iter().zip(offered) {
-        difference |= usize::from(expected ^ offered);
-    }
-    difference == 0
 }
 
 #[cfg(test)]
@@ -145,18 +137,36 @@ mod tests {
 
     #[test]
     fn a_remote_client_with_the_token_presents() {
-        let auth = PresenterAuth::new(Some("s3cr3t"));
+        let auth = PresenterAuth::new(Secret::new("s3cr3t"));
         assert_eq!(auth.role_for(REMOTE, Some("s3cr3t")), ClientRole::Presenter);
         assert_eq!(auth.role_for(REMOTE, Some("s3cr3")), ClientRole::Audience);
-        assert_eq!(auth.role_for(REMOTE, Some("s3cr3t ")), ClientRole::Audience);
         assert_eq!(auth.role_for(REMOTE, None), ClientRole::Audience);
     }
 
+    /// This used to assert `Audience`, which was the bug: the configured token
+    /// was trimmed on the way in and the offered one never was, so a token
+    /// pasted with a trailing space — or arriving as `?token=s3cr3t%20` — could
+    /// not match the token it was equal to. Both sides go through
+    /// [`Secret::new`] now, and the presenter is no longer demoted for it.
+    #[test]
+    fn a_token_pasted_with_whitespace_still_presents() {
+        let auth = PresenterAuth::new(Secret::new("s3cr3t"));
+        assert_eq!(
+            auth.role_for(REMOTE, Some("s3cr3t ")),
+            ClientRole::Presenter
+        );
+        assert_eq!(
+            auth.role_for(REMOTE, Some(" s3cr3t")),
+            ClientRole::Presenter
+        );
+    }
+
     /// `TOBOGGAN_PRESENTER_TOKEN=` set but empty is "no token", not "the empty
-    /// string is the password".
+    /// string is the password". Parsed the way clap parses it, so this covers
+    /// the flag as it actually arrives.
     #[test]
     fn an_empty_token_is_no_token() {
-        let auth = PresenterAuth::new(Some("   "));
+        let auth = PresenterAuth::new("   ".parse::<Secret>().ok());
         assert!(!auth.has_token());
         assert_eq!(auth.role_for(REMOTE, Some("")), ClientRole::Audience);
         assert_eq!(auth.role_for(REMOTE, Some("   ")), ClientRole::Audience);

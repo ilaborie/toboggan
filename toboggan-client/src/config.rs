@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use toboggan_core::{BaseClientConfig, ClientConfig, RetryConfig};
+use toboggan_core::{BaseClientConfig, ClientConfig, RetryConfig, Secret};
 
 #[derive(Debug, Clone, Default)]
 pub struct TobogganConfig {
@@ -24,7 +24,7 @@ impl TobogganConfig {
     /// Offers a presenter token, for a client connecting to a server running on
     /// another machine. See [`BaseClientConfig::with_presenter_token`].
     #[must_use]
-    pub fn with_presenter_token(mut self, token: Option<&str>) -> Self {
+    pub fn with_presenter_token(mut self, token: Option<Secret>) -> Self {
         self.base = self.base.with_presenter_token(token);
         self
     }
@@ -62,7 +62,7 @@ pub struct TobogganWebsocketConfig {
     /// Offered in every `Register`, including the ones sent after a reconnect —
     /// a client that dropped mid-talk has to come back as the same role it left
     /// with, or the presenter's remote goes quiet after a network blip.
-    pub presenter_token: Option<String>,
+    pub presenter_token: Option<Secret>,
 }
 
 impl From<&BaseClientConfig> for TobogganWebsocketConfig {

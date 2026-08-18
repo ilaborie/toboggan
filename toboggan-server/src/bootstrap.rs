@@ -85,7 +85,7 @@ pub async fn launch_with_talk(
     let cleanup_service = client_service.clone();
     let terminal_shell = settings.resolve_shell();
     info!(%terminal_shell, "Embedded terminals will use this shell");
-    let auth = PresenterAuth::new(settings.presenter_token.as_deref());
+    let auth = PresenterAuth::new(settings.presenter_token.clone());
     report_access_posture(host, &auth);
     let state =
         TobogganState::new(talk_service, client_service, terminal_shell.into()).with_auth(auth);

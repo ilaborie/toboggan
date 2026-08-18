@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{ClientId, SlideId};
+use crate::{ClientId, Secret, SlideId};
 
 /// What a client asks the server to do.
 ///
@@ -27,8 +27,13 @@ pub enum Command {
         /// A client *offers* a token; it never claims a role. The server is the
         /// only thing that decides what a connection may do, so a client that
         /// lies about itself gains nothing.
+        // Described to OpenAPI as the string it is on the wire. `Secret` is how
+        // the token is *held*; publishing it as a schema of its own would put
+        // an implementation detail, and this crate's reasons for having it, in
+        // the API contract. Deliberately not a doc comment: it would.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        token: Option<String>,
+        #[cfg_attr(feature = "openapi", schema(value_type = Option<String>))]
+        token: Option<Secret>,
     },
     /// Leave the presentation.
     Unregister {

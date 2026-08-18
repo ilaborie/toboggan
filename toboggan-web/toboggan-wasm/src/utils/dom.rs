@@ -1,6 +1,6 @@
 use gloo::console::error;
 use gloo::utils::{document, window};
-use toboggan_core::{Content, Style};
+use toboggan_core::{Content, Secret, Style};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::prelude::*;
 use web_sys::{AddEventListenerOptions, Element, Event, EventTarget, HtmlElement, KeyboardEvent};
@@ -180,22 +180,31 @@ pub fn apply_slide_styles(container: &Element, style: &Style) {
 /// The presenter token this page was opened with, if any.
 ///
 /// Read from `?token=` on the page's own URL, because that is where the server
-/// puts it when it prints the presenter link — one string to copy onto a phone
-/// or a second laptop, rather than a field to fill in. A page opened without one
-/// is an audience member, which is the right default for a link shared with a
+/// prints it in the presenter link — one string to copy onto a phone or a
+/// second laptop, rather than a field to fill in. A page opened without one is
+/// an audience member, which is the right default for a link shared with a
 /// room.
+///
+/// Decoding is [`Secret::from_query_value`]'s, not `decodeURIComponent`'s. This
+/// used to call the latter, which leaves `+` alone where the server reads it as
+/// a space, so a token containing one arrived as different text than was sent
+/// and the presenter was silently demoted.
 ///
 /// Not stored anywhere: the token stays in the URL, so closing the tab forgets
 /// it and sharing the *audience* URL cannot leak it by accident.
 #[must_use]
-pub fn presenter_token() -> Option<String> {
-    let search = window().location().search().ok()?;
+pub fn presenter_token() -> Option<Secret> {
+    let search = match window().location().search() {
+        Ok(search) => search,
+        Err(err) => {
+            error!("Could not read the page's query string:", err);
+            return None;
+        }
+    };
     let query = search.strip_prefix('?').unwrap_or(&search);
-    query.split('&').find_map(|pair| {
-        let value = pair.strip_prefix("token=")?;
-        let value = String::from(js_sys::decode_uri_component(value).ok()?);
-        (!value.is_empty()).then_some(value)
-    })
+    query
+        .split('&')
+        .find_map(|pair| Secret::from_query_value(pair.strip_prefix("token=")?))
 }
 
 /// Sets the page's language from the deck.

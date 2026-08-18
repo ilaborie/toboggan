@@ -186,10 +186,11 @@ mod tests {
     use axum::body::Body;
     use axum::extract::ConnectInfo;
     use axum::http::Request;
-    use toboggan_core::{Command, Slide, Talk};
+    use toboggan_core::{Command, Secret, Slide, Talk};
     use tower::ServiceExt as _;
 
     use super::*;
+    use crate::PresenterAuth;
     use crate::services::{ClientService, TalkService};
 
     const REMOTE: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 42)), 51_000);
@@ -264,6 +265,95 @@ mod tests {
             .expect("serve request");
 
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    /// A server reachable from the network, with a token set. Everything below
+    /// that names `GUARDED` is the `--presenter-token` feature end to end,
+    /// which nothing exercised: `with_auth` had exactly one caller, and it was
+    /// production. A regression in the extractor's token plumbing would have
+    /// left every unit test green and remote presenting silently dead.
+    fn guarded_router() -> Router {
+        let talk = Talk::new("Test Talk").add_slide(Slide::cover("Cover"));
+        let talk_service = TalkService::new(talk).expect("build talk service");
+        let state = TobogganState::new(talk_service, ClientService::new(100), "sh".into())
+            .with_auth(PresenterAuth::new(Secret::new(GUARDED)));
+        routes(None, OpenApi::default()).with_state(state)
+    }
+
+    const GUARDED: &str = "s3cr3t";
+
+    /// The point of the token: someone across the room, presenting.
+    #[tokio::test]
+    async fn the_network_drives_the_deck_with_the_token() {
+        let command = serde_json::to_vec(&Command::NextSlide).expect("serialize command");
+        let response = guarded_router()
+            .oneshot(request_from(
+                REMOTE,
+                Request::post("/api/command")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, format!("Bearer {GUARDED}"))
+                    .body(Body::from(command))
+                    .expect("build request"),
+            ))
+            .await
+            .expect("serve request");
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    /// A browser opening a `WebSocket` cannot set a header, so the token has
+    /// nowhere to go but the query string. Both spellings must work.
+    #[tokio::test]
+    async fn the_token_travels_in_the_query_string_too() {
+        let command = serde_json::to_vec(&Command::NextSlide).expect("serialize command");
+        let response = guarded_router()
+            .oneshot(request_from(
+                REMOTE,
+                Request::post(format!("/api/command?token={GUARDED}"))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(command))
+                    .expect("build request"),
+            ))
+            .await
+            .expect("serve request");
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    /// A token pasted with a trailing space, or percent-encoded as one, is the
+    /// token. It used to be refused, with the same log line as no token at all.
+    #[tokio::test]
+    async fn a_token_pasted_with_whitespace_still_presents() {
+        let command = serde_json::to_vec(&Command::NextSlide).expect("serialize command");
+        let response = guarded_router()
+            .oneshot(request_from(
+                REMOTE,
+                Request::post(format!("/api/command?token={GUARDED}%20"))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(command))
+                    .expect("build request"),
+            ))
+            .await
+            .expect("serve request");
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn the_wrong_token_is_still_refused() {
+        let command = serde_json::to_vec(&Command::NextSlide).expect("serialize command");
+        let response = guarded_router()
+            .oneshot(request_from(
+                REMOTE,
+                Request::post("/api/command?token=guess")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(command))
+                    .expect("build request"),
+            ))
+            .await
+            .expect("serve request");
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
 
     /// Being on the presenter's machine is what `Presenter` asks about, and a

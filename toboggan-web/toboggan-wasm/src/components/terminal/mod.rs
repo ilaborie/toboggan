@@ -480,7 +480,10 @@ async fn run_terminal_session(
     // the URL, so getting them right here saves the shell an initial redraw.
     let (initial_cols, initial_rows) = refit(&session, &body);
     let ws_url = build_terminal_ws_url(api_base_url, config, initial_cols, initial_rows);
-    info!("Starting terminal session:", &ws_url);
+    // The URL ends in `&token=…` when one was offered, so it is logged without
+    // its query string: this ran on every terminal open.
+    let logged_url = ws_url.split('?').next().unwrap_or(&ws_url);
+    info!("Starting terminal session:", logged_url);
 
     let ws = match WebSocket::open(&ws_url) {
         Ok(ws) => ws,
@@ -720,7 +723,7 @@ fn build_terminal_ws_url(
     // rest of the session's parameters.
     if let Some(token) = presenter_token() {
         url.push_str("&token=");
-        url.push_str(&String::from(js_sys::encode_uri_component(&token)));
+        url.push_str(&String::from(js_sys::encode_uri_component(token.expose())));
     }
 
     url

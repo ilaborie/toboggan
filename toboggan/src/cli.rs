@@ -6,7 +6,7 @@ use clap_complete::Shell;
 use serde::Deserialize;
 use toboggan_cli::OutputFormat;
 use toboggan_client::TobogganConfig;
-use toboggan_core::Date;
+use toboggan_core::{Date, Secret};
 
 use crate::config;
 
@@ -239,7 +239,7 @@ pub(crate) struct ServeOptions {
     /// Only relevant with `--host` set to something reachable: a client on this
     /// machine always presents. Remote clients pass it as `?token=…`.
     #[arg(long, env = "TOBOGGAN_PRESENTER_TOKEN")]
-    pub(crate) presenter_token: Option<String>,
+    pub(crate) presenter_token: Option<Secret>,
 }
 
 impl ServeOptions {
@@ -548,13 +548,13 @@ pub(crate) struct ClientArgs {
     /// own machine always presents. Without it, a client connecting across the
     /// network can watch but not navigate.
     #[arg(long, env = "TOBOGGAN_PRESENTER_TOKEN")]
-    pub(crate) presenter_token: Option<String>,
+    pub(crate) presenter_token: Option<Secret>,
 }
 
 impl From<ClientArgs> for TobogganConfig {
     fn from(args: ClientArgs) -> Self {
         TobogganConfig::new(&args.host, args.port)
-            .with_presenter_token(args.presenter_token.as_deref())
+            .with_presenter_token(args.presenter_token.clone())
     }
 }
 

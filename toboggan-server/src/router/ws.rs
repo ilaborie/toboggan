@@ -6,7 +6,7 @@ use axum::extract::{ConnectInfo, FromRef, State};
 use axum::response::Response;
 use futures::{SinkExt, StreamExt};
 use toboggan_core::timeouts::HEARTBEAT_INTERVAL;
-use toboggan_core::{ClientId, ClientRole, Command, Notification};
+use toboggan_core::{ClientId, ClientRole, Command, Notification, Secret};
 use tokio::sync::{mpsc, watch};
 use tracing::{error, info, warn};
 
@@ -36,7 +36,7 @@ async fn handle_websocket(socket: WebSocket, state: TobogganState, ip_addr: IpAd
                     // The handshake is where the role is settled, once: the
                     // socket's peer address cannot change under it, so there is
                     // no need to re-derive it per command.
-                    let role = state.role_for(ip_addr, token.as_deref());
+                    let role = state.role_for(ip_addr, token.as_ref().map(Secret::expose));
                     let initial_notification = TalkService::from_ref(&state)
                         .create_initial_notification()
                         .await;
@@ -205,8 +205,10 @@ fn spawn_message_receiver_task(
         while let Some(msg) = ws_receiver.next().await {
             match msg {
                 Ok(Message::Text(text)) => {
-                    info!(?client_id, message = %text, "Received WebSocket message");
-
+                    // The frame text is deliberately not logged: a `Register`
+                    // carries the presenter token, and this ran at INFO for
+                    // every message. The parsed command below is logged
+                    // instead, and `Secret`'s `Debug` redacts it there.
                     match serde_json::from_str::<Command>(&text) {
                         Ok(command) => {
                             info!(?client_id, ?command, "Processing command");
@@ -236,7 +238,13 @@ fn spawn_message_receiver_task(
                             let _notification = state.handle_command(&command).await;
                         }
                         Err(err) => {
-                            warn!(?client_id, ?err, message = %text, "Failed to parse command from WebSocket message");
+                            // Not the frame text: a `Register` that failed to
+                            // parse still carries the token that was in it.
+                            warn!(
+                                ?client_id,
+                                ?err,
+                                "Failed to parse command from WebSocket message"
+                            );
 
                             let error_notification =
                                 Notification::error(format!("Invalid command format: {err}"));

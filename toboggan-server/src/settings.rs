@@ -2,6 +2,8 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 use std::time::Duration;
 
+use toboggan_core::Secret;
+
 /// Everything the server needs once it already has a [`toboggan_core::Talk`].
 ///
 /// Split out from [`Settings`] because `launch_with_talk` — the entry point the
@@ -68,10 +70,10 @@ pub struct ServerSettings {
     /// Secret that lets a client **not** on this machine drive the deck.
     ///
     /// Only needed when the server is reachable from the network: a connection
-    /// from this machine always presents. Remote clients pass it as
+    /// over loopback always presents. Remote clients pass it as
     /// `?token=…` (`/run?token=…`, and the WebSocket picks it up from there).
     #[clap(long, env = "TOBOGGAN_PRESENTER_TOKEN")]
-    pub presenter_token: Option<String>,
+    pub presenter_token: Option<Secret>,
 }
 
 /// `toboggan serve`'s settings: which talk file to serve, and how.
