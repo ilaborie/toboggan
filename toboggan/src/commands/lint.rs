@@ -89,7 +89,7 @@ fn location_of(diagnostic: &LintDiagnostic) -> String {
     let slide = diagnostic
         .slide
         .as_ref()
-        .map(|slide| format!("slide {} \"{}\"", slide.display_number, slide.title));
+        .map(|slide| format!("slide {} \"{}\"", slide.display_number(), slide.title));
     match (&diagnostic.source_path, slide) {
         (Some(path), Some(slide)) => format!("{} ({slide})", path.display()),
         (Some(path), None) => path.display().to_string(),
@@ -341,7 +341,6 @@ mod tests {
                 severity,
                 &toboggan_lint::SlideRef {
                     index: 0,
-                    display_number: 1,
                     title: "T".to_owned(),
                 },
                 "boom",

@@ -1,6 +1,6 @@
-use std::cell::OnceCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use toboggan_core::{Slide, Talk};
@@ -80,10 +80,13 @@ impl LintConfig {
 /// Carries the slide's parsed body and its statistics so the rules can share
 /// them. Every rule used to derive its own: three `pause` rules and two `html`
 /// rules each parsed the body, and the two `content` rules each built a fresh
-/// `SlideStats`, which itself parsed the body several times over. That is more
-/// than twenty `scraper` parses of the same string for one slide, on every
-/// `toboggan lint` and on every `GET /api/talk`. Both are computed at most once
+/// `SlideStats`, which itself parsed the body again. That is a handful of
+/// `scraper` parses of the same string for one slide, on every `toboggan lint`
+/// and every `lint` call through the MCP server. Both are computed at most once
 /// here, and only when a rule actually asks.
+///
+/// The cells are [`OnceLock`] rather than `OnceCell` so the context is `Sync`,
+/// which is what [`Rule`]'s own `Send + Sync` bound already advertises.
 pub struct RuleContext<'a> {
     /// The whole talk (for cross-references such as resolved cwds).
     pub talk: &'a Talk,
@@ -93,9 +96,9 @@ pub struct RuleContext<'a> {
     pub slide_ref: &'a SlideRef,
     /// Active configuration.
     pub config: &'a LintConfig,
-    body_doc: OnceCell<HtmlDocument>,
-    stats: OnceCell<SlideStats>,
-    public_dir: OnceCell<Option<PathBuf>>,
+    body_doc: OnceLock<HtmlDocument>,
+    stats: OnceLock<SlideStats>,
+    public_dir: OnceLock<Option<PathBuf>>,
 }
 
 impl<'a> RuleContext<'a> {
@@ -112,28 +115,29 @@ impl<'a> RuleContext<'a> {
             slide,
             slide_ref,
             config,
-            body_doc: OnceCell::new(),
-            stats: OnceCell::new(),
-            public_dir: OnceCell::new(),
+            body_doc: OnceLock::new(),
+            stats: OnceLock::new(),
+            public_dir: OnceLock::new(),
         }
     }
 
     /// The deck's `public/` directory, looked up once per slide.
     ///
-    /// Checks beside the slides folder first and then inside it, matching how
-    /// the CLI finds the directory it serves at `/public`: `-p deck` and
-    /// `-p deck/slides` are both accepted, and they put `public/` in different
-    /// places relative to `Talk::source_dir`.
+    /// Beside the slides folder, which is the only place the server mounts it.
+    ///
+    /// `resolve_deck` accepts both `-p deck` and `-p deck/slides`, but either
+    /// way the directory it serves at `/public` is the *sibling* of the slides
+    /// folder. This used to fall back to `slides/public` as well, so an asset
+    /// living there satisfied `link/broken` and then 404'd at runtime — lint
+    /// passing was the reason to believe the link worked.
     pub fn public_dir(&self) -> Option<&Path> {
         self.public_dir
             .get_or_init(|| {
                 let source_dir = Path::new(self.talk.source_dir.as_deref()?);
-                let sibling = source_dir.parent().map(|parent| parent.join("public"));
-                let child = source_dir.join("public");
-                sibling
-                    .into_iter()
-                    .chain(std::iter::once(child))
-                    .find(|candidate| candidate.is_dir())
+                source_dir
+                    .parent()
+                    .map(|parent| parent.join("public"))
+                    .filter(|candidate| candidate.is_dir())
             })
             .as_deref()
     }
