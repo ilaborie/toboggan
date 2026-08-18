@@ -61,6 +61,17 @@ impl PresenterAuth {
         self.token.is_some()
     }
 
+    /// The token encoded for a `?token=` link, for printing to the operator.
+    ///
+    /// The one place the server discloses it, and it discloses it to the person
+    /// who set it, on their own console. Without this they assemble the URL by
+    /// hand — which is where the stray whitespace and the encoding mismatches
+    /// came from.
+    #[must_use]
+    pub fn token_for_link(&self) -> Option<String> {
+        self.token.as_ref().map(Secret::to_query_value)
+    }
+
     /// The role for a connection from `peer` offering `offered`.
     #[must_use]
     pub fn role_for(&self, peer: IpAddr, offered: Option<&str>) -> ClientRole {

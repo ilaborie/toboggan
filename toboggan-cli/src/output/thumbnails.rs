@@ -217,6 +217,21 @@ fn render_overview(talk: &Talk, entries: &[SlideEntry], search: bool) -> String 
         ""
     };
 
+    // Carry a presenter token from this page's URL onto the slide links.
+    //
+    // Done here rather than when the links are written, because this page is
+    // generated once and cached: baking the token in would write the secret to
+    // disk and hand it to whoever opened the overview next. Reading it from the
+    // address bar keeps it per-visitor, and a visitor without one is unaffected.
+    let token_script = r"<script>
+  const token = new URLSearchParams(location.search).get('token');
+  if (token) for (const card of document.querySelectorAll('.card')) {
+    const url = new URL(card.href, location.href);
+    url.searchParams.set('token', token);
+    card.href = url.pathname + url.search;
+  }
+</script>";
+
     format!(
         r#"<!doctype html>
 <html lang="{lang}">
@@ -250,7 +265,7 @@ fn render_overview(talk: &Talk, entries: &[SlideEntry], search: bool) -> String 
   <div class="grid">
 {cards}
   </div>
-{search_script}
+{search_script}{token_script}
 </body>
 </html>"#,
     )

@@ -86,7 +86,7 @@ pub async fn launch_with_talk(
     let terminal_shell = settings.resolve_shell();
     info!(%terminal_shell, "Embedded terminals will use this shell");
     let auth = PresenterAuth::new(settings.presenter_token.clone());
-    report_access_posture(host, &auth);
+    report_access_posture(host, port, &auth);
     let state =
         TobogganState::new(talk_service, client_service, terminal_shell.into()).with_auth(auth);
 
@@ -135,14 +135,33 @@ pub async fn launch_with_talk(
 /// case that changes it is the one an author reaches for five minutes before a
 /// talk — "let the room open it on their laptops" — without meaning to also
 /// offer the room a shell.
-fn report_access_posture(host: IpAddr, auth: &PresenterAuth) {
+fn report_access_posture(host: IpAddr, port: u16, auth: &PresenterAuth) {
     if host.is_loopback() {
         info!("Only this machine can reach the server, so every client presents");
-    } else if auth.has_token() {
+    } else if let Some(token) = auth.token_for_link() {
+        // Printed, because two clients' doc comments said the server prints the
+        // presenter link and nothing did. Assembling `?token=…` by hand is how
+        // a token picks up the stray whitespace and encoding that used to make
+        // it fail to match.
         info!(
             "Reachable from the network: clients present from this machine, \
              or with the presenter token"
         );
+        // Not `browse_url`: that rewrites a wildcard bind to loopback, which is
+        // right for `--open` on this machine and useless in a link whose whole
+        // purpose is to be opened from another one. A wildcard bind has no one
+        // address to name, so the host is left for the operator to fill in.
+        let authority = match host {
+            IpAddr::V4(addr) if addr.is_unspecified() => "<this-machine>".to_owned(),
+            IpAddr::V6(addr) if addr.is_unspecified() => "<this-machine>".to_owned(),
+            addr => SocketAddr::new(addr, port).to_string(),
+        };
+        let port = if authority == "<this-machine>" {
+            format!(":{port}")
+        } else {
+            String::new()
+        };
+        info!("Presenter link: http://{authority}{port}/run?token={token}");
     } else {
         warn!(
             "Reachable from the network: remote clients are read-only and cannot open \

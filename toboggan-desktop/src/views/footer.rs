@@ -1,6 +1,7 @@
 use iced::widget::{container, row};
 use iced::{Element, Length, Theme};
 use toboggan_client::ConnectionStatus;
+use toboggan_core::ClientRole;
 
 use crate::constants::{
     ICON_SIZE_MEDIUM, ICON_SIZE_SMALL, PADDING_CONTAINER, SPACING_MEDIUM, SPACING_SMALL,
@@ -164,6 +165,15 @@ pub(super) fn view(state: &AppState) -> Element<'_, Message> {
         .size(11.0)
         .color(crate::constants::COLOR_MUTED);
 
+    // Said plainly, because the alternative is discovering it by pressing an
+    // arrow key and having the server refuse.
+    let role_hint = match state.role {
+        Some(ClientRole::Audience) => iced::widget::text("Watching — this client cannot present")
+            .size(11.0)
+            .color(crate::constants::COLOR_MUTED),
+        _ => iced::widget::text("").size(11.0),
+    };
+
     container(
         row![
             connection_status,
@@ -184,6 +194,7 @@ pub(super) fn view(state: &AppState) -> Element<'_, Message> {
             slide_counter,
             step_indicators,
             help_hint,
+            role_hint,
         ]
         .spacing(SPACING_MEDIUM)
         .align_y(iced::Alignment::Center),

@@ -359,9 +359,13 @@ impl App {
                 self.state.error_message = Some(error);
                 Task::none()
             }
-            // Client registration events - no UI action needed in desktop
-            CommunicationMessage::Registered { .. }
-            | CommunicationMessage::ClientConnected { .. }
+            // The grant decides whether the keys do anything, so it reaches the
+            // UI rather than stopping here.
+            CommunicationMessage::Registered { role, .. } => {
+                self.state.role = Some(role);
+                Task::none()
+            }
+            CommunicationMessage::ClientConnected { .. }
             | CommunicationMessage::ClientDisconnected { .. } => Task::none(),
         }
     }

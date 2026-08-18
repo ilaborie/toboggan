@@ -8,7 +8,7 @@ pub(super) mod pdf;
 use std::sync::OnceLock;
 
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::http::{StatusCode, Uri};
 use axum::response::{Html, IntoResponse, Response};
 use toboggan_cli::OutputFormat;
 use toboggan_core::{SlideKind, Talk};
@@ -17,9 +17,26 @@ use tracing::error;
 use crate::services::TalkService;
 
 /// Landing page at `/`.
-pub(super) async fn homepage(State(talk_service): State<TalkService>) -> Html<String> {
+///
+/// Takes the request's own query string so the links below can carry the token
+/// it was opened with. Without that, a remote presenter who opened `/?token=…`
+/// was demoted to audience by clicking "Run the presentation" — and, before the
+/// presenter view could show a toast, told nothing about it.
+pub(super) async fn homepage(State(talk_service): State<TalkService>, uri: Uri) -> Html<String> {
     let talk = talk_service.talk().await;
-    Html(render_homepage(&talk))
+    Html(render_homepage(&talk, &carried_query(&uri)))
+}
+
+/// The part of this request's query string worth passing to the next page.
+///
+/// Only the token: everything else on a page URL is that page's own business.
+fn carried_query(uri: &Uri) -> String {
+    uri.query()
+        .into_iter()
+        .flat_map(|query| query.split('&'))
+        .find(|pair| pair.starts_with("token="))
+        .map(|pair| format!("?{pair}"))
+        .unwrap_or_default()
 }
 
 /// Serves the embedded present/run single-page app at `/run`.
@@ -88,7 +105,7 @@ fn render_guide() -> anyhow::Result<String> {
     Ok(String::from_utf8(bytes)?)
 }
 
-fn render_homepage(talk: &Talk) -> String {
+fn render_homepage(talk: &Talk, query: &str) -> String {
     let title = escape(&talk.title);
     let lang = escape_attribute(talk.lang());
     let date = talk.date.to_string();
@@ -145,9 +162,9 @@ fn render_homepage(talk: &Talk) -> String {
       <div><b>{parts}</b> parts</div>
     </div>
     <nav class="links">
-      <a class="btn primary" href="/run">▶ Run the presentation</a>
-      <a class="btn" href="/presenter">🎙 Presenter view</a>
-      <a class="btn" href="/slides">🗂 Slide overview</a>
+      <a class="btn primary" href="/run{query}">▶ Run the presentation</a>
+      <a class="btn" href="/presenter{query}">🎙 Presenter view</a>
+      <a class="btn" href="/slides{query}">🗂 Slide overview</a>
       <a class="btn" href="/guide">📖 User guide</a>
       <a class="btn" href="/download.pdf">⬇ Download PDF</a>
       <a class="btn" href="/doc">🔌 API docs</a>

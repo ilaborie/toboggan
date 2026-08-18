@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use toboggan_client::ConnectionStatus;
-use toboggan_core::{Notification, Slide, SlideId, State, TalkResponse};
+use toboggan_core::{ClientRole, Notification, Slide, SlideId, State, TalkResponse};
 use toboggan_stats::SlideStats;
 use tracing::{debug, info};
 
@@ -27,6 +27,14 @@ pub struct AppState {
 
     pub(crate) presentation_state: State,
 
+    /// The role the server granted, once it has said.
+    ///
+    /// `None` before the handshake answers, which the title bar shows as
+    /// nothing rather than guessing. A client that connects across the network
+    /// without a token can watch but not navigate, and used to find that out by
+    /// pressing a key and getting an error dialog back.
+    pub(crate) role: Option<ClientRole>,
+
     pub(crate) dialog: AppDialog,
     /// The slide number typed so far, waiting on `Enter`.
     pub(crate) goto_target: Option<usize>,
@@ -42,6 +50,7 @@ impl AppState {
         Self {
             connection_status: ConnectionStatus::Closed,
             current_slide_id: None,
+            role: None,
             talk,
             slides,
             presentation_state: State::Init,
@@ -210,8 +219,10 @@ impl AppState {
                 self.effects
                     .add_unique_effect(EffectKey::Blink, effects::blink_effect());
             }
+            Notification::Registered { role, .. } => {
+                self.role = Some(role);
+            }
             Notification::Pong
-            | Notification::Registered { .. }
             | Notification::ClientConnected { .. }
             | Notification::ClientDisconnected { .. } => {}
             Notification::Error { message } => {

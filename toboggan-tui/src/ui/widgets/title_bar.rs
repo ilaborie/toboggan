@@ -1,6 +1,7 @@
 use ratatui::prelude::*;
 use ratatui::symbols::border;
 use ratatui::widgets::{Block, Paragraph};
+use toboggan_core::ClientRole;
 
 use crate::events::AppAction;
 use crate::state::AppState;
@@ -28,6 +29,15 @@ impl StatefulWidget for &TitleBar {
             Some(number) => Line::from(vec![
                 Span::raw(" "),
                 Span::styled(format!("→ slide {number} ⏎"), styles::action::KEY),
+                Span::raw(" "),
+            ]),
+            // An audience client is said so here rather than left to be
+            // discovered by pressing a key and being refused.
+            None if state.role == Some(ClientRole::Audience) => Line::from(vec![
+                Span::raw(" "),
+                Span::raw(state.connection_status.to_string()),
+                Span::raw(" · "),
+                Span::styled("watching", Style::default().fg(colors::YELLOW)),
                 Span::raw(" "),
             ]),
             None => Line::from(vec![

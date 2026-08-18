@@ -74,6 +74,32 @@ impl Secret {
         Self::new(&percent_decode(raw))
     }
 
+    /// The secret encoded for a `?token=` value, ready to put in a URL.
+    ///
+    /// A deliberate disclosure, like [`expose`](Self::expose): the caller is
+    /// building a link to hand someone. Percent-encodes anything that is not
+    /// unreserved, so the token survives [`from_query_value`](Self::from_query_value)
+    /// on the way back.
+    ///
+    /// ```
+    /// # use toboggan_core::Secret;
+    /// let secret = Secret::new("a b+c").expect("a token");
+    /// assert_eq!(Secret::from_query_value(&secret.to_query_value()), Some(secret));
+    /// ```
+    #[must_use]
+    pub fn to_query_value(&self) -> String {
+        let mut out = String::with_capacity(self.0.len());
+        for byte in self.0.bytes() {
+            match byte {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                    out.push(char::from(byte));
+                }
+                other => out.push_str(&format!("%{other:02X}")),
+            }
+        }
+        out
+    }
+
     /// The secret itself. Every call is a deliberate disclosure.
     #[must_use]
     pub fn expose(&self) -> &str {

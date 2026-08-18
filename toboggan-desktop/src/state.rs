@@ -1,6 +1,6 @@
 use iced::widget::markdown;
 use toboggan_client::ConnectionStatus;
-use toboggan_core::{Slide, SlideId, State as PresentationState, Talk};
+use toboggan_core::{ClientRole, Slide, SlideId, State as PresentationState, Talk};
 
 /// Cached markdown content for a slide
 #[derive(Debug, Clone, Default)]
@@ -22,6 +22,13 @@ pub(crate) struct AppState {
     pub show_help: bool,
     pub show_sidebar: bool,
     pub fullscreen: bool,
+    /// The role the server granted, once it has said.
+    ///
+    /// `None` before the handshake answers — not the same as "audience", so the
+    /// footer says nothing rather than guessing. A client connecting across the
+    /// network without a token can watch but not navigate, and used to learn
+    /// that by pressing a key and being refused.
+    pub role: Option<ClientRole>,
     pub error_message: Option<String>,
 }
 
@@ -54,6 +61,7 @@ impl Default for AppState {
             show_help: false,
             show_sidebar: true,
             fullscreen: false,
+            role: None,
             error_message: None,
         }
     }
