@@ -23,9 +23,11 @@ pub struct ClientId(DefaultKey);
 /// [`Self::Audience`] is the default deliberately. A role that arrives unset,
 /// from an older client or a hand-written frame, is the one that can do the
 /// least.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
-)]
+// Deliberately not `PartialOrd, Ord`. `Presenter` is declared first, so a
+// derived ordering makes `Presenter < Audience` — and the natural-looking
+// `role >= ClientRole::Presenter` would then grant access to exactly the role it
+// was written to exclude. Ask [`ClientRole::is_presenter`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ClientRole {
     /// Drives the deck, and may open the embedded terminals.

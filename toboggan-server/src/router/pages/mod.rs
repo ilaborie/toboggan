@@ -90,7 +90,7 @@ fn render_guide() -> anyhow::Result<String> {
 
 fn render_homepage(talk: &Talk) -> String {
     let title = escape(&talk.title);
-    let lang = escape(talk.lang());
+    let lang = escape_attribute(talk.lang());
     let date = talk.date.to_string();
     let total = talk.slides.len();
     let parts = talk
@@ -161,9 +161,21 @@ fn render_homepage(talk: &Talk) -> String {
 /// Escapes the three characters that would break out of HTML text content.
 ///
 /// Shared with [`overview`], which renders the same kind of server-side error
-/// page.
+/// page. **Text content only** — an attribute value needs
+/// [`escape_attribute`], which also handles the quote that would end it.
 pub(super) fn escape(text: &str) -> String {
     text.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
+}
+
+/// Escapes text for a double-quoted HTML attribute value.
+///
+/// [`escape`] leaves `"` alone, which is correct between tags and wrong inside
+/// them: the deck's `lang` is author-supplied and lands in `<html lang="…">`, so
+/// a quote in it used to close the attribute and open whatever followed as
+/// markup. Both escapers in `toboggan-cli` already handled this; the server's
+/// did not.
+pub(super) fn escape_attribute(text: &str) -> String {
+    escape(text).replace('"', "&quot;")
 }

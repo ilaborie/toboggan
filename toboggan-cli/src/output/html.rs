@@ -59,11 +59,15 @@ fn render_slide(slide: &Slide) -> String {
     };
     classes.push(kind_class.to_owned());
 
-    let class_string = classes.join(" ");
+    // Both are author-supplied front matter landing in an attribute, so both
+    // are escaped. The trigger is ordinary CSS rather than an attack:
+    // `style = 'font-family: "Fira Code", monospace'` closes the attribute at
+    // the first quote and spills the rest of the declaration into the tag.
+    let class_string = escape_html(&classes.join(" "));
 
     // Build inline style attribute if present
     let style_attr = if let Some(style) = &slide.style.style {
-        format!(r#" style="{style}""#)
+        format!(r#" style="{}""#, escape_html(style))
     } else {
         String::new()
     };
@@ -184,6 +188,28 @@ mod tests {
             "&lt;script&gt;alert(&#39;XSS&#39;)&lt;/script&gt;"
         );
         assert_eq!(escape_html("A & B"), "A &amp; B");
+    }
+
+    /// The trigger is a font stack, not an attack: a quoted family name in
+    /// `style` front matter closed the attribute and spilled the rest of the
+    /// declaration into the tag as markup.
+    #[test]
+    fn a_quote_in_the_style_front_matter_stays_in_the_attribute() {
+        let mut slide = Slide::new("Styled");
+        slide.style = Style {
+            style: Some(r#"font-family: "Fira Code", monospace"#.to_owned()),
+            classes: vec![r#"a" onload="x"#.to_owned()],
+        };
+
+        let html = render_slide(&slide);
+        assert!(
+            html.contains("&quot;Fira Code&quot;"),
+            "the font name is escaped: {html}"
+        );
+        assert!(
+            !html.contains(r#"onload="x"#),
+            "the class cannot open an attribute of its own: {html}"
+        );
     }
 
     #[test]
