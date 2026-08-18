@@ -1,20 +1,20 @@
 +++
-classes = ["no_title"]
+classes = ["no_title", "wide"]
 +++
 
 # GFM Alerts
 
 > [!NOTE]
-> Highlights information that users should take into account.
+> Information worth taking into account.
 
 > [!TIP]
-> Optional information to help a user be more successful.
+> Optional advice for doing better.
 
 > [!IMPORTANT]
-> Crucial information necessary for users to succeed.
+> Crucial to getting this right.
 
 > [!WARNING]
-> Critical content demanding immediate user attention.
+> Demands immediate attention.
 
 > [!CAUTION]
-> Negative potential consequences of an action.
+> This one can bite.

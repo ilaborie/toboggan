@@ -1,5 +1,5 @@
 +++
-classes = ["no_title"]
+classes = ["no_title", "wide"]
 +++
 
 # Frontmatter Reference

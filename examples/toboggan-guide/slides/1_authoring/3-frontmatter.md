@@ -11,10 +11,7 @@ Each slide may open with a TOML block between `+++` delimiters:
 +++
 title = "Custom Title"
 classes = ["no_title", "wide"]
-style = "background: #112; color: gold;"
-skip = false
 duration = "2m"
-hidden_in = ["pdf"]
 +++
 ```
 

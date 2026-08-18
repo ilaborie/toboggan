@@ -105,8 +105,22 @@
 	--icon-info: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3ccircle cx='12' cy='12' r='10'/%3e%3cpath d='M12 16v-4'/%3e%3cpath d='m12 8 .01 0'/%3e%3c/svg%3e");
 }
 
+/* The root size every slide is measured in: headings, code, tables and the
+   slide's own padding are all relative to it.
+   
+   It was a flat 32px, so a deck laid out for a 1920x1080 projector kept those
+   exact pixels on a 1024x768 one — where the same slide is 47% narrower. Code
+   blocks ran off the right edge and the last lines fell off the bottom, with
+   nothing to scroll.
+   
+   Now it tracks the smaller of the two viewport dimensions, so a slide keeps
+   the same proportions — the same characters per line, the same lines per
+   slide — whatever it is shown on. The 32px ceiling is the old value: at
+   1920x1080 `min()` yields exactly 32px, so nothing changes at or above the
+   size decks were built for, and only smaller screens are affected. The floor
+   keeps a very small window legible rather than merely correct. */
 html {
-	font-size: 32px;
+	font-size: clamp(12px, min(1.667vw, 2.963vh), 32px);
 }
 
 body {
