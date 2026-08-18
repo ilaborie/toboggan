@@ -133,7 +133,7 @@ pass as a flag can live there instead:
 default-command = "lint"   # what a bare `toboggan` does
 
 [build]
-theme = "Monokai"
+theme = "Solarized (dark)"
 wpm = 130
 
 [serve]

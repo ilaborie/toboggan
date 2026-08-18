@@ -1999,7 +1999,7 @@ body_source = """
 # Handy options
 
 ```console
-$ toboggan build -p ./slides/ --theme Monokai -o talk.toml
+$ toboggan build -p ./slides/ --theme "Solarized (dark)" -o talk.toml
 $ toboggan build -p ./slides/ --no-counter   # don't auto-number parts/slides
 $ toboggan build -p ./slides/ --wpm 130      # tune the duration estimate
 ```
@@ -2032,7 +2032,7 @@ text = "4.3 Handy options"
 type = "Html"
 raw = """
 <h1>Handy options</h1>
-<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan build -p ./slides/ --theme Monokai -o talk.toml
+<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan build -p ./slides/ --theme &quot;Solarized (dark)&quot; -o talk.toml
 </span><span style="color:#4f5b66;">$ toboggan build -p ./slides/ --no-counter   # don&#39;t auto-number parts/slides
 </span><span style="color:#4f5b66;">$ toboggan build -p ./slides/ --wpm 130      # tune the duration estimate
 </span></code></pre>
@@ -2055,7 +2055,7 @@ alt = """
 # Handy options
 
 ```console
-$ toboggan build -p ./slides/ --theme Monokai -o talk.toml
+$ toboggan build -p ./slides/ --theme "Solarized (dark)" -o talk.toml
 $ toboggan build -p ./slides/ --no-counter   # don't auto-number parts/slides
 $ toboggan build -p ./slides/ --wpm 130      # tune the duration estimate
 ```
@@ -2326,7 +2326,7 @@ Every flag can live in a `toboggan.toml` beside your slides instead:
 default-command = "serve"   # what a bare `toboggan` does
 
 [build]
-theme = "Monokai"
+theme = "Solarized (dark)"
 
 [serve]
 open-presenter = true
@@ -2359,7 +2359,7 @@ raw = """
 <pre style="background-color:#eff1f5;"><code class="language-toml"><span style="color:#4f5b66;">default-command = &quot;serve&quot;   # what a bare `toboggan` does
 </span><span style="color:#4f5b66;">
 </span><span style="color:#4f5b66;">[build]
-</span><span style="color:#4f5b66;">theme = &quot;Monokai&quot;
+</span><span style="color:#4f5b66;">theme = &quot;Solarized (dark)&quot;
 </span><span style="color:#4f5b66;">
 </span><span style="color:#4f5b66;">[serve]
 </span><span style="color:#4f5b66;">open-presenter = true
@@ -2385,7 +2385,7 @@ Every flag can live in a `toboggan.toml` beside your slides instead:
 default-command = "serve"   # what a bare `toboggan` does
 
 [build]
-theme = "Monokai"
+theme = "Solarized (dark)"
 
 [serve]
 open-presenter = true

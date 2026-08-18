@@ -83,15 +83,14 @@ pub struct Settings {
 
     /// Syntax highlighting theme for code blocks.
     ///
-    /// Available themes: `base16-ocean.dark`, `base16-ocean.light`, `base16-mocha.dark`,
-    /// `base16-eighties.dark`, `InspiredGitHub`, `Solarized (dark)`, `Solarized (light)`,
-    /// `Monokai`, `Monokai Extended`, `Monokai Extended Light`, `Monokai Extended Bright`,
-    /// and many more from the syntect library.
+    /// The seven `syntect` ships with, and only those: `base16-ocean.dark`,
+    /// `base16-ocean.light`, `base16-eighties.dark`, `base16-mocha.dark`,
+    /// `InspiredGitHub`, `Solarized (dark)`, `Solarized (light)`.
     ///
-    /// Use `--list-themes` to see all available themes.
+    /// Use `--list-themes` to print them.
     #[clap(
         long,
-        default_value = "base16-ocean.light",
+        default_value = crate::parser::config::DEFAULT_THEME,
         help = "Syntax highlighting theme (default: base16-ocean.light)"
     )]
     pub theme: String,

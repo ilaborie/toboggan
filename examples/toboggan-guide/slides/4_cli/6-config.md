@@ -11,7 +11,7 @@ Every flag can live in a `toboggan.toml` beside your slides instead:
 default-command = "serve"   # what a bare `toboggan` does
 
 [build]
-theme = "Monokai"
+theme = "Solarized (dark)"
 
 [serve]
 open-presenter = true

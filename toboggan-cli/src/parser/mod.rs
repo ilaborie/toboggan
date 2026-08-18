@@ -17,7 +17,7 @@ pub use self::content::SlideContentParser;
 mod renderer;
 use self::renderer::{ContentRenderer, HtmlRenderer};
 
-mod config;
+pub(crate) mod config;
 pub(crate) use self::config::default_options;
 use self::config::{create_syntax_highlighter, default_plugins};
 

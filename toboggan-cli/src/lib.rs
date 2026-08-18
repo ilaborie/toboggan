@@ -213,6 +213,14 @@ pub fn run(settings: &Settings) -> Result<()> {
         return Ok(());
     }
 
+    // Before anything is parsed: the highlighter panics on a theme it cannot
+    // find, from inside comrak, which is neither actionable nor catchable.
+    if !parser::config::is_known_theme(&settings.theme) {
+        return Err(TobogganCliError::UnknownTheme {
+            theme: settings.theme.clone(),
+        });
+    }
+
     let input = validate_input(settings.input.as_ref())?;
     let parse_result = parse_presentation(input, settings)?;
     display_results(&parse_result, settings)?;
@@ -416,9 +424,24 @@ fn write_talk(out: &Path, content: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// Prints the themes the highlighter can load, from the one list that decides.
+///
+/// Generated rather than read from a text file: the file said twenty-two, the
+/// highlighter knew seven, and the fifteen it did not know panicked.
 #[allow(clippy::print_stdout)]
 fn list_available_themes() {
-    println!("{}", include_str!("available_themes.txt"));
+    use crate::parser::config::{AVAILABLE_THEMES, DEFAULT_THEME};
+
+    println!("Available syntax highlighting themes:\n");
+    for theme in AVAILABLE_THEMES {
+        let default = if theme == DEFAULT_THEME {
+            " (default)"
+        } else {
+            ""
+        };
+        println!("  {theme}{default}");
+    }
+    println!("\nNote: theme names are case-sensitive.");
 }
 
 fn parse_date_string(date_str: &str) -> Result<Date> {

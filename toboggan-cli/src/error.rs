@@ -38,6 +38,13 @@ pub enum TobogganCliError {
     )]
     InvalidCodeEmbed { path: PathBuf, reason: String },
 
+    #[display("Unknown syntax highlighting theme: {theme}")]
+    #[diagnostic(
+        code(toboggan_cli::unknown_theme),
+        help("Run `toboggan build --list-themes` for the themes that exist")
+    )]
+    UnknownTheme { theme: String },
+
     #[display("Failed to write to standard output")]
     #[diagnostic(
         code(toboggan_cli::write_stdout),
