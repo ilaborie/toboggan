@@ -1,8 +1,6 @@
 [env]
 RUST_LOG = "info"
 
-TOBOGGAN_HOST = "0.0.0.0"
-
 # Android SDK
 ANDROID_HOME = "/Users/igorlaborie/Library/Android/sdk"
 ANDROID_SDK_ROOT = "/Users/igorlaborie/Library/Android/sdk"
