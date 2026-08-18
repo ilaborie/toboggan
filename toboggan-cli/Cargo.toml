@@ -33,6 +33,7 @@ tempfile = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

@@ -366,7 +366,7 @@ fn copy_public_assets(talk: &Talk, output: &Path) -> Result<()> {
         .parent()
         .unwrap_or_else(|| Path::new("."))
         .join(PUBLIC_DIR);
-    if same_directory(&source, &destination) {
+    if same_directory(&source, &destination) || is_inside(&source, &destination) {
         return Ok(());
     }
 
@@ -386,24 +386,66 @@ fn copy_public_assets(talk: &Talk, output: &Path) -> Result<()> {
 fn same_directory(left: &Path, right: &Path) -> bool {
     match (left.canonicalize(), right.canonicalize()) {
         (Ok(left), Ok(right)) => left == right,
+        // A destination that does not exist yet is the ordinary case, and it is
+        // not the source. Anything else — a permission error, a symlink loop —
+        // is not evidence that the two differ, but the copy below reports it
+        // with the path it failed on, which is the better message.
         _ => false,
     }
 }
 
+/// Whether `destination` sits inside `source`.
+///
+/// Copying a directory into its own subtree never terminates: the destination
+/// is created, then found in the source's listing, then descended into. The
+/// deck that triggers it is ordinary — `public/` beside `slides/`, exported
+/// with `-o public/index.html`.
+fn is_inside(source: &Path, destination: &Path) -> bool {
+    // The destination usually does not exist yet, so its nearest existing
+    // ancestor is what can be canonicalised and compared.
+    let Ok(source) = source.canonicalize() else {
+        return false;
+    };
+    let mut candidate = destination.to_path_buf();
+    loop {
+        if let Ok(candidate) = candidate.canonicalize() {
+            return candidate.starts_with(&source);
+        }
+        if !candidate.pop() {
+            return false;
+        }
+    }
+}
+
 /// Recursively copies `source` into `destination`, returning the file count.
+///
+/// The listing is taken *before* the destination is created. Creating it first
+/// meant that a destination inside the source — `-o public/index.html` in a deck
+/// that has a `public/` — appeared in its own listing and was copied into
+/// itself, without bound: `public/public/public/…` until the path length or the
+/// disk gave out, shredding the author's assets on the way.
 fn copy_dir(source: &Path, destination: &Path) -> Result<usize> {
+    let entries = std::fs::read_dir(source)
+        .map_err(|err| TobogganCliError::read_file(source.to_path_buf(), err))?
+        .collect::<std::io::Result<Vec<_>>>()
+        .map_err(|err| TobogganCliError::read_file(source.to_path_buf(), err))?;
+
     std::fs::create_dir_all(destination)
         .map_err(|err| TobogganCliError::create_file(destination.to_path_buf(), err))?;
 
-    let entries = std::fs::read_dir(source)
-        .map_err(|err| TobogganCliError::read_file(source.to_path_buf(), err))?;
-
     let mut count = 0;
     for entry in entries {
-        let entry = entry.map_err(|err| TobogganCliError::read_file(source.to_path_buf(), err))?;
         let from = entry.path();
         let to = destination.join(entry.file_name());
-        if from.is_dir() {
+        let file_type = entry
+            .file_type()
+            .map_err(|err| TobogganCliError::read_file(from.clone(), err))?;
+        if file_type.is_symlink() {
+            // A symlink to an ancestor recurses by the same mechanism, and a
+            // deck's assets have no reason to contain one.
+            continue;
+        }
+        if file_type.is_dir() {
             count += copy_dir(&from, &to)?;
         } else {
             std::fs::copy(&from, &to).map_err(|err| TobogganCliError::create_file(to, err))?;
@@ -453,6 +495,7 @@ fn parse_date_string(date_str: &str) -> Result<Date> {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
     use toboggan_core::Slide;
 
@@ -556,5 +599,39 @@ mod tests {
             // This should still be in part context even though the part was skipped
             assert_eq!(slide.title.to_string(), "Topic B");
         }
+    }
+
+    /// `toboggan build -p slides -o public/index.html` in a deck that has a
+    /// `public/` used to copy that directory into itself, for ever: the
+    /// destination was created first, so it turned up in the source's own
+    /// listing. It stopped only at `PATH_MAX` or a full disk, and it destroyed
+    /// the author's assets on the way there.
+    #[test]
+    fn a_destination_inside_the_source_is_refused() {
+        let root = tempfile::tempdir().expect("temp dir");
+        let source = root.path().join(PUBLIC_DIR);
+        std::fs::create_dir_all(&source).expect("create public/");
+
+        // The destination the export would compute for `-o public/index.html`.
+        assert!(is_inside(&source, &source.join(PUBLIC_DIR)));
+        // And the directory itself, however it is spelled.
+        assert!(is_inside(&source, &source));
+    }
+
+    /// The everyday export, one directory up, must still copy.
+    #[test]
+    fn a_destination_beside_the_source_is_copied() {
+        let root = tempfile::tempdir().expect("temp dir");
+        let source = root.path().join(PUBLIC_DIR);
+        std::fs::create_dir_all(source.join("images")).expect("create public/images");
+        std::fs::write(source.join("logo.png"), b"png").expect("write logo");
+        std::fs::write(source.join("images/diagram.svg"), b"svg").expect("write diagram");
+
+        let destination = root.path().join("out").join(PUBLIC_DIR);
+        assert!(!is_inside(&source, &destination));
+
+        let count = copy_dir(&source, &destination).expect("copy assets");
+        assert_eq!(count, 2, "both files, at both depths");
+        assert!(destination.join("images/diagram.svg").is_file());
     }
 }
