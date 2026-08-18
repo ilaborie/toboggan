@@ -110,18 +110,29 @@ pub enum RenderTarget {
     Pdf,
 }
 
+/// One slide: what it says, how it looks, and what it is meant to cost in time.
+///
+/// Built by the parser from one Markdown file — [`Slide::from_markdown`] is the
+/// constructor that keeps `body` and `body_source` consistent.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(default)]
 pub struct Slide {
+    /// Whether this is the cover, a section title, or an ordinary slide.
     pub kind: SlideKind,
+    /// Classes and inline style applied to the slide's `<section>`.
     #[serde(skip_serializing_if = "Style::is_default")]
     pub style: Style,
+    /// The slide's heading. Empty for a slide that deliberately has none.
     #[serde(skip_serializing_if = "Content::is_empty")]
     pub title: Content,
+    /// Everything below the heading.
     pub body: Content,
+    /// Speaker notes — shown in the presenter view and the terminal client,
+    /// never on the projector.
     #[serde(skip_serializing_if = "Content::is_empty")]
     pub notes: Content,
+    /// Embedded terminals declared by the slide, rendered side by side.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub terminals: Vec<TerminalConfig>,
     /// Raw markdown source of the slide body, used by non-HTML exporters.
@@ -184,12 +195,16 @@ pub enum SlideBody<'a> {
     Rendered(&'a Content),
     /// Body produced from markdown — both the source and its rendered form.
     FromMarkdown {
+        /// The markdown the slide was written in, for exporters that would
+        /// rather re-render it than consume HTML.
         source: &'a str,
+        /// The rendered projection of that source.
         rendered: &'a Content,
     },
 }
 
 impl Slide {
+    /// An ordinary slide with a title and nothing else yet.
     pub fn new(title: impl Into<Content>) -> Self {
         let title = title.into();
         Self {
@@ -198,6 +213,7 @@ impl Slide {
         }
     }
 
+    /// The deck's cover slide.
     pub fn cover(title: impl Into<Content>) -> Self {
         let title = title.into();
         Self {
@@ -207,6 +223,7 @@ impl Slide {
         }
     }
 
+    /// A section title slide.
     pub fn part(title: impl Into<Content>) -> Self {
         let title = title.into();
         Self {
@@ -231,30 +248,35 @@ impl Slide {
     }
 
     #[must_use]
+    /// Replaces the slide's CSS classes.
     pub fn with_style_classes(mut self, classes: impl IntoIterator<Item = String>) -> Self {
         self.style.classes = Vec::from_iter(classes);
         self
     }
 
     #[must_use]
+    /// Sets the slide's body.
     pub fn with_body(mut self, body: impl Into<Content>) -> Self {
         self.body = body.into();
         self
     }
 
     #[must_use]
+    /// Sets the slide's speaker notes.
     pub fn with_notes(mut self, notes: impl Into<Content>) -> Self {
         self.notes = notes.into();
         self
     }
 
     #[must_use]
+    /// Adds an embedded terminal.
     pub fn with_terminal(mut self, terminal: TerminalConfig) -> Self {
         self.terminals.push(terminal);
         self
     }
 
     #[must_use]
+    /// Sets the render targets this slide is left out of.
     pub fn with_hidden_in(mut self, targets: impl IntoIterator<Item = RenderTarget>) -> Self {
         self.hidden_in = targets.into_iter().collect();
         self
@@ -280,12 +302,14 @@ impl Slide {
     }
 
     #[must_use]
+    /// Sets the working directory the quake terminal opens in on this slide.
     pub fn with_quake_terminal_cwd(mut self, cwd: impl Into<String>) -> Self {
         self.quake_terminal_cwd = Some(cwd.into());
         self
     }
 
     #[must_use]
+    /// Silences the named lint rules for this slide.
     pub fn with_lint_disabled(mut self, rules: impl IntoIterator<Item = String>) -> Self {
         self.lint_disabled = Vec::from_iter(rules);
         self
@@ -339,20 +363,27 @@ impl Display for Slide {
     }
 }
 
+/// What kind of slide this is, which is what decides how it is laid out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum SlideKind {
+    /// The deck's opening slide, from `_cover.md`.
     Cover,
+    /// A section title, from `_part.md` or from a folder's name.
     Part,
+    /// Everything else.
     #[default]
     Standard,
 }
 
+/// How a slide is dressed: CSS classes and an optional inline style.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Style {
+    /// Classes applied to the slide, from the `classes` front matter key.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub classes: Vec<String>,
+    /// An inline `style` attribute, from the `style` front matter key.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub style: Option<String>,
 }
@@ -370,9 +401,11 @@ impl Display for Style {
     }
 }
 
+/// The body of `GET /api/slides`: every slide in the deck.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SlidesResponse {
+    /// Every slide, in presentation order.
     pub slides: Vec<Slide>,
 }
 

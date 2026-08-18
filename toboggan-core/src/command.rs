@@ -2,11 +2,25 @@ use serde::{Deserialize, Serialize};
 
 use crate::{ClientId, SlideId};
 
+/// What a client asks the server to do.
+///
+/// Sent over `/api/ws`, or posted to `/api/command`. The server applies the
+/// command and broadcasts the resulting [`crate::State`] to *every* client, so
+/// a command is a request about the shared deck rather than about the sender's
+/// own view.
+///
+/// Everything except registration and the heartbeat is privileged; see
+/// [`Command::drives_the_deck`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(tag = "command")]
 pub enum Command {
+    /// Join the presentation. The first thing a client sends.
+    ///
+    /// The server replies with [`crate::Notification::Registered`], which is
+    /// where the client learns its id and the role it was granted.
     Register {
+        /// A human-readable name for this client, shown in `GET /api/clients`.
         name: String,
         /// The presenter token this client was given, if any.
         ///
@@ -16,24 +30,36 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         token: Option<String>,
     },
+    /// Leave the presentation.
     Unregister {
+        /// The client leaving.
         client: ClientId,
     },
+    /// Heartbeat. Answered with [`crate::Notification::Pong`].
     Ping,
-    // Navigation
+    /// Go to the first slide.
     First,
+    /// Go to the last slide.
     Last,
+    /// Go to a specific slide.
     GoTo {
+        /// The slide to show, as a 0-based index.
         slide: SlideId,
     },
+    /// Go to the next slide, skipping any reveals left on this one.
     #[serde(alias = "Next")]
     NextSlide,
+    /// Go to the previous slide.
     #[serde(alias = "Previous")]
     PreviousSlide,
-    // Step navigation
+    /// Reveal the next step, moving to the next slide once this one runs out.
+    ///
+    /// This is what a presenter remote and the space bar send, because it walks
+    /// the whole deck rather than skipping every build.
     NextStep,
+    /// Go back one step, moving to the previous slide once this one runs out.
     PreviousStep,
-    // Effect
+    /// Flash every other client, to get the room's attention.
     Blink,
 }
 

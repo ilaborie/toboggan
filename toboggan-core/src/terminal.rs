@@ -9,8 +9,11 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum Theme {
+    /// Light text on a dark background. The default, because a slide deck
+    /// usually is.
     #[default]
     Dark,
+    /// Dark text on a light background, for a deck with a light theme.
     Light,
 }
 
@@ -39,6 +42,7 @@ pub struct TerminalConfig {
 }
 
 impl TerminalConfig {
+    /// A terminal in `cwd`, with the dark theme and the default shell.
     #[must_use]
     pub fn new(cwd: impl Into<PathBuf>) -> Self {
         Self {
@@ -48,12 +52,14 @@ impl TerminalConfig {
         }
     }
 
+    /// Sets the colour theme.
     #[must_use]
     pub fn with_theme(mut self, theme: Theme) -> Self {
         self.theme = theme;
         self
     }
 
+    /// Runs `cmd` on connect instead of dropping into an interactive shell.
     #[must_use]
     pub fn with_cmd(mut self, cmd: impl Into<String>) -> Self {
         self.cmd = Some(cmd.into());

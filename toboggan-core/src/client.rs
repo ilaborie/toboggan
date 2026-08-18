@@ -5,6 +5,11 @@ use slotmap::DefaultKey;
 
 use crate::Timestamp;
 
+/// A connected client, as the server knows it.
+///
+/// Assigned at registration and handed back in [`crate::Notification::Registered`].
+/// Opaque on purpose: it is a slot-map key, so an id is only meaningful to the
+/// server that issued it and only for as long as that connection lives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ClientId(DefaultKey);
 
@@ -78,21 +83,30 @@ impl ClientId {
     }
 }
 
+/// A snapshot of one connected client, as reported by `GET /api/clients`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ClientInfo {
+    /// Server-assigned identifier for this connection.
     pub id: ClientId,
+    /// The name the client gave when it registered — `"tui"`, `"iPhone"`, …
     pub name: String,
+    /// Where the connection came from, which is also what decided its role.
     #[cfg_attr(feature = "openapi", schema(value_type = String))]
     pub ip_addr: IpAddr,
+    /// When the client registered.
     pub connected_at: Timestamp,
     /// What the server granted this client at registration.
     #[serde(default)]
     pub role: ClientRole,
 }
 
+/// The body of `GET /api/clients`: who is currently connected.
+///
+/// A presenter-only endpoint — the room does not get to enumerate the room.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ClientsResponse {
+    /// Every client currently registered with the server.
     pub clients: Vec<ClientInfo>,
 }

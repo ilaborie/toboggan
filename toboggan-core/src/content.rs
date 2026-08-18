@@ -4,19 +4,32 @@ use serde::{Deserialize, Serialize};
 
 use crate::Style;
 
+/// Anything a slide can say: its title, its body, or its speaker notes.
+///
+/// Use [`Self::display_text`] to ask what a piece of content *says*, rather
+/// than matching on the variants — the variants exist so that a renderer which
+/// can show markup gets markup, and everything else gets words.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(tag = "type")]
 pub enum Content {
+    /// Nothing at all — an absent title, a slide with no notes.
     #[default]
     Empty,
+    /// Plain text, with no markup to interpret.
     Text {
+        /// The text itself.
         text: String,
     },
+    /// An HTML fragment, as produced by rendering a slide's Markdown.
     Html {
+        /// The markup, ready to be placed into the document.
         raw: String,
+        /// Classes and inline style to apply where this is rendered.
         #[serde(default, skip_serializing_if = "Style::is_default")]
         style: Style,
+        /// A plain-text description, for anything that cannot show markup —
+        /// the terminal client, the stats table, a screen reader.
         #[serde(skip_serializing_if = "Option::is_none")]
         alt: Option<String>,
     },
@@ -27,11 +40,14 @@ impl Content {
         matches!(self, Self::Empty)
     }
 
+    /// Plain text content.
     pub fn text(text: impl Into<String>) -> Self {
         let text = text.into();
         Self::Text { text }
     }
 
+    /// An HTML fragment with no alt text, so [`Self::display_text`] falls back
+    /// to the markup.
     pub fn html(raw: impl Into<String>) -> Self {
         let style = Style::default();
         let raw = raw.into();
@@ -39,6 +55,7 @@ impl Content {
         Self::Html { raw, alt, style }
     }
 
+    /// An HTML fragment together with the plain text that stands in for it.
     pub fn html_with_alt(raw: impl Into<String>, alt: impl Into<String>) -> Self {
         let style = Style::default();
         let raw = raw.into();

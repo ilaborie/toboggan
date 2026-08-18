@@ -30,17 +30,31 @@ fn jitter_fraction() -> f32 {
     f32::from(value % 20) / 100.0
 }
 
+/// The two addresses every client needs: where to fetch the deck, and where to
+/// listen for changes to it.
 pub trait ClientConfig {
+    /// Base URL of the REST API, e.g. `http://localhost:8080`.
     fn api_url(&self) -> &str;
+    /// URL of the synchronisation socket, e.g. `ws://localhost:8080/api/ws`.
     fn websocket_url(&self) -> &str;
 }
 
+/// How a client backs off when the connection drops.
+///
+/// Jitter is on by default and matters more than it looks: a room full of
+/// clients that lost the same wifi will otherwise all come back at the same
+/// instant, and hit the server together.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RetryConfig {
+    /// How many times to retry before giving up.
     pub max_retries: usize,
+    /// Delay before the first retry.
     pub initial_retry_delay: Duration,
+    /// Ceiling the delay grows towards.
     pub max_retry_delay: Duration,
+    /// What the delay is multiplied by after each failed attempt.
     pub backoff_factor: f32,
+    /// Whether to spread retries out randomly.
     pub use_jitter: bool,
 }
 
@@ -57,6 +71,7 @@ impl Default for RetryConfig {
 }
 
 impl RetryConfig {
+    /// A retry policy from its parts.
     #[must_use]
     pub const fn new(
         max_retries: usize,
@@ -74,10 +89,14 @@ impl RetryConfig {
         }
     }
 
-    #[must_use]
     #[allow(clippy::cast_precision_loss)]
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_sign_loss)]
+    /// How long to wait before `attempt`, in milliseconds.
+    ///
+    /// Exponential in the attempt number, capped at
+    /// [`Self::max_retry_delay`], then spread by up to 20% when jitter is on.
+    #[must_use]
     pub fn calculate_delay(&self, attempt: usize) -> u64 {
         let initial_ms = self.initial_retry_delay.as_millis() as u64;
         let max_ms = self.max_retry_delay.as_millis() as u64;
@@ -100,21 +119,28 @@ impl RetryConfig {
         delay
     }
 
+    /// Delay before the first retry.
     #[must_use]
     pub const fn initial_retry_delay(&self) -> Duration {
         self.initial_retry_delay
     }
 
+    /// Ceiling the delay grows towards.
     #[must_use]
     pub const fn max_retry_delay(&self) -> Duration {
         self.max_retry_delay
     }
 }
 
+/// The configuration every client shares: where the server is, how to retry,
+/// and the presenter token if there is one.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BaseClientConfig {
+    /// Base URL of the REST API.
     pub api_url: String,
+    /// URL of the synchronisation socket.
     pub websocket_url: String,
+    /// How to back off when the connection drops.
     pub retry: RetryConfig,
     /// Secret offered at registration so a client that is not on the server's
     /// own machine may still drive the deck. `None` on the usual local
@@ -123,6 +149,7 @@ pub struct BaseClientConfig {
 }
 
 impl BaseClientConfig {
+    /// Points a client at `host:port`, over plain HTTP and `ws://`.
     #[must_use]
     pub fn new(host: &str, port: u16) -> Self {
         let api_url = format!("http://{host}:{port}");
@@ -135,11 +162,13 @@ impl BaseClientConfig {
         }
     }
 
+    /// The usual case: a server on this machine, on port 8080.
     #[must_use]
     pub fn localhost() -> Self {
         Self::new("localhost", 8080)
     }
 
+    /// Replaces the retry policy.
     #[must_use]
     pub fn with_retry(mut self, retry: RetryConfig) -> Self {
         self.retry = retry;
@@ -180,8 +209,12 @@ impl Default for BaseClientConfig {
 pub mod connection_timeouts {
     use std::time::Duration;
 
+    /// How often the server expects to hear from a client.
     pub const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
+    /// How long to wait for a connection before giving up on it.
     pub const CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
+    /// How often a client sends a ping — shorter than the heartbeat, so a slow
+    /// round trip does not read as a dead client.
     pub const PING_INTERVAL: Duration = Duration::from_secs(25);
 }
 

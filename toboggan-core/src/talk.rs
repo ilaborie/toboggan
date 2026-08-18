@@ -2,12 +2,20 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Date, Slide};
 
+/// A whole deck: what it is called, when it is given, and its slides in order.
+///
+/// Built by the parser from a folder of Markdown, or deserialized from a
+/// `.toml` that `toboggan build` produced.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Talk {
+    /// The deck's title, from `_cover.md` or from configuration.
     pub title: String,
+    /// The date the talk is given.
     pub date: Date,
+    /// Markup shown at the foot of every slide, from `_footer.html`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub footer: Option<String>,
+    /// Markup injected into `<head>`, from `_head.html` — fonts, custom CSS.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub head: Option<String>,
     /// BCP 47 language tag for the deck, e.g. `fr` or `pt-BR`.
@@ -25,10 +33,12 @@ pub struct Talk {
     /// Directory of the talk's source file(s). Populated by the loader; not serialized.
     #[serde(default, skip_serializing, skip_deserializing)]
     pub source_dir: Option<String>,
+    /// Every slide, in the order they are presented.
     pub slides: Vec<Slide>,
 }
 
 impl Talk {
+    /// An empty deck with the given title, dated today.
     pub fn new(title: impl Into<String>) -> Self {
         let title = title.into();
         let date = Date::today();
@@ -55,60 +65,78 @@ impl Talk {
     }
 
     #[must_use]
+    /// Sets the date the talk is given.
     pub fn with_date(mut self, date: Date) -> Self {
         self.date = date;
         self
     }
 
     #[must_use]
+    /// Sets the footer markup shown on every slide.
     pub fn with_footer(mut self, footer: impl Into<String>) -> Self {
         self.footer = Some(footer.into());
         self
     }
 
     #[must_use]
+    /// Sets markup to inject into the document `<head>`.
     pub fn with_head(mut self, head: impl Into<String>) -> Self {
         self.head = Some(head.into());
         self
     }
 
     #[must_use]
+    /// Sets the deck's BCP 47 language tag.
     pub fn with_lang(mut self, lang: impl Into<String>) -> Self {
         self.lang = Some(lang.into());
         self
     }
 
     #[must_use]
+    /// Sets the fallback working directory for the quake terminal.
     pub fn with_default_terminal_cwd(mut self, cwd: impl Into<String>) -> Self {
         self.default_terminal_cwd = Some(cwd.into());
         self
     }
 
     #[must_use]
+    /// Records the directory the deck was loaded from.
     pub fn with_source_dir(mut self, dir: impl Into<String>) -> Self {
         self.source_dir = Some(dir.into());
         self
     }
 
     #[must_use]
+    /// Appends a slide.
     pub fn add_slide(mut self, slide: Slide) -> Self {
         self.slides.push(slide);
         self
     }
 }
 
+/// The body of `GET /api/talk`: everything about a deck except its slides.
+///
+/// Carries slide *titles* rather than slides, so a client can render an outline,
+/// a progress bar and a presenter view without pulling the whole deck — and so
+/// the server can answer from a shared talk instead of deep-cloning every
+/// slide's rendered HTML on every request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TalkResponse {
+    /// The deck's title.
     pub title: String,
+    /// The date the talk is given.
     pub date: Date,
+    /// Footer markup, if the deck has any.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub footer: Option<String>,
+    /// `<head>` markup, if the deck has any.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub head: Option<String>,
     /// BCP 47 language tag; see [`Talk::lang`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
+    /// Every slide's title, in order.
     pub titles: Vec<String>,
     /// Step counts per slide (for clients that display step progress)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

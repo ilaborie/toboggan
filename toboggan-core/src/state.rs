@@ -2,23 +2,38 @@ use serde::{Deserialize, Serialize};
 
 use crate::SlideId;
 
+/// Where the presentation is: the one piece of state every client shares.
+///
+/// Broadcast as [`crate::Notification::State`] after every change, which is
+/// what keeps a browser, a terminal and a phone showing the same slide.
+///
+/// There are exactly three states, and no pause: a deck that is not moving is
+/// simply a `Running` state nobody is sending commands about.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(tag = "state")]
 pub enum State {
+    /// Nothing has been shown yet.
     #[default]
     Init,
+    /// Showing a slide.
     Running {
+        /// The slide on screen.
         current: SlideId,
+        /// Which reveal within that slide is showing.
         current_step: usize,
     },
+    /// Past the last slide.
     Done {
+        /// The last slide shown.
         current: SlideId,
+        /// The reveal it was left on.
         current_step: usize,
     },
 }
 
 impl State {
+    /// The slide on screen, or `None` before the deck has started.
     #[must_use]
     pub fn current(&self) -> Option<SlideId> {
         match self {
@@ -27,6 +42,7 @@ impl State {
         }
     }
 
+    /// The reveal currently showing, counting from zero.
     #[must_use]
     pub fn current_step(&self) -> usize {
         match self {
@@ -41,6 +57,8 @@ impl State {
         (self.current_step(), slide_step_count)
     }
 
+    /// Moves to a different reveal on the same slide. A no-op before the deck
+    /// has started.
     pub fn update_step(&mut self, step: usize) {
         match self {
             Self::Init => {}
@@ -50,11 +68,13 @@ impl State {
         }
     }
 
+    /// Whether the deck is on its first slide.
     #[must_use]
     pub fn is_first_slide(&self, total_slides: usize) -> bool {
         total_slides > 0 && self.current() == Some(SlideId::FIRST)
     }
 
+    /// Whether the deck is on its last slide.
     #[must_use]
     pub fn is_last_slide(&self, total_slides: usize) -> bool {
         if total_slides == 0 {
@@ -63,6 +83,7 @@ impl State {
         self.current() == Some(SlideId::new(total_slides - 1))
     }
 
+    /// The slide after this one, or `None` at the end of the deck.
     #[must_use]
     pub fn next(&self, total_slides: usize) -> Option<SlideId> {
         let current = self.current()?;
@@ -70,11 +91,13 @@ impl State {
         (next_index < total_slides).then(|| SlideId::new(next_index))
     }
 
+    /// The slide before this one, or `None` at the start of the deck.
     #[must_use]
     pub fn previous(&self, _total_slides: usize) -> Option<SlideId> {
         self.current()?.prev()
     }
 
+    /// Moves to a slide, from any state, resetting to its first reveal.
     pub fn update_slide(&mut self, slide_id: SlideId) {
         match self {
             Self::Init | Self::Running { .. } | Self::Done { .. } => {
