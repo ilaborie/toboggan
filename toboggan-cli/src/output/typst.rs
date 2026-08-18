@@ -253,13 +253,17 @@ fn content_to_typst(content: &Content) -> String {
     }
 }
 
-/// Escape a URL for use inside a Typst double-quoted string argument.
+/// Escape text for use inside a Typst double-quoted string argument.
 ///
 /// Typst string literals use `\` as the escape character, so both `"` and `\`
-/// must be escaped. This is separate from `escape_typst`, which escapes Typst
-/// markup characters for content nodes.
-fn escape_typst_string(url: &str) -> String {
-    url.replace('\\', r"\\").replace('"', r#"\""#)
+/// must be escaped. Line breaks are escaped too, because a code block passed to
+/// `#raw(block: true, …)` arrives here with its own. This is separate from
+/// `escape_typst`, which escapes Typst markup characters for content nodes.
+fn escape_typst_string(text: &str) -> String {
+    text.replace('\\', r"\\")
+        .replace('"', r#"\""#)
+        .replace('\r', r"\r")
+        .replace('\n', r"\n")
 }
 
 /// Convert a `CommonMark` source string to Typst markup.
@@ -410,6 +414,10 @@ fn render_alert<'a>(
 ) {
     let label = title_override.unwrap_or_else(|| kind.default_title());
     let clue = clue_fn(kind);
+    // The title is the author's, and it lands inside a Typst string literal:
+    // `> [!NOTE] He said "hi"` closes the argument early and fails the whole
+    // compile. Same class as the backtick that used to cost the guide its PDF.
+    let label = escape_typst_string(label);
     let _ = writeln!(out, "#{clue}(title: \"{label}\")[");
     render_children(node, out, list_depth, false);
     out.push_str("]\n\n");
@@ -483,8 +491,6 @@ fn render_table<'a>(node: &'a MarkdownNode<'a>, out: &mut String) {
     let _ = writeln!(out, ")\n");
 }
 
-/// Write an inline code span to `out`, using enough backticks to avoid
-/// conflicts with any backtick sequences inside the literal.
 /// Write inline code to `out` as Typst.
 ///
 /// A backtick in the content goes through `#raw("…")` rather than a longer
@@ -528,30 +534,36 @@ fn write_math(out: &mut String, latex: &str, display_math: bool) {
     }
 }
 
-/// Write a fenced code block to `out`, using enough backticks to avoid
-/// conflicts with any backtick sequences inside the code.
+/// Write a fenced code block to `out` as Typst.
+///
+/// Code containing a backtick goes through `#raw(block: true, …)` for the same
+/// reason [`write_inline_code`] does: Typst reads one or three backticks and
+/// nothing else, so it has no equivalent of `CommonMark`'s "a longer fence
+/// wins" rule. Padding the fence out past three — which this used to do —
+/// closes the block at the third backtick and leaves the rest as markup. A deck
+/// that documents markdown contains a fence inside a fence, so the guide itself
+/// is the trigger.
 fn write_fenced_code(out: &mut String, lang: &str, code: &str) {
-    let fence_len = max_consecutive_backticks(code) + 3;
-    let fence = "`".repeat(fence_len);
-    let _ = write!(out, "{fence}{lang}\n{code}");
+    if code.contains('`') {
+        let lang = if lang.is_empty() {
+            String::new()
+        } else {
+            format!(r#"lang: "{}", "#, escape_typst_string(lang))
+        };
+        let _ = writeln!(
+            out,
+            r#"#raw(block: true, {lang}"{}")"#,
+            escape_typst_string(code)
+        );
+        out.push('\n');
+        return;
+    }
+
+    let _ = write!(out, "```{lang}\n{code}");
     if !code.ends_with('\n') {
         out.push('\n');
     }
-    let _ = writeln!(out, "{fence}\n");
-}
-
-fn max_consecutive_backticks(src: &str) -> usize {
-    let mut max = 0;
-    let mut current = 0;
-    for ch in src.chars() {
-        if ch == '`' {
-            current += 1;
-            max = max.max(current);
-        } else {
-            current = 0;
-        }
-    }
-    max
+    out.push_str("```\n\n");
 }
 
 /// Escape Typst markup special characters with a backslash.
@@ -942,6 +954,55 @@ $$x = \frac{-b}{2a}$$
     /// It cost the guide deck its PDF: a keyboard table with a backtick in one
     /// cell desynchronised every fence after it, and `typst` reported the
     /// failure ninety lines later, on a `$` in an unrelated shell transcript.
+    /// The same defect as the inline case, one function down, and the deck that
+    /// triggers it is the guide: documenting markdown means a fence inside a
+    /// fence. Typst reads one or three backticks and nothing else, so padding
+    /// the fence out to four closed the block at the third and spilled the rest
+    /// into the document as markup.
+    #[test]
+    fn a_fenced_block_containing_a_fence_is_emitted_as_raw() {
+        let result = md_to_typst("````markdown\n```rust\nlet x = 1;\n```\n````\n");
+        assert!(
+            result.contains("#raw(block: true"),
+            "backtick content goes through #raw: {result}"
+        );
+        assert!(
+            !result.contains("````"),
+            "no four-backtick fence, which Typst does not read: {result}"
+        );
+        assert!(
+            result.contains(r"let x = 1;"),
+            "the code survives: {result}"
+        );
+    }
+
+    /// A code block reaches `#raw` as a string literal, so its own line breaks
+    /// have to be escaped or they end the literal.
+    #[test]
+    fn a_raw_code_block_escapes_its_line_breaks() {
+        let result = md_to_typst("````text\n``\nsecond line\n````\n");
+        assert!(
+            result.contains(r"\n"),
+            "line breaks escaped inside the string literal: {result}"
+        );
+    }
+
+    /// An alert title is the author's text and lands inside a Typst string
+    /// literal. A quote in it closed the argument early and failed the whole
+    /// compile — the same class as the backtick below, on an adjacent line.
+    #[test]
+    fn an_alert_title_containing_a_quote_is_escaped() {
+        let result = md_to_typst("> [!NOTE] He said \"hi\"\n> Body.\n");
+        assert!(
+            result.contains(r#"\"hi\""#),
+            "the quote is escaped inside the title argument: {result}"
+        );
+        assert!(
+            !result.contains(r#"title: "He said "hi""#),
+            "the unescaped form would not compile: {result}"
+        );
+    }
+
     #[test]
     fn inline_code_containing_a_backtick_is_emitted_as_raw() {
         let result = md_to_typst("Use `` `tick` `` here.");
