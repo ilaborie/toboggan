@@ -1,7 +1,4 @@
-import {
-	AppConfig,
-	WebSocketConfig,
-} from "../toboggan-wasm/pkg/toboggan_wasm";
+import { AppConfig, WebSocketConfig } from "../toboggan-wasm/pkg/toboggan_wasm";
 
 /**
  * Builds the configuration both entry points hand to wasm.

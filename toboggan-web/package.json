@@ -8,12 +8,13 @@
 		"build": "tsc && vite build",
 		"preview": "vite preview",
 		"serve": "vite preview --port 8000",
-		"lint": "biome lint src/",
-		"lint:fix": "biome lint --write src/",
-		"format": "biome format src/",
-		"format:fix": "biome format --write src/",
-		"check": "biome check src/",
-		"check:fix": "biome check --write src/"
+		"lint": "biome lint src/ tests/ playwright.config.ts",
+		"lint:fix": "biome lint --write src/ tests/ playwright.config.ts",
+		"format": "biome format src/ tests/ playwright.config.ts",
+		"format:fix": "biome format --write src/ tests/ playwright.config.ts",
+		"check": "biome check src/ tests/ playwright.config.ts",
+		"check:fix": "biome check --write src/ tests/ playwright.config.ts",
+		"test:e2e": "playwright test"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.7",
