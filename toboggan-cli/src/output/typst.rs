@@ -485,21 +485,23 @@ fn render_table<'a>(node: &'a MarkdownNode<'a>, out: &mut String) {
 
 /// Write an inline code span to `out`, using enough backticks to avoid
 /// conflicts with any backtick sequences inside the literal.
+/// Write inline code to `out` as Typst.
+///
+/// A backtick in the content goes through `#raw("…")` rather than a longer
+/// delimiter. Typst has no equivalent of `CommonMark`'s rule that more
+/// backticks open a longer span: to Typst, ``` `` ``` is an *empty* raw span,
+/// so the fence closes immediately and the literal backtick that follows opens
+/// a new one that runs to the end of the document. Emitting that produced a
+/// file that did not compile, and the error surfaced hundreds of lines later
+/// wherever the runaway span happened to hit a `$`.
 fn write_inline_code(out: &mut String, code: &str) {
-    let fence_len = max_consecutive_backticks(code) + 1;
-    let fence = "`".repeat(fence_len);
-    // When using multi-backtick delimiters, Typst requires a space before/after
-    // the content if it would otherwise start or end with a backtick.
-    let need_space = fence_len > 1 && (code.starts_with('`') || code.ends_with('`'));
-    out.push_str(&fence);
-    if need_space {
-        out.push(' ');
+    if code.contains('`') {
+        let _ = write!(out, r#"#raw("{}")"#, escape_typst_string(code));
+        return;
     }
+    out.push('`');
     out.push_str(code);
-    if need_space {
-        out.push(' ');
-    }
-    out.push_str(&fence);
+    out.push('`');
 }
 
 /// Write a `$…$` / `$$…$$` expression to `out` as a `MiTeX` call.
@@ -932,13 +934,24 @@ $$x = \frac{-b}{2a}$$
         assert!(result.contains("let x = 1;"), "code content preserved");
     }
 
+    /// Typst has no equivalent of `CommonMark`'s "more backticks open a longer
+    /// span" rule: ``` `` ``` is an empty raw span, so the delimiter closes at
+    /// once and the literal backtick after it opens a span that runs away to
+    /// the end of the file. This test used to assert that broken output.
+    ///
+    /// It cost the guide deck its PDF: a keyboard table with a backtick in one
+    /// cell desynchronised every fence after it, and `typst` reported the
+    /// failure ninety lines later, on a `$` in an unrelated shell transcript.
     #[test]
-    fn test_inline_code_with_backtick() {
-        // Single backtick in content requires double-backtick delimiter in Typst.
+    fn inline_code_containing_a_backtick_is_emitted_as_raw() {
         let result = md_to_typst("Use `` `tick` `` here.");
         assert!(
-            result.contains("`` `tick` ``"),
-            "double-backtick delimiter used"
+            result.contains(r#"#raw("`tick`")"#),
+            "backtick content goes through #raw: {result}"
+        );
+        assert!(
+            !result.contains("`` "),
+            "no multi-backtick inline delimiter: {result}"
         );
     }
 

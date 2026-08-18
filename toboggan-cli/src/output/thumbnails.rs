@@ -108,6 +108,20 @@ fn compile_first_page_png(
         .arg(&pattern)
         .output()
         .map_err(|err| TobogganCliError::typst(&err))?;
+
+    // Removed before the status is checked, not after. This scratch file is
+    // written into the user's own slides folder, and the cleanup used to sit
+    // below the early return — so the one case that leaves it behind was a
+    // failed compile, which is precisely the case where the user then finds an
+    // unexplained `.toboggan-thumb.typ` next to their slides.
+    //
+    // Best-effort, but not silent: the other two typst call sites already log.
+    if slides_dir.is_some()
+        && let Err(err) = std::fs::remove_file(&input)
+    {
+        tracing::debug!("could not remove {}: {err}", input.display());
+    }
+
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(TobogganCliError::typst_failed(&format!(
@@ -115,16 +129,6 @@ fn compile_first_page_png(
             output.status,
             stderr.trim()
         )));
-    }
-
-    // Best-effort, but not silent: this scratch file is written into the user's
-    // own slides folder, so a failure to remove it leaves `.toboggan-thumb.typ`
-    // sitting there with nothing to explain it. The other two typst call sites
-    // already log; this one discarded the error entirely.
-    if slides_dir.is_some()
-        && let Err(err) = std::fs::remove_file(&input)
-    {
-        tracing::debug!("could not remove {}: {err}", input.display());
     }
     let first_page = dir.path().join("page-1.png");
     std::fs::copy(&first_page, png)
