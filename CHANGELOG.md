@@ -51,6 +51,11 @@ Entries are grouped the way the commits are: this repository uses
   existed but the flag was hardcoded to `false`.
 - **`toboggan stats` reports the `duration` front matter**, which until now was
   parsed, validated, and read by nothing.
+- **CI runs the project against its own decks**: both examples are linted and
+  exported, the prebuilt guide artifact is checked for drift, and a Playwright
+  smoke test drives every route in a browser. Rustdoc and `cargo machete` join
+  the gate.
+- **The guide is published** at <https://ilaborie.github.io/toboggan>.
 
 ### Changed
 
@@ -66,6 +71,15 @@ Entries are grouped the way the commits are: this repository uses
 
 ### Fixed
 
+- **One backtick no longer breaks the whole PDF.** Inline code containing a
+  backtick was emitted with a `CommonMark`-style longer delimiter, which Typst
+  does not implement — the span ran away to the end of the document and `typst`
+  reported the failure on an unrelated line far below. The guide deck's own PDF
+  and `GET /download.pdf` were both failing.
+- **The presenter view's previews show the whole slide.** Both `zoom` rules
+  targeted `.screen > *`, but the slide component attaches its shadow root to
+  the host it is given, so the rules matched nothing and the next-slide pane
+  showed a clipped horizontal slice of one line.
 - **The dev tasks no longer bind to `0.0.0.0`.** `.mise.toml` exported
   `TOBOGGAN_HOST=0.0.0.0` for every task while `mise serve` printed
   `http://localhost:8080`.
