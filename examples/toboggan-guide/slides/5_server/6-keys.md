@@ -21,10 +21,8 @@ classes = ["no_title", "wide"]
 <!-- pause -->
 
 > [!TIP]
-> A clicker sends `PageUp`/`PageDown`, and those are bound to **steps** rather
-> than slides on purpose: `NextStep` moves on to the next slide once a slide's
-> reveals run out, so the remote walks the whole deck instead of skipping every
-> build.
+> A clicker sends `PageUp`/`PageDown`, bound to **steps** rather than slides on
+> purpose — so the remote walks the whole deck instead of skipping every build.
 
 <!-- notes -->
 `.` and `w` are for the moment someone asks a question and you want the room

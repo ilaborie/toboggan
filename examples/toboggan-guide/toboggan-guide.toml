@@ -465,10 +465,7 @@ Each slide may open with a TOML block between `+++` delimiters:
 +++
 title = "Custom Title"
 classes = ["no_title", "wide"]
-style = "background: #112; color: gold;"
-skip = false
 duration = "2m"
-hidden_in = ["pdf"]
 +++
 ```
 
@@ -500,10 +497,7 @@ raw = """
 <pre style="background-color:#eff1f5;"><code class="language-toml"><span style="color:#4f5b66;">+++
 </span><span style="color:#4f5b66;">title = &quot;Custom Title&quot;
 </span><span style="color:#4f5b66;">classes = [&quot;no_title&quot;, &quot;wide&quot;]
-</span><span style="color:#4f5b66;">style = &quot;background: #112; color: gold;&quot;
-</span><span style="color:#4f5b66;">skip = false
 </span><span style="color:#4f5b66;">duration = &quot;2m&quot;
-</span><span style="color:#4f5b66;">hidden_in = [&quot;pdf&quot;]
 </span><span style="color:#4f5b66;">+++
 </span></code></pre>
 
@@ -560,10 +554,7 @@ Each slide may open with a TOML block between `+++` delimiters:
 +++
 title = "Custom Title"
 classes = ["no_title", "wide"]
-style = "background: #112; color: gold;"
-skip = false
 duration = "2m"
-hidden_in = ["pdf"]
 +++
 ```
 
@@ -618,13 +609,8 @@ It is served at `/public/`, so that is how a slide asks for it:
 ```
 
 > [!WARNING]
-> The leading `/public/` is not optional. Slides render at `/run`, and only
-> `/public/` is mapped to a directory — so `![…](diagram.webp)` asks for
-> `/diagram.webp`, which nothing serves. The `link/broken` lint rule catches
-> exactly this, and says where the file actually is.
-
-`toboggan build -o deck.html` copies `public/` next to the exported file, so a
-deck stays self-contained when you publish it.
+> The leading `/public/` is not optional — `![…](diagram.webp)` asks for
+> `/diagram.webp`, which nothing serves. The `link/broken` rule catches it.
 """
 
 [slides.style]
@@ -655,13 +641,9 @@ raw = """
 </span></code></pre>
 <div class="markdown-alert markdown-alert-warning">
 <p class="markdown-alert-title">Warning</p>
-<p>The leading <code>/public/</code> is not optional. Slides render at <code>/run</code>, and only
-<code>/public/</code> is mapped to a directory — so <code>![…](diagram.webp)</code> asks for
-<code>/diagram.webp</code>, which nothing serves. The <code>link/broken</code> lint rule catches
-exactly this, and says where the file actually is.</p>
+<p>The leading <code>/public/</code> is not optional — <code>![…](diagram.webp)</code> asks for
+<code>/diagram.webp</code>, which nothing serves. The <code>link/broken</code> rule catches it.</p>
 </div>
-<p><code>toboggan build -o deck.html</code> copies <code>public/</code> next to the exported file, so a
-deck stays self-contained when you publish it.</p>
 </div><!-- end step -->
 """
 alt = """
@@ -682,13 +664,8 @@ It is served at `/public/`, so that is how a slide asks for it:
 ```
 
 > [!WARNING]
-> The leading `/public/` is not optional. Slides render at `/run`, and only
-> `/public/` is mapped to a directory — so `![…](diagram.webp)` asks for
-> `/diagram.webp`, which nothing serves. The `link/broken` lint rule catches
-> exactly this, and says where the file actually is.
-
-`toboggan build -o deck.html` copies `public/` next to the exported file, so a
-deck stays self-contained when you publish it.
+> The leading `/public/` is not optional — `![…](diagram.webp)` asks for
+> `/diagram.webp`, which nothing serves. The `link/broken` rule catches it.
 """
 
 [slides.body.style]
@@ -700,17 +677,26 @@ classes = [
 [slides.notes]
 type = "Html"
 raw = """
+<p>Slides render at <code>/run</code>, and only <code>/public/</code> is mapped to a directory on disk,
+which is why the prefix matters.</p>
 <p>This is the single most common way a deck breaks between the laptop and the
 projector: the image is right there on disk, the URL is one segment off, and the
 slide renders with a broken image icon in front of the room.</p>
-<p><code>--public-dir</code> overrides the location if the folder is somewhere else.</p>
+<p><code>toboggan build -o deck.html</code> copies <code>public/</code> next to the exported file, so a
+deck stays self-contained when you publish it. <code>--public-dir</code> overrides the
+location if the folder is somewhere else.</p>
 """
 alt = """
+Slides render at `/run`, and only `/public/` is mapped to a directory on disk,
+which is why the prefix matters.
+
 This is the single most common way a deck breaks between the laptop and the
 projector: the image is right there on disk, the URL is one segment off, and the
 slide renders with a broken image icon in front of the room.
 
-`--public-dir` overrides the location if the folder is somewhere else.
+`toboggan build -o deck.html` copies `public/` next to the exported file, so a
+deck stays self-contained when you publish it. `--public-dir` overrides the
+location if the folder is somewhere else.
 """
 
 [slides.notes.style]
@@ -937,16 +923,8 @@ kind = "Standard"
 body_source = """
 # Live terminals
 
-Embed a real PTY in a slide. Syntax:
-
-```markdown
-<!-- term: . -->                      # shell in the current dir
-<!-- term: ./src :light -->           # light theme
-<!-- term: . | bacon test -->         # run a command on connect
-```
-
-Add the `term-50vh` class to pin the terminal pane to half the viewport height
-(this slide uses it) — otherwise it fills the space left below the content.
+Embed a real PTY in a slide: `<!-- term: . -->`, plus `:light` for the theme
+and `| cmd` to run something on connect.
 
 The terminal below is **live** — click it and type:
 """
@@ -966,28 +944,15 @@ text = "2.3 term — live terminals"
 type = "Html"
 raw = """
 <h1>Live terminals</h1>
-<p>Embed a real PTY in a slide. Syntax:</p>
-<pre style="background-color:#eff1f5;"><code class="language-markdown"><span style="color:#a7adba;">&lt;!-- term: . --&gt;</span><span style="color:#4f5b66;">                      # shell in the current dir
-</span><span style="color:#a7adba;">&lt;!-- term: ./src :light --&gt;</span><span style="color:#4f5b66;">           # light theme
-</span><span style="color:#4f5b66;">&lt;!-- term: . | bacon test --&gt;         # run a command on connect
-</span></code></pre>
-<p>Add the <code>term-50vh</code> class to pin the terminal pane to half the viewport height
-(this slide uses it) — otherwise it fills the space left below the content.</p>
+<p>Embed a real PTY in a slide: <code>&lt;!-- term: . --&gt;</code>, plus <code>:light</code> for the theme
+and <code>| cmd</code> to run something on connect.</p>
 <p>The terminal below is <strong>live</strong> — click it and type:</p>
 """
 alt = """
 # Live terminals
 
-Embed a real PTY in a slide. Syntax:
-
-```markdown
-<!-- term: . -->                      # shell in the current dir
-<!-- term: ./src :light -->           # light theme
-<!-- term: . | bacon test -->         # run a command on connect
-```
-
-Add the `term-50vh` class to pin the terminal pane to half the viewport height
-(this slide uses it) — otherwise it fills the space left below the content.
+Embed a real PTY in a slide: `<!-- term: . -->`, plus `:light` for the theme
+and `| cmd` to run something on connect.
 
 The terminal below is **live** — click it and type:
 """
@@ -1002,6 +967,9 @@ classes = [
 [slides.notes]
 type = "Html"
 raw = """
+<p>The full syntax: <code>&lt;!-- term: ./src :light --&gt;</code>, <code>&lt;!-- term: . | bacon test --&gt;</code>.</p>
+<p>Add the <code>term-50vh</code> class to pin the terminal pane to half the viewport height
+(this slide uses it) — otherwise it fills the space left below the content.</p>
 <p>Multiple <code>term</code> comments on one slide render side by side. The shell is chosen
 by the server's --shell flag. The fenced examples above stay as text; the bare
 one below is a working terminal. <code>term-50vh</code> fixes the pane at 50vh so it does
@@ -1009,6 +977,11 @@ not push past the slide; without it the terminal flexes to fill the remaining
 height.</p>
 """
 alt = """
+The full syntax: `<!-- term: ./src :light -->`, `<!-- term: . | bacon test -->`.
+
+Add the `term-50vh` class to pin the terminal pane to half the viewport height
+(this slide uses it) — otherwise it fills the space left below the content.
+
 Multiple `term` comments on one slide render side by side. The shell is chosen
 by the server's --shell flag. The fenced examples above stay as text; the bare
 one below is a working terminal. `term-50vh` fixes the pane at 50vh so it does
@@ -1031,7 +1004,7 @@ kind = "Standard"
 body_source = """
 # Embed a source file
 
-Pull an external file in as a fenced code block — no copy-paste drift:
+Pull a file in as a fenced code block — no copy-paste drift:
 
 ```markdown
 <!-- code:rust:snippets/hello.rs -->
@@ -1041,9 +1014,8 @@ Pull an external file in as a fenced code block — no copy-paste drift:
 
 ```rust
 fn main() {
-    // Embedded into a slide by `<!-- code:rust:snippets/hello.rs -->`.
-    // The file stays the single source of truth — edit it once, the
-    // slide updates on the next build.
+    // Embedded by `<!-- code:rust:snippets/hello.rs -->`. The file stays the
+    // single source of truth — edit it once, the slide updates on next build.
     println!("Hello from a Toboggan code embed!");
 }
 
@@ -1051,11 +1023,7 @@ fn main() {
 
 > [!IMPORTANT]
 > The path resolves against the **deck root** — the folder *containing* the one
-> you pass to `-p`, never the slide file and never your shell's current
-> directory. So `snippets/` sits **beside** `slides/`, not inside it, and the
-> same embed resolves identically wherever you run the build from.
-
-Absolute paths and `..` are refused: an embed cannot reach outside the deck.
+> you pass to `-p`. So `snippets/` sits **beside** `slides/`, not inside it.
 """
 
 [slides.style]
@@ -1072,16 +1040,15 @@ text = "2.4 code — embed a file"
 type = "Html"
 raw = """
 <h1>Embed a source file</h1>
-<p>Pull an external file in as a fenced code block — no copy-paste drift:</p>
+<p>Pull a file in as a fenced code block — no copy-paste drift:</p>
 <pre style="background-color:#eff1f5;"><code class="language-markdown"><span style="color:#a7adba;">&lt;!-- code:rust:snippets/hello.rs --&gt;
 </span></code></pre>
 
 <div class="step step-0"><!-- begin step -->
 <p>…which renders, live from disk, as:</p>
 <pre style="background-color:#eff1f5;"><code class="language-rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">main</span><span style="color:#4f5b66;">() {
-</span><span style="color:#4f5b66;">    </span><span style="color:#a7adba;">// Embedded into a slide by `&lt;!-- code:rust:snippets/hello.rs --&gt;`.
-</span><span style="color:#4f5b66;">    </span><span style="color:#a7adba;">// The file stays the single source of truth — edit it once, the
-</span><span style="color:#4f5b66;">    </span><span style="color:#a7adba;">// slide updates on the next build.
+</span><span style="color:#4f5b66;">    </span><span style="color:#a7adba;">// Embedded by `&lt;!-- code:rust:snippets/hello.rs --&gt;`. The file stays the
+</span><span style="color:#4f5b66;">    </span><span style="color:#a7adba;">// single source of truth — edit it once, the slide updates on next build.
 </span><span style="color:#4f5b66;">    println!(&quot;</span><span style="color:#a3be8c;">Hello from a Toboggan code embed!</span><span style="color:#4f5b66;">&quot;);
 </span><span style="color:#4f5b66;">}
 </span><span style="color:#4f5b66;">
@@ -1089,17 +1056,14 @@ raw = """
 <div class="markdown-alert markdown-alert-important">
 <p class="markdown-alert-title">Important</p>
 <p>The path resolves against the <strong>deck root</strong> — the folder <em>containing</em> the one
-you pass to <code>-p</code>, never the slide file and never your shell's current
-directory. So <code>snippets/</code> sits <strong>beside</strong> <code>slides/</code>, not inside it, and the
-same embed resolves identically wherever you run the build from.</p>
+you pass to <code>-p</code>. So <code>snippets/</code> sits <strong>beside</strong> <code>slides/</code>, not inside it.</p>
 </div>
-<p>Absolute paths and <code>..</code> are refused: an embed cannot reach outside the deck.</p>
 </div><!-- end step -->
 """
 alt = """
 # Embed a source file
 
-Pull an external file in as a fenced code block — no copy-paste drift:
+Pull a file in as a fenced code block — no copy-paste drift:
 
 ```markdown
 <!-- code:rust:snippets/hello.rs -->
@@ -1109,9 +1073,8 @@ Pull an external file in as a fenced code block — no copy-paste drift:
 
 ```rust
 fn main() {
-    // Embedded into a slide by `<!-- code:rust:snippets/hello.rs -->`.
-    // The file stays the single source of truth — edit it once, the
-    // slide updates on the next build.
+    // Embedded by `<!-- code:rust:snippets/hello.rs -->`. The file stays the
+    // single source of truth — edit it once, the slide updates on next build.
     println!("Hello from a Toboggan code embed!");
 }
 
@@ -1119,14 +1082,30 @@ fn main() {
 
 > [!IMPORTANT]
 > The path resolves against the **deck root** — the folder *containing* the one
-> you pass to `-p`, never the slide file and never your shell's current
-> directory. So `snippets/` sits **beside** `slides/`, not inside it, and the
-> same embed resolves identically wherever you run the build from.
+> you pass to `-p`. So `snippets/` sits **beside** `slides/`, not inside it.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>Never the slide file, and never your shell's current directory — so the same
+embed resolves identically wherever you run the build from.</p>
+<p>Absolute paths and <code>..</code> are refused: an embed cannot reach outside the deck.</p>
+"""
+alt = """
+Never the slide file, and never your shell's current directory — so the same
+embed resolves identically wherever you run the build from.
 
 Absolute paths and `..` are refused: an embed cannot reach outside the deck.
 """
 
-[slides.body.style]
+[slides.notes.style]
 classes = [
     "no_title",
     "wide",
@@ -1138,7 +1117,8 @@ body_source = """
 # Rich Markdown
 
 Tables, task lists, footnotes, strikethrough, `==highlight==`, and
-GitHub-style **alerts** all work out of the box:
+GitHub-style **alerts** all work out of the box — `NOTE`, `TIP`, `WARNING`
+and `CAUTION`:
 
 ```markdown
 > [!TIP]
@@ -1153,9 +1133,6 @@ GitHub-style **alerts** all work out of the box:
 
 > [!WARNING]
 > Something to watch out for.
-
-> [!CAUTION]
-> A potentially destructive action.
 """
 
 [slides.style]
@@ -1173,7 +1150,8 @@ type = "Html"
 raw = """
 <h1>Rich Markdown</h1>
 <p>Tables, task lists, footnotes, strikethrough, <code>==highlight==</code>, and
-GitHub-style <strong>alerts</strong> all work out of the box:</p>
+GitHub-style <strong>alerts</strong> all work out of the box — <code>NOTE</code>, <code>TIP</code>, <code>WARNING</code>
+and <code>CAUTION</code>:</p>
 <pre style="background-color:#eff1f5;"><code class="language-markdown"><span style="color:#d08770;">&gt; [!TIP]
 </span><span style="color:#d08770;">&gt; Optional advice that helps the reader.
 </span></code></pre>
@@ -1191,17 +1169,14 @@ GitHub-style <strong>alerts</strong> all work out of the box:</p>
 <p class="markdown-alert-title">Warning</p>
 <p>Something to watch out for.</p>
 </div>
-<div class="markdown-alert markdown-alert-caution">
-<p class="markdown-alert-title">Caution</p>
-<p>A potentially destructive action.</p>
-</div>
 </div><!-- end step -->
 """
 alt = """
 # Rich Markdown
 
 Tables, task lists, footnotes, strikethrough, `==highlight==`, and
-GitHub-style **alerts** all work out of the box:
+GitHub-style **alerts** all work out of the box — `NOTE`, `TIP`, `WARNING`
+and `CAUTION`:
 
 ```markdown
 > [!TIP]
@@ -1216,9 +1191,6 @@ GitHub-style **alerts** all work out of the box:
 
 > [!WARNING]
 > Something to watch out for.
-
-> [!CAUTION]
-> A potentially destructive action.
 """
 
 [slides.body.style]
@@ -1821,9 +1793,6 @@ $ toboggan build -p ./slides/ \
 | `-o, --output` | Output file (extension picks the format) |
 | `-t, --title` | Override the title |
 | `-d, --date` | Override the date (`YYYY-MM-DD`) |
-
-> [!NOTE]
-> The input must be a **folder** — a single flat `.md` file is not accepted.
 '''
 
 [slides.style]
@@ -1876,10 +1845,6 @@ raw = '''
 </tr>
 </tbody>
 </table>
-<div class="markdown-alert markdown-alert-note">
-<p class="markdown-alert-title">Note</p>
-<p>The input must be a <strong>folder</strong> — a single flat <code>.md</code> file is not accepted.</p>
-</div>
 </div><!-- end step -->
 '''
 alt = '''
@@ -1904,12 +1869,24 @@ $ toboggan build -p ./slides/ \
 | `-o, --output` | Output file (extension picks the format) |
 | `-t, --title` | Override the title |
 | `-d, --date` | Override the date (`YYYY-MM-DD`) |
-
-> [!NOTE]
-> The input must be a **folder** — a single flat `.md` file is not accepted.
 '''
 
 [slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>The input must be a <strong>folder</strong> — a single flat <code>.md</code> file is not accepted.</p>
+"""
+alt = """
+The input must be a **folder** — a single flat `.md` file is not accepted.
+"""
+
+[slides.notes.style]
 classes = [
     "no_title",
     "wide",
@@ -2233,17 +2210,12 @@ $ toboggan lint -p ./slides/
 | Flag | Purpose |
 | --- | --- |
 | `--deny <level>` | Exit non-zero at/above `info`/`warning`/`error` (CI gates) |
-| `--format human` | Coloured lines for a terminal (the default) |
-| `--format github` | Workflow commands, which become inline PR annotations |
-| `--format sarif` | SARIF 2.1.0, for GitHub code scanning |
-| `--format json` | The `LintReport` as JSON (`--json` is a shorthand) |
+| `--format <fmt>` | `human`, `github` (PR annotations), `sarif`, `json` |
 | `--no-spell` | Skip spell-checking (it runs by default via the `typos` binary) |
 
 > [!TIP]
 > Diagnostics carry the file they came from, so `--format github` annotates the
-> offending slide in a pull request. The linter is a library (`toboggan-lint`) —
-> the same rules power the MCP `lint` tool, so an LLM editing the deck sees
-> exactly what CI sees.
+> offending slide right in a pull request.
 """
 
 [slides.style]
@@ -2281,20 +2253,8 @@ section dividers, nested steps, images without <code>alt</code>, oversized slide
 <td>Exit non-zero at/above <code>info</code>/<code>warning</code>/<code>error</code> (CI gates)</td>
 </tr>
 <tr>
-<td><code>--format human</code></td>
-<td>Coloured lines for a terminal (the default)</td>
-</tr>
-<tr>
-<td><code>--format github</code></td>
-<td>Workflow commands, which become inline PR annotations</td>
-</tr>
-<tr>
-<td><code>--format sarif</code></td>
-<td>SARIF 2.1.0, for GitHub code scanning</td>
-</tr>
-<tr>
-<td><code>--format json</code></td>
-<td>The <code>LintReport</code> as JSON (<code>--json</code> is a shorthand)</td>
+<td><code>--format &lt;fmt&gt;</code></td>
+<td><code>human</code>, <code>github</code> (PR annotations), <code>sarif</code>, <code>json</code></td>
 </tr>
 <tr>
 <td><code>--no-spell</code></td>
@@ -2305,9 +2265,7 @@ section dividers, nested steps, images without <code>alt</code>, oversized slide
 <div class="markdown-alert markdown-alert-tip">
 <p class="markdown-alert-title">Tip</p>
 <p>Diagnostics carry the file they came from, so <code>--format github</code> annotates the
-offending slide in a pull request. The linter is a library (<code>toboggan-lint</code>) —
-the same rules power the MCP <code>lint</code> tool, so an LLM editing the deck sees
-exactly what CI sees.</p>
+offending slide right in a pull request.</p>
 </div>
 </div><!-- end step -->
 """
@@ -2326,20 +2284,32 @@ $ toboggan lint -p ./slides/
 | Flag | Purpose |
 | --- | --- |
 | `--deny <level>` | Exit non-zero at/above `info`/`warning`/`error` (CI gates) |
-| `--format human` | Coloured lines for a terminal (the default) |
-| `--format github` | Workflow commands, which become inline PR annotations |
-| `--format sarif` | SARIF 2.1.0, for GitHub code scanning |
-| `--format json` | The `LintReport` as JSON (`--json` is a shorthand) |
+| `--format <fmt>` | `human`, `github` (PR annotations), `sarif`, `json` |
 | `--no-spell` | Skip spell-checking (it runs by default via the `typos` binary) |
 
 > [!TIP]
 > Diagnostics carry the file they came from, so `--format github` annotates the
-> offending slide in a pull request. The linter is a library (`toboggan-lint`) —
-> the same rules power the MCP `lint` tool, so an LLM editing the deck sees
-> exactly what CI sees.
+> offending slide right in a pull request.
 """
 
 [slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>The linter is a library (<code>toboggan-lint</code>) — the same rules power the MCP <code>lint</code>
+tool, so an LLM editing the deck sees exactly what CI sees.</p>
+"""
+alt = """
+The linter is a library (`toboggan-lint`) — the same rules power the MCP `lint`
+tool, so an LLM editing the deck sees exactly what CI sees.
+"""
+
+[slides.notes.style]
 classes = [
     "no_title",
     "wide",
@@ -2357,25 +2327,18 @@ default-command = "serve"   # what a bare `toboggan` does
 
 [build]
 theme = "Monokai"
-wpm = 130
 
 [serve]
 open-presenter = true
-
-[lint]
-max-duration = "45m"
 ```
 
 Files are read from the deck directory, then each parent, then
-`~/.config/toboggan/config.toml` — so a repo of several talks shares a house
-style and one talk overrides it. Strongest first:
+`~/.config/toboggan/config.toml`. Strongest first:
 
-    CLI flag  >  TOBOGGAN_*  >  nearest toboggan.toml  >  …  >  user global  >  default
+    CLI flag  >  TOBOGGAN_*  >  nearest toboggan.toml  >  …  >  default
 
 > [!TIP]
-> An unknown key is an **error**, not a silent no-op — so a typo tells you
-> instead of quietly doing nothing. `toboggan new` writes a file listing every
-> setting, commented out with its default.
+> An unknown key is an **error**, not a silent no-op — so a typo tells you.
 """
 
 [slides.style]
@@ -2397,26 +2360,19 @@ raw = """
 </span><span style="color:#4f5b66;">
 </span><span style="color:#4f5b66;">[build]
 </span><span style="color:#4f5b66;">theme = &quot;Monokai&quot;
-</span><span style="color:#4f5b66;">wpm = 130
 </span><span style="color:#4f5b66;">
 </span><span style="color:#4f5b66;">[serve]
 </span><span style="color:#4f5b66;">open-presenter = true
-</span><span style="color:#4f5b66;">
-</span><span style="color:#4f5b66;">[lint]
-</span><span style="color:#4f5b66;">max-duration = &quot;45m&quot;
 </span></code></pre>
 
 <div class="step step-0"><!-- begin step -->
 <p>Files are read from the deck directory, then each parent, then
-<code>~/.config/toboggan/config.toml</code> — so a repo of several talks shares a house
-style and one talk overrides it. Strongest first:</p>
-<pre style="background-color:#eff1f5;"><code><span style="color:#4f5b66;">CLI flag  &gt;  TOBOGGAN_*  &gt;  nearest toboggan.toml  &gt;  …  &gt;  user global  &gt;  default
+<code>~/.config/toboggan/config.toml</code>. Strongest first:</p>
+<pre style="background-color:#eff1f5;"><code><span style="color:#4f5b66;">CLI flag  &gt;  TOBOGGAN_*  &gt;  nearest toboggan.toml  &gt;  …  &gt;  default
 </span></code></pre>
 <div class="markdown-alert markdown-alert-tip">
 <p class="markdown-alert-title">Tip</p>
-<p>An unknown key is an <strong>error</strong>, not a silent no-op — so a typo tells you
-instead of quietly doing nothing. <code>toboggan new</code> writes a file listing every
-setting, commented out with its default.</p>
+<p>An unknown key is an <strong>error</strong>, not a silent no-op — so a typo tells you.</p>
 </div>
 </div><!-- end step -->
 """
@@ -2430,25 +2386,18 @@ default-command = "serve"   # what a bare `toboggan` does
 
 [build]
 theme = "Monokai"
-wpm = 130
 
 [serve]
 open-presenter = true
-
-[lint]
-max-duration = "45m"
 ```
 
 Files are read from the deck directory, then each parent, then
-`~/.config/toboggan/config.toml` — so a repo of several talks shares a house
-style and one talk overrides it. Strongest first:
+`~/.config/toboggan/config.toml`. Strongest first:
 
-    CLI flag  >  TOBOGGAN_*  >  nearest toboggan.toml  >  …  >  user global  >  default
+    CLI flag  >  TOBOGGAN_*  >  nearest toboggan.toml  >  …  >  default
 
 > [!TIP]
-> An unknown key is an **error**, not a silent no-op — so a typo tells you
-> instead of quietly doing nothing. `toboggan new` writes a file listing every
-> setting, commented out with its default.
+> An unknown key is an **error**, not a silent no-op — so a typo tells you.
 """
 
 [slides.body.style]
@@ -2460,17 +2409,26 @@ classes = [
 [slides.notes]
 type = "Html"
 raw = """
-<p>The precedence order is the useful part: you can put <code>open-presenter = true</code> in
-the deck and still say <code>--port 9000</code> for one run without editing anything.</p>
-<p>Boolean keys are the one asymmetry — a flag can turn something on, but cannot
-turn it back off if the file enabled it. Comment it out for a single run.</p>
+<p><code>toboggan new</code> writes a file listing every setting, commented out with its
+default, so the scaffolded deck is its own reference.</p>
+<p>The search order is the useful part: a repo of several talks shares a house
+style in a parent directory, and one talk overrides it. The precedence chain
+means you can put <code>open-presenter = true</code> in the deck and still say
+<code>--port 9000</code> for a single run without editing anything.</p>
+<p>Boolean keys are the one asymmetry — a flag can turn one on, but cannot turn one
+back off that the file enabled. Comment it out for a single run.</p>
 """
 alt = """
-The precedence order is the useful part: you can put `open-presenter = true` in
-the deck and still say `--port 9000` for one run without editing anything.
+`toboggan new` writes a file listing every setting, commented out with its
+default, so the scaffolded deck is its own reference.
 
-Boolean keys are the one asymmetry — a flag can turn something on, but cannot
-turn it back off if the file enabled it. Comment it out for a single run.
+The search order is the useful part: a repo of several talks shares a house
+style in a parent directory, and one talk overrides it. The precedence chain
+means you can put `open-presenter = true` in the deck and still say
+`--port 9000` for a single run without editing anything.
+
+Boolean keys are the one asymmetry — a flag can turn one on, but cannot turn one
+back off that the file enabled. Comment it out for a single run.
 """
 
 [slides.notes.style]
@@ -2495,24 +2453,14 @@ Or in its front matter, which is easier to see when you come back to it:
 ```toml
 +++
 title = "The whole API"
-disabled_rules = ["content/excessive-words", "code/too-long"]
+disabled_rules = ["content/excessive-words"]
 +++
 ```
 
-Deck-wide, in `toboggan.toml`:
-
-```toml
-[lint]
-disabled = ["spelling/typo"]
-
-[lint.severity]
-"content/excessive-words" = "info"
-```
-
 > [!TIP]
-> Prefer lowering a severity to disabling a rule: an `info` still tells you the
-> slide is dense, it just stops failing the build. An unknown rule id is
-> reported rather than ignored, so a renamed rule cannot silently stop applying.
+> Deck-wide, use `[lint] disabled`. Better still, lower the severity with
+> `[lint.severity]`: an `info` still tells you the slide is dense, it just
+> stops failing the build.
 """
 
 [slides.style]
@@ -2537,24 +2485,14 @@ raw = """
 <p>Or in its front matter, which is easier to see when you come back to it:</p>
 <pre style="background-color:#eff1f5;"><code class="language-toml"><span style="color:#4f5b66;">+++
 </span><span style="color:#4f5b66;">title = &quot;The whole API&quot;
-</span><span style="color:#4f5b66;">disabled_rules = [&quot;content/excessive-words&quot;, &quot;code/too-long&quot;]
+</span><span style="color:#4f5b66;">disabled_rules = [&quot;content/excessive-words&quot;]
 </span><span style="color:#4f5b66;">+++
-</span></code></pre>
-</div><!-- end step -->
-
-<div class="step step-1"><!-- begin step -->
-<p>Deck-wide, in <code>toboggan.toml</code>:</p>
-<pre style="background-color:#eff1f5;"><code class="language-toml"><span style="color:#4f5b66;">[lint]
-</span><span style="color:#4f5b66;">disabled = [&quot;spelling/typo&quot;]
-</span><span style="color:#4f5b66;">
-</span><span style="color:#4f5b66;">[lint.severity]
-</span><span style="color:#4f5b66;">&quot;content/excessive-words&quot; = &quot;info&quot;
 </span></code></pre>
 <div class="markdown-alert markdown-alert-tip">
 <p class="markdown-alert-title">Tip</p>
-<p>Prefer lowering a severity to disabling a rule: an <code>info</code> still tells you the
-slide is dense, it just stops failing the build. An unknown rule id is
-reported rather than ignored, so a renamed rule cannot silently stop applying.</p>
+<p>Deck-wide, use <code>[lint] disabled</code>. Better still, lower the severity with
+<code>[lint.severity]</code>: an <code>info</code> still tells you the slide is dense, it just
+stops failing the build.</p>
 </div>
 </div><!-- end step -->
 """
@@ -2572,24 +2510,14 @@ Or in its front matter, which is easier to see when you come back to it:
 ```toml
 +++
 title = "The whole API"
-disabled_rules = ["content/excessive-words", "code/too-long"]
+disabled_rules = ["content/excessive-words"]
 +++
 ```
 
-Deck-wide, in `toboggan.toml`:
-
-```toml
-[lint]
-disabled = ["spelling/typo"]
-
-[lint.severity]
-"content/excessive-words" = "info"
-```
-
 > [!TIP]
-> Prefer lowering a severity to disabling a rule: an `info` still tells you the
-> slide is dense, it just stops failing the build. An unknown rule id is
-> reported rather than ignored, so a renamed rule cannot silently stop applying.
+> Deck-wide, use `[lint] disabled`. Better still, lower the severity with
+> `[lint.severity]`: an `info` still tells you the slide is dense, it just
+> stops failing the build.
 """
 
 [slides.body.style]
@@ -2601,12 +2529,17 @@ classes = [
 [slides.notes]
 type = "Html"
 raw = """
+<p>An unknown rule id is reported rather than ignored, so a renamed rule cannot
+silently stop applying.</p>
 <p>Suppression is per slide, not per line: diagnostics are not line-tracked, so a
 directive covers the whole slide it appears on.</p>
 <p>Every diagnostic prints the id you would use here, so you never have to go
 looking for the name.</p>
 """
 alt = """
+An unknown rule id is reported rather than ignored, so a renamed rule cannot
+silently stop applying.
+
 Suppression is per slide, not per line: diagnostics are not line-tracked, so a
 directive covers the whole slide it appears on.
 
@@ -2757,7 +2690,7 @@ classes = [
 
 [[slides]]
 kind = "Standard"
-body_source = '''
+body_source = """
 # Server flags
 
 | Flag | Env var | What it does |
@@ -2770,25 +2703,13 @@ body_source = '''
 | `--allowed-origins` | `TOBOGGAN_CORS_ORIGINS` | Comma-separated CORS origins |
 | `--max-clients` | `TOBOGGAN_MAX_CLIENTS` | Concurrent client cap |
 | `--presenter-token` | `TOBOGGAN_PRESENTER_TOKEN` | Let a remote client drive |
-| `--open` | `TOBOGGAN_OPEN` | Open a browser once ready |
-| `--open-presenter` | `TOBOGGAN_OPEN_PRESENTER` | Also open the presenter view |
+| `--open` / `--open-presenter` | `TOBOGGAN_OPEN…` | Open the deck / the presenter view |
 | `--watch` | — | Reload when the `.toml` changes |
-
-```console
-$ toboggan serve -p ./my-talk.toml \
-    --public-dir ./public/ \
-    --shell /opt/homebrew/bin/fish \
-    --watch
-```
-
-> [!TIP]
-> `--shell` picks which shell the live terminals spawn — point it at `fish`
-> to show off your real prompt, or `sh` for a clean, portable demo.
 
 > [!WARNING]
 > Opening `--host` to the network makes the deck read-only for everyone but
 > this machine. Add `--presenter-token` to let your phone drive it too.
-'''
+"""
 
 [slides.style]
 classes = [
@@ -2802,7 +2723,7 @@ text = "5.2 Server flags"
 
 [slides.body]
 type = "Html"
-raw = '''
+raw = """
 <h1>Server flags</h1>
 <table>
 <thead>
@@ -2854,14 +2775,9 @@ raw = '''
 <td>Let a remote client drive</td>
 </tr>
 <tr>
-<td><code>--open</code></td>
-<td><code>TOBOGGAN_OPEN</code></td>
-<td>Open a browser once ready</td>
-</tr>
-<tr>
-<td><code>--open-presenter</code></td>
-<td><code>TOBOGGAN_OPEN_PRESENTER</code></td>
-<td>Also open the presenter view</td>
+<td><code>--open</code> / <code>--open-presenter</code></td>
+<td><code>TOBOGGAN_OPEN…</code></td>
+<td>Open the deck / the presenter view</td>
 </tr>
 <tr>
 <td><code>--watch</code></td>
@@ -2872,24 +2788,14 @@ raw = '''
 </table>
 
 <div class="step step-0"><!-- begin step -->
-<pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ toboggan serve -p ./my-talk.toml \
-</span><span style="color:#4f5b66;">    --public-dir ./public/ \
-</span><span style="color:#4f5b66;">    --shell /opt/homebrew/bin/fish \
-</span><span style="color:#4f5b66;">    --watch
-</span></code></pre>
-<div class="markdown-alert markdown-alert-tip">
-<p class="markdown-alert-title">Tip</p>
-<p><code>--shell</code> picks which shell the live terminals spawn — point it at <code>fish</code>
-to show off your real prompt, or <code>sh</code> for a clean, portable demo.</p>
-</div>
 <div class="markdown-alert markdown-alert-warning">
 <p class="markdown-alert-title">Warning</p>
 <p>Opening <code>--host</code> to the network makes the deck read-only for everyone but
 this machine. Add <code>--presenter-token</code> to let your phone drive it too.</p>
 </div>
 </div><!-- end step -->
-'''
-alt = '''
+"""
+alt = """
 # Server flags
 
 | Flag | Env var | What it does |
@@ -2902,25 +2808,13 @@ alt = '''
 | `--allowed-origins` | `TOBOGGAN_CORS_ORIGINS` | Comma-separated CORS origins |
 | `--max-clients` | `TOBOGGAN_MAX_CLIENTS` | Concurrent client cap |
 | `--presenter-token` | `TOBOGGAN_PRESENTER_TOKEN` | Let a remote client drive |
-| `--open` | `TOBOGGAN_OPEN` | Open a browser once ready |
-| `--open-presenter` | `TOBOGGAN_OPEN_PRESENTER` | Also open the presenter view |
+| `--open` / `--open-presenter` | `TOBOGGAN_OPEN…` | Open the deck / the presenter view |
 | `--watch` | — | Reload when the `.toml` changes |
-
-```console
-$ toboggan serve -p ./my-talk.toml \
-    --public-dir ./public/ \
-    --shell /opt/homebrew/bin/fish \
-    --watch
-```
-
-> [!TIP]
-> `--shell` picks which shell the live terminals spawn — point it at `fish`
-> to show off your real prompt, or `sh` for a clean, portable demo.
 
 > [!WARNING]
 > Opening `--host` to the network makes the deck read-only for everyone but
 > this machine. Add `--presenter-token` to let your phone drive it too.
-'''
+"""
 
 [slides.body.style]
 classes = [
@@ -2934,16 +2828,20 @@ raw = """
 <p>Any of these can live in <code>toboggan.toml</code> under <code>[serve]</code> instead of being typed
 every time. <code>--watch</code> is the one flag with no env var — watching a built file is
 a dev-loop choice, not deployment configuration.</p>
-<p>The token exists because <code>--shell</code> is real: the embedded terminals spawn a shell
-on <em>this</em> machine, and the room should not be able to ask for one.</p>
+<p><code>--shell</code> picks which shell the live terminals spawn: point it at <code>fish</code> to show
+off your real prompt, or <code>sh</code> for a clean, portable demo. The token exists
+because <code>--shell</code> is real — the embedded terminals spawn a shell on <em>this</em>
+machine, and the room should not be able to ask for one.</p>
 """
 alt = """
 Any of these can live in `toboggan.toml` under `[serve]` instead of being typed
 every time. `--watch` is the one flag with no env var — watching a built file is
 a dev-loop choice, not deployment configuration.
 
-The token exists because `--shell` is real: the embedded terminals spawn a shell
-on *this* machine, and the room should not be able to ask for one.
+`--shell` picks which shell the live terminals spawn: point it at `fish` to show
+off your real prompt, or `sh` for a clean, portable demo. The token exists
+because `--shell` is real — the embedded terminals spawn a shell on *this*
+machine, and the room should not be able to ask for one.
 """
 
 [slides.notes.style]
@@ -3351,10 +3249,8 @@ body_source = """
 | `F1` | This list, in the browser |
 
 > [!TIP]
-> A clicker sends `PageUp`/`PageDown`, and those are bound to **steps** rather
-> than slides on purpose: `NextStep` moves on to the next slide once a slide's
-> reveals run out, so the remote walks the whole deck instead of skipping every
-> build.
+> A clicker sends `PageUp`/`PageDown`, bound to **steps** rather than slides on
+> purpose — so the remote walks the whole deck instead of skipping every build.
 """
 
 [slides.style]
@@ -3425,10 +3321,8 @@ raw = """
 <div class="step step-0"><!-- begin step -->
 <div class="markdown-alert markdown-alert-tip">
 <p class="markdown-alert-title">Tip</p>
-<p>A clicker sends <code>PageUp</code>/<code>PageDown</code>, and those are bound to <strong>steps</strong> rather
-than slides on purpose: <code>NextStep</code> moves on to the next slide once a slide's
-reveals run out, so the remote walks the whole deck instead of skipping every
-build.</p>
+<p>A clicker sends <code>PageUp</code>/<code>PageDown</code>, bound to <strong>steps</strong> rather than slides on
+purpose — so the remote walks the whole deck instead of skipping every build.</p>
 </div>
 </div><!-- end step -->
 """
@@ -3449,10 +3343,8 @@ alt = """
 | `F1` | This list, in the browser |
 
 > [!TIP]
-> A clicker sends `PageUp`/`PageDown`, and those are bound to **steps** rather
-> than slides on purpose: `NextStep` moves on to the next slide once a slide's
-> reveals run out, so the remote walks the whole deck instead of skipping every
-> build.
+> A clicker sends `PageUp`/`PageDown`, bound to **steps** rather than slides on
+> purpose — so the remote walks the whole deck instead of skipping every build.
 """
 
 [slides.body.style]
@@ -3508,8 +3400,8 @@ because the deck is shared state rather than each client's own view.
 | `toboggan desktop` | ✅ | — | — | — |
 
 > [!WARNING]
-> A client on another machine can watch, but not navigate, and cannot open a
-> terminal. Give it `--presenter-token` to let it drive.
+> A client on another machine can watch, but not navigate. Give it
+> `--presenter-token` to let it drive.
 """
 
 [slides.style]
@@ -3577,8 +3469,8 @@ because the deck is shared state rather than each client's own view.</p>
 </table>
 <div class="markdown-alert markdown-alert-warning">
 <p class="markdown-alert-title">Warning</p>
-<p>A client on another machine can watch, but not navigate, and cannot open a
-terminal. Give it <code>--presenter-token</code> to let it drive.</p>
+<p>A client on another machine can watch, but not navigate. Give it
+<code>--presenter-token</code> to let it drive.</p>
 </div>
 </div><!-- end step -->
 """
@@ -3603,8 +3495,8 @@ because the deck is shared state rather than each client's own view.
 | `toboggan desktop` | ✅ | — | — | — |
 
 > [!WARNING]
-> A client on another machine can watch, but not navigate, and cannot open a
-> terminal. Give it `--presenter-token` to let it drive.
+> A client on another machine can watch, but not navigate. Give it
+> `--presenter-token` to let it drive.
 """
 
 [slides.body.style]
@@ -3616,12 +3508,15 @@ classes = [
 [slides.notes]
 type = "Html"
 raw = """
+<p>It cannot open an embedded terminal either.</p>
 <p>The terminal client is genuinely useful over ssh, and it was the presenter view
 before <code>/presenter</code> existed.</p>
 <p>The mobile clients speak the same protocol through the <code>toboggan-mobile</code> crate,
 which is the same Rust talking to Swift and Kotlin over UniFFI.</p>
 """
 alt = """
+It cannot open an embedded terminal either.
+
 The terminal client is genuinely useful over ssh, and it was the presenter view
 before `/presenter` existed.
 
@@ -3680,7 +3575,7 @@ $ toboggan -p ./slides/
 
 Save a slide → rebuild → the browser reloads.
 
-Wrap the rest in `mise` tasks (see this deck's `mise.toml`):
+Wrap the rest in `mise` tasks:
 
 ```console
 $ mise run dev         # the loop above
@@ -3690,8 +3585,7 @@ $ mise run run         # serve the built .toml with its public/ assets
 ```
 
 > [!TIP]
-> You only need a built `.toml` to *ship* a deck — to hand it to a server, a
-> CI job, or `toboggan serve`. While writing, skip it entirely.
+> You only need a built `.toml` to *ship* a deck. While writing, skip it.
 """
 
 [slides.style]
@@ -3716,19 +3610,15 @@ so there is no <code>.toml</code> to regenerate and no second process to run:</p
 <p>Save a slide → rebuild → the browser reloads.</p>
 
 <div class="step step-0"><!-- begin step -->
-<p>Wrap the rest in <code>mise</code> tasks (see this deck's <code>mise.toml</code>):</p>
+<p>Wrap the rest in <code>mise</code> tasks:</p>
 <pre style="background-color:#eff1f5;"><code class="language-console"><span style="color:#4f5b66;">$ mise run dev         # the loop above
 </span><span style="color:#4f5b66;">$ mise run build       # slides/ → toboggan-guide.toml
 </span><span style="color:#4f5b66;">$ mise run pdf         # typst export → PDF
 </span><span style="color:#4f5b66;">$ mise run run         # serve the built .toml with its public/ assets
 </span></code></pre>
-</div><!-- end step -->
-
-<div class="step step-1"><!-- begin step -->
 <div class="markdown-alert markdown-alert-tip">
 <p class="markdown-alert-title">Tip</p>
-<p>You only need a built <code>.toml</code> to <em>ship</em> a deck — to hand it to a server, a
-CI job, or <code>toboggan serve</code>. While writing, skip it entirely.</p>
+<p>You only need a built <code>.toml</code> to <em>ship</em> a deck. While writing, skip it.</p>
 </div>
 </div><!-- end step -->
 """
@@ -3745,7 +3635,7 @@ $ toboggan -p ./slides/
 
 Save a slide → rebuild → the browser reloads.
 
-Wrap the rest in `mise` tasks (see this deck's `mise.toml`):
+Wrap the rest in `mise` tasks:
 
 ```console
 $ mise run dev         # the loop above
@@ -3755,8 +3645,7 @@ $ mise run run         # serve the built .toml with its public/ assets
 ```
 
 > [!TIP]
-> You only need a built `.toml` to *ship* a deck — to hand it to a server, a
-> CI job, or `toboggan serve`. While writing, skip it entirely.
+> You only need a built `.toml` to *ship* a deck. While writing, skip it.
 """
 
 [slides.body.style]
@@ -3768,12 +3657,15 @@ classes = [
 [slides.notes]
 type = "Html"
 raw = """
+<p>See this deck's own <code>mise.toml</code> for the task definitions.</p>
 <p>This used to be a two-terminal loop: bacon rebuilding the .toml on save, plus a
 server with --watch reloading it. The in-memory default action collapsed both
 into one command, so the deck's bacon.toml is now only there for regenerating
 the committed artifact.</p>
 """
 alt = """
+See this deck's own `mise.toml` for the task definitions.
+
 This used to be a two-terminal loop: bacon rebuilding the .toml on save, plus a
 server with --watch reloading it. The in-memory default action collapsed both
 into one command, so the deck's bacon.toml is now only there for regenerating

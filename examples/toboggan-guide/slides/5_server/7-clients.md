@@ -25,10 +25,12 @@ because the deck is shared state rather than each client's own view.
 | `toboggan desktop` | ✅ | — | — | — |
 
 > [!WARNING]
-> A client on another machine can watch, but not navigate, and cannot open a
-> terminal. Give it `--presenter-token` to let it drive.
+> A client on another machine can watch, but not navigate. Give it
+> `--presenter-token` to let it drive.
 
 <!-- notes -->
+It cannot open an embedded terminal either.
+
 The terminal client is genuinely useful over ssh, and it was the presenter view
 before `/presenter` existed.
 

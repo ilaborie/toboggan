@@ -24,17 +24,17 @@ It is served at `/public/`, so that is how a slide asks for it:
 ```
 
 > [!WARNING]
-> The leading `/public/` is not optional. Slides render at `/run`, and only
-> `/public/` is mapped to a directory — so `![…](diagram.webp)` asks for
-> `/diagram.webp`, which nothing serves. The `link/broken` lint rule catches
-> exactly this, and says where the file actually is.
-
-`toboggan build -o deck.html` copies `public/` next to the exported file, so a
-deck stays self-contained when you publish it.
+> The leading `/public/` is not optional — `![…](diagram.webp)` asks for
+> `/diagram.webp`, which nothing serves. The `link/broken` rule catches it.
 
 <!-- notes -->
+Slides render at `/run`, and only `/public/` is mapped to a directory on disk,
+which is why the prefix matters.
+
 This is the single most common way a deck breaks between the laptop and the
 projector: the image is right there on disk, the URL is one segment off, and the
 slide renders with a broken image icon in front of the room.
 
-`--public-dir` overrides the location if the folder is somewhere else.
+`toboggan build -o deck.html` copies `public/` next to the exported file, so a
+deck stays self-contained when you publish it. `--public-dir` overrides the
+location if the folder is somewhere else.

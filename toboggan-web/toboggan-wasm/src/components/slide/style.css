@@ -134,16 +134,17 @@ a:visited {
 	}
 }
 
-/* Links */
+/* Inline code.
+   
+   No hover treatment: this rule matches every `code`, including the one inside
+   every `<pre>`, so moving the mouse across a slide drew a box around whole
+   code blocks. On a projector that is a rectangle appearing for no reason the
+   room can see, and the transparent border existed only to reserve the space
+   that box needed. */
 code {
 	color: var(--accent2);
-	border: thin solid transparent;
 	border-radius: 0.25em;
 	padding: 0 0.125em;
-
-	&:hover {
-		border-color: rgba(0, 0, 0, 0.25);
-	}
 }
 
 /* Keyboard keys (<kbd>) — physical 3D key cap.

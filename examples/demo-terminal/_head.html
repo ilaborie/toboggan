@@ -5,8 +5,8 @@
 	 * cross the boundary, which is why the sizes below are set as variables on
 	 * the host rather than as rules on the elements.
 	 *
-	 * The base is 32px, so the stock 350% h1 renders at 112px — most of a slide
-	 * before a single line of content. These bring the headings back to a size
+	 * The base is the client's own root size, so the stock 350% h1 renders at
+	 * most of a slide before a single line of content. These bring the headings back to a size
 	 * that leaves room for what the slide is actually demonstrating, and shrink
 	 * code enough that the longer samples fit without scrolling.
 	 */
@@ -18,7 +18,14 @@
 	 * want: the shell stays readable while the prose around it gets denser.
 	 */
 	html {
-		font-size: 25px;
+		/*
+		 * Fluid for the same reason the client's own default is: a flat 25px
+		 * keeps a 1920x1080 layout's exact pixels on a smaller screen, where
+		 * the slide has less room for them, and the tail of a long slide falls
+		 * off the bottom with nothing to scroll. The ceiling is the 25px this
+		 * deck was tuned at, so nothing changes at or above 1920x1080.
+		 */
+		font-size: clamp(12px, min(1.302vw, 2.315vh), 25px);
 	}
 
 	.toboggan-slide {

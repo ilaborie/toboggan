@@ -18,28 +18,19 @@ Or in its front matter, which is easier to see when you come back to it:
 ```toml
 +++
 title = "The whole API"
-disabled_rules = ["content/excessive-words", "code/too-long"]
+disabled_rules = ["content/excessive-words"]
 +++
 ```
 
-<!-- pause -->
-
-Deck-wide, in `toboggan.toml`:
-
-```toml
-[lint]
-disabled = ["spelling/typo"]
-
-[lint.severity]
-"content/excessive-words" = "info"
-```
-
 > [!TIP]
-> Prefer lowering a severity to disabling a rule: an `info` still tells you the
-> slide is dense, it just stops failing the build. An unknown rule id is
-> reported rather than ignored, so a renamed rule cannot silently stop applying.
+> Deck-wide, use `[lint] disabled`. Better still, lower the severity with
+> `[lint.severity]`: an `info` still tells you the slide is dense, it just
+> stops failing the build.
 
 <!-- notes -->
+An unknown rule id is reported rather than ignored, so a renamed rule cannot
+silently stop applying.
+
 Suppression is per slide, not per line: diagnostics are not line-tracked, so a
 directive covers the whole slide it appears on.
 

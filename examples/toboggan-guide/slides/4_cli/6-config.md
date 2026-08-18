@@ -12,33 +12,31 @@ default-command = "serve"   # what a bare `toboggan` does
 
 [build]
 theme = "Monokai"
-wpm = 130
 
 [serve]
 open-presenter = true
-
-[lint]
-max-duration = "45m"
 ```
 
 <!-- pause -->
 
 Files are read from the deck directory, then each parent, then
-`~/.config/toboggan/config.toml` — so a repo of several talks shares a house
-style and one talk overrides it. Strongest first:
+`~/.config/toboggan/config.toml`. Strongest first:
 
 ```
-CLI flag  >  TOBOGGAN_*  >  nearest toboggan.toml  >  …  >  user global  >  default
+CLI flag  >  TOBOGGAN_*  >  nearest toboggan.toml  >  …  >  default
 ```
 
 > [!TIP]
-> An unknown key is an **error**, not a silent no-op — so a typo tells you
-> instead of quietly doing nothing. `toboggan new` writes a file listing every
-> setting, commented out with its default.
+> An unknown key is an **error**, not a silent no-op — so a typo tells you.
 
 <!-- notes -->
-The precedence order is the useful part: you can put `open-presenter = true` in
-the deck and still say `--port 9000` for one run without editing anything.
+`toboggan new` writes a file listing every setting, commented out with its
+default, so the scaffolded deck is its own reference.
 
-Boolean keys are the one asymmetry — a flag can turn something on, but cannot
-turn it back off if the file enabled it. Comment it out for a single run.
+The search order is the useful part: a repo of several talks shares a house
+style in a parent directory, and one talk overrides it. The precedence chain
+means you can put `open-presenter = true` in the deck and still say
+`--port 9000` for a single run without editing anything.
+
+Boolean keys are the one asymmetry — a flag can turn one on, but cannot turn one
+back off that the file enabled. Comment it out for a single run.
