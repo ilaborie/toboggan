@@ -67,6 +67,13 @@ jobs:
         run: cargo +stable nextest run
       - name: Doctests
         run: cargo +stable test --doc
+      # Crate READMEs are included into their crate docs, so a broken intra-doc
+      # link or an example that stopped compiling fails here rather than being
+      # discovered by whoever reads docs.rs.
+      - name: Rustdoc
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo +stable doc --no-deps --workspace
 
   # The embedded web client is a *separate* Cargo workspace (its Cargo.toml
   # carries an empty `[workspace]` table), so the `rust` job above never reaches
@@ -113,3 +120,109 @@ jobs:
       # No test step: the crate has no tests, and running any would need
       # wasm-bindgen-test-runner plus a headless browser. `--all-targets` above
       # still type-checks whatever test code gets added later.
+
+  # Unused dependencies. `cargo machete` is a mise tool locally, but the repo's
+  # prek hooks are git hooks and jj does not run them, so it never fired for the
+  # VCS this project actually uses.
+  deps:
+    name: Unused dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-machete
+      - run: cargo machete
+
+  # Runs the project against its own decks.
+  #
+  # Everything above type-checks Rust; nothing above proves that `toboggan` can
+  # still read a folder of Markdown, that the embedded web client boots, or that
+  # the PDF exporter emits Typst that compiles. Those broke in ways the Rust gate
+  # cannot see — a one-backtick table cell produced a `.typ` that typst refused,
+  # and no test noticed because no test had ever built a real deck.
+  #
+  # Ubuntu, with the real web bundle: the `rust` job stubs `toboggan-web/dist`,
+  # so it is the one job here that says anything about the shipped client.
+  deck:
+    name: Build and serve the example decks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: toboggan-web/pnpm-lock.yaml
+      - name: Install Typst
+        uses: typst-community/setup-typst@v5
+
+      # Mirrors `mise build:web`. Must happen before the Rust build: the server
+      # embeds this folder and its build.rs fails without it.
+      - name: Build the embedded web client
+        run: |
+          wasm-pack build --target web --no-pack --release --out-dir pkg toboggan-web/toboggan-wasm
+          cd toboggan-web
+          pnpm install --frozen-lockfile
+          pnpm run build
+
+      - name: Build toboggan
+        run: cargo build -p toboggan
+
+      # A parser or rule regression shows up here as a failure on a real deck
+      # rather than as a surprise during someone's talk.
+      - name: Lint the example decks
+        run: |
+          ./target/debug/toboggan lint -p examples/toboggan-guide/slides --deny warning
+          ./target/debug/toboggan lint -p examples/riir-folder --deny warning
+
+      # `toboggan-guide.toml` is a *prebuilt* artifact that the server embeds
+      # with include_str!, so it can drift from the slides it was built from and
+      # nothing would say so. Rebuild it and insist it did not change.
+      - name: The built guide matches its slides
+        run: |
+          ./target/debug/toboggan build \
+            -p examples/toboggan-guide/slides \
+            -o examples/toboggan-guide/toboggan-guide.toml
+          git diff --exit-code -- examples/toboggan-guide/toboggan-guide.toml \
+            || {
+              echo "::error file=examples/toboggan-guide/toboggan-guide.toml::the built guide is out of date; rebuild it and commit the result"
+              exit 1
+            }
+
+      - name: Export every format
+        run: |
+          ./target/debug/toboggan build -p examples/toboggan-guide/slides -o /tmp/guide.html
+          ./target/debug/toboggan build -p examples/riir-folder -o /tmp/riir.html
+          ./target/debug/toboggan pdf -p examples/toboggan-guide/slides -o /tmp/guide.pdf
+          test -s /tmp/guide.pdf
+
+      # The deck is compiled Rust behind a shadow root: a page can answer 200
+      # with a blank body when the wasm bundle fails to boot, so the assertions
+      # wait for something the client itself had to render.
+      - name: Install Playwright browsers
+        working-directory: toboggan-web
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Smoke test the served deck
+        working-directory: toboggan-web
+        env:
+          TOBOGGAN_BIN: ../target/debug/toboggan
+        run: pnpm run test:e2e
+
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: toboggan-web/playwright-report/
+          retention-days: 7

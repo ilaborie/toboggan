@@ -1,0 +1,97 @@
+# Publishes this project's own guide deck to GitHub Pages.
+#
+# Toboggan ships an HTML exporter, a PDF exporter, a thumbnail overview and a
+# composite action for publishing decks, and published none of them for itself.
+# The guide is a real deck living in this repository, so it is the obvious thing
+# to point all of that at: https://ilaborie.github.io/toboggan
+#
+# Why this does not use `ilaborie/toboggan@v0.1.0` (or `./`, which is the same
+# thing): `action.yml` installs a *released* binary on purpose, so that a change
+# to the CLI cannot alter what an already-published ref of the action does. The
+# guide on `main` uses features newer than the newest release, so building it
+# with a released binary would publish an older deck than the one in the tree,
+# or fail. It is built from source here instead, and the action keeps its
+# guarantee.
+#
+# Requires "Build and deployment → Source: GitHub Actions" in the repository's
+# Pages settings. Until that is set, this workflow's deploy step fails and
+# nothing else is affected.
+name: Publish the guide
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One publish at a time, and let a newer commit win: an older run finishing
+# second would put a stale deck back on the site.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build the guide
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: toboggan-web/pnpm-lock.yaml
+      - name: Install Typst
+        uses: typst-community/setup-typst@v5
+
+      # `toboggan-server` embeds this folder at compile time and its build.rs
+      # fails without it, so the web bundle comes first even though what we want
+      # here is the exporters.
+      - name: Build the embedded web client
+        run: |
+          wasm-pack build --target web --no-pack --release --out-dir pkg toboggan-web/toboggan-wasm
+          cd toboggan-web
+          pnpm install --frozen-lockfile
+          pnpm run build
+
+      - name: Build toboggan
+        run: cargo build -p toboggan --release
+
+      # Assets are referenced relative to index.html, which is correct for a
+      # project page under /toboggan/ as well as at a site root — so no
+      # --base-url is needed.
+      - name: Export the deck
+        run: |
+          mkdir -p dist
+          ./target/release/toboggan build -p examples/toboggan-guide/slides -o dist/index.html
+          ./target/release/toboggan pdf -p examples/toboggan-guide/slides -o dist/toboggan-guide.pdf
+          ./target/release/toboggan thumbnails -p examples/toboggan-guide/slides -o dist/overview
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
