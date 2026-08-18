@@ -1,13 +1,15 @@
 use std::ops::ControlFlow;
 
 use toboggan_client::ConnectionStatus;
-use toboggan_core::{ClientRole, Notification, Slide, SlideId, State, TalkResponse};
+use toboggan_core::{
+    ClientRole, Notification, Slide, SlideId, State, TalkResponse, accumulate_goto, goto_command,
+};
 use toboggan_stats::SlideStats;
 use tracing::{debug, info};
 
 use crate::connection_handler::ConnectionHandler;
 use crate::effects::{self, EffectKey, Effects, LayoutAreas};
-use crate::events::{AppAction, AppEvent, goto_command};
+use crate::events::{AppAction, AppEvent};
 
 #[derive(Debug, Clone, Default)]
 pub(crate) enum AppDialog {
@@ -199,13 +201,10 @@ impl AppState {
 
     /// Appends a digit to the slide number being typed.
     ///
-    /// Four digits is more slides than a talk has ever had, and the cap is what
-    /// stops a leaned-on key from overflowing the running multiplication.
+    /// The arithmetic is [`accumulate_goto`]'s, shared with the web client —
+    /// which had its own copy, with the same leading-zero defect.
     fn push_goto_digit(&mut self, digit: u8) {
-        const MAX_GOTO_TARGET: usize = 9_999;
-
-        let typed = self.goto_target.unwrap_or(0) * 10 + usize::from(digit);
-        if typed <= MAX_GOTO_TARGET {
+        if let Some(typed) = accumulate_goto(self.goto_target, digit) {
             self.goto_target = Some(typed);
         }
     }

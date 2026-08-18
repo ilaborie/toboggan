@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use toboggan_client::ConnectionStatus;
-use toboggan_core::{Command, Notification, Slide, SlideId, TalkResponse};
+use toboggan_core::{Command, Notification, Slide, TalkResponse};
 
 #[derive(Debug, Clone)]
 pub(crate) enum AppEvent {
@@ -136,16 +136,6 @@ fn digit_of(character: char) -> u8 {
     u8::try_from(character.to_digit(10).unwrap_or(0)).unwrap_or(0)
 }
 
-/// The command that jumps to a slide the presenter typed.
-///
-/// They type the number printed on the slide, and `SlideId` is a 0-based index:
-/// passing one straight to the other used to send every jump one slide too far.
-pub(crate) fn goto_command(number: usize) -> Command {
-    Command::GoTo {
-        slide: SlideId::new(number.saturating_sub(1)),
-    }
-}
-
 pub(crate) struct ActionDetails {
     pub(crate) keys: Vec<&'static str>,
     pub(crate) description: &'static str,
@@ -175,23 +165,6 @@ mod tests {
         for code in [KeyCode::PageUp, KeyCode::Backspace, KeyCode::Up] {
             assert_eq!(command_for(code), Some(Command::PreviousStep), "{code:?}");
         }
-    }
-
-    /// The number on screen is 1-based; `SlideId` is not.
-    #[test]
-    fn typing_a_slide_number_goes_to_that_slide() {
-        assert_eq!(
-            goto_command(1),
-            Command::GoTo {
-                slide: SlideId::FIRST
-            }
-        );
-        assert_eq!(
-            goto_command(12),
-            Command::GoTo {
-                slide: SlideId::new(11)
-            }
-        );
     }
 
     /// A digit is not a command on its own: it is one keystroke of a number
