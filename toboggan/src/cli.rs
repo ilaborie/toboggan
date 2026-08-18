@@ -587,7 +587,7 @@ pub(crate) struct PdfArgs {
     #[command(flatten)]
     pub(crate) path: PathArg,
 
-    /// Output PDF path (default: <deck-name>.pdf in the current directory)
+    /// Output PDF path (default: `<deck-name>.pdf` in the current directory)
     #[arg(short, long, value_hint = ValueHint::FilePath)]
     pub(crate) output: Option<PathBuf>,
 

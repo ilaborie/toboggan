@@ -2,7 +2,7 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 use std::time::Duration;
 
-/// Everything the server needs once it already has a [`crate::Talk`].
+/// Everything the server needs once it already has a [`toboggan_core::Talk`].
 ///
 /// Split out from [`Settings`] because `launch_with_talk` — the entry point the
 /// unified CLI's build+serve uses — has the talk in memory and never reads

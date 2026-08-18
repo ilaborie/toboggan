@@ -4,6 +4,7 @@
 //! framework-neutral [`LintReport`]. It deliberately has no CLI/terminal
 //! dependencies, so the consumers decide on presentation: the `toboggan` binary
 //! prints coloured lines, and `toboggan-mcp` serializes the report to JSON.
+#![warn(missing_docs)]
 
 mod diagnostic;
 mod report;

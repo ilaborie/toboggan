@@ -1,3 +1,15 @@
+//! Parses a folder of Markdown into a [`toboggan_core::Talk`], and renders a
+//! `Talk` back out as TOML, JSON, YAML, HTML, Typst, or a folder of thumbnails.
+//!
+//! A deck is a directory: `_cover.md` for the cover, `_part.md` for a section
+//! title, `_head.html` and `_footer.html` for the chrome, and numbered files and
+//! folders for everything else. Ordering comes from the filenames.
+//!
+//! Errors are [`miette`] diagnostics, so a bad slide is reported with the file
+//! and the span rather than a message about a string.
+//!
+//! See the crate README for the front matter keys and the body directives.
+
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};

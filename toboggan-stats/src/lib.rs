@@ -6,6 +6,7 @@
 //! - Image counting (`img`, `svg`, `figure` elements)
 //! - Animation step counting (`.step` CSS class)
 //! - Duration estimation at different speaking rates
+#![warn(missing_docs)]
 
 mod analysis;
 mod html;

@@ -1,3 +1,10 @@
+//! The rules themselves, and the registry that names them.
+//!
+//! Each rule is a small unit: it reads a [`crate::RuleContext`] and returns a
+//! `Vec<`[`crate::LintDiagnostic`]`>`. Every diagnostic carries the id of the
+//! rule that produced it, which is also what a deck writes in `disabled_rules`
+//! or a `<!-- lint-disable -->` comment to silence it.
+
 pub(crate) mod code;
 pub(crate) mod content;
 pub(crate) mod html;

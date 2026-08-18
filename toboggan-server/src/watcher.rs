@@ -72,7 +72,7 @@ pub struct WatchConfig {
 }
 
 /// Starts a background task that watches `config.paths` and hot-swaps the served
-/// talk once a burst of changes has settled (see [`watch_loop`]).
+/// talk once a burst of changes has settled.
 ///
 /// # Errors
 /// Returns an error if the underlying file-system watcher cannot be created or

@@ -2,7 +2,9 @@
 //!
 //! Inspection tools (`talk_outline`, `stats`, `lint`) re-parse the presentation
 //! folder, and mutation tools (`add_part`, `add_slide`) edit it through a safe
-//! [`Workspace`](workspace::Workspace). Served over stdio for LLM clients.
+//! workspace that confines every path to the presentation root. Served over
+//! stdio for LLM clients.
+#![warn(missing_docs)]
 
 mod init;
 mod server;

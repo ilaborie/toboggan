@@ -1,3 +1,13 @@
+//! The desktop client: a native [iced] window that connects to a running server.
+//!
+//! Run it with `toboggan desktop`; this crate declares no binary of its own.
+//!
+//! Every shortcut is described once, in `actions`, and the help panel reads
+//! those descriptions — so what the panel lists and what the keys do cannot
+//! drift apart.
+//!
+//! [iced]: https://github.com/iced-rs/iced
+
 use anyhow::{Context, Result};
 use iced::Settings;
 use iced::window::icon;

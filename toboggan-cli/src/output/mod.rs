@@ -20,8 +20,7 @@ use crate::settings::OutputFormat;
 /// Serializes `talk` in `format`.
 ///
 /// `base_url` is only meaningful for [`OutputFormat::Html`]: it is the URL the
-/// exported file will be served from, used to resolve the deck's assets. See
-/// [`assets`].
+/// exported file will be served from, used to resolve the deck's assets.
 ///
 /// # Errors
 /// Returns an error if the talk cannot be rendered in `format`.
