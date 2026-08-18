@@ -1,389 +1,131 @@
-# Toboggan CLI
+# toboggan-cli
+
+The parser and the exporters: it turns a folder of Markdown into a
+[`Talk`](../toboggan-core), and a `Talk` into TOML, JSON, YAML, HTML, Typst, or a
+folder of thumbnails.
 
 > [!IMPORTANT]
-> **Use `toboggan build` instead.** The unified [`toboggan`](../toboggan) command is
-> the supported entry point, and the only binary a release ships — install it with
-> `cargo install --path toboggan`.
->
-> The `toboggan-cli` binary documented below still builds from source, but it takes
-> the deck as a positional argument where `toboggan` takes `-p/--path`, so the
-> examples here are not interchangeable with the rest of the documentation. This
-> crate's real audience is now the **library**: `toboggan-server`, `toboggan-mcp`
-> and `toboggan` all depend on it for parsing and rendering.
+> This is a **library crate with no binary**. Everything below is reached through
+> the unified [`toboggan`](../toboggan) command.
 
-Convert Markdown presentations to Toboggan format with advanced features for speaker notes, progressive reveals, and presentation statistics.
+## A deck is a folder
 
-[![Crates.io](https://img.shields.io/crates/v/toboggan-cli.svg)](https://crates.io/crates/toboggan-cli)
-[![Documentation](https://docs.rs/toboggan-cli/badge.svg)](https://docs.rs/toboggan-cli)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](https://github.com/ilaborie/toboggan)
+```
+my-talk/
+├── toboggan.toml           # optional configuration
+├── public/                 # images and other assets, served at /public/
+└── slides/
+    ├── _cover.md           # the cover slide, and the deck's own front matter
+    ├── _head.html          # injected into <head> — fonts, custom CSS
+    ├── _footer.html        # the footer shown on every slide
+    ├── 1_intro/
+    │   ├── _part.md        # the section title slide
+    │   ├── 1-why.md
+    │   └── 2-how.md
+    └── 2_demo/
+        └── 1-live.md
+```
 
-## Installation
+Ordering comes from the filenames, and the leading `N_` / `N-` is stripped from
+what is displayed. A folder without a `_part.md` still gets a section slide,
+titled from the folder name.
 
 ```bash
-# From source
-cargo install --path toboggan-cli
-
-# From crates.io (when published)
-cargo install toboggan-cli
+toboggan build -p ./my-talk/slides -o talk.toml
+toboggan build -p ./my-talk/slides -o deck.html --base-url /my-talk/
+toboggan build --list-themes                       # syntax themes for code blocks
 ```
 
-## Quick Start
+| `-o` extension | Output |
+| --- | --- |
+| `.toml` | The built deck (the default; what `toboggan serve` reads) |
+| `.json`, `.yaml` | The same model, other encodings |
+| `.html` | One self-contained, navigable file — no CDN, no external assets |
+| `.typ` | Typst source, for `toboggan pdf` |
 
-```bash
-# Convert a presentation folder to TOML
-toboggan-cli slides/ -o presentation.toml
+The HTML export is a real deck, not a printout: arrow keys, space,
+`PageUp`/`PageDown`, step reveals, `#slide-N` deep links and `f` for fullscreen,
+all from a small inline script. The deck's `public/` folder is copied next to it.
 
-# Override title and date
-toboggan-cli slides/ --title "My Talk" --date "2025-03-15" -o talk.toml
+## Front matter
 
-# Use different output format
-toboggan-cli slides/ -f json -o presentation.json
-```
-
-## CLI Options
-
-```
-toboggan-cli [OPTIONS] <INPUT>
-
-Arguments:
-  <INPUT>                    Input folder containing presentation files
-
-Options:
-  -o, --output <FILE>        Output file (default: stdout)
-  -t, --title <TITLE>        Override presentation title
-  -d, --date <DATE>          Override date (YYYY-MM-DD format)
-  -f, --format <FORMAT>      Output format: toml, json, yaml, cbor, msgpack, bincode
-                            (auto-detected from file extension if not specified)
-  --theme <THEME>            Syntax highlighting theme (default: base16-ocean.light)
-  --list-themes              List all available syntax highlighting themes
-  --no-counter               Disable automatic numbering of parts and slides
-  --no-stats                 Disable presentation statistics display
-  --wpm <WPM>                Speaking rate in words per minute (default: 150)
-  --exclude-notes-from-duration  Exclude speaker notes from duration calculations
-  -h, --help                 Print help information
-```
-
-## Folder Structure
-
-Toboggan CLI processes a folder hierarchy to create presentations:
-
-```
-my-presentation/
-├── _cover.md          # Cover slide (optional, contains title/date)
-├── _footer.md         # Footer content for all slides (optional)
-├── 01-intro/          # Part folder (becomes section divider)
-│   ├── _part.md       # Part slide content
-│   ├── slide1.md      # Regular slides
-│   └── slide2.md
-├── 02-main/
-│   ├── _part.md
-│   └── content.md
-└── 99-conclusion.md   # Standalone slide
-```
-
-### Special Files
-
-| File | Purpose |
-|------|---------|
-| `_cover.md` | Cover slide with presentation title and date |
-| `_part.md` | Section divider slide within a folder |
-| `_footer.md` | Footer content applied to all slides |
-
-### Processing Rules
-
-- Files are processed in **alphabetical order**
-- Folders become **Part slides** (section dividers)
-- Both `.md` and `.html` files are supported
-- Hidden files (starting with `.`) are ignored
-- Inline HTML tags (like `<abbr>`, `<mark>`) are preserved
-
-## Frontmatter
-
-Add TOML frontmatter to any slide using `+++` delimiters, the content should be TOML:
+Every slide may open with a TOML block. **Unknown keys are an error**, so a typo
+tells you instead of silently doing nothing.
 
 ```markdown
 +++
-title = "Custom Slide Title"
-skip = false              # Set to true to exclude from output
-classes = ["centered", "dark"]  # CSS classes
-css = "background: linear-gradient(...);"  # Inline CSS
-css_file = "path/to/styles.css"  # External CSS file
-duration = "2m 30s"       # Slide duration (or use seconds: 150)
+title = "Why borrow?"
+classes = ["wide", "no_title"]
+duration = "2m 30s"
 +++
-
-# Slide Content
-Your content here...
 ```
 
-### Cover Slide Frontmatter
+| Key | Meaning |
+| --- | --- |
+| `title` | Overrides the title taken from the first heading |
+| `skip` | Leave the slide out of the build entirely |
+| `classes` | CSS classes on the slide's `<section>` |
+| `style` | Inline `style` attribute for the slide |
+| `duration` | Planned speaking time — seconds, or `"2m 30s"` |
+| `hidden_in` | Render targets to omit this slide from: `web`, `pdf` |
+| `quake_cwd` | Working directory for the quake terminal on this slide |
+| `disabled_rules` | Lint rule ids to silence for this slide |
+| `date` | Deck-level, read from `_cover.md` |
+| `lang` | Deck-level BCP 47 tag, read from `_cover.md` |
 
-The `_cover.md` file can set presentation-wide metadata:
+## Directives
 
-```markdown
-+++
-title = "My Awesome Presentation"
-date = "2025-03-15"
-+++
-
-# Welcome
-Subtitle or opening content
-```
-
-## Advanced Features
-
-### Progressive Reveals (Steps)
-
-Use `<!-- pause -->` comments to reveal content step-by-step:
+HTML comments in the body do the things Markdown has no syntax for:
 
 ```markdown
-# Key Points
-
-First point appears immediately
+Everyone sees this first.
 
 <!-- pause -->
-Second point appears on next step
 
-<!-- pause: highlight -->
-Third point appears with highlight class
-```
+This appears on the next press.
 
-### Speaker Notes
+<!-- code:rust:snippets/hello.rs -->
 
-Add presenter notes that won't be shown during presentation:
+<!-- term: . | cargo test -->
 
-```markdown
-# Main Slide Content
-
-Your visible content here
+<!-- lint-disable content/excessive-words -->
 
 <!-- notes -->
-These are speaker notes:
-- Remember to mention the demo
-- Ask for questions
-- Time check: should be at 10 minutes
+Everything after this is speaker notes, and never reaches the projector.
 ```
 
-### Code Blocks from Files
+| Directive | What it does |
+| --- | --- |
+| `<!-- pause -->` | A step boundary. Takes CSS classes: `<!-- pause fade -->` |
+| `<!-- notes -->` | Everything after it is speaker notes |
+| `<!-- code:<info>:<path> -->` | Embeds a file as a code block |
+| `<!-- term: <cwd> -->` | An embedded terminal, live in the web client |
+| `<!-- term: <cwd> :light -->` | …with the light theme |
+| `<!-- term: <cwd> \| <command> -->` | …running a command on connect |
+| `<!-- lint-disable <ids> -->` | Silences lint rules for this slide |
 
-Include code from external files:
+> [!IMPORTANT]
+> Paths in `<!-- code -->` resolve against the **parent** of the folder you pass
+> to `-p`. With `-p ./my-talk/slides`, a path of `./snippets/main.rs` is
+> `./my-talk/snippets/main.rs` — which is why a deck keeps its snippets beside
+> `slides/` rather than inside it.
 
-```markdown
-# Code Example
+## Using it as a library
 
-Here's our implementation:
+```rust,ignore
+use std::path::Path;
+use toboggan_cli::{parse_presentation, Settings};
 
-<!-- code:rust:src/main.rs -->
-
-This will be replaced with the contents of src/main.rs
+let result = parse_presentation(Path::new("./my-talk/slides"), &settings)?;
+let talk = result.talk;
 ```
 
-The directive is `<!-- code:<info>:<path> -->`, where `<info>` is the fence info
-string the file is wrapped in (`rust`, `javascript`, …), so syntax highlighting
-behaves exactly as with a hand-written fence. Two things to keep in mind:
+Also public: `output` (the renderers), `scaffold` (what `toboggan new` writes),
+`stats`, `display`, and `TobogganCliError`, which is a [`miette`] diagnostic — so
+a parse failure points at the offending line in the offending file.
 
-- The path is resolved from the directory you run the CLI in — the deck folder —
-  **not** from the slide file. Keep snippets beside your build command.
-- A missing file is a hard error: the build fails rather than emitting an empty
-  block.
-
-Works anywhere a block does: slide bodies, steps after `<!-- pause -->`, and
-inside `<!-- notes -->`.
-
-## Presentation Statistics
-
-The CLI provides comprehensive statistics about your presentation:
-
-### Overview Metrics
-
-- Total slides and parts
-- Word count (body + optional notes)
-- Bullet points and images
-- Estimated duration at your speaking rate
-
-### Part Breakdown
-
-Shows distribution of content across sections:
-
-- Slides per part
-- Words and percentage of total
-- Estimated duration per part
-
-### Duration Scenarios
-
-Calculates presentation length for different speaking rates:
-
-- Slow (110 WPM)
-- Normal (150 WPM)
-- Fast (170 WPM)
-- Custom (your --wpm setting)
-- Additional time for images (5 seconds each)
-
-### Recommendations
-
-The tool provides smart recommendations when:
-
-| Condition | Recommendation |
-|-----------|----------------|
-| Duration > 50 minutes | Consider splitting into multiple presentations |
-| Duration < 2 minutes | Presentation might be too short |
-| One part > 50% of content | Consider splitting that part |
-| > 100 words/slide average | High density - use more slides with less text |
-| < 20 words/slide average | Low density - slides might need more content |
-
-## Live Development with Bacon
-
-For live updates while editing your presentation, use [bacon](https://dystroy.org/bacon/):
-
-### Setup
-
-Create a `bacon.toml` in your project root:
-
-```toml
-default_job = "toboggan"
-
-[jobs.toboggan]
-command = ["toboggan-cli", "./slides/", "--output", "presentation.toml"]
-need_stdout = true
-allow_warnings = true
-default_watch = false
-watch = ["slides"]  # Watch your presentation folder
-```
-
-### Usage
-
-```bash
-# Install bacon if needed
-cargo install bacon
-
-# Run with live reload
-bacon
-
-# Or run specific job
-bacon toboggan
-```
-
-Now your `presentation.toml` will automatically rebuild whenever you edit files in the `slides/` folder!
-
-## Output Formats
-
-Toboggan CLI supports multiple output formats:
-
-| Format | Extension | Description |
-|--------|-----------|-------------|
-| TOML | `.toml` | Default, human-readable |
-| JSON | `.json` | Web-friendly, readable |
-| YAML | `.yaml`, `.yml` | Alternative readable format |
-| CBOR | `.cbor` | Compact binary, standardized |
-| MessagePack | `.msgpack` | Ultra-compact binary |
-| Bincode | `.bincode`, `.bin` | Rust-native, fastest |
-
-Format is auto-detected from file extension or specify with `-f`:
-
-```bash
-# Auto-detect from extension
-toboggan-cli slides/ -o presentation.json
-
-# Explicit format
-toboggan-cli slides/ -f yaml -o output.txt
-```
-
-## Examples
-
-### Basic Presentation
-
-````bash
-# Create structure
-mkdir -p my-talk/01-intro
-
-# Create cover
-cat > my-talk/_cover.md << 'EOF'
-+++
-title = "Introduction to Rust"
-date = "2025-03-15"
-+++
-
-# Welcome to Rust Programming
-EOF
-
-# Create part
-echo "# Chapter 1: Getting Started" > my-talk/01-intro/_part.md
-
-# Create slide
-cat > my-talk/01-intro/hello.md << 'EOF'
-# Hello World
-
-<!-- pause -->
-```rust
-fn main() {
-    println!("Hello, world!");
-}
-````
-
-<!-- notes -->
-
-Explain that println! is a macro, not a function
-EOF
-
-# Convert
-
-toboggan-cli my-talk/ -o presentation.toml
-
-````
-
-### Batch Processing
-
-```bash
-#!/bin/bash
-# Convert all presentations in a directory
-
-for dir in presentations/*/; do
-  name=$(basename "$dir")
-  toboggan-cli "$dir" \
-    --date "$(date +%Y-%m-%d)" \
-    --wpm 130 \
-    -o "output/${name}.toml"
-done
-````
-
-### CI/CD Integration
-
-```yaml
-# GitHub Actions example
-- name: Build Presentations
-  run: |
-    for dir in presentations/*/; do
-      toboggan-cli "$dir" -f json -o "dist/$(basename "$dir").json"
-    done
-```
-
-## Troubleshooting
-
-### Common Issues
-
-**Missing syntax highlighting**
-
-- Use `--list-themes` to see available themes
-- Specify language in code blocks: ````  ```rust ````
-
-**Incorrect duration estimates**
-
-- Adjust `--wpm` to match your speaking pace
-- Use `--exclude-notes-from-duration` if notes are just reminders
-
-**Files processed in wrong order**
-
-- Prefix with numbers: `01-intro.md`, `02-main.md`
-- Use folders for logical grouping
-
-## Contributing
-
-Contributions welcome! Please see the [main repository](https://github.com/ilaborie/toboggan) for guidelines.
+[`miette`]: https://github.com/zkat/miette
 
 ## License
 
-Licensed under either of:
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
-- MIT license ([LICENSE-MIT](LICENSE-MIT))
-
-at your option.
+MIT or Apache-2.0, at your option.

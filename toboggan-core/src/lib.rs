@@ -1,3 +1,10 @@
+//! The domain model for Toboggan, and the protocol its clients speak.
+//!
+//! This crate depends on nothing else in the workspace; everything else is
+//! built on top of it. The overview below is the crate's README, so the
+//! examples in it are doctests and cannot drift from the API they describe.
+#![doc = include_str!("../README.md")]
+
 mod time;
 pub use self::time::*;
 
