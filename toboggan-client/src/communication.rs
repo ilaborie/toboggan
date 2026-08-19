@@ -79,8 +79,6 @@ impl Default for ConnectionState {
     }
 }
 
-const RECONNECT_DELAY: Duration = Duration::from_secs(5);
-
 pub struct WebSocketClient {
     client_name: String,
     config: TobogganWebsocketConfig,
@@ -385,7 +383,7 @@ async fn next_retry(
     config: &TobogganWebsocketConfig,
     tx_msg: &mpsc::UnboundedSender<CommunicationMessage>,
 ) -> Option<Duration> {
-    let retry_count = {
+    let (retry_count, delay) = {
         let mut state_ref = state.lock().await;
         if state_ref.is_disposed {
             return None;
@@ -398,17 +396,22 @@ async fn next_retry(
             return None;
         }
         state_ref.retry_count += 1;
-        state_ref.retry_count
+        // Exponential, and jittered so a room that all lost the same wifi does
+        // not come back at the same instant. This used to be a flat five
+        // seconds and `calculate_delay` had no caller at all, which is exactly
+        // the failure its own documentation described.
+        let delay = Duration::from_millis(config.retry.calculate_delay(state_ref.retry_count - 1));
+        (state_ref.retry_count, delay)
     };
 
     let status = ConnectionStatus::Reconnecting {
         attempt: retry_count,
         max_attempt: config.max_retries,
-        delay: RECONNECT_DELAY,
+        delay,
     };
     debug!(%status, "🗿connection status");
     let _ = tx_msg.send(CommunicationMessage::ConnectionStatusChange { status });
-    Some(RECONNECT_DELAY)
+    Some(delay)
 }
 
 /// Opens a fresh socket and re-registers on it, returning its read half.
@@ -639,6 +642,8 @@ mod tests {
 #[cfg(test)]
 #[allow(clippy::expect_used)]
 mod reconnect_tests {
+    use toboggan_core::RetryConfig;
+
     use super::*;
 
     fn config(max_retries: usize) -> TobogganWebsocketConfig {
@@ -649,6 +654,13 @@ mod reconnect_tests {
             max_retries,
             retry_delay: Duration::from_millis(1),
             max_retry_delay: Duration::from_millis(1),
+            retry: RetryConfig::new(
+                max_retries,
+                Duration::from_millis(1).into(),
+                Duration::from_millis(2).into(),
+                2.0,
+                true,
+            ),
             presenter_token: None,
         }
     }
@@ -664,7 +676,12 @@ mod reconnect_tests {
 
         let delay = next_retry(&state, &config(3), &tx).await;
 
-        assert_eq!(delay, Some(RECONNECT_DELAY));
+        // The first retry, jittered: the initial delay plus up to 20%.
+        let delay = delay.expect("a delay");
+        assert!(
+            delay >= Duration::from_millis(1) && delay <= Duration::from_millis(2),
+            "unexpected first delay: {delay:?}"
+        );
         assert_eq!(state.lock().await.retry_count, 1);
         match rx.try_recv().expect("a status change") {
             CommunicationMessage::ConnectionStatusChange {

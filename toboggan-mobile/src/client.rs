@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use toboggan_client::{TobogganClientCore, TobogganWebsocketConfig};
-use toboggan_core::{Secret, Slide as CoreSlide, TalkResponse};
+use toboggan_core::{RetryConfig, Secret, Slide as CoreSlide, TalkResponse};
 use tokio::runtime::Runtime;
 use tokio::sync::{Mutex, watch};
 
@@ -106,6 +106,16 @@ impl TobogganClient {
             max_retries: max_retries as usize,
             retry_delay,
             max_retry_delay: retry_delay * max_retries,
+            // Built from the same numbers, so a phone that loses signal backs
+            // off and jitters like every other client rather than retrying on a
+            // flat timer.
+            retry: RetryConfig::new(
+                max_retries as usize,
+                retry_delay.into(),
+                (retry_delay * max_retries).into(),
+                2.0,
+                true,
+            ),
             presenter_token,
         };
 

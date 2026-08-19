@@ -94,29 +94,31 @@ impl RetryConfig {
     #[allow(clippy::cast_sign_loss)]
     /// How long to wait before `attempt`, in milliseconds.
     ///
-    /// Exponential in the attempt number, capped at
-    /// [`Self::max_retry_delay`], then spread by up to 20% when jitter is on.
+    /// Exponential in the attempt number, spread by up to 20% when jitter is
+    /// on, and then capped at [`Self::max_retry_delay`].
+    ///
+    /// The cap comes last on purpose. It used to be applied before the jitter,
+    /// so a delay already at the ceiling was pushed up to 20% past it — and
+    /// `max_retry_delay` is documented as the ceiling the delay grows *towards*.
+    ///
+    /// Attempt 0 is jittered too. It used to return the initial delay
+    /// untouched, which meant the very wave the jitter exists to break up — a
+    /// room that all lost the same wifi — came back perfectly synchronised.
     #[must_use]
     pub fn calculate_delay(&self, attempt: usize) -> u64 {
         let initial_ms = self.initial_retry_delay.as_millis() as u64;
         let max_ms = self.max_retry_delay.as_millis() as u64;
-
-        if attempt == 0 {
-            return initial_ms;
-        }
 
         let mut delay = initial_ms as f32;
         for _ in 0..attempt {
             delay *= self.backoff_factor;
         }
 
-        let mut delay = delay.min(max_ms as f32) as u64;
-
         if self.use_jitter {
-            delay = (delay as f32 * (1.0 + jitter_fraction())) as u64;
+            delay *= 1.0 + jitter_fraction();
         }
 
-        delay
+        (delay as u64).min(max_ms)
     }
 
     /// Delay before the first retry.
@@ -203,38 +205,50 @@ impl Default for BaseClientConfig {
     }
 }
 
-/// Connection status constants for consistency across clients
-pub mod connection_timeouts {
-    use std::time::Duration;
-
-    /// How often the server expects to hear from a client.
-    pub const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
-    /// How long to wait for a connection before giving up on it.
-    pub const CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
-    /// How often a client sends a ping — shorter than the heartbeat, so a slow
-    /// round trip does not read as a dead client.
-    pub const PING_INTERVAL: Duration = Duration::from_secs(25);
-}
-
 #[cfg(test)]
 #[allow(clippy::expect_used)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_retry_config_delay_calculation() {
+    fn the_delay_doubles_with_each_attempt() {
         let config = RetryConfig::default();
 
-        assert_eq!(config.calculate_delay(0), 1_000);
+        // Jitter adds up to 20%, so each attempt is a band rather than a value.
+        assert!((1_000..=1_200).contains(&config.calculate_delay(0)));
+        assert!((2_000..=2_400).contains(&config.calculate_delay(1)));
+        assert!((4_000..=4_800).contains(&config.calculate_delay(2)));
+    }
 
-        // With exponential backoff factor of 2.0
-        let delay1 = config.calculate_delay(1);
-        assert!((2_000..=2_400).contains(&delay1)); // With jitter
+    /// `max_retry_delay` is documented as the ceiling the delay grows towards,
+    /// and this used to assert it could be exceeded by a fifth: the cap was
+    /// applied before the jitter, so a delay already at the ceiling was pushed
+    /// past it.
+    #[test]
+    fn the_delay_never_passes_its_ceiling() {
+        let config = RetryConfig::default();
+        let ceiling = config.max_retry_delay().as_millis();
 
-        // Should not exceed max delay
-        let delay_max = u128::from(config.calculate_delay(100));
-        let max_delay_ms = config.max_retry_delay().as_millis();
-        assert!(delay_max <= max_delay_ms + (max_delay_ms / 5));
+        for attempt in [10, 50, 100] {
+            let delay = u128::from(config.calculate_delay(attempt));
+            assert!(delay <= ceiling, "attempt {attempt} waited {delay}ms");
+        }
+    }
+
+    /// The wave the jitter exists to break up is a room that all lost the same
+    /// wifi — which is the *first* retry. It used to be returned untouched, so
+    /// every client in the room came back at the same instant.
+    #[test]
+    fn the_first_retry_is_spread_out_too() {
+        let config = RetryConfig::default();
+        let delays = (0..40)
+            .map(|_| config.calculate_delay(0))
+            .collect::<std::collections::HashSet<_>>();
+
+        assert!(
+            delays.len() > 1,
+            "every client would reconnect at the same instant: {delays:?}"
+        );
     }
 
     #[test]

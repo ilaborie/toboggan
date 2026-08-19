@@ -22,7 +22,9 @@ pub const PING_PERIOD: Duration = Duration::from_secs(10);
 /// Maximum time to wait for a connection response
 pub const CONNECTION_TIMEOUT: Duration = Duration::from_mins(1);
 
-/// Interval for cleanup tasks
+/// Interval for cleanup tasks.
 ///
-/// How often the server checks for and removes disconnected clients.
+/// A default for a client that has no setting of its own. The server does not
+/// use it: `--cleanup-interval-secs` owns that, and defaults to 60 — this said
+/// 30 and claimed to be the server's, which was two wrong answers.
 pub const CLEANUP_INTERVAL: Duration = Duration::from_secs(30);
