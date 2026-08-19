@@ -268,6 +268,54 @@ mod tests {
         ids_in(report).contains(&rule.as_str())
     }
 
+    /// Every declared id must have a rule behind it.
+    ///
+    /// `all_rules` is a hand-written `vec![]`, so dropping one `Box::new` line
+    /// stops that rule running on every deck and leaves the whole suite green —
+    /// each rule's own tests call it directly, and nothing checked that the
+    /// runner still reached it.
+    ///
+    /// `spelling/typo` is deliberately absent: it is registered only under the
+    /// `spell` feature, so its id is not in `DECLARED_IDS`.
+    #[test]
+    fn registered_rules_cover_every_id() {
+        let registered = all_rule_ids()
+            .into_iter()
+            .map(RuleId::as_str)
+            .collect::<Vec<_>>();
+
+        for declared in rules::DECLARED_IDS {
+            assert!(
+                registered.contains(&declared.as_str()),
+                "{} is declared but no rule is registered for it",
+                declared.as_str()
+            );
+        }
+    }
+
+    /// The reverse: a rule whose id was never declared cannot be referenced by
+    /// `--no-spell`, a `disabled_rules` entry, or the MCP tool.
+    #[test]
+    fn every_registered_rule_has_a_declared_id() {
+        let declared = rules::DECLARED_IDS
+            .iter()
+            .map(|id| id.as_str())
+            .collect::<Vec<_>>();
+
+        for rule in all_rule_ids() {
+            // Skip the feature-gated one, which is registered without being
+            // listed above.
+            if rule.as_str() == ids::SPELLING_TYPO.as_str() {
+                continue;
+            }
+            assert!(
+                declared.contains(&rule.as_str()),
+                "{} runs but is not declared in `ids`",
+                rule.as_str()
+            );
+        }
+    }
+
     /// Every rule must be reachable: a rule that no input can trigger is dead
     /// weight, and one whose id is misspelled can never be disabled.
     #[test]

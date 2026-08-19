@@ -399,3 +399,102 @@ mod tests {
         assert_eq!(doc.count_images_without_alt(), 2);
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::indexing_slicing)]
+mod query_tests {
+    use super::*;
+
+    /// These five are the parser behind `html/raw-script`, `html/heading-h1`,
+    /// `link/broken`, `html/img-missing-alt` and both `code/*` rules, and were
+    /// covered only through `toboggan-lint` — so a change here surfaced as a
+    /// lint failure in another crate, pointing at the rule rather than the
+    /// parse.
+    #[test]
+    fn a_raw_script_is_found_anywhere_in_the_fragment() {
+        assert!(HtmlDocument::parse_fragment("<p>hi</p><script>x()</script>").has_script());
+        assert!(
+            HtmlDocument::parse_fragment("<div><script src=\"a.js\"></script></div>").has_script()
+        );
+        assert!(!HtmlDocument::parse_fragment("<p>no script here</p>").has_script());
+    }
+
+    #[test]
+    fn an_h1_in_the_body_is_found() {
+        assert!(HtmlDocument::parse_fragment("<h1>Title</h1>").has_h1());
+        assert!(!HtmlDocument::parse_fragment("<h2>Subtitle</h2>").has_h1());
+    }
+
+    #[test]
+    fn image_sources_come_back_in_document_order() {
+        let document = HtmlDocument::parse_fragment(
+            r#"<img src="one.png"><p>x</p><img src="two.png" alt="a">"#,
+        );
+        assert_eq!(document.image_sources(), vec!["one.png", "two.png"]);
+        // An `<img>` with no `src` has nothing to check and is not reported.
+        assert!(
+            HtmlDocument::parse_fragment("<img alt=\"a\">")
+                .image_sources()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn link_targets_come_back_in_document_order() {
+        let document =
+            HtmlDocument::parse_fragment(r#"<a href="/a">A</a><a>no href</a><a href="/b">B</a>"#);
+        assert_eq!(document.link_targets(), vec!["/a", "/b"]);
+    }
+
+    /// The language comes off comrak's `language-*` class, and the line count
+    /// is what `code/too-long` compares against a budget.
+    #[test]
+    fn a_fenced_block_carries_its_language_and_line_count() {
+        let document = HtmlDocument::parse_fragment(
+            "<pre><code class=\"language-rust\">fn main() {\nprintln!(\"hi\");\n}\n</code></pre>",
+        );
+        assert_eq!(
+            document.code_blocks(),
+            vec![CodeBlock {
+                language: Some("rust".to_owned()),
+                lines: 3,
+            }]
+        );
+    }
+
+    /// A block with no language is what `code/no-language` reports, so the
+    /// distinction between `None` and `Some("")` is load-bearing.
+    #[test]
+    fn a_block_without_a_language_reports_none() {
+        let document = HtmlDocument::parse_fragment("<pre><code>plain\ntext\n</code></pre>");
+        assert_eq!(
+            document
+                .code_blocks()
+                .first()
+                .map(|block| block.language.clone()),
+            Some(None)
+        );
+    }
+
+    /// Only the trailing newline is ignored; a block that does not end in one
+    /// still counts its last line. The `lines: 1` case is the boundary
+    /// `code/too-long` never sees but every short block hits.
+    #[test]
+    fn a_trailing_newline_does_not_add_a_line() {
+        let with = HtmlDocument::parse_fragment("<pre><code>one\n</code></pre>");
+        let without = HtmlDocument::parse_fragment("<pre><code>one</code></pre>");
+        assert_eq!(with.code_blocks()[0].lines, 1);
+        assert_eq!(without.code_blocks()[0].lines, 1);
+    }
+
+    #[test]
+    fn several_blocks_are_all_returned() {
+        let document = HtmlDocument::parse_fragment(
+            "<pre><code class=\"language-sh\">ls</code></pre><p>x</p><pre><code>plain</code></pre>",
+        );
+        let blocks = document.code_blocks();
+        assert_eq!(blocks.len(), 2);
+        assert_eq!(blocks[0].language.as_deref(), Some("sh"));
+        assert_eq!(blocks[1].language, None);
+    }
+}

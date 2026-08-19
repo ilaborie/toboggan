@@ -217,6 +217,7 @@ pub mod connection_timeouts {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
     use super::*;
 
@@ -237,7 +238,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
     fn test_humantime_serialization() {
         let config = RetryConfig {
             max_retries: 5,
@@ -247,8 +247,9 @@ mod tests {
             use_jitter: false,
         };
 
-        let serialized = serde_json::to_string(&config).unwrap();
-        let deserialized: RetryConfig = serde_json::from_str(&serialized).unwrap();
+        let serialized = serde_json::to_string(&config).expect("serialize retry config");
+        let deserialized =
+            serde_json::from_str::<RetryConfig>(&serialized).expect("round-trip retry config");
 
         assert_eq!(config.max_retries, deserialized.max_retries);
         assert_eq!(config.initial_retry_delay, deserialized.initial_retry_delay);
@@ -258,7 +259,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
     fn test_humantime_parsing() {
         let json = r#"{
             "max_retries": 3,
@@ -268,7 +268,7 @@ mod tests {
             "use_jitter": true
         }"#;
 
-        let config: RetryConfig = serde_json::from_str(json).unwrap();
+        let config = serde_json::from_str::<RetryConfig>(json).expect("parse retry config");
 
         assert_eq!(config.max_retries, 3);
         assert_eq!(config.initial_retry_delay, Duration::from_secs(1));

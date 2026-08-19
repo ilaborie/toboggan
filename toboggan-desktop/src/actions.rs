@@ -83,6 +83,49 @@ impl AppAction {
         Some(action)
     }
 
+    /// Every action, for the table-driven tests below.
+    ///
+    /// Kept honest by [`Self::position`]: adding a variant does not compile
+    /// until it appears there, and the assertion in `all_lists_every_action`
+    /// then fails until it appears here too.
+    #[cfg(test)]
+    pub(crate) const ALL: [Self; 12] = [
+        Self::First,
+        Self::Previous,
+        Self::Next,
+        Self::Last,
+        Self::PreviousStep,
+        Self::NextStep,
+        Self::Blink,
+        Self::ToggleHelp,
+        Self::ToggleSidebar,
+        Self::ToggleFullscreen,
+        Self::CloseOverlay,
+        Self::Quit,
+    ];
+
+    /// Where this action sits in [`Self::ALL`].
+    ///
+    /// An exhaustive match on purpose — it is what makes a forgotten variant a
+    /// build failure rather than a silently thinner test.
+    #[cfg(test)]
+    const fn position(self) -> usize {
+        match self {
+            Self::First => 0,
+            Self::Previous => 1,
+            Self::Next => 2,
+            Self::Last => 3,
+            Self::PreviousStep => 4,
+            Self::NextStep => 5,
+            Self::Blink => 6,
+            Self::ToggleHelp => 7,
+            Self::ToggleSidebar => 8,
+            Self::ToggleFullscreen => 9,
+            Self::CloseOverlay => 10,
+            Self::Quit => 11,
+        }
+    }
+
     /// The command to send to the server, for the actions that drive the deck.
     pub(crate) fn command(self) -> Option<Command> {
         let command = match self {
@@ -185,6 +228,56 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    /// `from_key` only proves a key reaches the right *action*. Which command
+    /// that action sends was untested, so swapping two neighbouring arms in
+    /// `command()` would have moved the deck the wrong way with every test
+    /// still green.
+    #[test]
+    fn each_action_sends_the_command_it_names() {
+        for (action, expected) in [
+            (AppAction::First, Some(Command::First)),
+            (AppAction::Previous, Some(Command::PreviousSlide)),
+            (AppAction::Next, Some(Command::NextSlide)),
+            (AppAction::Last, Some(Command::Last)),
+            (AppAction::PreviousStep, Some(Command::PreviousStep)),
+            (AppAction::NextStep, Some(Command::NextStep)),
+            (AppAction::Blink, Some(Command::Blink)),
+            // The local ones are the window's business, not the server's.
+            (AppAction::ToggleHelp, None),
+            (AppAction::ToggleSidebar, None),
+            (AppAction::ToggleFullscreen, None),
+            (AppAction::CloseOverlay, None),
+            (AppAction::Quit, None),
+        ] {
+            assert_eq!(action.command(), expected, "{action:?}");
+        }
+    }
+
+    #[test]
+    fn all_lists_every_action() {
+        for (index, action) in AppAction::ALL.iter().enumerate() {
+            assert_eq!(action.position(), index, "{action:?} is out of place");
+        }
+    }
+
+    /// The help panel is generated from `HELP_GROUPS`, so an action missing
+    /// from it is a key that works and is never advertised — the same drift as
+    /// the reverse, which `every_documented_key_is_bound` covers.
+    #[test]
+    fn every_action_is_documented() {
+        let documented: Vec<AppAction> = HELP_GROUPS
+            .iter()
+            .flat_map(|(_, actions)| actions.iter().copied())
+            .collect();
+
+        for action in AppAction::ALL {
+            assert!(
+                documented.contains(&action),
+                "{action:?} is bound but absent from the help panel"
+            );
         }
     }
 

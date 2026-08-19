@@ -127,6 +127,22 @@ async fn handle_websocket(socket: WebSocket, state: TobogganState, ip_addr: IpAd
     );
 }
 
+/// Whether this socket's role bars it from this command.
+///
+/// The whole of the WebSocket's authorization, which is a different mechanism
+/// from the [`Presenter`](super::presenter::Presenter) extractor the HTTP routes
+/// use: the role here is settled once, at the `Register` frame, because the
+/// socket outlives the request. Named and separate so it can be tested — it was
+/// an inline condition, and `/api/ws` is what every browser client actually
+/// drives the deck through, so this was the least covered branch in the crate.
+///
+/// An audience client is not disconnected for trying. A stale tab, or a
+/// reconnect from a laptop that moved off the presenter's machine, is a mistake
+/// rather than an attack: it is told, and ignored.
+const fn refuses(command: &Command, role: ClientRole) -> bool {
+    command.drives_the_deck() && !role.is_presenter()
+}
+
 async fn send_initial_state(
     ws_sender: &mut futures::stream::SplitSink<WebSocket, Message>,
     state: &TobogganState,
@@ -223,11 +239,7 @@ fn spawn_message_receiver_task(
                                 break;
                             }
 
-                            // An audience client is not disconnected for trying
-                            // — a stale tab, or a reconnect from a laptop that
-                            // moved off the presenter's machine, is a mistake
-                            // rather than an attack. It is told, and ignored.
-                            if command.drives_the_deck() && !client_role.is_presenter() {
+                            if refuses(&command, client_role) {
                                 warn!(?client_id, ?command, "Refused a command from the audience");
                                 let refusal =
                                     Notification::error("This client is watching, not presenting");
@@ -298,4 +310,60 @@ fn spawn_heartbeat_task(
 
         info!(?client_id, "Heartbeat task finished");
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use toboggan_core::SlideId;
+
+    use super::*;
+
+    /// The audience may watch and nothing else. `drives_the_deck` is a negation
+    /// of the harmless set, so a command added later is refused here by default
+    /// rather than slipping through.
+    #[test]
+    fn the_audience_is_refused_everything_that_moves_the_deck() {
+        for command in [
+            Command::First,
+            Command::Last,
+            Command::NextSlide,
+            Command::PreviousSlide,
+            Command::NextStep,
+            Command::PreviousStep,
+            Command::Blink,
+            Command::GoTo {
+                slide: SlideId::FIRST,
+            },
+        ] {
+            assert!(
+                refuses(&command, ClientRole::Audience),
+                "audience must not send {command:?}"
+            );
+            assert!(
+                !refuses(&command, ClientRole::Presenter),
+                "presenter must be able to send {command:?}"
+            );
+        }
+    }
+
+    /// Registering and the heartbeat are how a client becomes an audience
+    /// member at all, so refusing them would refuse the connection itself.
+    #[test]
+    fn the_audience_may_still_register_and_ping() {
+        for command in [
+            Command::Register {
+                name: "watcher".to_owned(),
+                token: None,
+            },
+            Command::Unregister {
+                client: ClientId::from_key(slotmap::DefaultKey::default()),
+            },
+            Command::Ping,
+        ] {
+            assert!(
+                !refuses(&command, ClientRole::Audience),
+                "audience must be able to send {command:?}"
+            );
+        }
+    }
 }

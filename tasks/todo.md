@@ -14,33 +14,33 @@ Branch: `feat/review-program` (everything lands here before #55 merges)
 
 ## B. Presenter view and web client
 
-- [ ] B1 — Log each presenter selector miss; keep the panes that resolved
-- [ ] B2 — Mount the toast under `body` on the presenter branch
-- [ ] B3 — Guard `await init()`; render the failure into the page
-- [ ] B4 — `navigate.js`: real catch + modifier guard
-- [ ] B5 — Report rejected font faces; log env coercion
-- [ ] B6 — Expire `pending_goto`; modifier guard; reject leading `0`
+- [x] B1 — Log each presenter selector miss; keep the panes that resolved
+- [x] B2 — Mount the toast under `body` on the presenter branch
+- [x] B3 — Guard `await init()`; render the failure into the page
+- [x] B4 — `navigate.js`: real catch + modifier guard
+- [x] B5 — Report rejected font faces; log env coercion
+- [x] B6 — Expire `pending_goto`; modifier guard; reject leading `0`
 
 ## C. Token UX
 
 - [x] C2 — Make the three token decoders agree
-- [ ] C3 — Page links carry `?token=`
-- [ ] C4 — `report_access_posture` prints the presenter URL
-- [ ] C5 — TUI/desktop read the granted role
+- [x] C3 — Page links carry `?token=`
+- [x] C4 — `report_access_posture` prints the presenter URL
+- [x] C5 — TUI/desktop read the granted role
 
 ## D. Types and escaping
 
 - [x] D1 — `Presenter(())`; drop `Ord` from `ClientRole`
-- [ ] D2 — `escape_attribute`; escape `style`/`classes`
+- [x] D2 — `escape_attribute`; escape `style`/`classes`
 - [ ] D3 — `TalkResponse` → `Vec<SlideSummary>`
-- [ ] D4 — `OnceCell` → `OnceLock` in `RuleContext`
-- [ ] D5 — `with_source_path` `pub(crate)`; drop stored `display_number`
+- [x] D4 — `OnceCell` → `OnceLock` in `RuleContext`
+- [x] D5 — `with_source_path` `pub(crate)`; drop stored `display_number`
 
 ## E. Lint, build, CLI
 
-- [ ] E1 — Terminal rules: key on `(cwd, cmd)`; fix `unresolved-cwd` + its test; DRY test helpers
+- [x] E1 — Terminal rules: key on `(cwd, cmd)`; fix `unresolved-cwd` + its test; DRY test helpers
 - [ ] E2 — Normalise `--base-url` trailing slash
-- [ ] E3 — Drop the `source_dir/public` candidate
+- [x] E3 — Drop the `source_dir/public` candidate
 - [ ] E4 — `build.rs` gates on `presenter.html`
 - [ ] E5 — Lint stdout through `WriteStdout` (EPIPE)
 - [ ] E6 — `examples/slide.md` `css` → `style`; part `duration` dropped
@@ -53,8 +53,8 @@ Branch: `feat/review-program` (everything lands here before #55 merges)
 - [ ] F3 — WS audience-refusal test
 - [x] F4 — Fenced code block containing backticks
 - [ ] F5 — `all_rules()` registration + severity table
-- [ ] F6 — First wasm tests + CI step
-- [ ] F7 — `layout.spec.ts` serial + `expect.poll`
+- [x] F6 — First wasm tests + CI step
+- [x] F7 — `layout.spec.ts` serial + `expect.poll`
 - [ ] F8 — Desktop `command()`; TUI key bindings
 - [ ] F9 — `HtmlDocument` unit tests
 - [ ] F10 — `expect()` over `unwrap()` in `core/config.rs` tests
