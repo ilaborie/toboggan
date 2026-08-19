@@ -251,16 +251,24 @@ pub fn inject_head_html(head_html: Option<&str>) {
         .expect_throw("DOM unavailable: could not create temp div for head HTML injection");
     temp.set_inner_html(html);
 
-    // Move each child to document.head with marker attribute
+    // Move each child to document.head with marker attribute.
+    //
+    // `append_child` is also what removes the node from `temp`, so the loop's
+    // termination depends on it succeeding. Logging the failure and carrying on
+    // left the same node at the front for ever: the tab span, emitting console
+    // errors, on any node `<head>` declines — which a deck's own `_head.html`
+    // can contain. It is removed either way now.
     while let Some(child) = temp.first_child() {
-        // Add marker attribute if it's an element
         if let Some(element) = child.dyn_ref::<Element>() {
             let _ = element.set_attribute("data-toboggan-head", "true");
         }
 
-        // Move to head
         if head.append_child(&child).is_err() {
-            error!("Failed to append element to head");
+            error!("Could not move an element from _head.html into <head>");
+            if temp.remove_child(&child).is_err() {
+                error!("Could not drop it either; abandoning the rest of _head.html");
+                return;
+            }
         }
     }
 }
