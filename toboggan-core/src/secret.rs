@@ -1,4 +1,4 @@
-use std::fmt;
+use std::fmt::{self, Write as _};
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
@@ -94,7 +94,9 @@ impl Secret {
                 b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
                     out.push(char::from(byte));
                 }
-                other => out.push_str(&format!("%{other:02X}")),
+                other => {
+                    let _ = write!(out, "%{other:02X}");
+                }
             }
         }
         out

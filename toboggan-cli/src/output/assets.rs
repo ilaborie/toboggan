@@ -31,6 +31,16 @@ const URL_ATTRIBUTES: [&str; 2] = ["src=\"", "href=\""];
 /// recommends for generated diagrams — never goes through the markdown renderer
 /// at all.
 pub(super) fn rewrite_asset_urls(html: &str, base: &str) -> String {
+    // Normalised once, here, rather than trusted. `--base-url /my-talk` — which
+    // is how GitHub Pages documents a project path, and what `action.yml` passes
+    // through verbatim — used to concatenate to `/my-talkpublic/logo.png`, so
+    // every image 404'd on exactly the deploy this flag exists for.
+    let base = if base.is_empty() || base.ends_with('/') {
+        base.to_owned()
+    } else {
+        format!("{base}/")
+    };
+    let base = base.as_str();
     let mut out = String::with_capacity(html.len());
     let mut rest = html;
 

@@ -1,9 +1,7 @@
 +++
 title= "xxx"
 classes= ["wer", "sdf"]
-css = """
-.step { color:red;}
-"""
+style = "color: red"
 +++
 
 # Title

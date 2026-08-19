@@ -1,3 +1,5 @@
+use std::io::Write as _;
+
 use owo_colors::{OwoColorize, Stream};
 use toboggan_lint::{LintDiagnostic, LintReport, Severity};
 
@@ -28,7 +30,7 @@ pub(crate) fn run_lint(resolved: ResolvedLint) -> anyhow::Result<()> {
     match format {
         LintFormat::Human => print_report(&report),
         LintFormat::Json => print_json(&report)?,
-        LintFormat::Github => print_github(&report),
+        LintFormat::Github => print_github(&report)?,
         LintFormat::Sarif => print_sarif(&report)?,
     }
 
@@ -98,12 +100,27 @@ fn location_of(diagnostic: &LintDiagnostic) -> String {
     }
 }
 
-#[allow(clippy::print_stdout)]
 fn print_json(report: &LintReport) -> anyhow::Result<()> {
     let output = serde_json::to_string_pretty(report)
         .map_err(|err| anyhow::anyhow!("serializing report: {err}"))?;
-    println!("{output}");
-    Ok(())
+    write_line(&output)
+}
+
+/// Writes one line to stdout, turning a closed pipe into a clean exit.
+///
+/// `println!` panics if stdout is gone, so `toboggan lint --format json | head`
+/// ended in a panic message rather than the output the user asked for. The
+/// machine-readable formats are the ones people pipe, which is why they are the
+/// ones that hit it.
+fn write_line(line: &str) -> anyhow::Result<()> {
+    let mut stdout = std::io::stdout().lock();
+    match writeln!(stdout, "{line}") {
+        Ok(()) => Ok(()),
+        // The reader went away — `head`, `grep -q`, a closed pager. That is the
+        // pipeline working, not a failure to report.
+        Err(err) if err.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
+        Err(err) => Err(anyhow::anyhow!("writing to stdout: {err}")),
+    }
 }
 
 /// Prints GitHub Actions workflow commands, which the runner turns into inline
@@ -112,11 +129,11 @@ fn print_json(report: &LintReport) -> anyhow::Result<()> {
 /// Only useful because diagnostics now carry a file. Without `line`, GitHub
 /// pins the annotation to the top of the file, which is right: a diagnostic
 /// covers a whole slide, and slides are one file each.
-#[allow(clippy::print_stdout)]
-fn print_github(report: &LintReport) {
+fn print_github(report: &LintReport) -> anyhow::Result<()> {
     for line in github_lines(report) {
-        println!("{line}");
+        write_line(&line)?;
     }
+    Ok(())
 }
 
 /// Builds the workflow command for each diagnostic.
@@ -152,12 +169,10 @@ fn github_lines(report: &LintReport) -> Vec<String> {
 
 /// Prints a SARIF 2.1.0 log, which GitHub code scanning and other analysis
 /// tools ingest directly.
-#[allow(clippy::print_stdout)]
 fn print_sarif(report: &LintReport) -> anyhow::Result<()> {
     let output = serde_json::to_string_pretty(&sarif_log(report))
         .map_err(|err| anyhow::anyhow!("serializing SARIF: {err}"))?;
-    println!("{output}");
-    Ok(())
+    write_line(&output)
 }
 
 /// Builds the SARIF log for `report`.

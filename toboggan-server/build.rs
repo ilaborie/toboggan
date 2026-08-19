@@ -27,19 +27,25 @@ fn main() {
          \n"
     );
 
-    // Check that the dist folder contains the essential files
-    let index_html = web_dist_path.join("index.html");
-    assert!(
-        index_html.exists(),
-        "\n\n❌ ERROR: Web frontend dist folder is incomplete!\n\
-         \n\
-         The dist/index.html file is missing. The web frontend may not have\n\
-         been built correctly.\n\
-         \n\
-         Please rebuild the web frontend:\n\
-            cd toboggan-web && npm run build && cd ..\n\
-         \n"
-    );
+    // Check that the dist folder contains the essential files.
+    //
+    // Both entry points, not just the deck's: `/presenter` is served from
+    // `presenter.html`, and a `dist/` built before that page existed passed this
+    // check and then answered the route `404 web app not built` — at runtime,
+    // with nothing said at build time.
+    for page in ["index.html", "presenter.html"] {
+        assert!(
+            web_dist_path.join(page).exists(),
+            "\n\n❌ ERROR: Web frontend dist folder is incomplete!\n\
+             \n\
+             The dist/{page} file is missing. The web frontend may not have\n\
+             been built correctly, or was built before this page existed.\n\
+             \n\
+             Please rebuild the web frontend:\n\
+                mise build:web\n\
+             \n"
+        );
+    }
 
     // Tell Cargo to rerun this build script if the dist folder changes
     println!("cargo:rerun-if-changed=../toboggan-web/dist");

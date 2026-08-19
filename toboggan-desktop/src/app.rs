@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use iced::{Element, Subscription, Task, Theme, event, keyboard};
+use iced::{Element, Subscription, Task, Theme, event, keyboard, window};
 use toboggan_client::{
     CommunicationMessage, ConnectionStatus, TobogganApi, TobogganApiError, TobogganConfig,
     WebSocketClient, refetch_talk_and_slides,
@@ -105,10 +105,7 @@ impl App {
                 Task::none()
             }
 
-            Message::ToggleFullscreen => {
-                self.state.fullscreen = !self.state.fullscreen;
-                Task::none()
-            }
+            Message::ToggleFullscreen => self.toggle_fullscreen(),
 
             Message::KeyPressed(key, modifiers) => self.handle_keyboard(&key, modifiers),
 
@@ -379,6 +376,22 @@ impl App {
         Task::none()
     }
 
+    /// Puts the window in or out of fullscreen.
+    ///
+    /// `state.fullscreen` used to be flipped here and read nowhere, so `F11`
+    /// did nothing — while the help panel this crate's `AppAction` refactor
+    /// generates advertised it, which is the exact class of drift that refactor
+    /// exists to prevent.
+    fn toggle_fullscreen(&mut self) -> Task<Message> {
+        self.state.fullscreen = !self.state.fullscreen;
+        let mode = if self.state.fullscreen {
+            window::Mode::Fullscreen
+        } else {
+            window::Mode::Windowed
+        };
+        window::latest().and_then(move |id| window::set_mode(id, mode))
+    }
+
     fn handle_keyboard(
         &mut self,
         key: &keyboard::Key,
@@ -402,9 +415,7 @@ impl App {
             AppAction::ToggleSidebar => {
                 self.state.show_sidebar = !self.state.show_sidebar;
             }
-            AppAction::ToggleFullscreen => {
-                self.state.fullscreen = !self.state.fullscreen;
-            }
+            AppAction::ToggleFullscreen => return self.toggle_fullscreen(),
             // One key for both overlays, closing whichever is up.
             AppAction::CloseOverlay => {
                 if self.state.show_help {
