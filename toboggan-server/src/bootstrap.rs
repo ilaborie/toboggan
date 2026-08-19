@@ -8,8 +8,8 @@ use tracing::{info, instrument, warn};
 use utoipa::openapi::OpenApi;
 
 use crate::{
-    ClientService, ServerSettings, Settings, TalkService, TobogganState, WatchConfig, WatchTarget,
-    routes_with_cors, start_watch_task,
+    ClientService, PresenterAuth, ServerSettings, Settings, TalkService, TobogganState,
+    WatchConfig, WatchTarget, routes_with_cors, start_watch_task,
 };
 
 /// Loads the talk from `settings.talk` and serves it.
@@ -62,14 +62,22 @@ pub async fn launch_with_talk(
         .await
         .with_context(|| format!("Connecting to {addr} ..."))?;
 
-    if settings.open {
-        let url = browse_url(host, port);
-        info!(%url, "Opening presentation in the default browser");
-        tokio::task::spawn_blocking(move || {
-            if let Err(err) = open::that(&url) {
-                warn!(%url, %err, "Could not open the browser");
-            }
-        });
+    if settings.open || settings.open_presenter {
+        // The presenter view goes second so it lands on top: the deck belongs on
+        // the projector, and the window the speaker is left looking at should be
+        // the one with their notes in it.
+        let mut pages = vec![browse_url(host, port, "")];
+        if settings.open_presenter {
+            pages.push(browse_url(host, port, "presenter"));
+        }
+        for url in pages {
+            info!(%url, "Opening in the default browser");
+            tokio::task::spawn_blocking(move || {
+                if let Err(err) = open::that(&url) {
+                    warn!(%url, %err, "Could not open the browser");
+                }
+            });
+        }
     }
 
     let talk_service = TalkService::new(talk).context("build talk service")?;
@@ -77,7 +85,10 @@ pub async fn launch_with_talk(
     let cleanup_service = client_service.clone();
     let terminal_shell = settings.resolve_shell();
     info!(%terminal_shell, "Embedded terminals will use this shell");
-    let state = TobogganState::new(talk_service, client_service, terminal_shell.into());
+    let auth = PresenterAuth::new(settings.presenter_token.clone());
+    report_access_posture(host, port, &auth);
+    let state =
+        TobogganState::new(talk_service, client_service, terminal_shell.into()).with_auth(auth);
 
     // A pre-generated overview directory (`--thumbnails-dir`) seeds the cache as
     // ready; otherwise the overview is generated lazily on the first request.
@@ -118,19 +129,60 @@ pub async fn launch_with_talk(
     Ok(())
 }
 
-/// Builds the URL `--open` hands to the browser.
+/// Says out loud who will be able to drive the deck.
+///
+/// Worth a line in the log because the answer changes with `--host`, and the
+/// case that changes it is the one an author reaches for five minutes before a
+/// talk — "let the room open it on their laptops" — without meaning to also
+/// offer the room a shell.
+fn report_access_posture(host: IpAddr, port: u16, auth: &PresenterAuth) {
+    if host.is_loopback() {
+        info!("Only this machine can reach the server, so every client presents");
+    } else if let Some(token) = auth.token_for_link() {
+        // Printed, because two clients' doc comments said the server prints the
+        // presenter link and nothing did. Assembling `?token=…` by hand is how
+        // a token picks up the stray whitespace and encoding that used to make
+        // it fail to match.
+        info!(
+            "Reachable from the network: clients present from this machine, \
+             or with the presenter token"
+        );
+        // Not `browse_url`: that rewrites a wildcard bind to loopback, which is
+        // right for `--open` on this machine and useless in a link whose whole
+        // purpose is to be opened from another one. A wildcard bind has no one
+        // address to name, so the host is left for the operator to fill in.
+        let authority = match host {
+            IpAddr::V4(addr) if addr.is_unspecified() => "<this-machine>".to_owned(),
+            IpAddr::V6(addr) if addr.is_unspecified() => "<this-machine>".to_owned(),
+            addr => SocketAddr::new(addr, port).to_string(),
+        };
+        let port = if authority == "<this-machine>" {
+            format!(":{port}")
+        } else {
+            String::new()
+        };
+        info!("Presenter link: http://{authority}{port}/run?token={token}");
+    } else {
+        warn!(
+            "Reachable from the network: remote clients are read-only and cannot open \
+             terminals. Pass --presenter-token to let one drive the deck."
+        );
+    }
+}
+
+/// Builds a URL `--open` hands to the browser.
 ///
 /// Two things the bind address cannot supply directly: a wildcard bind
 /// (`0.0.0.0` / `::`) is not an address a client can connect to, so it becomes
 /// loopback; and an IPv6 literal needs brackets in a URL authority, which
 /// `SocketAddr`'s `Display` adds and plain interpolation does not.
-fn browse_url(host: IpAddr, port: u16) -> String {
+fn browse_url(host: IpAddr, port: u16, path: &str) -> String {
     let host = match host {
         IpAddr::V4(addr) if addr.is_unspecified() => IpAddr::V4(Ipv4Addr::LOCALHOST),
         IpAddr::V6(addr) if addr.is_unspecified() => IpAddr::V6(Ipv6Addr::LOCALHOST),
         addr => addr,
     };
-    format!("http://{}/", SocketAddr::new(host, port))
+    format!("http://{}/{path}", SocketAddr::new(host, port))
 }
 
 #[instrument]
@@ -245,21 +297,25 @@ mod tests {
     fn browse_url_is_reachable_and_bracketed() {
         // A wildcard bind is not connectable; loopback of the same family is.
         assert_eq!(
-            browse_url(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 8080),
+            browse_url(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 8080, ""),
             "http://127.0.0.1:8080/"
         );
         assert_eq!(
-            browse_url(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 8080),
+            browse_url(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 8080, ""),
             "http://[::1]:8080/"
         );
         // An IPv6 literal needs brackets in the URL authority.
         assert_eq!(
-            browse_url(IpAddr::V6(Ipv6Addr::LOCALHOST), 3000),
+            browse_url(IpAddr::V6(Ipv6Addr::LOCALHOST), 3000, ""),
             "http://[::1]:3000/"
         );
         assert_eq!(
-            browse_url(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10)), 80),
+            browse_url(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10)), 80, ""),
             "http://192.168.1.10:80/"
+        );
+        assert_eq!(
+            browse_url(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080, "presenter"),
+            "http://127.0.0.1:8080/presenter"
         );
     }
 }

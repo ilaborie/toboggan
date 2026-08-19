@@ -107,8 +107,12 @@ pub enum State {
 impl State {
     /// Create a new State from core State and slides (for step count calculation)
     pub(crate) fn new(slides: &[Slide], value: &CoreState) -> Self {
+        // No assertion that the deck is non-empty. There used to be one, because
+        // the `next` calculation below computed `total_slides - 1` and would
+        // underflow — but an empty deck is a state the client is legitimately in
+        // before the talk has loaded, and an `assert!` across the UniFFI boundary
+        // aborts the host app. The subtraction is gone instead.
         let total_slides = slides.len();
-        assert!(total_slides > 0, "total_slides must be greater than 0");
 
         #[allow(clippy::cast_possible_truncation)]
         // UniFFI requires u32, truncation unlikely for slide counts
@@ -132,7 +136,7 @@ impl State {
                 Self::Running {
                     previous: (current_index > 0).then(|| current_index - 1),
                     current: current_index,
-                    next: ((current_index as usize) < total_slides - 1).then(|| current_index + 1),
+                    next: ((current_index as usize + 1) < total_slides).then(|| current_index + 1),
                     current_step: current_step as u32,
                     step_count,
                 }
@@ -214,6 +218,64 @@ impl From<CoreConnectionStatus> for ConnectionStatus {
             CoreConnectionStatus::Closed => Self::Closed,
             CoreConnectionStatus::Reconnecting { .. } => Self::Reconnecting,
             CoreConnectionStatus::Error { .. } => Self::Error,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use toboggan_core::{SlideId, State as CoreState};
+
+    use super::*;
+
+    fn slide(title: &str) -> Slide {
+        Slide {
+            title: title.to_owned(),
+            kind: SlideKind::Standard,
+            step_count: 0,
+        }
+    }
+
+    /// The client is legitimately in this state before the talk has loaded.
+    /// It used to hit an `assert!` that aborted the host app across the FFI
+    /// boundary, guarding a `total_slides - 1` that would otherwise underflow.
+    #[test]
+    fn an_empty_deck_does_not_abort() {
+        match State::new(&[], &CoreState::Init) {
+            State::Init { total_slides } => assert_eq!(total_slides, 0),
+            other => panic!("expected Init, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_last_slide_has_no_next() {
+        let slides = [slide("one"), slide("two")];
+        let running = CoreState::Running {
+            current: SlideId::new(1),
+            current_step: 0,
+        };
+        match State::new(&slides, &running) {
+            State::Running { next, previous, .. } => {
+                assert_eq!(next, None, "last slide has no next");
+                assert_eq!(previous, Some(0));
+            }
+            other => panic!("expected Running, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_middle_slide_has_both_neighbours() {
+        let slides = [slide("one"), slide("two"), slide("three")];
+        let running = CoreState::Running {
+            current: SlideId::new(1),
+            current_step: 0,
+        };
+        match State::new(&slides, &running) {
+            State::Running { next, previous, .. } => {
+                assert_eq!(previous, Some(0));
+                assert_eq!(next, Some(2));
+            }
+            other => panic!("expected Running, got {other:?}"),
         }
     }
 }

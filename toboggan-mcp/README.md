@@ -36,6 +36,12 @@ intended LLM-client usage. Issuing concurrent mutations can race on numbering.
 ## Usage
 
 ```bash
-toboggan mcp --dir ./slides        # serve over stdio
+toboggan mcp -p ./my-talk          # serve over stdio (defaults to the cwd)
+toboggan mcp serve -p ./my-talk    # the same thing, named explicitly
 toboggan mcp init                  # register with Claude Code (claude mcp add)
 ```
+
+`-p/--path` is the presentation directory. Point it at the deck root and the
+workspace re-anchors itself on the `slides/` subfolder, so both `./my-talk` and
+`./my-talk/slides` do the right thing. `toboggan new` writes a project-local
+`.mcp.json` pointing here, so a scaffolded deck is wired up already.

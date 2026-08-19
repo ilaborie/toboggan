@@ -6,6 +6,7 @@ use axum::extract::State;
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use toboggan_cli::OutputFormat;
+use toboggan_cli::scaffold::slugify;
 use toboggan_core::Talk;
 use tracing::{error, info};
 
@@ -69,8 +70,8 @@ fn pdf_response(bytes: &[u8], slug: &str) -> Response {
 }
 
 /// Renders the talk to Typst, then compiles it to PDF in a blocking task.
-async fn render_pdf(talk: Talk) -> anyhow::Result<Vec<u8>> {
-    let typst_source = toboggan_cli::output::serialize_talk(&talk, OutputFormat::Typst)
+async fn render_pdf(talk: Arc<Talk>) -> anyhow::Result<Vec<u8>> {
+    let typst_source = toboggan_cli::output::serialize_talk(&talk, OutputFormat::Typst, "")
         .map_err(|err| anyhow::anyhow!("{err}"))?;
     // Compile with the deck as the project root so slides that reference
     // `../public/...` images resolve; without it typst rejects each one and the
@@ -129,24 +130,5 @@ fn cleanup_input(input: &Path, slides: Option<&Path>) {
         && let Err(err) = std::fs::remove_file(input)
     {
         tracing::debug!("could not remove {}: {err}", input.display());
-    }
-}
-
-fn slugify(title: &str) -> String {
-    let slug = title
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() {
-                ch.to_ascii_lowercase()
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>();
-    let trimmed = slug.trim_matches('-');
-    if trimmed.is_empty() {
-        "presentation".to_owned()
-    } else {
-        trimmed.to_owned()
     }
 }

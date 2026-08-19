@@ -1,6 +1,6 @@
 [package]
 name = "toboggan-mcp"
-version = "0.1.0"
+version.workspace = true
 description = "MCP server exposing Toboggan authoring tools (outline, stats, lint, scaffold)"
 edition.workspace = true
 rust-version.workspace = true

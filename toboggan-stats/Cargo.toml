@@ -1,6 +1,6 @@
 [package]
 name = "toboggan-stats"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
 description = "Statistics computation for Toboggan presentations"
 rust-version.workspace = true

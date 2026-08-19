@@ -1,7 +1,9 @@
 use std::ops::ControlFlow;
 
 use toboggan_client::ConnectionStatus;
-use toboggan_core::{Notification, Slide, SlideId, State, TalkResponse};
+use toboggan_core::{
+    ClientRole, Notification, Slide, SlideId, State, TalkResponse, accumulate_goto, goto_command,
+};
 use toboggan_stats::SlideStats;
 use tracing::{debug, info};
 
@@ -27,7 +29,17 @@ pub struct AppState {
 
     pub(crate) presentation_state: State,
 
+    /// The role the server granted, once it has said.
+    ///
+    /// `None` before the handshake answers, which the title bar shows as
+    /// nothing rather than guessing. A client that connects across the network
+    /// without a token can watch but not navigate, and used to find that out by
+    /// pressing a key and getting an error dialog back.
+    pub(crate) role: Option<ClientRole>,
+
     pub(crate) dialog: AppDialog,
+    /// The slide number typed so far, waiting on `Enter`.
+    pub(crate) goto_target: Option<usize>,
     pub(crate) terminal_size: (u16, u16),
 
     pub(crate) effects: Effects,
@@ -40,10 +52,12 @@ impl AppState {
         Self {
             connection_status: ConnectionStatus::Closed,
             current_slide_id: None,
+            role: None,
             talk,
             slides,
             presentation_state: State::Init,
             dialog: AppDialog::None,
+            goto_target: None,
             terminal_size: (80, 24),
             effects: Effects::default(),
             layout_areas: LayoutAreas::default(),
@@ -144,6 +158,22 @@ impl AppState {
         action: AppAction,
         connection_handler: &ConnectionHandler,
     ) -> ControlFlow<()> {
+        match action {
+            AppAction::Digit(digit) => {
+                self.push_goto_digit(digit);
+                return ControlFlow::Continue(());
+            }
+            AppAction::GotoTyped => {
+                if let Some(number) = self.goto_target.take() {
+                    connection_handler.send_command(&goto_command(number));
+                }
+                return ControlFlow::Continue(());
+            }
+            // Anything else abandons a half-typed number rather than leaving it
+            // to land on some later `Enter`.
+            _ => self.goto_target = None,
+        }
+
         let was_no_dialog = matches!(self.dialog, AppDialog::None);
         self.dialog = match action {
             AppAction::Close => AppDialog::None,
@@ -169,6 +199,16 @@ impl AppState {
         ControlFlow::Continue(())
     }
 
+    /// Appends a digit to the slide number being typed.
+    ///
+    /// The arithmetic is [`accumulate_goto`]'s, shared with the web client —
+    /// which had its own copy, with the same leading-zero defect.
+    fn push_goto_digit(&mut self, digit: u8) {
+        if let Some(typed) = accumulate_goto(self.goto_target, digit) {
+            self.goto_target = Some(typed);
+        }
+    }
+
     fn handle_notification(&mut self, notification: Notification) {
         match notification {
             Notification::State { state } | Notification::TalkChange { state } => {
@@ -178,13 +218,22 @@ impl AppState {
                 self.effects
                     .add_unique_effect(EffectKey::Blink, effects::blink_effect());
             }
+            Notification::Registered { role, .. } => {
+                self.role = Some(role);
+            }
             Notification::Pong
-            | Notification::Registered { .. }
             | Notification::ClientConnected { .. }
             | Notification::ClientDisconnected { .. } => {}
             Notification::Error { message } => {
                 self.dialog = AppDialog::Error(message);
             }
+        }
+    }
+
+    #[cfg(test)]
+    fn type_goto(&mut self, digits: &str) {
+        for digit in digits.chars().filter_map(|ch| ch.to_digit(10)) {
+            self.push_goto_digit(u8::try_from(digit).unwrap_or(0));
         }
     }
 
@@ -227,5 +276,31 @@ impl AppState {
                 effects::step_reveal_effect(slide_area),
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_state() -> AppState {
+        AppState::new(TalkResponse::default(), vec![])
+    }
+
+    /// Nine slides was the ceiling: one keystroke, one jump, and no way to
+    /// reach the tenth. Digits accumulate now.
+    #[test]
+    fn digits_accumulate_into_one_slide_number() {
+        let mut state = empty_state();
+        state.type_goto("127");
+        assert_eq!(state.goto_target, Some(127));
+    }
+
+    /// A leaned-on key would otherwise overflow the running multiplication.
+    #[test]
+    fn digits_past_the_cap_are_dropped_rather_than_wrapping() {
+        let mut state = empty_state();
+        state.type_goto("99999999");
+        assert_eq!(state.goto_target, Some(9_999));
     }
 }

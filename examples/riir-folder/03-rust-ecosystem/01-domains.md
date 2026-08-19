@@ -1,27 +1,32 @@
-# Rust partout
++++
+classes = ["wide"]
++++
 
-Rust ne se limite pas aux applications terminal :
+# Rust partout
 
 #### Web & Backend
 
-- **Actix-web**, **Axum** : Serveurs web haute performance
+- **Actix-web**, **Axum** : serveurs web haute performance
 - **Diesel**, **SQLx** : ORMs type-safe
-- **Tokio** : Runtime async de référence
 
 #### Applications Desktop
 
-- **Tauri** : Alternative à Electron
+- **Tauri** : alternative à Electron
 - **egui**, **iced** : GUI natives
-- **Bevy** : Moteur de jeu en ECS
 
 #### Microcontrôleurs & IoT
 
-- **Embassy** : Framework async pour embedded
+- **Embassy** : framework async pour l'embarqué
 - Support natif ARM, RISC-V
-- Consommation mémoire optimisée
 
 #### Blockchain & Crypto
 
-- **Solana** : Runtime blockchain
-- **Substrate** : Framework pour blockchains
+- **Solana**, **Substrate** : runtimes et frameworks
 - Performances critiques + sécurité
+
+<!-- notes -->
+Rust ne se limite pas aux applications terminal.
+
+Côté async, **Tokio** est le runtime de référence, et **Bevy** est le moteur de
+jeu en ECS. Sur microcontrôleur, la consommation mémoire est le premier
+argument.

@@ -16,16 +16,24 @@ use serde::{Deserialize, Serialize};
     derive_more::Deref,
     derive_more::From,
 )]
+/// A span of time, serialized in a form a human can write.
+///
+/// Wraps [`std::time::Duration`] so that it round-trips through TOML as
+/// `"2m 30s"` rather than a struct of seconds and nanoseconds — a slide's
+/// `duration` front matter is written by hand.
 pub struct Duration(std::time::Duration);
 
 impl Duration {
+    /// No time at all.
     pub const ZERO: Self = Self(std::time::Duration::ZERO);
 
+    /// A duration of whole seconds.
     #[must_use]
     pub fn from_secs(secs: u64) -> Self {
         Self(std::time::Duration::from_secs(secs))
     }
 
+    /// A duration of whole milliseconds.
     #[must_use]
     pub fn from_millis(millis: u64) -> Self {
         Self(std::time::Duration::from_millis(millis))
@@ -47,7 +55,10 @@ impl Display for Duration {
     }
 }
 
-// Custom serialization/deserialization
+/// Serde support for [`Duration`], in humantime form.
+///
+/// A duration is written by a human in front matter and read back by one in a
+/// built artifact, so it travels as `"2m 30s"` rather than as a number.
 pub mod duration_serde {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -77,15 +88,18 @@ pub mod duration_serde {
     }
 }
 
+/// An instant, used for "when did this client connect".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Timestamp(pub jiff::Timestamp);
 
 impl Timestamp {
+    /// The current instant.
     #[must_use]
     pub fn now() -> Self {
         Self(jiff::Timestamp::now())
     }
 
+    /// How long ago this was. Saturates at zero for an instant in the future.
     #[must_use]
     pub fn elapsed(&self) -> Duration {
         let signed_duration = jiff::Timestamp::now().duration_since(self.0);
@@ -101,20 +115,30 @@ impl Display for Timestamp {
     }
 }
 
+/// A calendar date, with no time and no zone: the day a talk is given.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Date(jiff::civil::Date);
 
 impl Date {
+    /// A date from its parts.
+    ///
+    /// # Errors
+    /// Returns an error if the parts do not name a real date.
     pub fn new(year: i16, month: i8, day: i8) -> Result<Self, jiff::Error> {
         jiff::civil::Date::new(year, month, day).map(Self)
     }
 
+    /// Today, in the local time zone.
     #[must_use]
     pub fn today() -> Self {
         let now = jiff::Zoned::now();
         Self(now.date())
     }
 
+    /// A date from its parts, falling back to today and logging a warning.
+    ///
+    /// For the places that would rather show a deck with the wrong date than
+    /// fail to build it at all.
     #[cfg(feature = "tracing")]
     #[must_use]
     pub fn ymd(year: i16, month: i8, day: i8) -> Date {

@@ -20,8 +20,58 @@ main {
 		display: flex;
 		box-shadow: 1px 1px 1em rgba(0, 0, 0, .25);
 
+		/* Without the navigator the export is a stack you scroll, so every step
+		   has to be on screen at once: a hidden one would never appear. */
 		.step {
-			opacity: 1 !important;
+			opacity: 1;
+		}
+
+		/* And its links have to work. `.step a` is `pointer-events: none` so a
+		   link cannot be clicked before it is revealed — but nothing reveals
+		   anything here, which left every link in a step dead. */
+		.step a {
+			pointer-events: auto;
+		}
+	}
+}
+
+/* With the navigator running: one slide at a time, steps revealed as you go.
+   Gated on the class the script adds, and screen-only, so a file opened with
+   scripting off — or sent to a printer — is still the whole deck in order. */
+@media screen {
+	html.toboggan-js {
+		body {
+			overflow: hidden;
+		}
+
+		main {
+			gap: 0;
+		}
+
+		.toboggan-slide {
+			display: none;
+			outline: none;
+			box-shadow: none;
+		}
+
+		.toboggan-slide.current {
+			display: flex;
+		}
+
+		.toboggan-slide .step {
+			opacity: var(--step-opacity-hidden);
+		}
+
+		.toboggan-slide .step.step-done {
+			opacity: var(--step-opacity-revealed);
+		}
+
+		.toboggan-slide .step.step-current {
+			opacity: var(--step-opacity-active);
+		}
+
+		.toboggan-slide .step:not(.step-done) a {
+			pointer-events: none;
 		}
 	}
 }

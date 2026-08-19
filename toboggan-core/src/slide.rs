@@ -1,10 +1,41 @@
 use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
 use crate::{Content, Talk, TerminalConfig};
+
+/// Serializes an optional [`Duration`] as whole seconds.
+///
+/// `Duration`'s own serde representation is a `{ secs, nanos }` table, which in
+/// a `talk.toml` an author may read is noise. Slide durations are authored in
+/// seconds or humantime strings and never need sub-second precision.
+mod duration_secs {
+    use std::time::Duration;
+
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    // `&Option<T>` rather than `Option<&T>`: serde's `with` module contract
+    // fixes this signature.
+    #[allow(clippy::ref_option)]
+    pub(super) fn serialize<S: Serializer>(
+        value: &Option<Duration>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        match value {
+            Some(duration) => serializer.serialize_some(&duration.as_secs()),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Duration>, D::Error> {
+        Ok(Option::<u64>::deserialize(deserializer)?.map(Duration::from_secs))
+    }
+}
 
 /// A type-safe identifier for slides in a presentation.
 ///
@@ -79,18 +110,29 @@ pub enum RenderTarget {
     Pdf,
 }
 
+/// One slide: what it says, how it looks, and what it is meant to cost in time.
+///
+/// Built by the parser from one Markdown file — [`Slide::from_markdown`] is the
+/// constructor that keeps `body` and `body_source` consistent.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(default)]
 pub struct Slide {
+    /// Whether this is the cover, a section title, or an ordinary slide.
     pub kind: SlideKind,
+    /// Classes and inline style applied to the slide's `<section>`.
     #[serde(skip_serializing_if = "Style::is_default")]
     pub style: Style,
+    /// The slide's heading. Empty for a slide that deliberately has none.
     #[serde(skip_serializing_if = "Content::is_empty")]
     pub title: Content,
+    /// Everything below the heading.
     pub body: Content,
+    /// Speaker notes — shown in the presenter view and the terminal client,
+    /// never on the projector.
     #[serde(skip_serializing_if = "Content::is_empty")]
     pub notes: Content,
+    /// Embedded terminals declared by the slide, rendered side by side.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub terminals: Vec<TerminalConfig>,
     /// Raw markdown source of the slide body, used by non-HTML exporters.
@@ -103,6 +145,19 @@ pub struct Slide {
     /// Targets this slide should be excluded from. Empty means visible everywhere.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub hidden_in: BTreeSet<RenderTarget>,
+    /// Speaking time the author planned for this slide, from the front matter
+    /// `duration`.
+    ///
+    /// Serialized as whole seconds so a built artifact stays readable and
+    /// round-trips; the front matter accepts either a number of seconds or a
+    /// humantime string like `"2m 30s"`.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "duration_secs"
+    )]
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<u64>))]
+    pub duration: Option<Duration>,
     /// Working directory for the `QuakeTerminal` overlay when this slide is active.
     /// If unset, falls back to [`Talk::default_terminal_cwd`], then to the server cwd.
     /// Resolved against [`Talk::source_dir`] when relative.
@@ -113,6 +168,18 @@ pub struct Slide {
     /// diagnostics are not line-tracked, so a directive covers the whole slide.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub lint_disabled: Vec<String>,
+    /// File this slide was parsed from, as the loader saw it — so a path passed
+    /// relative to the cwd stays relative, which is what both a terminal and a
+    /// CI annotation want.
+    ///
+    /// `None` for slides with no file of their own: a talk deserialized from a
+    /// built artifact, the implicit part slide a folder gets when it has no
+    /// `_part.md`, and anything constructed in code.
+    ///
+    /// Not serialized, like [`Talk::source_dir`]: it describes where the slide
+    /// came from on this machine, not what it is.
+    #[serde(skip)]
+    pub source_path: Option<PathBuf>,
 }
 
 /// Borrowed view over a slide's body content.
@@ -128,12 +195,16 @@ pub enum SlideBody<'a> {
     Rendered(&'a Content),
     /// Body produced from markdown — both the source and its rendered form.
     FromMarkdown {
+        /// The markdown the slide was written in, for exporters that would
+        /// rather re-render it than consume HTML.
         source: &'a str,
+        /// The rendered projection of that source.
         rendered: &'a Content,
     },
 }
 
 impl Slide {
+    /// An ordinary slide with a title and nothing else yet.
     pub fn new(title: impl Into<Content>) -> Self {
         let title = title.into();
         Self {
@@ -142,6 +213,7 @@ impl Slide {
         }
     }
 
+    /// The deck's cover slide.
     pub fn cover(title: impl Into<Content>) -> Self {
         let title = title.into();
         Self {
@@ -151,6 +223,7 @@ impl Slide {
         }
     }
 
+    /// A section title slide.
     pub fn part(title: impl Into<Content>) -> Self {
         let title = title.into();
         Self {
@@ -175,30 +248,35 @@ impl Slide {
     }
 
     #[must_use]
+    /// Replaces the slide's CSS classes.
     pub fn with_style_classes(mut self, classes: impl IntoIterator<Item = String>) -> Self {
         self.style.classes = Vec::from_iter(classes);
         self
     }
 
     #[must_use]
+    /// Sets the slide's body.
     pub fn with_body(mut self, body: impl Into<Content>) -> Self {
         self.body = body.into();
         self
     }
 
     #[must_use]
+    /// Sets the slide's speaker notes.
     pub fn with_notes(mut self, notes: impl Into<Content>) -> Self {
         self.notes = notes.into();
         self
     }
 
     #[must_use]
+    /// Adds an embedded terminal.
     pub fn with_terminal(mut self, terminal: TerminalConfig) -> Self {
         self.terminals.push(terminal);
         self
     }
 
     #[must_use]
+    /// Sets the render targets this slide is left out of.
     pub fn with_hidden_in(mut self, targets: impl IntoIterator<Item = RenderTarget>) -> Self {
         self.hidden_in = targets.into_iter().collect();
         self
@@ -224,14 +302,30 @@ impl Slide {
     }
 
     #[must_use]
+    /// Sets the working directory the quake terminal opens in on this slide.
     pub fn with_quake_terminal_cwd(mut self, cwd: impl Into<String>) -> Self {
         self.quake_terminal_cwd = Some(cwd.into());
         self
     }
 
     #[must_use]
+    /// Silences the named lint rules for this slide.
     pub fn with_lint_disabled(mut self, rules: impl IntoIterator<Item = String>) -> Self {
         self.lint_disabled = Vec::from_iter(rules);
+        self
+    }
+
+    /// Records the file this slide was parsed from.
+    #[must_use]
+    pub fn with_source_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.source_path = Some(path.into());
+        self
+    }
+
+    /// Sets the speaking time planned for this slide.
+    #[must_use]
+    pub fn with_duration(mut self, duration: Duration) -> Self {
+        self.duration = Some(duration);
         self
     }
 
@@ -269,20 +363,27 @@ impl Display for Slide {
     }
 }
 
+/// What kind of slide this is, which is what decides how it is laid out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum SlideKind {
+    /// The deck's opening slide, from `_cover.md`.
     Cover,
+    /// A section title, from `_part.md` or from a folder's name.
     Part,
+    /// Everything else.
     #[default]
     Standard,
 }
 
+/// How a slide is dressed: CSS classes and an optional inline style.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Style {
+    /// Classes applied to the slide, from the `classes` front matter key.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub classes: Vec<String>,
+    /// An inline `style` attribute, from the `style` front matter key.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub style: Option<String>,
 }
@@ -300,9 +401,11 @@ impl Display for Style {
     }
 }
 
+/// The body of `GET /api/slides`: every slide in the deck.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SlidesResponse {
+    /// Every slide, in presentation order.
     pub slides: Vec<Slide>,
 }
 
@@ -420,6 +523,43 @@ mod tests {
         let slide = Slide::from_markdown("source text", Content::text("rendered text"));
         assert_eq!(slide.body_source.as_deref(), Some("source text"));
         assert!(matches!(slide.body, Content::Text { ref text } if text == "rendered text"));
+    }
+
+    /// `source_path` describes where a slide came from on the machine that
+    /// parsed it. Serializing it would bake one author's absolute paths into a
+    /// `talk.toml` that gets committed and served elsewhere.
+    #[test]
+    fn source_path_stays_out_of_the_serialized_slide() {
+        let slide = Slide::new("T").with_source_path("/home/someone/deck/slides/1.md");
+        let json = serde_json::to_string(&slide).expect("serialize");
+        assert!(
+            !json.contains("source_path") && !json.contains("home/someone"),
+            "source_path leaked into the artifact: {json}"
+        );
+
+        let parsed: Slide = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(parsed.source_path, None);
+    }
+
+    /// A plain scalar of seconds, not `Duration`'s `{ secs, nanos }` pair — a
+    /// built `talk.toml` is something an author may read and hand-edit.
+    #[test]
+    fn duration_round_trips_as_seconds() {
+        let slide = Slide::new("T").with_duration(Duration::from_secs(150));
+        let json = serde_json::to_string(&slide).expect("serialize");
+        assert!(
+            json.contains(r#""duration":150"#),
+            "expected plain seconds, got: {json}"
+        );
+
+        let parsed: Slide = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(parsed.duration, Some(Duration::from_secs(150)));
+    }
+
+    #[test]
+    fn a_slide_without_a_duration_serializes_no_key() {
+        let json = serde_json::to_string(&Slide::new("T")).expect("serialize");
+        assert!(!json.contains("duration"), "unexpected key in: {json}");
     }
 
     #[test]

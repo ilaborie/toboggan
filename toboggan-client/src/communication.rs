@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
 use toboggan_core::timeouts::PING_PERIOD;
-use toboggan_core::{ClientId, Command, Notification, State};
+use toboggan_core::{ClientId, ClientRole, Command, Notification, State};
 use tokio::net::TcpStream;
 use tokio::sync::{Mutex, mpsc};
 use tokio::task::JoinHandle;
@@ -36,13 +36,30 @@ pub enum ConnectionStatus {
 
 #[derive(Debug, Clone)]
 pub enum CommunicationMessage {
-    ConnectionStatusChange { status: ConnectionStatus },
-    StateChange { state: State },
-    TalkChange { state: State },
-    Registered { client_id: ClientId },
-    ClientConnected { client_id: ClientId, name: String },
-    ClientDisconnected { client_id: ClientId, name: String },
-    Error { error: String },
+    ConnectionStatusChange {
+        status: ConnectionStatus,
+    },
+    StateChange {
+        state: State,
+    },
+    TalkChange {
+        state: State,
+    },
+    Registered {
+        client_id: ClientId,
+        role: ClientRole,
+    },
+    ClientConnected {
+        client_id: ClientId,
+        name: String,
+    },
+    ClientDisconnected {
+        client_id: ClientId,
+        name: String,
+    },
+    Error {
+        error: String,
+    },
 }
 
 #[derive(Clone)]
@@ -61,8 +78,6 @@ impl Default for ConnectionState {
         }
     }
 }
-
-const RECONNECT_DELAY: Duration = Duration::from_secs(5);
 
 pub struct WebSocketClient {
     client_name: String,
@@ -145,18 +160,16 @@ impl WebSocketClient {
         let rx_cmd = Arc::clone(&self.rx_cmd);
         tokio::spawn(handle_outgoing_commands(rx_cmd, write));
 
-        let tx_msg_clone = self.tx_msg.clone();
-        let state_clone = self.state.clone();
-        let config = self.config.clone();
-        let last_ping = Arc::clone(&self.last_ping);
-        let client_id = Arc::clone(&self.client_id);
         tokio::spawn(handle_incoming_messages(
-            read,
-            tx_msg_clone,
-            state_clone,
-            config,
-            last_ping,
-            client_id,
+            Some(read),
+            self.tx_msg.clone(),
+            self.state.clone(),
+            self.config.clone(),
+            Arc::clone(&self.last_ping),
+            Arc::clone(&self.client_id),
+            self.client_name.clone(),
+            self.tx_cmd.clone(),
+            Arc::clone(&self.rx_cmd),
         ));
     }
 
@@ -170,6 +183,7 @@ impl WebSocketClient {
         // Send Register command with client name
         let _ = self.tx_cmd.send(Command::Register {
             name: self.client_name.clone(),
+            token: self.config.presenter_token.clone(),
         });
 
         self.start_pinging();
@@ -177,28 +191,15 @@ impl WebSocketClient {
         self.send_status_change(ConnectionStatus::Connected);
     }
 
+    /// Starts the retry loop after the first connection attempt failed.
+    ///
+    /// The counting and the countdown belong to [`next_retry`], not here: this
+    /// used to spend a retry and announce one of its own before handing over,
+    /// which would now bill the same drop twice.
     async fn schedule_reconnect(&mut self) {
-        let (retry_count, retry_delay, max_retries) = {
-            let mut state = self.state.lock().await;
-            if state.is_disposed {
-                return;
-            }
-
-            if state.retry_count >= self.config.max_retries {
-                let message = format!("Max retries reached! ({})", self.config.max_retries);
-                self.send_status_change(ConnectionStatus::Error { message });
-                return;
-            }
-
-            state.retry_count += 1;
-            (state.retry_count, RECONNECT_DELAY, self.config.max_retries)
-        };
-
-        self.send_status_change(ConnectionStatus::Reconnecting {
-            attempt: retry_count,
-            max_attempt: max_retries,
-            delay: retry_delay,
-        });
+        if self.state.lock().await.is_disposed {
+            return;
+        }
 
         let tx_msg_clone = self.tx_msg.clone();
         let config = self.config.clone();
@@ -209,23 +210,19 @@ impl WebSocketClient {
         let last_ping = Arc::clone(&self.last_ping);
         let client_id = Arc::clone(&self.client_id);
 
-        tokio::spawn(async move {
-            tokio::time::sleep(retry_delay).await;
-            let state = state_clone.lock().await;
-            if !state.is_disposed {
-                drop(state);
-                reconnect_with_channel(
-                    &config,
-                    &client_name,
-                    tx_msg_clone,
-                    &tx_cmd,
-                    rx_cmd,
-                    last_ping,
-                    client_id,
-                )
-                .await;
-            }
-        });
+        // Entered with no socket, so it goes straight to waiting and retrying
+        // — the same loop that keeps a mid-talk drop reconnecting.
+        tokio::spawn(handle_incoming_messages(
+            None,
+            tx_msg_clone,
+            state_clone,
+            config,
+            last_ping,
+            client_id,
+            client_name,
+            tx_cmd,
+            rx_cmd,
+        ));
     }
 
     fn start_pinging(&mut self) {
@@ -272,46 +269,6 @@ impl Drop for WebSocketClient {
     }
 }
 
-async fn reconnect_with_channel(
-    config: &TobogganWebsocketConfig,
-    client_name: &str,
-    tx_msg: mpsc::UnboundedSender<CommunicationMessage>,
-    tx_cmd: &mpsc::UnboundedSender<Command>,
-    rx_cmd: Arc<Mutex<mpsc::UnboundedReceiver<Command>>>,
-    last_ping: Arc<Mutex<Option<Instant>>>,
-    client_id: Arc<RwLock<Option<ClientId>>>,
-) {
-    info!("Attempting to reconnect...");
-
-    let (ws, _) = match connect_async(&config.websocket_url).await {
-        Ok(ws) => ws,
-        Err(error) => {
-            error!(?error, "Reconnection failed");
-            return;
-        }
-    };
-
-    let (write, read) = ws.split();
-
-    debug!("🗿connection status: {}", ConnectionStatus::Connected);
-    let _ = tx_msg.send(CommunicationMessage::ConnectionStatusChange {
-        status: ConnectionStatus::Connected,
-    });
-    let _ = tx_cmd.send(Command::Register {
-        name: client_name.to_owned(),
-    });
-
-    tokio::spawn(handle_outgoing_commands(rx_cmd, write));
-    tokio::spawn(async move {
-        let mut read = read;
-        while let Some(msg) = read.next().await {
-            if let Ok(msg) = msg {
-                handle_ws_message(msg, &tx_msg, last_ping.clone(), client_id.clone()).await;
-            }
-        }
-    });
-}
-
 async fn handle_outgoing_commands(
     rx_cmd: Arc<Mutex<mpsc::UnboundedReceiver<Command>>>,
     mut write: SplitSink<WebSocket, Message>,
@@ -340,18 +297,70 @@ async fn handle_outgoing_commands(
     }
 }
 
+/// Pumps the socket, and keeps reconnecting for as long as the budget allows.
+///
+/// Written as a loop because the reconnect is the point. It used to announce
+/// `Reconnecting` and then *return*: `reconnect_with_channel` was reachable only
+/// from `schedule_reconnect`, which only ran when the **initial** connect
+/// failed. So a presenter whose wifi blipped mid-talk watched "Reconnecting in
+/// 5s" forever and had to reload the page. The `should_reconnect` flag it
+/// computed was always `true` by the time it was read — the shape a lost call
+/// leaves behind.
+///
+/// A loop rather than the obvious recursion: pump → retry → reconnect → pump is
+/// a cycle, and a mutually recursive `async fn` cycle has no provably `Send`
+/// future, so it cannot be spawned.
+#[allow(clippy::too_many_arguments)]
 async fn handle_incoming_messages(
-    mut read: SplitStream<WebSocket>,
+    read: Option<SplitStream<WebSocket>>,
     tx_msg: mpsc::UnboundedSender<CommunicationMessage>,
     state: Arc<Mutex<ConnectionState>>,
     config: TobogganWebsocketConfig,
     last_ping: Arc<Mutex<Option<Instant>>>,
     client_id: Arc<RwLock<Option<ClientId>>>,
+    client_name: String,
+    tx_cmd: mpsc::UnboundedSender<Command>,
+    rx_cmd: Arc<Mutex<mpsc::UnboundedReceiver<Command>>>,
+) {
+    let mut read = read;
+    loop {
+        // `None` on entry means there is nothing to pump yet: the first connect
+        // failed, and this task exists only to keep trying.
+        if let Some(open) = &mut read {
+            pump_messages(open, &tx_msg, &last_ping, &client_id).await;
+        }
+
+        warn!("⚠️ WebSocket connection closed, will attempt reconnection");
+        debug!("🗿connection status: {}", ConnectionStatus::Closed);
+        let _ = tx_msg.send(CommunicationMessage::ConnectionStatusChange {
+            status: ConnectionStatus::Closed,
+        });
+
+        let Some(delay) = next_retry(&state, &config, &tx_msg).await else {
+            return;
+        };
+        tokio::time::sleep(delay).await;
+        if state.lock().await.is_disposed {
+            return;
+        }
+
+        // `None` means the attempt failed; the loop tries again until the
+        // budget is out.
+        read = reopen(&config, &client_name, &tx_msg, &tx_cmd, &rx_cmd, &state).await;
+    }
+}
+
+/// Reads until the socket ends, handing every frame to [`handle_ws_message`].
+async fn pump_messages(
+    read: &mut SplitStream<WebSocket>,
+    tx_msg: &mpsc::UnboundedSender<CommunicationMessage>,
+    last_ping: &Arc<Mutex<Option<Instant>>>,
+    client_id: &Arc<RwLock<Option<ClientId>>>,
 ) {
     while let Some(msg) = read.next().await {
         match msg {
             Ok(msg) => {
-                handle_ws_message(msg, &tx_msg, last_ping.clone(), client_id.clone()).await;
+                handle_ws_message(msg, tx_msg, last_ping.clone(), client_id.clone()).await;
             }
             Err(error) => {
                 error!(?error, "Failed to read WS incoming message");
@@ -359,36 +368,91 @@ async fn handle_incoming_messages(
                 let status = ConnectionStatus::Error { message };
                 debug!(%status, "🗿connection status");
                 let _ = tx_msg.send(CommunicationMessage::ConnectionStatusChange { status });
-                break;
+                return;
             }
         }
     }
+}
 
-    warn!("⚠️ WebSocket connection closed, will attempt reconnection in 5 seconds");
-    debug!("🗿connection status: {}", ConnectionStatus::Closed);
-    let _ = tx_msg.send(CommunicationMessage::ConnectionStatusChange {
-        status: ConnectionStatus::Closed,
-    });
-
-    let (retry_count, retry_delay, should_reconnect) = {
+/// How long to wait before the next attempt, or `None` when there is no next.
+///
+/// Spends one unit of the retry budget and announces the wait, so the client
+/// shows the same countdown whichever way the connection ended.
+async fn next_retry(
+    state: &Arc<Mutex<ConnectionState>>,
+    config: &TobogganWebsocketConfig,
+    tx_msg: &mpsc::UnboundedSender<CommunicationMessage>,
+) -> Option<Duration> {
+    let (retry_count, delay) = {
         let mut state_ref = state.lock().await;
-        if state_ref.is_disposed || state_ref.retry_count >= config.max_retries {
-            return;
+        if state_ref.is_disposed {
+            return None;
         }
-
+        if state_ref.retry_count >= config.max_retries {
+            let message = format!("Max retries reached! ({})", config.max_retries);
+            let _ = tx_msg.send(CommunicationMessage::ConnectionStatusChange {
+                status: ConnectionStatus::Error { message },
+            });
+            return None;
+        }
         state_ref.retry_count += 1;
-        (state_ref.retry_count, RECONNECT_DELAY, true)
+        // Exponential, and jittered so a room that all lost the same wifi does
+        // not come back at the same instant. This used to be a flat five
+        // seconds and `calculate_delay` had no caller at all, which is exactly
+        // the failure its own documentation described.
+        let delay = Duration::from_millis(config.retry.calculate_delay(state_ref.retry_count - 1));
+        (state_ref.retry_count, delay)
     };
 
-    if should_reconnect {
-        let status = ConnectionStatus::Reconnecting {
-            attempt: retry_count,
-            max_attempt: config.max_retries,
-            delay: retry_delay,
-        };
-        debug!(%status, "🗿connection status");
-        let _ = tx_msg.send(CommunicationMessage::ConnectionStatusChange { status });
-    }
+    let status = ConnectionStatus::Reconnecting {
+        attempt: retry_count,
+        max_attempt: config.max_retries,
+        delay,
+    };
+    debug!(%status, "🗿connection status");
+    let _ = tx_msg.send(CommunicationMessage::ConnectionStatusChange { status });
+    Some(delay)
+}
+
+/// Opens a fresh socket and re-registers on it, returning its read half.
+///
+/// Registration matters as much as the socket: a client that dropped mid-talk
+/// has to come back as the role it left with, or the presenter's remote goes
+/// quiet after a network blip.
+async fn reopen(
+    config: &TobogganWebsocketConfig,
+    client_name: &str,
+    tx_msg: &mpsc::UnboundedSender<CommunicationMessage>,
+    tx_cmd: &mpsc::UnboundedSender<Command>,
+    rx_cmd: &Arc<Mutex<mpsc::UnboundedReceiver<Command>>>,
+    state: &Arc<Mutex<ConnectionState>>,
+) -> Option<SplitStream<WebSocket>> {
+    info!("Attempting to reconnect...");
+
+    let (ws, _) = match connect_async(&config.websocket_url).await {
+        Ok(ws) => ws,
+        Err(error) => {
+            error!(?error, "Reconnection failed");
+            return None;
+        }
+    };
+
+    let (write, read) = ws.split();
+
+    // A connection that came back starts a fresh budget, as the first one does.
+    state.lock().await.retry_count = 0;
+
+    debug!("🗿connection status: {}", ConnectionStatus::Connected);
+    let _ = tx_msg.send(CommunicationMessage::ConnectionStatusChange {
+        status: ConnectionStatus::Connected,
+    });
+    let _ = tx_cmd.send(Command::Register {
+        name: client_name.to_owned(),
+        token: config.presenter_token.clone(),
+    });
+
+    tokio::spawn(handle_outgoing_commands(Arc::clone(rx_cmd), write));
+    Some(read)
 }
 
 async fn handle_ws_message(
@@ -431,12 +495,18 @@ async fn handle_ws_message(
         Notification::Blink => {
             info!("🔔 Blink");
         }
-        Notification::Registered { client_id: id } => {
-            info!(?id, "✅ Registered");
+        Notification::Registered {
+            client_id: id,
+            role,
+        } => {
+            info!(?id, ?role, "✅ Registered");
             if let Ok(mut guard) = client_id.write() {
                 *guard = Some(id);
             }
-            let _ = tx.send(CommunicationMessage::Registered { client_id: id });
+            let _ = tx.send(CommunicationMessage::Registered {
+                client_id: id,
+                role,
+            });
         }
         Notification::ClientConnected { client_id, name } => {
             info!(?client_id, %name, "👋 Client connected");
@@ -446,5 +516,251 @@ async fn handle_ws_message(
             info!(?client_id, %name, "👋 Client disconnected");
             let _ = tx.send(CommunicationMessage::ClientDisconnected { client_id, name });
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use toboggan_core::SlideId;
+
+    use super::*;
+
+    /// Drives one server frame through the dispatcher and returns whatever it
+    /// forwarded to the application.
+    async fn dispatch(frame: &str) -> Vec<CommunicationMessage> {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let last_ping = Arc::new(Mutex::new(None));
+        let client_id = Arc::new(RwLock::new(None));
+
+        handle_ws_message(
+            Message::Text(frame.into()),
+            &tx,
+            Arc::clone(&last_ping),
+            Arc::clone(&client_id),
+        )
+        .await;
+
+        drop(tx);
+        let mut out = Vec::new();
+        while let Some(message) = rx.recv().await {
+            out.push(message);
+        }
+        out
+    }
+
+    #[tokio::test]
+    async fn a_state_notification_reaches_the_application() {
+        let state = State::Running {
+            current: SlideId::new(2),
+            current_step: 1,
+        };
+        let frame = serde_json::to_string(&Notification::state(state)).expect("serialize");
+
+        match dispatch(&frame).await.as_slice() {
+            [CommunicationMessage::StateChange { state }] => {
+                assert_eq!(state.current(), Some(SlideId::new(2)));
+            }
+            other => panic!("expected one StateChange, got {other:?}"),
+        }
+    }
+
+    /// A reload is not a state change: clients have to refetch the talk and the
+    /// slides, so it must arrive as its own message rather than being folded in.
+    #[tokio::test]
+    async fn a_talk_change_is_distinguishable_from_a_state_change() {
+        let frame =
+            serde_json::to_string(&Notification::talk_change(State::default())).expect("serialize");
+
+        assert!(
+            matches!(
+                dispatch(&frame).await.as_slice(),
+                [CommunicationMessage::TalkChange { .. }]
+            ),
+            "TalkChange must not be delivered as a StateChange"
+        );
+    }
+
+    /// `Pong` is the heartbeat and carries no application meaning; forwarding it
+    /// would wake every client on a timer for nothing.
+    #[tokio::test]
+    async fn a_pong_is_absorbed() {
+        let frame = serde_json::to_string(&Notification::PONG).expect("serialize");
+        assert!(dispatch(&frame).await.is_empty());
+    }
+
+    /// The registration reply carries the id the server will use for this client
+    /// and has to be published, not just recorded internally.
+    #[tokio::test]
+    async fn registration_publishes_the_assigned_id() {
+        // Written as a wire frame rather than built from a `ClientId`: the id is
+        // server-assigned and has no public constructor here, which is the point
+        // — this checks the id the server sent survives the trip to the app.
+        let frame = r#"{"type":"Registered","client_id":{"idx":3,"version":1},"role":"Presenter"}"#;
+        let expected = match serde_json::from_str::<Notification>(frame).expect("parse") {
+            Notification::Registered { client_id, .. } => client_id,
+            other => panic!("fixture is not a Registered frame: {other:?}"),
+        };
+
+        match dispatch(frame).await.as_slice() {
+            [CommunicationMessage::Registered { client_id, role }] => {
+                assert_eq!(*client_id, expected);
+                assert_eq!(*role, ClientRole::Presenter);
+            }
+            other => panic!("expected Registered, got {other:?}"),
+        }
+    }
+
+    /// The role the server granted has to reach the app, not just the id: a
+    /// client that cannot drive the deck needs to say so rather than let the
+    /// presenter discover it by pressing a key that does nothing.
+    #[tokio::test]
+    async fn registration_publishes_the_granted_role() {
+        let frame = r#"{"type":"Registered","client_id":{"idx":1,"version":1},"role":"Audience"}"#;
+        match dispatch(frame).await.as_slice() {
+            [CommunicationMessage::Registered { role, .. }] => {
+                assert_eq!(*role, ClientRole::Audience);
+            }
+            other => panic!("expected Registered, got {other:?}"),
+        }
+    }
+
+    /// A frame the client cannot parse must not take the connection down with
+    /// it — a server that learns a new notification kind should degrade to
+    /// ignoring it, not disconnect everyone.
+    #[tokio::test]
+    async fn an_unparseable_frame_is_ignored() {
+        assert!(
+            dispatch("{\"type\":\"SomethingFromTheFuture\"}")
+                .await
+                .is_empty()
+        );
+        assert!(dispatch("not json at all").await.is_empty());
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod reconnect_tests {
+    use toboggan_core::RetryConfig;
+
+    use super::*;
+
+    fn config(max_retries: usize) -> TobogganWebsocketConfig {
+        TobogganWebsocketConfig {
+            // Nothing listens here: `reopen` is expected to fail, which is the
+            // path that used to end the retry loop for good.
+            websocket_url: "ws://127.0.0.1:1/api/ws".to_owned(),
+            max_retries,
+            retry_delay: Duration::from_millis(1),
+            max_retry_delay: Duration::from_millis(1),
+            retry: RetryConfig::new(
+                max_retries,
+                Duration::from_millis(1).into(),
+                Duration::from_millis(2).into(),
+                2.0,
+                true,
+            ),
+            presenter_token: None,
+        }
+    }
+
+    /// A closed socket has to spend a retry and say so.
+    ///
+    /// This is the half that worked: the status was announced. What did not was
+    /// anything happening afterwards — see the loop's doc comment.
+    #[tokio::test]
+    async fn a_closed_connection_spends_one_retry_and_announces_it() {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let state = Arc::new(Mutex::new(ConnectionState::default()));
+
+        let delay = next_retry(&state, &config(3), &tx).await;
+
+        // The first retry, jittered: the initial delay plus up to 20%.
+        let delay = delay.expect("a delay");
+        assert!(
+            delay >= Duration::from_millis(1) && delay <= Duration::from_millis(2),
+            "unexpected first delay: {delay:?}"
+        );
+        assert_eq!(state.lock().await.retry_count, 1);
+        match rx.try_recv().expect("a status change") {
+            CommunicationMessage::ConnectionStatusChange {
+                status: ConnectionStatus::Reconnecting { attempt, .. },
+            } => assert_eq!(attempt, 1),
+            other => panic!("expected Reconnecting, got {other:?}"),
+        }
+    }
+
+    /// The budget is finite, and running out is reported rather than becoming a
+    /// silent stop.
+    #[tokio::test]
+    async fn the_retry_budget_runs_out_and_says_so() {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let state = Arc::new(Mutex::new(ConnectionState::default()));
+        state.lock().await.retry_count = 2;
+
+        assert_eq!(next_retry(&state, &config(2), &tx).await, None);
+        assert!(matches!(
+            rx.try_recv().expect("a status change"),
+            CommunicationMessage::ConnectionStatusChange {
+                status: ConnectionStatus::Error { .. }
+            }
+        ));
+    }
+
+    /// A disposed client stops trying, whatever its budget says.
+    #[tokio::test]
+    async fn a_disposed_client_does_not_retry() {
+        let (tx, _rx) = mpsc::unbounded_channel();
+        let state = Arc::new(Mutex::new(ConnectionState::default()));
+        state.lock().await.is_disposed = true;
+
+        assert_eq!(next_retry(&state, &config(5), &tx).await, None);
+    }
+
+    /// The loop is what this whole change is about: entered with no socket, it
+    /// must keep trying until the budget is gone and then return, rather than
+    /// announcing one reconnection and stopping.
+    ///
+    /// Before, this task returned after a single `Reconnecting` message and the
+    /// retry count never passed 1.
+    ///
+    /// The clock is paused so the three five-second waits cost nothing: tokio
+    /// advances time itself once every task is blocked on a timer.
+    #[tokio::test(start_paused = true)]
+    async fn a_lost_connection_keeps_retrying_until_the_budget_is_gone() {
+        let (tx_msg, mut rx_msg) = mpsc::unbounded_channel();
+        let (tx_cmd, rx_cmd) = mpsc::unbounded_channel();
+        let state = Arc::new(Mutex::new(ConnectionState::default()));
+
+        handle_incoming_messages(
+            None,
+            tx_msg,
+            Arc::clone(&state),
+            config(3),
+            Arc::new(Mutex::new(None)),
+            Arc::new(RwLock::new(None)),
+            "test".to_owned(),
+            tx_cmd,
+            Arc::new(Mutex::new(rx_cmd)),
+        )
+        .await;
+
+        assert_eq!(
+            state.lock().await.retry_count,
+            3,
+            "every retry in the budget should have been spent"
+        );
+
+        let mut attempts = Vec::new();
+        while let Ok(message) = rx_msg.try_recv() {
+            if let CommunicationMessage::ConnectionStatusChange {
+                status: ConnectionStatus::Reconnecting { attempt, .. },
+            } = message
+            {
+                attempts.push(attempt);
+            }
+        }
+        assert_eq!(attempts, vec![1, 2, 3], "one countdown per attempt");
     }
 }

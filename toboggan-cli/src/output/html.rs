@@ -16,6 +16,11 @@ const SLIDE_CSS: &str =
 // Print CSS for one slide per page
 const PRINT_CSS: &str = include_str!("../print.css");
 
+// Keyboard navigation for the exported file. Inlined, like the stylesheets: an
+// export is handed around as a single file and shown from a lectern with no
+// guarantee of a network.
+const NAVIGATE_JS: &str = include_str!("../navigate.js");
+
 /// Escape HTML special characters
 fn escape_html(text: &str) -> String {
     text.replace('&', "&amp;")
@@ -54,11 +59,15 @@ fn render_slide(slide: &Slide) -> String {
     };
     classes.push(kind_class.to_owned());
 
-    let class_string = classes.join(" ");
+    // Both are author-supplied front matter landing in an attribute, so both
+    // are escaped. The trigger is ordinary CSS rather than an attack:
+    // `style = 'font-family: "Fira Code", monospace'` closes the attribute at
+    // the first quote and spills the rest of the declaration into the tag.
+    let class_string = escape_html(&classes.join(" "));
 
     // Build inline style attribute if present
     let style_attr = if let Some(style) = &slide.style.style {
-        format!(r#" style="{style}""#)
+        format!(r#" style="{}""#, escape_html(style))
     } else {
         String::new()
     };
@@ -82,16 +91,28 @@ fn render_slide(slide: &Slide) -> String {
 ///
 /// * `talk` - The presentation data
 /// * `custom_head_html` - Optional custom HTML to insert at the end of the `<head>` element
+/// * `base_url` - Where the export will be served from, used to resolve the
+///   deck's assets; empty means "beside the file"
 #[allow(clippy::unnecessary_wraps)]
-pub(super) fn generate_html(talk: &Talk, custom_head_html: Option<&str>) -> Result<Vec<u8>> {
-    // Render all slides
+pub(super) fn generate_html(
+    talk: &Talk,
+    custom_head_html: Option<&str>,
+    base_url: &str,
+) -> Result<Vec<u8>> {
+    // Render all slides. Each carries an `id`, so `deck.html#slide-12` opens on
+    // that slide — with the navigator running, and by scrolling to it without.
     let slides_html =
         talk.slides
             .iter()
-            .map(render_slide)
-            .fold(String::new(), |mut acc, slide_html| {
+            .enumerate()
+            .fold(String::new(), |mut acc, (index, slide)| {
                 use std::fmt::Write;
-                let _ = write!(acc, r#"<div class="toboggan-slide">{slide_html}</div>"#);
+                let number = index + 1;
+                let slide_html = render_slide(slide);
+                let _ = write!(
+                    acc,
+                    r#"<div class="toboggan-slide" id="slide-{number}">{slide_html}</div>"#
+                );
                 acc
             });
 
@@ -106,15 +127,12 @@ pub(super) fn generate_html(talk: &Talk, custom_head_html: Option<&str>) -> Resu
     // Build the complete HTML document
     let html = format!(
         r#"<!doctype html>
-<html lang="en">
+<html lang="{lang}">
 
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{title}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap" rel="stylesheet">
     <style>
 {reset_css}
     </style>
@@ -133,22 +151,30 @@ pub(super) fn generate_html(talk: &Talk, custom_head_html: Option<&str>) -> Resu
     <main>
 {slides_html}
     </main>
+    <script>
+{navigate_js}
+    </script>
 </body>
 
 </html>"#,
+        lang = escape_html(talk.lang()),
         title = escape_html(&talk.title),
         reset_css = RESET_CSS,
         main_css = MAIN_CSS,
         slide_css = adapted_slide_css,
         print_css = PRINT_CSS,
         custom_head = custom_head,
-        slides_html = slides_html
+        slides_html = slides_html,
+        navigate_js = NAVIGATE_JS
     );
 
-    Ok(html.into_bytes())
+    // Rewritten over the whole document rather than per slide: a deck's
+    // `_head.html` links its stylesheet exactly the way a slide embeds an image.
+    Ok(super::assets::rewrite_asset_urls(&html, base_url).into_bytes())
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
     use toboggan_core::{Date, Style};
 
@@ -162,6 +188,28 @@ mod tests {
             "&lt;script&gt;alert(&#39;XSS&#39;)&lt;/script&gt;"
         );
         assert_eq!(escape_html("A & B"), "A &amp; B");
+    }
+
+    /// The trigger is a font stack, not an attack: a quoted family name in
+    /// `style` front matter closed the attribute and spilled the rest of the
+    /// declaration into the tag as markup.
+    #[test]
+    fn a_quote_in_the_style_front_matter_stays_in_the_attribute() {
+        let mut slide = Slide::new("Styled");
+        slide.style = Style {
+            style: Some(r#"font-family: "Fira Code", monospace"#.to_owned()),
+            classes: vec![r#"a" onload="x"#.to_owned()],
+        };
+
+        let html = render_slide(&slide);
+        assert!(
+            html.contains("&quot;Fira Code&quot;"),
+            "the font name is escaped: {html}"
+        );
+        assert!(
+            !html.contains(r#"onload="x"#),
+            "the class cannot open an attribute of its own: {html}"
+        );
     }
 
     #[test]
@@ -221,16 +269,88 @@ mod tests {
         };
         talk.slides.push(slide);
 
-        let html_bytes = generate_html(&talk, None)?;
+        let html_bytes = generate_html(&talk, None, "")?;
         let html = String::from_utf8_lossy(&html_bytes);
 
         // Check basic structure
         assert!(html.contains("<!doctype html>"));
         assert!(html.contains("<title>Test Presentation</title>"));
-        assert!(html.contains(r#"<div class="toboggan-slide">"#));
+        assert!(html.contains(r#"<div class="toboggan-slide" id="slide-1">"#));
         assert!(html.contains(r#"<section class="cover""#));
         assert!(html.contains("<h2>Welcome</h2>"));
         assert!(html.contains("<p>Hello World</p>"));
+
+        // An exported deck is handed around as a file and shown from a lectern
+        // with no guarantee of network, so it must not fetch anything
+        // off-origin: no CDN, no web font, no script. Inline `data:` SVGs carry
+        // an `xmlns="http://www.w3.org/..."` namespace, which names a spec
+        // rather than something the browser requests, so match on the
+        // attributes that actually cause a fetch.
+        for attribute in [r#"href="http"#, r#"src="http"#, "url(http", "url(\"http"] {
+            assert!(
+                !html.contains(attribute),
+                "exported HTML must be self-contained, found `{attribute}`"
+            );
+        }
+
+        Ok(())
+    }
+
+    /// The export is a file someone opens from a lectern, so the navigator has
+    /// to be in it — not fetched — and every slide has to be addressable.
+    #[test]
+    fn the_export_carries_its_own_navigation() -> anyhow::Result<()> {
+        let mut talk = Talk::new("Test");
+        talk.slides.push(Slide::new("One"));
+        talk.slides.push(Slide::new("Two"));
+
+        let html = String::from_utf8(generate_html(&talk, None, "")?)?;
+
+        assert!(html.contains("<script>"), "the navigator ships inline");
+        assert!(html.contains(r#"id="slide-1""#));
+        assert!(html.contains(r#"id="slide-2""#));
+        // Nothing may run before the slides exist: the script reads them on the
+        // way in, and mounting it in <head> would find an empty document.
+        let script = html.find("<script>").expect("script");
+        let last_slide = html.find(r#"id="slide-2""#).expect("slide");
+        assert!(last_slide < script, "the navigator comes after the slides");
+
+        Ok(())
+    }
+
+    /// The `lang` attribute is what tells a screen reader how to pronounce the
+    /// deck, so a French talk must not go out announcing itself as English.
+    #[test]
+    fn the_deck_declares_its_own_language() -> anyhow::Result<()> {
+        let talk = Talk::new("Peut-on RIIR de tout ?").with_lang("fr");
+        let html = String::from_utf8(generate_html(&talk, None, "")?)?;
+        assert!(html.contains(r#"<html lang="fr">"#), "{}", &html[..120]);
+
+        let untagged = Talk::new("A deck");
+        let html = String::from_utf8(generate_html(&untagged, None, "")?)?;
+        assert!(
+            html.contains(r#"<html lang="en">"#),
+            "unset falls back to en"
+        );
+
+        Ok(())
+    }
+
+    /// Presentation mode is opt-in from the script and screen-only, so a deck
+    /// opened with scripting off — and the PDF export, which renders this same
+    /// document — still get every slide and every step.
+    #[test]
+    fn presentation_mode_never_reaches_print() -> anyhow::Result<()> {
+        let talk = Talk::new("Test");
+        let html = String::from_utf8(generate_html(&talk, None, "")?)?;
+
+        let screen_only = html
+            .find("@media screen")
+            .expect("presentation mode is screen-only");
+        let gate = html
+            .find("html.toboggan-js")
+            .expect("presentation mode is gated on the script having run");
+        assert!(screen_only < gate);
 
         Ok(())
     }
@@ -243,7 +363,7 @@ mod tests {
         let custom_html = r#"<meta name="author" content="Test Author">
     <script>console.log('Custom script');</script>"#;
 
-        let html_bytes = generate_html(&talk, Some(custom_html))?;
+        let html_bytes = generate_html(&talk, Some(custom_html), "")?;
         let html = String::from_utf8_lossy(&html_bytes);
 
         // Check custom HTML is present in head
@@ -257,6 +377,15 @@ mod tests {
             .find("Test Author")
             .ok_or_else(|| anyhow::anyhow!("Should have custom content"))?;
         assert!(custom_pos < head_close_pos, "Custom HTML should be in head");
+
+        // The custom head comes last so a deck can override the bundled styles.
+        let styles_pos = html
+            .find("<style>")
+            .ok_or_else(|| anyhow::anyhow!("Should have bundled styles"))?;
+        assert!(
+            styles_pos < custom_pos,
+            "custom head must come after the bundled styles so a deck can override them"
+        );
 
         Ok(())
     }

@@ -83,9 +83,14 @@ table {
 }
 
 /* Layout */
+/* Width goes through a custom property for the same reason the type sizes do,
+   plus one this shadow tree cannot solve on its own: `vw` is the *viewport*, so
+   a slide rendered into a pane rather than a whole screen — the presenter
+   view's two previews — laid itself out wider than the box it was in and spilled
+   out of it. Those panes set `--slide-width: 100%`. */
 section {
 	margin: 1rem auto 0;
-	width: 80vw;
+	width: var(--slide-width, 80vw);
 	min-height: calc(100% - 1rem);
 	max-height: calc(100% - 1rem);
 	overflow: hidden;
@@ -129,16 +134,17 @@ a:visited {
 	}
 }
 
-/* Links */
+/* Inline code.
+   
+   No hover treatment: this rule matches every `code`, including the one inside
+   every `<pre>`, so moving the mouse across a slide drew a box around whole
+   code blocks. On a projector that is a rectangle appearing for no reason the
+   room can see, and the transparent border existed only to reserve the space
+   that box needed. */
 code {
 	color: var(--accent2);
-	border: thin solid transparent;
 	border-radius: 0.25em;
 	padding: 0 0.125em;
-
-	&:hover {
-		border-color: rgba(0, 0, 0, 0.25);
-	}
 }
 
 /* Keyboard keys (<kbd>) — physical 3D key cap.
@@ -320,7 +326,7 @@ section.term-50vh .toboggan-terminals {
 
 /* Wide layout: maximize space for terminal-heavy slides */
 section.wide {
-	width: 95vw;
+	width: var(--slide-width-wide, 95vw);
 	margin-top: 0.25rem;
 	min-height: calc(100% - 0.25rem);
 	max-height: calc(100% - 0.25rem);

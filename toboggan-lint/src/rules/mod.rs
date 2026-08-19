@@ -1,8 +1,24 @@
+//! The rules themselves, and the registry that names them.
+//!
+//! Each rule is a small unit: it reads a [`crate::RuleContext`] and *pushes*
+//! any [`crate::LintDiagnostic`] it finds into an `&mut Vec` — a rule returns
+//! nothing, so one allocation serves the whole run. Talk-level rules implement
+//! [`crate::Rule::check_talk`] instead and never see a `RuleContext`.
+//!
+//! Every diagnostic carries the id of the rule that produced it, which is also
+//! what a deck writes in `disabled_rules` or a `<!-- lint-disable -->` comment
+//! to silence it.
+
+pub(crate) mod code;
 pub(crate) mod content;
 pub(crate) mod html;
+pub(crate) mod link;
 pub(crate) mod pause;
 pub(crate) mod structure;
 pub(crate) mod terminal;
+
+#[cfg(test)]
+pub(crate) mod test_support;
 
 #[cfg(feature = "spell")]
 pub(crate) mod spelling;
@@ -45,6 +61,18 @@ pub mod ids {
     pub const STRUCTURE_TITLE_MISSING: RuleId = RuleId("structure/title-missing");
     /// Two parts sharing a name.
     pub const STRUCTURE_DUPLICATE_PART_NAME: RuleId = RuleId("structure/duplicate-part-name");
+    /// Two content slides sharing a title.
+    pub const STRUCTURE_DUPLICATE_SLIDE_TITLE: RuleId = RuleId("structure/duplicate-slide-title");
+    /// A code block longer than `max_code_lines`.
+    pub const CODE_TOO_LONG: RuleId = RuleId("code/too-long");
+    /// A code block with no language on its fence.
+    pub const CODE_NO_LANGUAGE: RuleId = RuleId("code/no-language");
+    /// An image or download that is not in the deck's `public/` directory.
+    pub const LINK_BROKEN: RuleId = RuleId("link/broken");
+    /// Declared speaking time exceeding `max_duration`.
+    pub const STRUCTURE_OVER_BUDGET: RuleId = RuleId("structure/over-budget");
+    /// A content slide with no speaker notes, when notes are required.
+    pub const CONTENT_MISSING_NOTES: RuleId = RuleId("content/missing-notes");
     /// More words than `max_words_per_slide`.
     pub const CONTENT_EXCESSIVE_WORDS: RuleId = RuleId("content/excessive-words");
     /// More images than `max_images_per_slide`.
@@ -52,6 +80,37 @@ pub mod ids {
     /// A typo reported by the `typos` CLI.
     pub const SPELLING_TYPO: RuleId = RuleId("spelling/typo");
 }
+
+/// Every id declared in [`ids`], whether or not a rule was registered for it.
+///
+/// The counterpart to [`all_rule_ids`], which lists the ids of the rules that
+/// actually run. `registered_rules_cover_every_id` asserts the two agree — a
+/// `Box::new` dropped from [`all_rules`] otherwise leaves every test green and
+/// the rule silently not running on anyone's deck.
+#[cfg(test)]
+pub(crate) const DECLARED_IDS: [RuleId; 21] = [
+    ids::PAUSE_IN_PART,
+    ids::PAUSE_EMPTY_STEP,
+    ids::PAUSE_TOO_MANY_STEPS,
+    ids::TERM_IN_PART,
+    ids::TERM_UNRESOLVED_CWD,
+    ids::TERM_DUPLICATE_CWD,
+    ids::HTML_NESTED_STEP,
+    ids::HTML_IMG_MISSING_ALT,
+    ids::HTML_RAW_SCRIPT,
+    ids::HTML_HEADING_H1,
+    ids::STRUCTURE_EMPTY_SLIDE,
+    ids::STRUCTURE_TITLE_MISSING,
+    ids::STRUCTURE_DUPLICATE_PART_NAME,
+    ids::STRUCTURE_DUPLICATE_SLIDE_TITLE,
+    ids::CODE_TOO_LONG,
+    ids::CODE_NO_LANGUAGE,
+    ids::LINK_BROKEN,
+    ids::STRUCTURE_OVER_BUDGET,
+    ids::CONTENT_MISSING_NOTES,
+    ids::CONTENT_EXCESSIVE_WORDS,
+    ids::CONTENT_TOO_MANY_IMAGES,
+];
 
 /// Every rule id known to this build, for validating user-supplied ids.
 #[must_use]
@@ -76,8 +135,14 @@ pub fn all_rules() -> Vec<Box<dyn Rule>> {
         Box::new(structure::EmptySlide),
         Box::new(structure::TitleMissing),
         Box::new(structure::DuplicatePartName),
+        Box::new(structure::DuplicateSlideTitle),
         Box::new(content::ExcessiveWords),
         Box::new(content::TooManyImages),
+        Box::new(code::CodeTooLong),
+        Box::new(code::CodeNoLanguage),
+        Box::new(link::BrokenLink),
+        Box::new(structure::OverBudget),
+        Box::new(structure::MissingNotes),
     ];
     // Spell checking is opt-in at compile time (it needs the `typos` CLI at
     // runtime). Disable it for a run with `--no-spell`; it cannot be silenced by

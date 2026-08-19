@@ -5,8 +5,45 @@ use slotmap::DefaultKey;
 
 use crate::Timestamp;
 
+/// A connected client, as the server knows it.
+///
+/// Assigned at registration and handed back in [`crate::Notification::Registered`].
+/// Opaque on purpose: it is a slot-map key, so an id is only meaningful to the
+/// server that issued it and only for as long as that connection lives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ClientId(DefaultKey);
+
+/// Which side of the projector a connection is on.
+///
+/// Navigation is shared state — every presenter drives the same deck — so this
+/// is not about whose deck it is. It is about the two things a spectator must
+/// not be able to do: move the presentation, and open a shell on the machine
+/// hosting it.
+///
+/// [`Self::Audience`] is the default deliberately. A role that arrives unset,
+/// from an older client or a hand-written frame, is the one that can do the
+/// least.
+// Deliberately not `PartialOrd, Ord`. `Presenter` is declared first, so a
+// derived ordering makes `Presenter < Audience` — and the natural-looking
+// `role >= ClientRole::Presenter` would then grant access to exactly the role it
+// was written to exclude. Ask [`ClientRole::is_presenter`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub enum ClientRole {
+    /// Drives the deck, and may open the embedded terminals.
+    Presenter,
+    /// Follows along. Read-only.
+    #[default]
+    Audience,
+}
+
+impl ClientRole {
+    /// Whether this role may send commands and open terminals.
+    #[must_use]
+    pub const fn is_presenter(self) -> bool {
+        matches!(self, Self::Presenter)
+    }
+}
 
 #[cfg(feature = "openapi")]
 mod client_openapi {
@@ -48,18 +85,30 @@ impl ClientId {
     }
 }
 
+/// A snapshot of one connected client, as reported by `GET /api/clients`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ClientInfo {
+    /// Server-assigned identifier for this connection.
     pub id: ClientId,
+    /// The name the client gave when it registered — `"tui"`, `"iPhone"`, …
     pub name: String,
+    /// Where the connection came from, which is also what decided its role.
     #[cfg_attr(feature = "openapi", schema(value_type = String))]
     pub ip_addr: IpAddr,
+    /// When the client registered.
     pub connected_at: Timestamp,
+    /// What the server granted this client at registration.
+    #[serde(default)]
+    pub role: ClientRole,
 }
 
+/// The body of `GET /api/clients`: who is currently connected.
+///
+/// A presenter-only endpoint — the room does not get to enumerate the room.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ClientsResponse {
+    /// Every client currently registered with the server.
     pub clients: Vec<ClientInfo>,
 }

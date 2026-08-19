@@ -8,9 +8,9 @@ use serde::{Deserialize, Serialize};
 use toboggan_core::{
     ClientsResponse, Command, Notification, SlideId, SlidesResponse, TalkResponse,
 };
-use toboggan_stats::SlideStats;
 use tracing::{info, warn};
 
+use super::presenter::Presenter;
 use crate::TobogganState;
 use crate::services::{ClientService, TalkService};
 
@@ -28,15 +28,12 @@ pub(super) async fn get_talk(
 ) -> impl IntoResponse {
     let talk = talk_service.talk().await;
 
-    // Calculate step counts from slides before converting to response
-    let step_counts: Vec<usize> = talk
-        .slides
-        .iter()
-        .map(|slide| SlideStats::from_slide(slide).steps)
-        .collect();
-
-    let mut result = TalkResponse::from(talk);
-    result.step_counts = step_counts;
+    // Step counts are computed when the deck loads, not per request: deriving
+    // them here meant several HTML parses per slide on every call. They are
+    // attached through `with_step_counts`, which refuses a set that does not
+    // line up with the titles it will be read against.
+    let mut result = TalkResponse::from(talk.as_ref())
+        .with_step_counts(talk_service.step_counts().await.to_vec());
 
     if !param.footer {
         result.footer.take();
@@ -66,7 +63,13 @@ pub(super) async fn get_slide_by_index(
         .ok_or(StatusCode::NOT_FOUND)
 }
 
+/// Drives the deck over plain HTTP.
+///
+/// `Presenter` first, and before `Json`: the gate has to run before the body is
+/// read, so a refused caller is told `403` rather than having its command
+/// parsed and validated first.
 pub(super) async fn post_command(
+    _: Presenter,
     State(state): State<TobogganState>,
     Json(command): Json<Command>,
 ) -> impl IntoResponse {
@@ -91,7 +94,13 @@ pub(super) async fn post_command(
     Json(result)
 }
 
+/// Lists who is connected — names, roles and **IP addresses**.
+///
+/// Gated for that last one: the audience has no business enumerating the rest
+/// of the audience, and this is an operator's view of the room rather than a
+/// part of the presentation.
 pub(super) async fn get_clients(
+    _: Presenter,
     State(client_service): State<ClientService>,
 ) -> Json<ClientsResponse> {
     let clients = client_service.connected_clients().await;

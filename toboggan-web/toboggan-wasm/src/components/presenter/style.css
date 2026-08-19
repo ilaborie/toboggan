@@ -1,0 +1,225 @@
+:host {
+	--presenter-bg: #0d1117;
+	--presenter-panel: #161b22;
+	--presenter-line: #21262d;
+	--presenter-fg: #e6edf5;
+	--presenter-muted: #8b98a5;
+	--presenter-accent: #4cc9f0;
+	--presenter-late: #ff8c42;
+	--presenter-early: #56d364;
+
+	display: block;
+	block-size: 100dvb;
+	color: var(--presenter-fg);
+	background: var(--presenter-bg);
+	font: 16px/1.5 system-ui, sans-serif;
+}
+
+.layout {
+	block-size: 100%;
+	display: grid;
+	grid-template-columns: 2fr 1fr;
+	grid-template-rows: minmax(0, 1fr) auto;
+	grid-template-areas:
+		"now aside"
+		"status status";
+	gap: 12px;
+	padding: 12px;
+	box-sizing: border-box;
+}
+
+/* A one-column stack once the two panes would each be too narrow to read —
+   a presenter view is often a laptop screen in portrait beside a projector. */
+@media (max-inline-size: 960px) {
+	.layout {
+		grid-template-columns: 1fr;
+		grid-template-rows: minmax(0, 3fr) minmax(0, 2fr) auto;
+		grid-template-areas:
+			"now"
+			"aside"
+			"status";
+	}
+}
+
+.pane {
+	background: var(--presenter-panel);
+	border: 1px solid var(--presenter-line);
+	border-radius: 12px;
+	overflow: hidden;
+	min-block-size: 0;
+}
+
+.now {
+	grid-area: now;
+	display: grid;
+	place-items: center;
+	min-block-size: 0;
+}
+
+/* Both previews are shaped like the thing they are previewing. Without this the
+   slide is laid out into whatever rectangle the pane happened to be, so the
+   presenter's copy wrapped and broke differently from the projector's — which
+   is the one thing a preview must not do. */
+.screen {
+	aspect-ratio: 16 / 9;
+	inline-size: 100%;
+	max-inline-size: 100%;
+	max-block-size: 100%;
+	display: grid;
+}
+
+.aside {
+	grid-area: aside;
+	display: grid;
+	grid-template-rows: auto auto minmax(0, 1fr);
+	gap: 12px;
+	min-block-size: 0;
+}
+
+.label {
+	margin: 0;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--presenter-muted);
+}
+
+.next {
+	display: grid;
+	place-items: center;
+	max-block-size: clamp(128px, 26dvb, 300px);
+}
+
+/* The slide renders *into* this element — the slide component attaches its own
+   shadow root to the host it is handed, so the host must be an element the
+   presenter chrome does not otherwise use. Styling `.screen > *` instead would
+   match nothing at all, because the slide's `<section>` is behind that shadow
+   boundary rather than beside it. */
+.fit {
+	min-block-size: 0;
+	overflow: hidden;
+	/* A slide sizes itself against the viewport, because normally it *is* the
+	   viewport. Here it is a pane, so it is told to fill that instead. Custom
+	   properties inherit across the shadow boundary the deck's own selectors
+	   cannot cross, which is why these work and a descendant rule would not. */
+	--slide-width: 100%;
+	--slide-width-wide: 100%;
+}
+
+/* The next-slide pane is a thumbnail, and a deck's type is sized for a room.
+   `zoom` rather than `transform: scale()` because zoom changes the box the
+   slide is laid out *into*: at 0.3 the slide lays itself out against a
+   pane-width/0.3 rectangle and is painted at pane width, so long lines wrap
+   where they would on a small screen instead of running off the side.
+   Applied to `.fit` and not to `.screen`, which would shrink the frame and the
+   16:9 ratio along with the slide. */
+.next .fit {
+	zoom: 0.3;
+}
+
+/* Roughly the ratio between this pane and a projector, so the presenter's copy
+   breaks its lines where the room's does. */
+.now .fit {
+	zoom: 0.55;
+}
+
+.notes {
+	overflow-y: auto;
+	padding: 12px 16px;
+	line-height: 1.6;
+	font-size: 17px;
+}
+
+.notes:empty::after {
+	content: "No notes for this slide.";
+	color: var(--presenter-muted);
+	font-style: italic;
+}
+
+.notes :first-child {
+	margin-block-start: 0;
+}
+
+.notes code {
+	font-family: ui-monospace, monospace;
+	font-size: 0.9em;
+	background: #0d1117;
+	padding: 0.1em 0.35em;
+	border-radius: 4px;
+}
+
+.status {
+	grid-area: status;
+	display: flex;
+	align-items: center;
+	gap: 20px;
+	padding: 8px 16px;
+	background: var(--presenter-panel);
+	border: 1px solid var(--presenter-line);
+	border-radius: 12px;
+	font-variant-numeric: tabular-nums;
+}
+
+.clock {
+	color: var(--presenter-muted);
+}
+
+.elapsed {
+	font-size: 22px;
+	font-weight: 600;
+	/* Clickable: it is the only control in the view, so it says so. */
+	cursor: pointer;
+	background: none;
+	border: 0;
+	color: inherit;
+	font-family: inherit;
+	padding: 0;
+}
+
+.elapsed:hover {
+	color: var(--presenter-accent);
+}
+
+.progress {
+	flex: 1;
+	block-size: 8px;
+	min-inline-size: 64px;
+	border-radius: 999px;
+	background: var(--presenter-line);
+	overflow: hidden;
+}
+
+.progress > span {
+	display: block;
+	block-size: 100%;
+	inline-size: 0;
+	background: var(--presenter-accent);
+	transition: inline-size 0.2s ease;
+}
+
+.counter,
+.steps {
+	color: var(--presenter-muted);
+}
+
+.counter b {
+	color: var(--presenter-fg);
+	font-size: 18px;
+}
+
+.pacing {
+	font-weight: 600;
+}
+
+.pacing[data-pace="late"] {
+	color: var(--presenter-late);
+}
+
+.pacing[data-pace="early"] {
+	color: var(--presenter-early);
+}
+
+.pacing:empty {
+	display: none;
+}

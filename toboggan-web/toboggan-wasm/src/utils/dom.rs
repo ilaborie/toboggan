@@ -1,6 +1,6 @@
 use gloo::console::error;
 use gloo::utils::{document, window};
-use toboggan_core::{Content, Style};
+use toboggan_core::{Content, Secret, Style};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::prelude::*;
 use web_sys::{AddEventListenerOptions, Element, Event, EventTarget, HtmlElement, KeyboardEvent};
@@ -177,6 +177,51 @@ pub fn apply_slide_styles(container: &Element, style: &Style) {
     }
 }
 
+/// The presenter token this page was opened with, if any.
+///
+/// Read from `?token=` on the page's own URL, because that is where the server
+/// prints it in the presenter link — one string to copy onto a phone or a
+/// second laptop, rather than a field to fill in. A page opened without one is
+/// an audience member, which is the right default for a link shared with a
+/// room.
+///
+/// Decoding is [`Secret::from_query_value`]'s, not `decodeURIComponent`'s. This
+/// used to call the latter, which leaves `+` alone where the server reads it as
+/// a space, so a token containing one arrived as different text than was sent
+/// and the presenter was silently demoted.
+///
+/// Not stored anywhere: the token stays in the URL, so closing the tab forgets
+/// it and sharing the *audience* URL cannot leak it by accident.
+#[must_use]
+pub fn presenter_token() -> Option<Secret> {
+    let search = match window().location().search() {
+        Ok(search) => search,
+        Err(err) => {
+            error!("Could not read the page's query string:", err);
+            return None;
+        }
+    };
+    let query = search.strip_prefix('?').unwrap_or(&search);
+    query
+        .split('&')
+        .find_map(|pair| Secret::from_query_value(pair.strip_prefix("token=")?))
+}
+
+/// Sets the page's language from the deck.
+///
+/// The served shell is a static `index.html` that can only say `lang="en"`; the
+/// deck's own language does not exist until the talk has been fetched. Left at
+/// the default, a screen reader reads a French deck aloud with an English voice,
+/// and the browser hyphenates it by English rules.
+pub fn set_document_lang(lang: Option<&str>) {
+    let Some(root) = document().document_element() else {
+        return;
+    };
+    if root.set_attribute("lang", lang.unwrap_or("en")).is_err() {
+        error!("Failed to set the page language");
+    }
+}
+
 /// Injects custom head HTML into document.head
 /// Removes any previously injected elements and adds new ones with data-toboggan-head marker
 pub fn inject_head_html(head_html: Option<&str>) {
@@ -206,16 +251,24 @@ pub fn inject_head_html(head_html: Option<&str>) {
         .expect_throw("DOM unavailable: could not create temp div for head HTML injection");
     temp.set_inner_html(html);
 
-    // Move each child to document.head with marker attribute
+    // Move each child to document.head with marker attribute.
+    //
+    // `append_child` is also what removes the node from `temp`, so the loop's
+    // termination depends on it succeeding. Logging the failure and carrying on
+    // left the same node at the front for ever: the tab span, emitting console
+    // errors, on any node `<head>` declines — which a deck's own `_head.html`
+    // can contain. It is removed either way now.
     while let Some(child) = temp.first_child() {
-        // Add marker attribute if it's an element
         if let Some(element) = child.dyn_ref::<Element>() {
             let _ = element.set_attribute("data-toboggan-head", "true");
         }
 
-        // Move to head
         if head.append_child(&child).is_err() {
-            error!("Failed to append element to head");
+            error!("Could not move an element from _head.html into <head>");
+            if temp.remove_child(&child).is_err() {
+                error!("Could not drop it either; abandoning the rest of _head.html");
+                return;
+            }
         }
     }
 }

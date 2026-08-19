@@ -32,8 +32,42 @@ static LIST_ITEM_SELECTOR: LazyLock<Selector> =
 static NESTED_STEP_SELECTOR: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse(".step .step").expect("nested step selector should be valid"));
 
+/// Pre-compiled selector for `script` elements
+#[allow(clippy::expect_used)]
+static SCRIPT_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("script").expect("script selector should be valid"));
+
+/// Pre-compiled selector for `h1` elements
+#[allow(clippy::expect_used)]
+static H1_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("h1").expect("h1 selector should be valid"));
+
+/// Pre-compiled selector for code blocks (`<code>` inside a `<pre>`)
+#[allow(clippy::expect_used)]
+static CODE_BLOCK_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("pre code").expect("code block selector should be valid"));
+
+/// Pre-compiled selector for `a` elements
+#[allow(clippy::expect_used)]
+static ANCHOR_SELECTOR: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("a").expect("anchor selector should be valid"));
+
 /// Tags whose content should be excluded from text extraction
 const EXCLUDED_TAGS: &[&str] = &["style", "script", "svg", "figure"];
+
+/// Prefix comrak puts on a fenced block's language class.
+const LANGUAGE_CLASS_PREFIX: &str = "language-";
+
+/// A fenced or indented code block found in slide content.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CodeBlock {
+    /// The fence's language, from the `language-*` class comrak emits.
+    /// `None` for a block written without one (or an indented block, which
+    /// cannot carry a language at all).
+    pub language: Option<String>,
+    /// Lines of code, ignoring a trailing newline.
+    pub lines: usize,
+}
 
 /// Wrapper around `scraper::Html` for convenient HTML querying
 #[derive(Debug)]
@@ -69,6 +103,22 @@ impl HtmlDocument {
     #[must_use]
     pub fn count_list_items(&self) -> usize {
         self.document.select(&LIST_ITEM_SELECTOR).count()
+    }
+
+    /// Whether the fragment contains a raw `<script>` element.
+    ///
+    /// Asks the parsed tree rather than searching the source for `<script`,
+    /// which also matched the text of an HTML comment and forced a full
+    /// lowercased copy of the body to be allocated for every check.
+    #[must_use]
+    pub fn has_script(&self) -> bool {
+        self.document.select(&SCRIPT_SELECTOR).next().is_some()
+    }
+
+    /// Whether the fragment contains an `<h1>` element.
+    #[must_use]
+    pub fn has_h1(&self) -> bool {
+        self.document.select(&H1_SELECTOR).next().is_some()
     }
 
     /// Count `.step` elements nested inside another `.step`.
@@ -108,6 +158,49 @@ impl HtmlDocument {
                     .is_none_or(|alt| alt.trim().is_empty())
             })
             .count()
+    }
+
+    /// Every `src` an `<img>` points at, in document order.
+    #[must_use]
+    pub fn image_sources(&self) -> Vec<&str> {
+        self.document
+            .select(&IMG_SELECTOR)
+            .filter_map(|img| img.value().attr("src"))
+            .collect()
+    }
+
+    /// Every `href` an `<a>` points at, in document order.
+    #[must_use]
+    pub fn link_targets(&self) -> Vec<&str> {
+        self.document
+            .select(&ANCHOR_SELECTOR)
+            .filter_map(|anchor| anchor.value().attr("href"))
+            .collect()
+    }
+
+    /// Every code block in the fragment, with its language and line count.
+    ///
+    /// One pass serving both code rules, so a slide's body is walked once
+    /// rather than once per question asked about it.
+    #[must_use]
+    pub fn code_blocks(&self) -> Vec<CodeBlock> {
+        self.document
+            .select(&CODE_BLOCK_SELECTOR)
+            .map(|block| {
+                let language = block
+                    .value()
+                    .classes()
+                    .find_map(|class| class.strip_prefix(LANGUAGE_CLASS_PREFIX))
+                    .map(str::to_owned);
+                // `text()` concatenates the highlighter's per-token spans back
+                // into the original source, so the newlines survive.
+                let source = block.text().collect::<String>();
+                CodeBlock {
+                    language,
+                    lines: source.trim_end_matches('\n').lines().count(),
+                }
+            })
+            .collect()
     }
 
     /// Extract text content, excluding content from style, script, svg, and figure tags
@@ -304,5 +397,104 @@ mod tests {
         let doc = HtmlDocument::parse_fragment(html);
         // `a` has no alt, `b` has empty alt; the malformed `< img` is not parsed as img.
         assert_eq!(doc.count_images_without_alt(), 2);
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::indexing_slicing)]
+mod query_tests {
+    use super::*;
+
+    /// These five are the parser behind `html/raw-script`, `html/heading-h1`,
+    /// `link/broken`, `html/img-missing-alt` and both `code/*` rules, and were
+    /// covered only through `toboggan-lint` — so a change here surfaced as a
+    /// lint failure in another crate, pointing at the rule rather than the
+    /// parse.
+    #[test]
+    fn a_raw_script_is_found_anywhere_in_the_fragment() {
+        assert!(HtmlDocument::parse_fragment("<p>hi</p><script>x()</script>").has_script());
+        assert!(
+            HtmlDocument::parse_fragment("<div><script src=\"a.js\"></script></div>").has_script()
+        );
+        assert!(!HtmlDocument::parse_fragment("<p>no script here</p>").has_script());
+    }
+
+    #[test]
+    fn an_h1_in_the_body_is_found() {
+        assert!(HtmlDocument::parse_fragment("<h1>Title</h1>").has_h1());
+        assert!(!HtmlDocument::parse_fragment("<h2>Subtitle</h2>").has_h1());
+    }
+
+    #[test]
+    fn image_sources_come_back_in_document_order() {
+        let document = HtmlDocument::parse_fragment(
+            r#"<img src="one.png"><p>x</p><img src="two.png" alt="a">"#,
+        );
+        assert_eq!(document.image_sources(), vec!["one.png", "two.png"]);
+        // An `<img>` with no `src` has nothing to check and is not reported.
+        assert!(
+            HtmlDocument::parse_fragment("<img alt=\"a\">")
+                .image_sources()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn link_targets_come_back_in_document_order() {
+        let document =
+            HtmlDocument::parse_fragment(r#"<a href="/a">A</a><a>no href</a><a href="/b">B</a>"#);
+        assert_eq!(document.link_targets(), vec!["/a", "/b"]);
+    }
+
+    /// The language comes off comrak's `language-*` class, and the line count
+    /// is what `code/too-long` compares against a budget.
+    #[test]
+    fn a_fenced_block_carries_its_language_and_line_count() {
+        let document = HtmlDocument::parse_fragment(
+            "<pre><code class=\"language-rust\">fn main() {\nprintln!(\"hi\");\n}\n</code></pre>",
+        );
+        assert_eq!(
+            document.code_blocks(),
+            vec![CodeBlock {
+                language: Some("rust".to_owned()),
+                lines: 3,
+            }]
+        );
+    }
+
+    /// A block with no language is what `code/no-language` reports, so the
+    /// distinction between `None` and `Some("")` is load-bearing.
+    #[test]
+    fn a_block_without_a_language_reports_none() {
+        let document = HtmlDocument::parse_fragment("<pre><code>plain\ntext\n</code></pre>");
+        assert_eq!(
+            document
+                .code_blocks()
+                .first()
+                .map(|block| block.language.clone()),
+            Some(None)
+        );
+    }
+
+    /// Only the trailing newline is ignored; a block that does not end in one
+    /// still counts its last line. The `lines: 1` case is the boundary
+    /// `code/too-long` never sees but every short block hits.
+    #[test]
+    fn a_trailing_newline_does_not_add_a_line() {
+        let with = HtmlDocument::parse_fragment("<pre><code>one\n</code></pre>");
+        let without = HtmlDocument::parse_fragment("<pre><code>one</code></pre>");
+        assert_eq!(with.code_blocks()[0].lines, 1);
+        assert_eq!(without.code_blocks()[0].lines, 1);
+    }
+
+    #[test]
+    fn several_blocks_are_all_returned() {
+        let document = HtmlDocument::parse_fragment(
+            "<pre><code class=\"language-sh\">ls</code></pre><p>x</p><pre><code>plain</code></pre>",
+        );
+        let blocks = document.code_blocks();
+        assert_eq!(blocks.len(), 2);
+        assert_eq!(blocks[0].language.as_deref(), Some("sh"));
+        assert_eq!(blocks[1].language, None);
     }
 }

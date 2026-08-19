@@ -37,12 +37,14 @@ impl RuleId {
 }
 
 /// Identifies the slide a diagnostic refers to.
+///
+/// The display number is derived rather than stored: it is exactly
+/// `index + 1`, and as two public fields the pair could be set to disagree —
+/// which would put one slide's number beside another slide's finding.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SlideRef {
     /// Zero-based index into `talk.slides` (matches `/api/slides`).
     pub index: usize,
-    /// One-based number for display.
-    pub display_number: usize,
     /// Best-effort title text for the slide.
     pub title: String,
 }
@@ -53,9 +55,14 @@ impl SlideRef {
     pub fn new(index: usize, slide: &Slide) -> Self {
         Self {
             index,
-            display_number: SlideId::new(index).display_number(),
             title: slide_title(slide),
         }
+    }
+
+    /// The slide's one-based number, as a reader counts them.
+    #[must_use]
+    pub const fn display_number(&self) -> usize {
+        SlideId::new(self.index).display_number()
     }
 }
 
@@ -113,6 +120,18 @@ impl LintDiagnostic {
     #[must_use]
     pub fn with_help(mut self, help: impl Into<String>) -> Self {
         self.help = Some(help.into());
+        self
+    }
+
+    /// Attaches the source file the finding refers to.
+    ///
+    /// A rule has no reason to call this. [`crate::lint`] stamps every
+    /// diagnostic a slide produced with that slide's file on the way out, so a
+    /// rule cannot forget to — it stays public for callers assembling a
+    /// diagnostic by hand, such as test fixtures.
+    #[must_use]
+    pub fn with_source_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.source_path = Some(path.into());
         self
     }
 }

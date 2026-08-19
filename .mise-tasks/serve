@@ -8,4 +8,4 @@ echo "🌐 Ensuring web frontend is built..."
 mise build:web
 
 echo "🚀 Build + serve examples/riir-folder at http://localhost:8080"
-cargo run -p toboggan -- examples/riir-folder
+cargo run -p toboggan -- --path examples/riir-folder

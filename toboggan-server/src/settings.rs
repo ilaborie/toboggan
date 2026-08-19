@@ -2,7 +2,9 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 use std::time::Duration;
 
-/// Everything the server needs once it already has a [`crate::Talk`].
+use toboggan_core::Secret;
+
+/// Everything the server needs once it already has a [`toboggan_core::Talk`].
 ///
 /// Split out from [`Settings`] because `launch_with_talk` — the entry point the
 /// unified CLI's build+serve uses — has the talk in memory and never reads
@@ -57,6 +59,21 @@ pub struct ServerSettings {
     /// Open the presentation in the default browser once the server is ready
     #[clap(long, env = "TOBOGGAN_OPEN")]
     pub open: bool,
+
+    /// Also open the presenter view — notes, next slide, and a timer
+    ///
+    /// Two windows for one talk: this one on your screen, the deck on the
+    /// projector. Implies `--open`.
+    #[clap(long, env = "TOBOGGAN_OPEN_PRESENTER")]
+    pub open_presenter: bool,
+
+    /// Secret that lets a client **not** on this machine drive the deck.
+    ///
+    /// Only needed when the server is reachable from the network: a connection
+    /// over loopback always presents. Remote clients pass it as
+    /// `?token=…` (`/run?token=…`, and the WebSocket picks it up from there).
+    #[clap(long, env = "TOBOGGAN_PRESENTER_TOKEN")]
+    pub presenter_token: Option<Secret>,
 }
 
 /// `toboggan serve`'s settings: which talk file to serve, and how.

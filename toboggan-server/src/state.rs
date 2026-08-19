@@ -6,7 +6,7 @@ use toboggan_core::{Command, Notification, Talk, Timestamp};
 use tokio::sync::RwLock;
 
 use crate::services::{AssetLookup, ClientService, TalkService, ThumbStatus, ThumbnailService};
-use crate::{HealthResponse, HealthResponseStatus};
+use crate::{HealthResponse, HealthResponseStatus, PresenterAuth};
 
 impl FromRef<TobogganState> for TalkService {
     fn from_ref(state: &TobogganState) -> Self {
@@ -17,6 +17,12 @@ impl FromRef<TobogganState> for TalkService {
 impl FromRef<TobogganState> for ClientService {
     fn from_ref(state: &TobogganState) -> Self {
         state.client_service.clone()
+    }
+}
+
+impl FromRef<TobogganState> for PresenterAuth {
+    fn from_ref(state: &TobogganState) -> Self {
+        state.auth.clone()
     }
 }
 
@@ -56,6 +62,8 @@ pub struct TobogganState {
     pdf_render_lock: Arc<tokio::sync::Mutex<()>>,
     /// Lazily-generated slide-overview thumbnails, invalidated on reload.
     thumbnail_service: ThumbnailService,
+    /// Decides which connections may drive the deck and open terminals.
+    auth: PresenterAuth,
 }
 
 impl TobogganState {
@@ -74,7 +82,29 @@ impl TobogganState {
             pdf_cache: Arc::new(RwLock::new(PdfCache::default())),
             pdf_render_lock: Arc::new(tokio::sync::Mutex::new(())),
             thumbnail_service: ThumbnailService::new(),
+            auth: PresenterAuth::default(),
         }
+    }
+
+    /// Installs the presenter gate.
+    ///
+    /// Separate from [`Self::new`] so the default is the closed-but-quiet one:
+    /// a state built without thinking about it grants the presenter role to
+    /// this machine only, which is exactly what a server bound to loopback
+    /// wants.
+    #[must_use]
+    pub fn with_auth(mut self, auth: PresenterAuth) -> Self {
+        self.auth = auth;
+        self
+    }
+
+    /// The role a connection from `peer` offering `token` is granted.
+    pub(crate) fn role_for(
+        &self,
+        peer: std::net::IpAddr,
+        token: Option<&str>,
+    ) -> toboggan_core::ClientRole {
+        self.auth.role_for(peer, token)
     }
 
     /// Returns the cached rendered PDF, if any.
@@ -88,7 +118,7 @@ impl TobogganState {
     /// read *before* the talk: a reload in between then leaves the epoch stale
     /// and the render is discarded, whereas the reverse order would pair an old
     /// talk with a fresh epoch and cache a stale PDF as current.
-    pub(crate) async fn pdf_render_input(&self) -> (u64, Talk) {
+    pub(crate) async fn pdf_render_input(&self) -> (u64, Arc<Talk>) {
         let epoch = self.pdf_cache.read().await.epoch;
         (epoch, self.talk_service.talk().await)
     }

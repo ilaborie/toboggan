@@ -1,6 +1,6 @@
 [package]
 name = "toboggan-core"
-version = "0.1.0"
+version.workspace = true
 description = "Core types and domain logic for the Toboggan presentation system (no_std compatible)"
 edition = "2024"
 

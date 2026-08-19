@@ -61,7 +61,10 @@ impl InnerContent {
             let options = default_options();
             format_commonmark(elt, &options, &mut buffer).map_err(|err| {
                 TobogganCliError::FormatCommonmark {
-                    src: miette::NamedSource::new(source.name, format!("{data:?}")),
+                    src: std::sync::Arc::new(miette::NamedSource::new(
+                        source.name,
+                        format!("{data:?}"),
+                    )),
                     span: SourceSpan::from((0, 1)),
                     message: err.to_string(),
                 }
@@ -91,7 +94,7 @@ impl InnerContent {
         Ok(())
     }
 
-    fn render_with<R: ContentRenderer>(&self, renderer: &R) -> Content {
+    fn render_with<R: ContentRenderer>(&self, renderer: &R) -> Result<Content> {
         let all_steps: Vec<_> = self
             .steps
             .iter()
@@ -329,16 +332,16 @@ impl SlideContentParser {
         }
     }
 
-    fn notes(&self, renderer: &HtmlRenderer<'_>) -> Content {
+    fn notes(&self, renderer: &HtmlRenderer<'_>) -> Result<Content> {
         match self {
-            Self::Init | Self::Base { .. } => Content::Empty,
+            Self::Init | Self::Base { .. } => Ok(Content::Empty),
             Self::Notes { notes, .. } => notes.render_with(renderer),
         }
     }
 
-    fn body(&self, renderer: &HtmlRenderer<'_>) -> Content {
+    fn body(&self, renderer: &HtmlRenderer<'_>) -> Result<Content> {
         match self {
-            Self::Init => Content::Empty,
+            Self::Init => Ok(Content::Empty),
             Self::Base { inner, .. } | Self::Notes { inner, .. } => inner.render_with(renderer),
         }
     }
@@ -397,9 +400,9 @@ impl SlideContentParser {
 
         let front_matter = self.front_matter();
         let style = front_matter.to_style()?;
-        let renderer = HtmlRenderer::new(options, plugins, style.clone());
+        let renderer = HtmlRenderer::new(options, plugins, style.clone(), &file_name);
 
-        let body = self.body(&renderer);
+        let body = self.body(&renderer)?;
 
         // Per-slide lint silencing: front matter `disabled_rules` plus any
         // `<!-- lint-disable -->` body directives, de-duplicated.
@@ -420,9 +423,10 @@ impl SlideContentParser {
                     .unwrap_or_else(|| DEFAULT_SLIDE_TITLE.to_owned()),
             },
             body,
-            notes: self.notes(&renderer),
+            notes: self.notes(&renderer)?,
             body_source: self.body_source(),
             hidden_in: front_matter.hidden_in.clone(),
+            duration: front_matter.duration,
             terminals: self
                 .terminals()
                 .into_iter()
@@ -437,6 +441,7 @@ impl SlideContentParser {
                 .collect(),
             quake_terminal_cwd: front_matter.quake_cwd.clone(),
             lint_disabled,
+            source_path: path.map(Path::to_path_buf),
         };
 
         Ok((result, front_matter))
@@ -784,7 +789,7 @@ Content with inline CSS."#;
     }
 
     #[test]
-    fn test_code_comment_transformation() -> Result<()> {
+    fn test_code_comment_transformation() -> anyhow::Result<()> {
         use std::fs;
 
         use tempfile::tempdir;
@@ -838,7 +843,7 @@ Content after code.";
     }
 
     #[test]
-    fn test_code_comment_comprehensive_integration() -> Result<()> {
+    fn test_code_comment_comprehensive_integration() -> anyhow::Result<()> {
         use std::fs;
 
         use tempfile::tempdir;

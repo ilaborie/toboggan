@@ -1,3 +1,12 @@
+//! The terminal client: a [ratatui] view of the deck, with speaker notes, a
+//! next-slide preview and a slide list.
+//!
+//! Connects to a running server and stays in sync with every other client. Run
+//! it with `toboggan tui`. A standalone `toboggan-tui` binary is also built
+//! from `src/main.rs`, kept from before the unified command.
+//!
+//! [ratatui]: https://ratatui.rs/
+
 #![allow(clippy::missing_errors_doc)]
 
 use anyhow::Context;

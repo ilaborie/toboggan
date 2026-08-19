@@ -17,6 +17,14 @@ inputs:
     description: Directory to write artifacts into.
     required: false
     default: dist
+  base-url:
+    description: >-
+      Base URL the published HTML is served from, e.g. /my-talk/. Only needed
+      when the deck's assets have to be addressed absolutely; by default they
+      are referenced relative to index.html, which is correct on a project page
+      under a sub-path as well as on a user page at the root.
+    required: false
+    default: ""
   version:
     description: >-
       Release tag of ilaborie/toboggan to install, e.g. v0.1.0. Pinned by
@@ -88,13 +96,23 @@ runs:
         FOLDER: ${{ inputs.folder }}
         OUT_DIR: ${{ inputs.out-dir }}
         OUTPUTS: ${{ inputs.outputs }}
+        BASE_URL: ${{ inputs.base-url }}
       run: |
         set -euo pipefail
         mkdir -p "$OUT_DIR"
+        # An empty --base-url is the default, so only pass the flag when set.
+        # `toboggan build` copies the deck's public/ next to index.html itself,
+        # which is what makes the deck's images resolve once published.
+        # An `[ … ] && …` one-liner would exit the whole script under `set -e`
+        # the moment the test failed, which is the common case.
+        base_url_args=()
+        if [ -n "$BASE_URL" ]; then
+          base_url_args=(--base-url "$BASE_URL")
+        fi
         IFS=',' read -ra kinds <<< "$OUTPUTS"
         for kind in "${kinds[@]}"; do
           case "$(echo "$kind" | xargs)" in
-            html)       toboggan build --path "$FOLDER" --output "$OUT_DIR/index.html" ;;
+            html)       toboggan build --path "$FOLDER" --output "$OUT_DIR/index.html" "${base_url_args[@]}" ;;
             pdf)        toboggan pdf --path "$FOLDER" --output "$OUT_DIR/presentation.pdf" ;;
             thumbnails) toboggan thumbnails --path "$FOLDER" --output "$OUT_DIR/overview" ;;
             "")         ;;

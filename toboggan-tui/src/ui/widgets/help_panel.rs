@@ -5,6 +5,9 @@ use ratatui::widgets::{Block, Paragraph};
 use crate::events::{ActionDetails, AppAction};
 use crate::ui::styles;
 
+/// Character width of the key column, before the `·` separator.
+const KEYS_COLUMN: usize = 24;
+
 #[derive(Debug, Default)]
 pub struct HelpPanel {}
 
@@ -27,7 +30,7 @@ impl Widget for &HelpPanel {
                 AppAction::Previous,
                 AppAction::Next,
                 AppAction::Last,
-                AppAction::Goto(1),
+                AppAction::Digit(0),
             ],
         ));
 
@@ -56,17 +59,22 @@ fn build_lines<'a>(title: &'a str, actions: &'a [AppAction]) -> Vec<Line<'a>> {
     )));
     for action in actions {
         let ActionDetails { keys, description } = action.details();
-        let mut keys_len = 0;
+        // Counted in characters, not bytes, and clamped: `↑` is three bytes on
+        // its own, and a third key on a row was enough to take the byte count
+        // past the column and underflow the subtraction.
+        let mut keys_width = 0;
         let mut spans = vec![];
         spans.push(Span::raw(" "));
         for key in keys {
             spans.push(Span::raw(" "));
             let key = format!("[{key}]");
-            keys_len += key.len() + 1;
+            keys_width += key.chars().count() + 1;
             spans.push(Span::styled(key, styles::action::KEY));
         }
 
-        spans.push(Span::raw(" ".repeat(24 - keys_len)));
+        spans.push(Span::raw(
+            " ".repeat(KEYS_COLUMN.saturating_sub(keys_width)),
+        ));
         spans.push(Span::raw(" · "));
         spans.push(Span::styled(description, styles::action::DESCRIPTION));
 

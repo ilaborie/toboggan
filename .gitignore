@@ -81,3 +81,11 @@ idea.md
 *.local.*
 TODO.md
 logo/AppIcons.zip
+
+# Playwright MCP browser-session artifacts (page snapshots, console logs).
+.playwright-mcp/
+
+# Scratch Typst files the PDF and thumbnail renderers write into a deck's own
+# slides folder. Removed after each run, but a killed process leaves one behind.
+.toboggan-pdf.typ
+.toboggan-thumb.typ

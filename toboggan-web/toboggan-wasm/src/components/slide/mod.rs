@@ -16,11 +16,23 @@ pub(crate) struct TobogganSlideElement {
     slide: Option<Slide>,
     terminals: Vec<TobogganTerminalElement>,
     api_base_url: String,
+    /// Whether this is a look at a slide rather than the slide itself.
+    ///
+    /// A preview renders everything but the terminals. Spawning those would
+    /// open a *second* shell, in a second session, showing output the room
+    /// never sees — and in the presenter view's next-slide pane, for a slide
+    /// nobody has reached yet.
+    preview: bool,
 }
 
 impl TobogganSlideElement {
     pub(crate) fn set_api_base_url(&mut self, url: &str) {
         url.clone_into(&mut self.api_base_url);
+    }
+
+    /// Marks this element as showing a preview; see [`Self::preview`].
+    pub(crate) fn set_preview(&mut self, preview: bool) {
+        self.preview = preview;
     }
 
     pub(crate) fn set_slide(&mut self, slide: Option<Slide>, current_step: usize) {
@@ -35,7 +47,8 @@ impl TobogganSlideElement {
         self.set_current_step(current_step);
 
         // Start terminals if the slide has any
-        if let Some(slide) = &self.slide
+        if !self.preview
+            && let Some(slide) = &self.slide
             && !slide.terminals.is_empty()
             && let Some(container) = &self.container
         {

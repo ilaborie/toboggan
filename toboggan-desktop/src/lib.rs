@@ -1,8 +1,20 @@
+//! The desktop client: a native [iced] window that connects to a running server.
+//!
+//! Run it with `toboggan desktop`. A standalone `toboggan-desktop` binary is
+//! also built from `src/main.rs`, kept from before the unified command.
+//!
+//! Every shortcut is described once, in `actions`, and the help panel reads
+//! those descriptions — so what the panel lists and what the keys do cannot
+//! drift apart.
+//!
+//! [iced]: https://github.com/iced-rs/iced
+
 use anyhow::{Context, Result};
 use iced::Settings;
 use iced::window::icon;
 use toboggan_client::TobogganConfig;
 
+mod actions;
 mod app;
 pub use app::App;
 

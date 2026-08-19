@@ -29,5 +29,5 @@ $ toboggan build -p ./slides/ \
 | `-t, --title` | Override the title |
 | `-d, --date` | Override the date (`YYYY-MM-DD`) |
 
-> [!NOTE]
-> The input must be a **folder** — a single flat `.md` file is not accepted.
+<!-- notes -->
+The input must be a **folder** — a single flat `.md` file is not accepted.

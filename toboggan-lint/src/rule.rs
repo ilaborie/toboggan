@@ -1,6 +1,10 @@
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+use std::time::Duration;
 
-use toboggan_core::{Content, Slide, Talk};
+use toboggan_core::{Slide, Talk};
+use toboggan_stats::{HtmlDocument, SlideStats};
 
 use crate::diagnostic::{LintDiagnostic, RuleId, Severity, SlideRef};
 
@@ -17,6 +21,15 @@ pub struct LintConfig {
     pub max_words_per_slide: usize,
     /// Maximum images before `content/too-many-images` fires.
     pub max_images_per_slide: usize,
+    /// Maximum lines in one code block before `code/too-long` fires.
+    pub max_code_lines: usize,
+    /// Speaking-time budget for the whole talk. `structure/over-budget` stays
+    /// silent until one is set — a deck has no natural length to be judged
+    /// against, only the slot its author was given.
+    pub max_duration: Option<Duration>,
+    /// Whether every content slide is expected to carry speaker notes.
+    /// Off by default: plenty of decks deliberately have none.
+    pub require_notes: bool,
 }
 
 impl Default for LintConfig {
@@ -27,6 +40,10 @@ impl Default for LintConfig {
             max_steps_per_slide: 20,
             max_words_per_slide: 120,
             max_images_per_slide: 8,
+            // Roughly what stays readable projected at a legible font size.
+            max_code_lines: 20,
+            max_duration: None,
+            require_notes: false,
         }
     }
 }
@@ -59,6 +76,17 @@ impl LintConfig {
 }
 
 /// Per-slide context passed to [`Rule::check_slide`].
+///
+/// Carries the slide's parsed body and its statistics so the rules can share
+/// them. Every rule used to derive its own: three `pause` rules and two `html`
+/// rules each parsed the body, and the two `content` rules each built a fresh
+/// `SlideStats`, which itself parsed the body again. That is a handful of
+/// `scraper` parses of the same string for one slide, on every `toboggan lint`
+/// and every `lint` call through the MCP server. Both are computed at most once
+/// here, and only when a rule actually asks.
+///
+/// The cells are [`OnceLock`] rather than `OnceCell` so the context is `Sync`,
+/// which is what [`Rule`]'s own `Send + Sync` bound already advertises.
 pub struct RuleContext<'a> {
     /// The whole talk (for cross-references such as resolved cwds).
     pub talk: &'a Talk,
@@ -68,6 +96,63 @@ pub struct RuleContext<'a> {
     pub slide_ref: &'a SlideRef,
     /// Active configuration.
     pub config: &'a LintConfig,
+    body_doc: OnceLock<HtmlDocument>,
+    stats: OnceLock<SlideStats>,
+    public_dir: OnceLock<Option<PathBuf>>,
+}
+
+impl<'a> RuleContext<'a> {
+    /// Builds a context for one slide.
+    #[must_use]
+    pub fn new(
+        talk: &'a Talk,
+        slide: &'a Slide,
+        slide_ref: &'a SlideRef,
+        config: &'a LintConfig,
+    ) -> Self {
+        Self {
+            talk,
+            slide,
+            slide_ref,
+            config,
+            body_doc: OnceLock::new(),
+            stats: OnceLock::new(),
+            public_dir: OnceLock::new(),
+        }
+    }
+
+    /// The deck's `public/` directory, looked up once per slide.
+    ///
+    /// Beside the slides folder, which is the only place the server mounts it.
+    ///
+    /// `resolve_deck` accepts both `-p deck` and `-p deck/slides`, but either
+    /// way the directory it serves at `/public` is the *sibling* of the slides
+    /// folder. This used to fall back to `slides/public` as well, so an asset
+    /// living there satisfied `link/broken` and then 404'd at runtime — lint
+    /// passing was the reason to believe the link worked.
+    pub fn public_dir(&self) -> Option<&Path> {
+        self.public_dir
+            .get_or_init(|| {
+                let source_dir = Path::new(self.talk.source_dir.as_deref()?);
+                source_dir
+                    .parent()
+                    .map(|parent| parent.join("public"))
+                    .filter(|candidate| candidate.is_dir())
+            })
+            .as_deref()
+    }
+
+    /// The slide body, parsed once per slide.
+    pub fn body_doc(&self) -> &HtmlDocument {
+        self.body_doc
+            .get_or_init(|| HtmlDocument::parse_fragment(body_html(self.slide)))
+    }
+
+    /// The slide's statistics, computed once per slide.
+    pub fn stats(&self) -> &SlideStats {
+        self.stats
+            .get_or_init(|| SlideStats::from_slide(self.slide))
+    }
 }
 
 /// A lint rule. Most rules implement [`Rule::check_slide`]; cross-slide rules
@@ -89,9 +174,5 @@ pub trait Rule: Send + Sync {
 /// Returns the rendered HTML (or plain text) of a slide body for inspection.
 #[must_use]
 pub(crate) fn body_html(slide: &Slide) -> &str {
-    match &slide.body {
-        Content::Html { raw, .. } => raw,
-        Content::Text { text } => text,
-        Content::Empty => "",
-    }
+    slide.body.raw_html()
 }

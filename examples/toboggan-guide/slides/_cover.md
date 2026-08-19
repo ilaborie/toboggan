@@ -1,5 +1,9 @@
 +++
 title = "Toboggan — User Guide"
+# Pinned on purpose: `toboggan-guide.toml` is embedded into the server with
+# `include_str!`, so an unpinned date restamps the committed artifact on every
+# rebuild and no CI check can tell a real edit from the clock moving.
+date = "2026-08-17"
 classes = ["no_title", "cover"]
 style = """
 min-height: 100%;

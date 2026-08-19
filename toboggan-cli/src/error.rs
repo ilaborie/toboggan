@@ -1,5 +1,6 @@
 use std::io;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use miette::{Diagnostic, NamedSource, SourceSpan};
 
@@ -37,6 +38,23 @@ pub enum TobogganCliError {
     )]
     InvalidCodeEmbed { path: PathBuf, reason: String },
 
+    #[display("Unknown syntax highlighting theme: {theme}")]
+    #[diagnostic(
+        code(toboggan_cli::unknown_theme),
+        help("Run `toboggan build --list-themes` for the themes that exist")
+    )]
+    UnknownTheme { theme: String },
+
+    #[display("Failed to write to standard output")]
+    #[diagnostic(
+        code(toboggan_cli::write_stdout),
+        help(
+            "Usually a broken pipe: the output was piped into a command that exited first, \
+             such as `toboggan stats | head`"
+        )
+    )]
+    WriteStdout { source: io::Error },
+
     #[display("Failed to create file: {}", path.display())]
     #[diagnostic(
         code(toboggan_cli::create_file),
@@ -60,24 +78,31 @@ pub enum TobogganCliError {
     )]
     ParseMarkdown {
         #[source_code]
-        src: NamedSource<String>,
+        src: Arc<NamedSource<String>>,
         #[label("error occurred here")]
         span: SourceSpan,
         message: String,
     },
 
-    #[display("Failed to parse frontmatter in file: {}", src.name())]
+    /// Carries `toml`'s own message rather than only naming the file.
+    ///
+    /// The span and `source_code` give miette a snippet, but most callers only
+    /// ever see `Display` — the folder parser collects per-file failures into
+    /// strings — and "failed to parse frontmatter in 1-hello.md" does not tell
+    /// an author which key is wrong. `message()` is the reason without toml's
+    /// own snippet, which miette already draws.
+    #[display("Failed to parse frontmatter in file {}: {}", src.name(), source.message())]
     #[diagnostic(
         code(toboggan_cli::parse_frontmatter),
         help("Frontmatter must be valid TOML format between '+++' markers")
     )]
     ParseFrontmatter {
         #[source_code]
-        src: NamedSource<String>,
-        #[label("invalid TOML syntax")]
+        src: Arc<NamedSource<String>>,
+        #[label("{}", source.message())]
         span: SourceSpan,
 
-        source: toml::de::Error,
+        source: Box<toml::de::Error>,
     },
 
     #[display("Failed to format markdown file: {}", src.name())]
@@ -87,9 +112,25 @@ pub enum TobogganCliError {
     )]
     FormatCommonmark {
         #[source_code]
-        src: NamedSource<String>,
+        src: Arc<NamedSource<String>>,
         #[label("formatting failed here")]
         span: SourceSpan,
+        message: String,
+    },
+
+    #[display("Invalid LaTeX math in {file}: {message}")]
+    #[diagnostic(
+        code(toboggan_cli::invalid_math),
+        help(
+            "`$…$` and `$$…$$` are converted to MathML while the deck builds, so a bad \
+             expression is caught here rather than silently rendering as nothing in \
+             front of an audience. Fix the expression, or escape the dollar sign (`\\$`) \
+             if it was not meant to be math."
+        )
+    )]
+    InvalidMath {
+        file: String,
+        latex: String,
         message: String,
     },
 
@@ -166,7 +207,7 @@ impl TobogganCliError {
         message: String,
     ) -> Self {
         Self::ParseMarkdown {
-            src: NamedSource::new(file_path, content),
+            src: Arc::new(NamedSource::new(file_path, content)),
             span,
             message,
         }
@@ -179,8 +220,9 @@ impl TobogganCliError {
         span: SourceSpan,
         source: toml::de::Error,
     ) -> Self {
+        let source = Box::new(source);
         Self::ParseFrontmatter {
-            src: NamedSource::new(file_path, content),
+            src: Arc::new(NamedSource::new(file_path, content)),
             span,
             source,
         }
@@ -194,7 +236,7 @@ impl TobogganCliError {
         message: String,
     ) -> Self {
         Self::FormatCommonmark {
-            src: NamedSource::new(file_path, content),
+            src: Arc::new(NamedSource::new(file_path, content)),
             span,
             message,
         }
@@ -220,6 +262,11 @@ impl TobogganCliError {
     #[must_use]
     pub fn write_file(path: PathBuf, source: io::Error) -> Self {
         Self::WriteFile { path, source }
+    }
+
+    #[must_use]
+    pub fn write_stdout(source: io::Error) -> Self {
+        Self::WriteStdout { source }
     }
 
     #[must_use]
@@ -271,15 +318,6 @@ impl From<serde_saphyr::Error> for TobogganCliError {
         Self::Serialize {
             format: "YAML".to_owned(),
             message: source.to_string(),
-        }
-    }
-}
-
-impl From<io::Error> for TobogganCliError {
-    fn from(source: io::Error) -> Self {
-        Self::ReadFile {
-            path: PathBuf::from("<unknown>"),
-            source,
         }
     }
 }

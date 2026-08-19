@@ -59,17 +59,38 @@ pub struct Settings {
     )]
     pub date: Option<Date>,
 
-    /// Syntax highlighting theme for code blocks.
+    /// BCP 47 language tag for the deck, e.g. `fr`.
     ///
-    /// Available themes: `base16-ocean.dark`, `base16-ocean.light`, `base16-mocha.dark`,
-    /// `base16-eighties.dark`, `InspiredGitHub`, `Solarized (dark)`, `Solarized (light)`,
-    /// `Monokai`, `Monokai Extended`, `Monokai Extended Light`, `Monokai Extended Bright`,
-    /// and many more from the syntect library.
-    ///
-    /// Use `--list-themes` to see all available themes.
+    /// Takes precedence over the `lang` in `_cover.md` front matter. Becomes the
+    /// `lang` attribute on every page Toboggan renders.
     #[clap(
         long,
-        default_value = "base16-ocean.light",
+        help = "Deck language tag (e.g. fr); overrides the cover frontmatter"
+    )]
+    pub lang: Option<String>,
+
+    /// Base URL the exported HTML will be served from.
+    ///
+    /// Only meaningful for the HTML export, where it resolves the deck's
+    /// `public/` assets. Empty — the default — leaves them relative to the
+    /// exported file, which is right whenever `public/` travels with it. Set it
+    /// for a deploy that serves the file from a known path, e.g. `/my-talk/`.
+    #[clap(
+        long,
+        help = "Base URL the exported HTML is served from (e.g. /my-talk/)"
+    )]
+    pub base_url: Option<String>,
+
+    /// Syntax highlighting theme for code blocks.
+    ///
+    /// The seven `syntect` ships with, and only those: `base16-ocean.dark`,
+    /// `base16-ocean.light`, `base16-eighties.dark`, `base16-mocha.dark`,
+    /// `InspiredGitHub`, `Solarized (dark)`, `Solarized (light)`.
+    ///
+    /// Use `--list-themes` to print them.
+    #[clap(
+        long,
+        default_value = crate::parser::config::DEFAULT_THEME,
         help = "Syntax highlighting theme (default: base16-ocean.light)"
     )]
     pub theme: String,

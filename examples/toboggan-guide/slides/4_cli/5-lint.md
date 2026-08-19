@@ -19,9 +19,13 @@ $ toboggan lint -p ./slides/
 | Flag | Purpose |
 |---|---|
 | `--deny <level>` | Exit non-zero at/above `info`/`warning`/`error` (CI gates) |
-| `--json` | Emit a machine-readable `LintReport` |
+| `--format <fmt>` | `human`, `github` (PR annotations), `sarif`, `json` |
 | `--no-spell` | Skip spell-checking (it runs by default via the `typos` binary) |
 
 > [!TIP]
-> The linter is a library (`toboggan-lint`) — the same rules power the MCP
-> `lint` tool, so an LLM editing the deck sees exactly what CI sees.
+> Diagnostics carry the file they came from, so `--format github` annotates the
+> offending slide right in a pull request.
+
+<!-- notes -->
+The linter is a library (`toboggan-lint`) — the same rules power the MCP `lint`
+tool, so an LLM editing the deck sees exactly what CI sees.

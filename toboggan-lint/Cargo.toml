@@ -1,6 +1,6 @@
 [package]
 name = "toboggan-lint"
-version = "0.1.0"
+version.workspace = true
 description = "Lints for Toboggan presentations (bad HTML, misused pause/terminal, structure, content)"
 edition.workspace = true
 rust-version.workspace = true
@@ -22,6 +22,7 @@ serde = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
 serde_json = { workspace = true }
+tempfile.workspace = true
 
 [lints]
 workspace = true

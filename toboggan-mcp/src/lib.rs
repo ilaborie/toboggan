@@ -2,13 +2,15 @@
 //!
 //! Inspection tools (`talk_outline`, `stats`, `lint`) re-parse the presentation
 //! folder, and mutation tools (`add_part`, `add_slide`) edit it through a safe
-//! [`Workspace`](workspace::Workspace). Served over stdio for LLM clients.
+//! workspace that confines every path to the presentation root. Served over
+//! stdio for LLM clients.
+#![warn(missing_docs)]
 
 mod init;
 mod server;
 mod workspace;
 
-pub use self::init::{mcp_init, write_mcp_json};
+pub use self::init::{SERVER_ARGS, mcp_init, write_mcp_json};
 pub use self::server::TobogganServer;
 
 pub(crate) const ADVICE: &str = include_str!("advice.md");

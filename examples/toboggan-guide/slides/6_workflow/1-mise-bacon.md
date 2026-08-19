@@ -17,7 +17,7 @@ Save a slide → rebuild → the browser reloads.
 
 <!-- pause -->
 
-Wrap the rest in `mise` tasks (see this deck's `mise.toml`):
+Wrap the rest in `mise` tasks:
 
 ```console
 $ mise run dev         # the loop above
@@ -26,13 +26,12 @@ $ mise run pdf         # typst export → PDF
 $ mise run run         # serve the built .toml with its public/ assets
 ```
 
-<!-- pause -->
-
 > [!TIP]
-> You only need a built `.toml` to *ship* a deck — to hand it to a server, a
-> CI job, or `toboggan serve`. While writing, skip it entirely.
+> You only need a built `.toml` to *ship* a deck. While writing, skip it.
 
 <!-- notes -->
+See this deck's own `mise.toml` for the task definitions.
+
 This used to be a two-terminal loop: bacon rebuilding the .toml on save, plus a
 server with --watch reloading it. The in-memory default action collapsed both
 into one command, so the deck's bacon.toml is now only there for regenerating

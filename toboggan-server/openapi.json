@@ -128,10 +128,19 @@
         "type": "object",
         "description": "Client identifier (server-assigned)"
       },
+      "ClientRole": {
+        "type": "string",
+        "description": "Which side of the projector a connection is on.\n\nNavigation is shared state — every presenter drives the same deck — so this\nis not about whose deck it is. It is about the two things a spectator must\nnot be able to do: move the presentation, and open a shell on the machine\nhosting it.\n\n[`Self::Audience`] is the default deliberately. A role that arrives unset,\nfrom an older client or a hand-written frame, is the one that can do the\nleast.",
+        "enum": [
+          "Presenter",
+          "Audience"
+        ]
+      },
       "Command": {
         "oneOf": [
           {
             "type": "object",
+            "description": "Join the presentation. The first thing a client sends.\n\nThe server replies with [`crate::Notification::Registered`], which is\nwhere the client learns its id and the role it was granted.",
             "required": [
               "name",
               "command"
@@ -144,19 +153,29 @@
                 ]
               },
               "name": {
-                "type": "string"
+                "type": "string",
+                "description": "A human-readable name for this client, shown in `GET /api/clients`."
+              },
+              "token": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "The presenter token this client was given, if any.\n\nA client *offers* a token; it never claims a role. The server is the\nonly thing that decides what a connection may do, so a client that\nlies about itself gains nothing."
               }
             }
           },
           {
             "type": "object",
+            "description": "Leave the presentation.",
             "required": [
               "client",
               "command"
             ],
             "properties": {
               "client": {
-                "$ref": "#/components/schemas/ClientId"
+                "$ref": "#/components/schemas/ClientId",
+                "description": "The client leaving."
               },
               "command": {
                 "type": "string",
@@ -168,6 +187,7 @@
           },
           {
             "type": "object",
+            "description": "Heartbeat. Answered with [`crate::Notification::Pong`].",
             "required": [
               "command"
             ],
@@ -182,6 +202,7 @@
           },
           {
             "type": "object",
+            "description": "Go to the first slide.",
             "required": [
               "command"
             ],
@@ -196,6 +217,7 @@
           },
           {
             "type": "object",
+            "description": "Go to the last slide.",
             "required": [
               "command"
             ],
@@ -210,6 +232,7 @@
           },
           {
             "type": "object",
+            "description": "Go to a specific slide.",
             "required": [
               "slide",
               "command"
@@ -222,12 +245,14 @@
                 ]
               },
               "slide": {
-                "$ref": "#/components/schemas/SlideId"
+                "$ref": "#/components/schemas/SlideId",
+                "description": "The slide to show, as a 0-based index."
               }
             }
           },
           {
             "type": "object",
+            "description": "Go to the next slide, skipping any reveals left on this one.",
             "required": [
               "command"
             ],
@@ -242,6 +267,7 @@
           },
           {
             "type": "object",
+            "description": "Go to the previous slide.",
             "required": [
               "command"
             ],
@@ -256,6 +282,7 @@
           },
           {
             "type": "object",
+            "description": "Reveal the next step, moving to the next slide once this one runs out.\n\nThis is what a presenter remote and the space bar send, because it walks\nthe whole deck rather than skipping every build.",
             "required": [
               "command"
             ],
@@ -270,6 +297,7 @@
           },
           {
             "type": "object",
+            "description": "Go back one step, moving to the previous slide once this one runs out.",
             "required": [
               "command"
             ],
@@ -284,6 +312,7 @@
           },
           {
             "type": "object",
+            "description": "Flash every other client, to get the room's attention.",
             "required": [
               "command"
             ],
@@ -296,12 +325,14 @@
               }
             }
           }
-        ]
+        ],
+        "description": "What a client asks the server to do.\n\nSent over `/api/ws`, or posted to `/api/command`. The server applies the\ncommand and broadcasts the resulting [`crate::State`] to *every* client, so\na command is a request about the shared deck rather than about the sender's\nown view.\n\nEverything except registration and the heartbeat is privileged; see\n[`Command::drives_the_deck`]."
       },
       "Content": {
         "oneOf": [
           {
             "type": "object",
+            "description": "Nothing at all — an absent title, a slide with no notes.",
             "required": [
               "type"
             ],
@@ -316,13 +347,15 @@
           },
           {
             "type": "object",
+            "description": "Plain text, with no markup to interpret.",
             "required": [
               "text",
               "type"
             ],
             "properties": {
               "text": {
-                "type": "string"
+                "type": "string",
+                "description": "The text itself."
               },
               "type": {
                 "type": "string",
@@ -334,6 +367,7 @@
           },
           {
             "type": "object",
+            "description": "An HTML fragment, as produced by rendering a slide's Markdown.",
             "required": [
               "raw",
               "type"
@@ -343,13 +377,16 @@
                 "type": [
                   "string",
                   "null"
-                ]
+                ],
+                "description": "A plain-text description, for anything that cannot show markup —\nthe terminal client, the stats table, a screen reader."
               },
               "raw": {
-                "type": "string"
+                "type": "string",
+                "description": "The markup, ready to be placed into the document."
               },
               "style": {
-                "$ref": "#/components/schemas/Style"
+                "$ref": "#/components/schemas/Style",
+                "description": "Classes and inline style to apply where this is rendered."
               },
               "type": {
                 "type": "string",
@@ -359,7 +396,8 @@
               }
             }
           }
-        ]
+        ],
+        "description": "Anything a slide can say: its title, its body, or its speaker notes.\n\nUse [`Self::display_text`] to ask what a piece of content *says*, rather\nthan matching on the variants — the variants exist so that a renderer which\ncan show markup gets markup, and everything else gets words."
       },
       "Date": {
         "type": "string",
@@ -416,13 +454,15 @@
         "oneOf": [
           {
             "type": "object",
+            "description": "The deck moved. Broadcast to every client after every change.",
             "required": [
               "state",
               "type"
             ],
             "properties": {
               "state": {
-                "$ref": "#/components/schemas/State"
+                "$ref": "#/components/schemas/State",
+                "description": "Where the presentation now is."
               },
               "type": {
                 "type": "string",
@@ -434,13 +474,15 @@
           },
           {
             "type": "object",
+            "description": "Something went wrong, for this client only.\n\nUsed rather than a disconnect when an audience client sends a command it\nis not allowed to send: a stale tab is a mistake, not an attack.",
             "required": [
               "message",
               "type"
             ],
             "properties": {
               "message": {
-                "type": "string"
+                "type": "string",
+                "description": "What went wrong, in words a presenter can read."
               },
               "type": {
                 "type": "string",
@@ -452,6 +494,7 @@
           },
           {
             "type": "object",
+            "description": "Answer to [`crate::Command::Ping`].",
             "required": [
               "type"
             ],
@@ -466,6 +509,7 @@
           },
           {
             "type": "object",
+            "description": "Flash the screen — someone pressed `b`.",
             "required": [
               "type"
             ],
@@ -480,13 +524,15 @@
           },
           {
             "type": "object",
+            "description": "The deck itself was rebuilt, so clients should re-fetch it.\n\nSent by the file watcher in live-reload mode.",
             "required": [
               "state",
               "type"
             ],
             "properties": {
               "state": {
-                "$ref": "#/components/schemas/State"
+                "$ref": "#/components/schemas/State",
+                "description": "Where the presentation is in the new deck."
               },
               "type": {
                 "type": "string",
@@ -498,14 +544,19 @@
           },
           {
             "type": "object",
-            "description": "Sent to the registering client with their assigned ID",
+            "description": "Sent to the registering client with their assigned ID and the role the\nserver granted them.\n\nThe role is told rather than asked for: a client cannot know whether it\nmay drive the deck until the server has looked at where it connected\nfrom, so this is where a UI learns to hide its navigation controls.",
             "required": [
               "client_id",
               "type"
             ],
             "properties": {
               "client_id": {
-                "$ref": "#/components/schemas/ClientId"
+                "$ref": "#/components/schemas/ClientId",
+                "description": "The id the server assigned to this connection."
+              },
+              "role": {
+                "$ref": "#/components/schemas/ClientRole",
+                "description": "What this client is allowed to do."
               },
               "type": {
                 "type": "string",
@@ -525,10 +576,12 @@
             ],
             "properties": {
               "client_id": {
-                "$ref": "#/components/schemas/ClientId"
+                "$ref": "#/components/schemas/ClientId",
+                "description": "The client that joined."
               },
               "name": {
-                "type": "string"
+                "type": "string",
+                "description": "The name it registered under."
               },
               "type": {
                 "type": "string",
@@ -548,10 +601,12 @@
             ],
             "properties": {
               "client_id": {
-                "$ref": "#/components/schemas/ClientId"
+                "$ref": "#/components/schemas/ClientId",
+                "description": "The client that left."
               },
               "name": {
-                "type": "string"
+                "type": "string",
+                "description": "The name it had registered under."
               },
               "type": {
                 "type": "string",
@@ -561,7 +616,8 @@
               }
             }
           }
-        ]
+        ],
+        "description": "What the server tells its clients.\n\nMost notifications are broadcast to everyone — the deck is shared state, so\na change one client asked for is news for all of them. [`Self::Error`] and\n[`Self::Registered`] go only to the client concerned."
       },
       "RenderTarget": {
         "type": "string",
@@ -573,11 +629,13 @@
       },
       "Slide": {
         "type": "object",
+        "description": "One slide: what it says, how it looks, and what it is meant to cost in time.\n\nBuilt by the parser from one Markdown file — [`Slide::from_markdown`] is the\nconstructor that keeps `body` and `body_source` consistent.",
         "properties": {
           "body": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/Content"
+                "$ref": "#/components/schemas/Content",
+                "description": "Everything below the heading."
               }
             ],
             "default": {
@@ -592,6 +650,16 @@
             "description": "Raw markdown source of the slide body, used by non-HTML exporters.\n\nWhen `Some`, `body` is expected to be the rendered projection of this\nsource — `Slide::from_markdown` is the constructor that pairs them\nconsistently; ad-hoc construction must uphold that invariant.",
             "default": null
           },
+          "duration": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Speaking time the author planned for this slide, from the front matter\n`duration`.\n\nSerialized as whole seconds so a built artifact stays readable and\nround-trips; the front matter accepts either a number of seconds or a\nhumantime string like `\"2m 30s\"`.",
+            "default": null,
+            "minimum": 0
+          },
           "hidden_in": {
             "type": "array",
             "items": {
@@ -604,7 +672,8 @@
           "kind": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/SlideKind"
+                "$ref": "#/components/schemas/SlideKind",
+                "description": "Whether this is the cover, a section title, or an ordinary slide."
               }
             ],
             "default": "Standard"
@@ -620,7 +689,8 @@
           "notes": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/Content"
+                "$ref": "#/components/schemas/Content",
+                "description": "Speaker notes — shown in the presenter view and the terminal client,\nnever on the projector."
               }
             ],
             "default": {
@@ -638,7 +708,8 @@
           "style": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/Style"
+                "$ref": "#/components/schemas/Style",
+                "description": "Classes and inline style applied to the slide's `<section>`."
               }
             ],
             "default": {}
@@ -648,12 +719,14 @@
             "items": {
               "$ref": "#/components/schemas/TerminalConfig"
             },
+            "description": "Embedded terminals declared by the slide, rendered side by side.",
             "default": []
           },
           "title": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/Content"
+                "$ref": "#/components/schemas/Content",
+                "description": "The slide's heading. Empty for a slide that deliberately has none."
               }
             ],
             "default": {
@@ -669,6 +742,7 @@
       },
       "SlideKind": {
         "type": "string",
+        "description": "What kind of slide this is, which is what decides how it is laid out.",
         "enum": [
           "Cover",
           "Part",
@@ -677,6 +751,7 @@
       },
       "SlidesResponse": {
         "type": "object",
+        "description": "The body of `GET /api/slides`: every slide in the deck.",
         "required": [
           "slides"
         ],
@@ -685,7 +760,8 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Slide"
-            }
+            },
+            "description": "Every slide, in presentation order."
           }
         }
       },
@@ -693,6 +769,7 @@
         "oneOf": [
           {
             "type": "object",
+            "description": "Nothing has been shown yet.",
             "required": [
               "state"
             ],
@@ -707,6 +784,7 @@
           },
           {
             "type": "object",
+            "description": "Showing a slide.",
             "required": [
               "current",
               "current_step",
@@ -714,10 +792,12 @@
             ],
             "properties": {
               "current": {
-                "$ref": "#/components/schemas/SlideId"
+                "$ref": "#/components/schemas/SlideId",
+                "description": "The slide on screen."
               },
               "current_step": {
                 "type": "integer",
+                "description": "Which reveal within that slide is showing.",
                 "minimum": 0
               },
               "state": {
@@ -730,6 +810,7 @@
           },
           {
             "type": "object",
+            "description": "Past the last slide.",
             "required": [
               "current",
               "current_step",
@@ -737,10 +818,12 @@
             ],
             "properties": {
               "current": {
-                "$ref": "#/components/schemas/SlideId"
+                "$ref": "#/components/schemas/SlideId",
+                "description": "The last slide shown."
               },
               "current_step": {
                 "type": "integer",
+                "description": "The reveal it was left on.",
                 "minimum": 0
               },
               "state": {
@@ -751,27 +834,32 @@
               }
             }
           }
-        ]
+        ],
+        "description": "Where the presentation is: the one piece of state every client shares.\n\nBroadcast as [`crate::Notification::State`] after every change, which is\nwhat keeps a browser, a terminal and a phone showing the same slide.\n\nThere are exactly three states, and no pause: a deck that is not moving is\nsimply a `Running` state nobody is sending commands about."
       },
       "Style": {
         "type": "object",
+        "description": "How a slide is dressed: CSS classes and an optional inline style.",
         "properties": {
           "classes": {
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "Classes applied to the slide, from the `classes` front matter key."
           },
           "style": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "An inline `style` attribute, from the `style` front matter key."
           }
         }
       },
       "TalkResponse": {
         "type": "object",
+        "description": "The body of `GET /api/talk`: everything about a deck except its slides.\n\nCarries slide *titles* rather than slides, so a client can render an outline,\na progress bar and a presenter view without pulling the whole deck — and so\nthe server can answer from a shared talk instead of deep-cloning every\nslide's rendered HTML on every request.",
         "required": [
           "title",
           "date",
@@ -779,19 +867,41 @@
         ],
         "properties": {
           "date": {
-            "$ref": "#/components/schemas/Date"
+            "$ref": "#/components/schemas/Date",
+            "description": "The date the talk is given."
+          },
+          "durations": {
+            "type": "array",
+            "items": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64",
+              "minimum": 0
+            },
+            "description": "Planned speaking time per slide, in seconds, from each slide's\n`duration` front matter. `None` where the author did not say.\n\nParallel to `titles`, and here rather than fetched per slide because the\npresenter view needs the *whole* plan to work out whether the talk is\nrunning early or late — one number per slide is far less than the deck."
           },
           "footer": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "Footer markup, if the deck has any."
           },
           "head": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "`<head>` markup, if the deck has any."
+          },
+          "lang": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "BCP 47 language tag; see [`Talk::lang`]."
           },
           "step_counts": {
             "type": "array",
@@ -799,16 +909,18 @@
               "type": "integer",
               "minimum": 0
             },
-            "description": "Step counts per slide (for clients that display step progress)"
+            "description": "Step counts per slide, for clients that show step progress. Either\nabsent, or exactly as long as `titles` and read against it by index."
           },
           "title": {
-            "type": "string"
+            "type": "string",
+            "description": "The deck's title."
           },
           "titles": {
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "Every slide's title, in order."
           }
         }
       },

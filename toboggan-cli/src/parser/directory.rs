@@ -159,7 +159,7 @@ pub(super) fn create_slide_from_file(
         file_path.extension().and_then(|ext| ext.to_str()),
         Some(FILE_HTML | FILE_HTM)
     ) {
-        let slide = create_html_slide(&content, slide_kind, filename);
+        let slide = create_html_slide(&content, slide_kind, filename, file_path);
         (slide, FrontMatter::default())
     } else {
         parse_slide_from_markdown(
@@ -207,7 +207,12 @@ pub(super) fn parse_slide_from_markdown(
     Ok((slide, front_matter))
 }
 
-fn create_html_slide(content: &str, slide_kind: SlideKind, filename: &str) -> Slide {
+fn create_html_slide(
+    content: &str,
+    slide_kind: SlideKind,
+    filename: &str,
+    file_path: &Path,
+) -> Slide {
     let html_content = Content::html(content.trim());
 
     let slide = match slide_kind {
@@ -216,7 +221,7 @@ fn create_html_slide(content: &str, slide_kind: SlideKind, filename: &str) -> Sl
         SlideKind::Standard => Slide::new(filename),
     };
 
-    slide.with_body(html_content)
+    slide.with_body(html_content).with_source_path(file_path)
 }
 
 pub(super) fn parse_frontmatter(content: &str, file_path: &str) -> Result<FrontMatter> {
@@ -267,19 +272,23 @@ pub(super) fn extract_node_text<'a>(node: &'a AstNode<'a>) -> String {
     text
 }
 
-/// The deck root a slides folder belongs to: its parent, or the folder itself
-/// when it has none.
+/// The deck root a slides folder belongs to: the directory containing it.
 ///
 /// Assets a slide references (`snippets/`, `public/`) sit beside `slides/`, not
 /// inside it.
-fn deck_root(slides: &Path) -> Option<PathBuf> {
-    slides
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-        .map_or_else(
-            || Some(slides.to_path_buf()),
-            |parent| Some(parent.to_path_buf()),
-        )
+///
+/// A relative folder with no directory component (`slides`) has an *empty*
+/// parent rather than no parent, and the empty parent still means "the current
+/// directory". Mapping it to `.` is what keeps `-p slides` and `-p ./slides/`
+/// resolving assets against the same root; treating it as "no parent" used to
+/// root the first one inside the slides folder itself.
+fn deck_root(slides: &Path) -> PathBuf {
+    match slides.parent() {
+        // A filesystem root is its own parent.
+        None => slides.to_path_buf(),
+        Some(parent) if parent.as_os_str().is_empty() => PathBuf::from("."),
+        Some(parent) => parent.to_path_buf(),
+    }
 }
 
 pub(super) fn process_talk_metadata(
@@ -296,7 +305,7 @@ pub(super) fn process_talk_metadata(
         debug!("Processing cover slide: {}", path.display());
         let asset_root = deck_root(toboggan_dir.as_ref());
         let (cover_slide, front_matter) =
-            create_slide_from_file(&path, theme, asset_root.as_deref())?;
+            create_slide_from_file(&path, theme, Some(asset_root.as_path()))?;
         metadata.title = cover_slide.title.to_string();
         metadata.date = front_matter
             .date
@@ -304,19 +313,22 @@ pub(super) fn process_talk_metadata(
             .unwrap_or_else(Date::today);
         // The cover's frontmatter is the natural place for talk-level defaults.
         metadata.default_terminal_cwd = front_matter.quake_cwd;
+        metadata.lang = front_matter.lang;
     }
 
     if let Some(footer) = toboggan_dir.get_footer()? {
         let path = footer.path();
         debug!("Processing footer: {}", path.display());
-        let content = fs::read_to_string(&path)?;
+        let content = fs::read_to_string(&path)
+            .map_err(|err| TobogganCliError::read_file(path.clone(), err))?;
         metadata.footer = Some(content);
     }
 
     if let Some(head) = toboggan_dir.get_head()? {
         let path = head.path();
         debug!("Processing head: {}", path.display());
-        let content = fs::read_to_string(&path)?;
+        let content = fs::read_to_string(&path)
+            .map_err(|err| TobogganCliError::read_file(path.clone(), err))?;
         metadata.head = Some(content);
     }
 
@@ -330,7 +342,7 @@ pub(super) fn process_all_entries(
     // `<!-- code:lang:path -->` resolves against the deck root, i.e. the slides
     // folder's parent — that is where a deck's `snippets/` and `public/` live.
     let asset_root = deck_root(toboggan_dir.as_ref());
-    let asset_root = asset_root.as_deref();
+    let asset_root = Some(asset_root.as_path());
     let mut result = vec![];
 
     // Process cover slide first if it exists
@@ -435,6 +447,18 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+
+    /// `-p slides` and `-p ./slides/` name the same folder, so they have to
+    /// resolve `<!-- code:… -->` paths and `public/` against the same root.
+    #[test]
+    fn deck_root_is_the_containing_directory_however_the_folder_is_spelled() {
+        assert_eq!(deck_root(Path::new("slides")), PathBuf::from("."));
+        assert_eq!(deck_root(Path::new("./slides/")), PathBuf::from("."));
+        assert_eq!(
+            deck_root(Path::new("/tmp/deck/slides")),
+            PathBuf::from("/tmp/deck")
+        );
+    }
 
     #[test]
     fn test_toboggan_dir_new() {

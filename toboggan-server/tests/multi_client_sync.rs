@@ -62,6 +62,7 @@ async fn connect_and_register_client(
     // Send Register command with client name
     let register_cmd = Command::Register {
         name: client_name.to_owned(),
+        token: None,
     };
     let register_msg = serde_json::to_string(&register_cmd)?;
     ws_sender
@@ -76,7 +77,7 @@ async fn connect_and_register_client(
         if let TungsteniteMessage::Text(text) = msg {
             let notification: Notification = serde_json::from_str(&text)?;
             match notification {
-                Notification::Registered { client_id } => {
+                Notification::Registered { client_id, .. } => {
                     println!("[{client_name}] Registered as client: {client_id:?}");
                     client_id
                 }

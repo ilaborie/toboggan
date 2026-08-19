@@ -17,7 +17,7 @@ use web_sys::{Element, HtmlElement, KeyboardEvent, Node, ResizeObserver, ShadowR
 
 use self::rioterm::{CanvasRenderer, OpenOptions, RioTermHandle, RioTheme, Terminal};
 use crate::components::WasmElement;
-use crate::{create_and_append_element, create_shadow_root_with_style, dom_try};
+use crate::{create_and_append_element, create_shadow_root_with_style, dom_try, presenter_token};
 
 const CSS: &str = include_str!("style.css");
 const DEFAULT_FONT_SIZE: f64 = 22.0;
@@ -480,7 +480,10 @@ async fn run_terminal_session(
     // the URL, so getting them right here saves the shell an initial redraw.
     let (initial_cols, initial_rows) = refit(&session, &body);
     let ws_url = build_terminal_ws_url(api_base_url, config, initial_cols, initial_rows);
-    info!("Starting terminal session:", &ws_url);
+    // The URL ends in `&token=…` when one was offered, so it is logged without
+    // its query string: this ran on every terminal open.
+    let logged_url = ws_url.split('?').next().unwrap_or(&ws_url);
+    info!("Starting terminal session:", logged_url);
 
     let ws = match WebSocket::open(&ws_url) {
         Ok(ws) => ws,
@@ -713,6 +716,14 @@ fn build_terminal_ws_url(
     if let Some(cmd) = &config.cmd {
         url.push_str("&cmd=");
         url.push_str(&String::from(js_sys::encode_uri_component(cmd)));
+    }
+
+    // Opening a shell is presenter-only, and a browser cannot put a header on a
+    // WebSocket — so the token travels here, in the same query string as the
+    // rest of the session's parameters.
+    if let Some(token) = presenter_token() {
+        url.push_str("&token=");
+        url.push_str(&String::from(js_sys::encode_uri_component(token.expose())));
     }
 
     url

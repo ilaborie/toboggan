@@ -1,415 +1,113 @@
-# Toboggan Server
+# toboggan-server
+
+The [Toboggan](https://github.com/ilaborie/toboggan) server: an [axum] service
+that serves a deck over REST, keeps every connected client on the same slide over
+a WebSocket, and hosts the embedded web client.
 
 > [!IMPORTANT]
-> **Use `toboggan serve` instead** — or a bare `toboggan`, which builds a slides
-> folder in memory and serves it with live reload. The unified
-> [`toboggan`](../toboggan) command is the supported entry point and the only binary
-> a release ships.
->
-> The `toboggan-server` binary documented below still builds from source, but it
-> takes the talk as a positional argument where `toboggan serve` takes `-p/--path`.
-> The flags and `TOBOGGAN_*` environment variables described here are the same ones
-> the unified command exposes.
+> Reach this through the unified
+> [`toboggan`](../toboggan) command — `toboggan -p my-talk` to build a folder in
+> memory and serve it with live reload, or `toboggan serve -p talk.toml` to serve
+> an already-built file.
 
-The Toboggan server is a high-performance, Axum-based web server that serves presentations and provides real-time synchronization across multiple clients via WebSocket. Built with async Rust, it handles concurrent connections efficiently while maintaining presentation state consistency.
+[axum]: https://github.com/tokio-rs/axum
 
-## Features
+## Routes
 
-- **Real-time Synchronization**: WebSocket-based multi-client communication
-- **REST API**: HTTP endpoints for health checks and presentation management
-- **Presentation State Machine**: Robust state management with clear transitions
-- **Multi-format Support**: Serves TOML presentations with rich content types
-- **Concurrent Client Support**: Handles multiple presenters and viewers simultaneously
-- **Health Monitoring**: Built-in health checks and monitoring endpoints
+| Method | Path | What it is |
+| --- | --- | --- |
+| `GET` | `/` | Homepage, linking to everything below |
+| `GET` | `/run` | The deck — the embedded web client |
+| `GET` | `/presenter` | Presenter view: notes, next slide, timer |
+| `GET` | `/slides` | Thumbnail overview (needs `--thumbnails-dir`) |
+| `GET` | `/guide` | The bundled authoring guide |
+| `GET` | `/guide/public/{*path}` | The guide deck's own assets |
+| `GET` | `/download.pdf` | The deck rendered to PDF (needs `typst`) |
+| `GET` | `/doc` | OpenAPI reference, rendered with Scalar |
+| `GET` | `/health` | Liveness check |
+| `GET` | `/api/talk` | The whole deck |
+| `GET` | `/api/slides` | Every slide, with step counts |
+| `GET` | `/api/slides/{index}` | One slide, by 0-based index |
+| `POST` | `/api/command` | Send a `Command` over HTTP 🔒 |
+| `GET` | `/api/clients` | Connected clients 🔒 |
+| `GET` | `/api/ws` | WebSocket: commands in, notifications out |
+| `GET` | `/api/terminal` | WebSocket for an embedded terminal 🔒 |
+| `GET` | `/public/{*path}` | The deck's assets (needs `--public-dir`) |
+| `GET` | `/overview/{*path}` | Generated thumbnail assets |
 
-## Quick Start
+🔒 **presenter only.** A connection from the machine running the server presents;
+a connection from elsewhere presents only if it carries the presenter token. See
+[SECURITY.md](../SECURITY.md) — `/api/terminal` spawns a real shell, so this is
+the difference between a demo and a stranger on the conference wifi getting one.
 
-### Running the Server
+The gate is an axum extractor (`Presenter`) rather than a check inside each
+handler, so a privileged route that forgets to ask for it reads as unprivileged
+in its own signature.
 
-```bash
-# Start server with example presentation
-cargo run -p toboggan-server
+## State
 
-# Or with custom presentation
-cargo run -p toboggan-server -- path/to/presentation.toml
+The presentation state machine has exactly three states:
 
-# With custom host and port
-cargo run -p toboggan-server -- --host 0.0.0.0 --port 3000 presentation.toml
+```
+Init  ──►  Running { current, current_step }  ──►  Done { current, current_step }
 ```
 
-### Client Connections
+`Init` is before anything has been shown; `Running` carries the current slide and
+which reveal within it is showing; `Done` is past the last slide. There is no
+pause: a deck that is not moving is simply a `Running` state nobody is sending
+commands about.
 
-Once running, clients can connect via:
-
-- **Web Interface**: http://localhost:8080
-- **WebSocket**: ws://localhost:8080/api/ws
-- **Health Check**: http://localhost:8080/api/health
-
-## REST API
-
-### Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/` | Web interface (static files) |
-| `GET` | `/api/health` | Server health check |
-| `GET` | `/api/ws` | WebSocket upgrade endpoint |
-| `GET` | `/api/presentation` | Current presentation metadata |
-
-### Health Check Response
-
-```json
-{
-  "status": "ok",
-  "timestamp": "2025-01-26T12:00:00Z",
-  "clients": 3,
-  "presentation": "My Talk"
-}
-```
-
-## WebSocket Protocol
-
-The server uses a JSON-based WebSocket protocol for real-time communication with clients.
-
-### Client → Server (Commands)
-
-```json
-// Navigation Commands
-{ "type": "Next" }
-{ "type": "Previous" }
-{ "type": "First" }
-{ "type": "Last" }
-{ "type": "Goto", "slide": 5 }
-
-// Presentation Control
-{ "type": "Play" }
-{ "type": "Pause" }
-{ "type": "Resume" }
-
-// Client Management
-{ "type": "Register", "client_id": "presenter-abc123" }
-{ "type": "Unregister", "client_id": "presenter-abc123" }
-
-// Heartbeat
-{ "type": "Ping", "timestamp": 1735210800000 }
-```
-
-### Server → Client (Notifications)
-
-```json
-// State Updates
-{
-  "type": "State",
-  "timestamp": 1735210800000,
-  "state": {
-    "type": "Running",
-    "current": 3,
-    "started": 1735210750000,
-    "total_duration": 45000
-  }
-}
-
-// Error Messages
-{
-  "type": "Error",
-  "message": "Invalid slide index: 10"
-}
-
-// Heartbeat Response
-{
-  "type": "Pong",
-  "timestamp": 1735210800000
-}
-```
-
-### Connection Flow
-
-1. **Client Connects**: WebSocket handshake at `/api/ws`
-2. **Registration**: Client sends `Register` command with unique ID
-3. **State Sync**: Server sends current presentation state
-4. **Command Processing**: Client sends navigation/control commands
-5. **State Broadcast**: Server broadcasts state updates to all clients
-6. **Heartbeat**: Periodic ping/pong for connection health
-
-### Error Handling
-
-The server provides descriptive error messages for invalid commands:
-
-```json
-// Invalid slide index
-{ "type": "Error", "message": "Slide index 15 out of range (0-10)" }
-
-// Command not available in current state
-{ "type": "Error", "message": "Cannot play: presentation is already running" }
-
-// Malformed command
-{ "type": "Error", "message": "Invalid command format: missing 'type' field" }
-```
-
-## Presentation State Machine
-
-The presentation system uses a state machine with four states: `Init`, `Paused`, `Running`, and `Done`. Below is a diagram showing how commands transition between states:
-
-```mermaid
-stateDiagram-v2
-    [*] --> Init: Initial state
-
-    Init --> Running: First/Last/GoTo/Next/Previous
-
-    Paused --> Running: First/Last/GoTo*/Next*/Previous*
-    Paused --> Paused: Next (on last slide)
-    Paused --> Paused: Previous (on first slide)
-    Paused --> Paused: GoTo (to last slide when already on last)
-
-    Running --> Running: First/Last/GoTo/Next/Previous
-    Running --> Paused: Pause
-    Running --> Done: Next (on last slide)
-
-    Done --> Paused: Previous/First/Last/GoTo
-
-    note right of Init
-        All navigation commands from Init
-        go to first slide and start Running
-    end note
-
-    note right of Paused
-        * Navigation from Paused starts Running
-        except when already on last slide
-        * **First command resets timestamp to zero**
-    end note
-
-    note right of Running
-        Navigation commands update current slide
-        while maintaining Running state.
-        **First command resets timestamp to zero.**
-    end note
-
-    note right of Done
-        Navigation from Done goes to Paused
-        to allow resuming the presentation
-    end note
-```
-
-## Command Behavior Details
-
-### From `Init` State
-
-- **All navigation commands** (`First`, `Last`, `GoTo`, `Next`, `Previous`) → Navigate to **first slide** and transition to `Running`
-
-### From `Paused` State
-
-- **`First`** → Navigate to first slide and transition to `Running`
-- **`Last`** → Navigate to last slide and transition to `Running` (unless already on last slide, then stay `Paused`)
-- **`GoTo(slide)`** → Navigate to specified slide and transition to `Running` (unless going to last slide while already on last, then stay `Paused`)
-- **`Next`** → Navigate to next slide and transition to `Running` (unless on last slide, then stay `Paused`)
-- **`Previous`** → Navigate to previous slide and transition to `Running` (unless on last slide, then stay `Paused`)
-- **`Resume`** → Transition to `Running` with current slide
-
-### From `Running` State
-
-- **`First`** → Navigate to first slide (stay `Running`)
-- **`Last`** → Navigate to last slide (stay `Running`)
-- **`GoTo(slide)`** → Navigate to specified slide (stay `Running`)
-- **`Next`** → Navigate to next slide (stay `Running`), or transition to `Done` if on last slide
-- **`Previous`** → Navigate to previous slide (stay `Running`)
-- **`Pause`** → Transition to `Paused` with current slide
-
-### From `Done` State
-
-- **All navigation commands** → Navigate to requested slide and transition to `Paused`
-
-## Special Commands
-
-- **`Ping`** → Returns `Pong` (no state change)
-- **`Register`/`Unregister`** → Handled separately via WebSocket (no state change)
-
-## State Properties
-
-Each state maintains different information:
-
-- **`Init`**: No slide information
-- **`Paused`**: Current slide + total duration
-- **`Running`**: Current slide + start timestamp + total duration
-- **`Done`**: Current slide + total duration
+Every state change is broadcast to every client as
+`Notification::State { state }`, which is what keeps a browser, a terminal and a
+phone showing the same thing. The full protocol lives in
+[`toboggan-core`](../toboggan-core).
 
 ## Configuration
 
-### Command Line Options
+Every setting is a flag on `toboggan serve`, an entry under `[serve]` in
+`toboggan.toml`, and a `TOBOGGAN_*` environment variable.
 
-```bash
-toboggan-server [OPTIONS] [PRESENTATION]
+| Flag | Env var | Default |
+| --- | --- | --- |
+| `--host` | `TOBOGGAN_HOST` | `127.0.0.1` |
+| `--port` | `TOBOGGAN_PORT` | `8080` |
+| `--max-clients` | `TOBOGGAN_MAX_CLIENTS` | `100` |
+| `--public-dir` | `TOBOGGAN_PUBLIC_DIR` | — |
+| `--thumbnails-dir` | `TOBOGGAN_THUMBNAILS_DIR` | — |
+| `--shell` | `TOBOGGAN_SHELL` | `$SHELL`, else `sh` |
+| `--allowed-origins` | `TOBOGGAN_CORS_ORIGINS` | any origin |
+| `--presenter-token` | `TOBOGGAN_PRESENTER_TOKEN` | — |
+| `--open` | `TOBOGGAN_OPEN` | `false` |
+| `--open-presenter` | `TOBOGGAN_OPEN_PRESENTER` | `false` |
 
-Arguments:
-  [PRESENTATION]  Path to presentation TOML file
+The bind address defaults to loopback. Open it up and the server says what that
+means on startup — that remote clients are read-only, or that a token is in play.
 
-Options:
-  -h, --host <HOST>      Host to bind to [default: 127.0.0.1]
-  -p, --port <PORT>      Port to bind to [default: 8080]
-      --help             Print help
-      --version          Print version
+## Using it as a library
+
+```rust,ignore
+use toboggan_core::Talk;
+use toboggan_server::{ServerSettings, launch_with_talk};
+
+// Serve a talk you already have in memory. `None` means no file watching;
+// pass a `WatchConfig` to hot-swap the deck when its source changes.
+launch_with_talk(talk, settings, None).await?;
 ```
 
-### Environment Variables
+`launch_with_talk` is the shared serving core: `launch` uses it after reading a
+`.toml` file, and the unified CLI's build-and-serve uses it with a talk parsed
+from a folder plus a recursive watcher.
 
-```bash
-# Server configuration
-export TOBOGGAN_HOST=0.0.0.0
-export TOBOGGAN_PORT=3000
+Also public: `routes` / `routes_with_cors` to mount the router yourself,
+`TobogganState`, `PresenterAuth`, `WatchConfig` / `start_watch_task`, and
+`openapi_json()` for the bundled OpenAPI document (`toboggan openapi` prints it).
 
-# Logging
-export RUST_LOG=info                    # Basic logging
-export RUST_LOG=toboggan_server=debug   # Debug server logs
-export RUST_LOG=trace                   # Verbose logging
-```
+> [!NOTE]
+> The crate embeds `toboggan-web/dist` at compile time with `rust-embed`, and its
+> `build.rs` **fails when that folder is missing**. Run `mise build:web` before
+> building this crate for the first time, and again after changing the web
+> client.
 
-## Development
+## License
 
-### Building and Testing
-
-```bash
-# Build the server
-cargo build -p toboggan-server
-
-# Run tests
-cargo test -p toboggan-server
-
-# Run with debug logging
-RUST_LOG=debug cargo run -p toboggan-server
-
-# Build optimized release
-cargo build -p toboggan-server --release
-```
-
-### Testing WebSocket Connections
-
-```bash
-# Test WebSocket with websocat
-websocat ws://localhost:8080/api/ws
-
-# Send commands interactively
-{"type": "Register", "client_id": "test-client"}
-{"type": "Next"}
-{"type": "Pause"}
-```
-
-## Deployment
-
-### Docker Deployment
-
-```dockerfile
-FROM rust:1.88 as builder
-WORKDIR /app
-COPY . .
-RUN cargo build --release -p toboggan-server
-
-FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates
-COPY --from=builder /app/target/release/toboggan-server /usr/local/bin/
-COPY presentation.toml /app/
-EXPOSE 8080
-CMD ["toboggan-server", "/app/presentation.toml"]
-```
-
-### Reverse Proxy (nginx)
-
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-
-    location / {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-
-    location /api/ws {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-    }
-}
-```
-
-## Monitoring
-
-### Health Checks
-
-```bash
-# Basic health check
-curl http://localhost:8080/api/health
-
-# Example response
-{
-  "status": "ok",
-  "timestamp": "2025-01-26T12:00:00Z",
-  "clients": 3,
-  "presentation": "My Conference Talk"
-}
-```
-
-### Logging
-
-The server uses structured logging:
-
-```bash
-# Log levels
-RUST_LOG=error    # Errors only
-RUST_LOG=warn     # Warnings and errors
-RUST_LOG=info     # Info, warnings, errors
-RUST_LOG=debug    # Debug info + above
-RUST_LOG=trace    # All logs (very verbose)
-```
-
-## Architecture
-
-### Core Components
-
-- **WebSocket Handler**: Manages real-time client connections
-- **State Manager**: Thread-safe presentation state with `Arc<RwLock<T>>`
-- **Command Processor**: Handles presentation navigation and control
-- **Broadcast System**: Distributes state updates to all clients
-- **REST API**: HTTP endpoints for health checks and metadata
-
-### Concurrency Model
-
-- **Async-first**: All operations are non-blocking using tokio
-- **Shared State**: Presentation state shared safely across connections
-- **Client Isolation**: Each WebSocket connection handled independently
-- **Atomic Updates**: State changes are atomic and consistent
-
-## Troubleshooting
-
-### Common Issues
-
-**Server Won't Start:**
-
-```bash
-# Check if port is already in use
-lsof -i :8080
-
-# Try different port
-cargo run -p toboggan-server -- --port 3000 presentation.toml
-```
-
-**WebSocket Connection Failed:**
-
-```bash
-# Check server is running
-curl http://localhost:8080/api/health
-
-# Test WebSocket endpoint manually
-websocat ws://localhost:8080/api/ws
-```
-
-**Presentation Not Loading:**
-
-```bash
-# Validate TOML syntax
-toml_verify presentation.toml
-
-# Check file permissions and existence
-ls -la presentation.toml
-```
+MIT or Apache-2.0, at your option.

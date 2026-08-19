@@ -5,15 +5,15 @@ classes = ["no_title", "wide"]
 
 # Publish to the web
 
-A composite **GitHub Action** builds your deck and ships it to GitHub Pages —
-single-file HTML, a PDF handout, and the searchable thumbnail overview:
+A composite **GitHub Action** builds your deck into single-file HTML, a PDF
+handout, and the searchable thumbnail overview — ready for GitHub Pages:
 
 ```yaml
-- uses: ilaborie/toboggan@v1
+- uses: ilaborie/toboggan@v0.1.0
   with:
     folder: ./slides
     outputs: html,pdf,thumbnails
-    deploy-pages: true
+    out-dir: dist
 ```
 
 <!-- pause -->

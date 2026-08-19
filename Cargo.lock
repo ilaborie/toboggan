@@ -3608,6 +3608,37 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 
 [[package]]
+name = "math-core"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0891c647629cf690fbc16d2969cc86e28b572e9d408b91f688de1024aa8a763b"
+dependencies = [
+ "math-core-renderer-internal",
+ "memchr",
+ "phf 0.13.1",
+ "rustc-hash 2.1.3",
+ "static_assertions",
+ "strum",
+ "strum_macros",
+]
+
+[[package]]
+name = "math-core-renderer-internal"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec7e875f83f6bcfcdd8af557aecba8dd3ab30d85647086b6db2d05fe51debaf8"
+dependencies = [
+ "bitflags 2.13.1",
+ "dtoa",
+ "percent-encoding",
+ "rustc-hash 2.1.3",
+ "stable-arena",
+ "static_assertions",
+ "strum",
+ "strum_macros",
+]
+
+[[package]]
 name = "maybe-rayon"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6336,6 +6367,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "stable-arena"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a6572b16faf73db61fab0b1d848ce108e20d026dc20dcb043a3f83c73ad1c09"
+
+[[package]]
 name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6850,6 +6887,7 @@ dependencies = [
  "anyhow",
  "clap",
  "clap_complete",
+ "humantime",
  "miette",
  "owo-colors",
  "serde",
@@ -6879,6 +6917,7 @@ dependencies = [
  "comrak",
  "derive_more",
  "humantime",
+ "math-core",
  "miette",
  "owo-colors",
  "serde",
@@ -6889,7 +6928,6 @@ dependencies = [
  "toboggan-stats",
  "toml",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -6945,6 +6983,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "tempfile",
  "toboggan-core",
  "toboggan-stats",
 ]

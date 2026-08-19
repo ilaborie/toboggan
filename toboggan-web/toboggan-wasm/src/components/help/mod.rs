@@ -8,8 +8,8 @@ use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use web_sys::{AddEventListenerOptions, HtmlDialogElement, HtmlElement, KeyboardEvent};
 
 use crate::components::WasmElement;
-use crate::create_html_element;
-use crate::services::KeyboardMapping;
+use crate::services::{KeyAction, KeyboardMapping};
+use crate::{BlankScreen, create_html_element};
 
 const CSS: &str = include_str!("style.css");
 const STYLE_MARKER_ATTR: &str = "data-toboggan-help-style";
@@ -112,18 +112,25 @@ fn register_toggle_listener(dialog: HtmlDialogElement) {
 }
 
 fn build_help_html(mapping: &KeyboardMapping) -> String {
-    let nav_rows = build_navigation_rows(mapping);
-
     let mut out = String::new();
     out.push_str(
         r#"<header><h2>Keyboard shortcuts</h2><button class="close" type="button" aria-label="Close">&times;</button></header>"#,
     );
 
-    if !nav_rows.is_empty() {
-        out.push_str("<h3>Navigation</h3><dl>");
-        out.push_str(&nav_rows);
-        out.push_str("</dl>");
-    }
+    // Split by where the key takes effect: "Navigation" drives the presentation
+    // for everyone connected, "Display" only changes this screen.
+    let mut navigation = build_rows(mapping, |action| matches!(action, KeyAction::Send(_)));
+    // Written out rather than grouped from the mapping: ten digit keys would
+    // render as a row of ten `<kbd>`s that says nothing about how they combine.
+    navigation.push_str(
+        "<dt><kbd>0</kbd>…<kbd>9</kbd> <kbd>Enter</kbd></dt><dd>Go to slide by number</dd>",
+    );
+    push_section(&mut out, "Navigation", &navigation);
+    push_section(
+        &mut out,
+        "Display",
+        &build_rows(mapping, |action| !matches!(action, KeyAction::Send(_))),
+    );
 
     out.push_str("<h3>Tools</h3><dl>");
     out.push_str("<dt><kbd>`</kbd></dt><dd>Toggle terminal overlay</dd>");
@@ -134,13 +141,23 @@ fn build_help_html(mapping: &KeyboardMapping) -> String {
     out
 }
 
-/// Group server-mapped keys by their command label and render one `<dt>/<dd>`
-/// pair per command. Pure-letter aliases (`b`/`B`) collapse to the uppercase
-/// form so the list reads as case-insensitive shortcuts.
-fn build_navigation_rows(mapping: &KeyboardMapping) -> String {
+fn push_section(out: &mut String, title: &str, rows: &str) {
+    if rows.is_empty() {
+        return;
+    }
+    let _ = write!(out, "<h3>{title}</h3><dl>{rows}</dl>");
+}
+
+/// Group the mapped keys by their label and render one `<dt>/<dd>` pair per
+/// label. Pure-letter aliases (`b`/`B`) collapse to the uppercase form so the
+/// list reads as case-insensitive shortcuts.
+fn build_rows(mapping: &KeyboardMapping, keep: impl Fn(&KeyAction) -> bool) -> String {
     let mut groups: Vec<(&'static str, Vec<&'static str>)> = Vec::new();
-    for (key, cmd) in mapping.entries() {
-        let label = command_label(cmd);
+    for (key, action) in mapping.entries() {
+        if !keep(action) {
+            continue;
+        }
+        let label = action_label(action);
         if label.is_empty() {
             continue;
         }
@@ -172,7 +189,22 @@ fn display_key(key: &str) -> String {
         "ArrowRight" => "→".to_owned(),
         "ArrowDown" => "↓".to_owned(),
         " " => "Space".to_owned(),
-        other => other.to_ascii_uppercase(),
+        // Letter shortcuts are case-insensitive and read better capitalised;
+        // named keys are already spelled the way a keyboard prints them, and
+        // uppercasing them gave `PAGEDOWN`.
+        other if other.chars().count() == 1 => other.to_ascii_uppercase(),
+        other => other.to_owned(),
+    }
+}
+
+fn action_label(action: &KeyAction) -> &'static str {
+    match action {
+        KeyAction::Send(command) => command_label(command),
+        KeyAction::ToggleFullscreen => "Fullscreen",
+        KeyAction::Blank(BlankScreen::Black) => "Blank the screen",
+        KeyAction::Blank(BlankScreen::White) => "White out the screen",
+        // Written out by hand in `build_help_html`; see there.
+        KeyAction::Digit(_) | KeyAction::GotoTyped => "",
     }
 }
 

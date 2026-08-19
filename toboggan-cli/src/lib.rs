@@ -1,4 +1,14 @@
-#![allow(clippy::result_large_err)]
+//! Parses a folder of Markdown into a [`toboggan_core::Talk`], and renders a
+//! `Talk` back out as TOML, JSON, YAML, HTML, Typst, or a folder of thumbnails.
+//!
+//! A deck is a directory: `_cover.md` for the cover, `_part.md` for a section
+//! title, `_head.html` and `_footer.html` for the chrome, and numbered files and
+//! folders for everything else. Ordering comes from the filenames.
+//!
+//! Errors are [`miette`] diagnostics, so a bad slide is reported with the file
+//! and the span rather than a message about a string.
+//!
+//! See the crate README for the front matter keys and the body directives.
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -11,7 +21,7 @@ pub mod error;
 pub use self::error::{Result, TobogganCliError};
 
 pub mod parser;
-use parser::FolderParser;
+use parser::{FolderParser, Overrides};
 
 pub mod output;
 
@@ -23,6 +33,9 @@ pub use self::settings::*;
 pub mod display;
 
 pub mod stats;
+
+/// The one directory a deck's assets live in, beside its slides folder.
+const PUBLIC_DIR: &str = "public";
 
 #[derive(Debug, Clone)]
 pub enum SlideProcessingResult {
@@ -38,6 +51,8 @@ pub struct TalkMetadata {
     pub date: Date,
     pub footer: Option<String>,
     pub head: Option<String>,
+    /// BCP 47 language tag for the deck; see [`toboggan_core::Talk::lang`].
+    pub lang: Option<String>,
     /// Default working directory for the `QuakeTerminal` overlay (talk-level fallback).
     pub default_terminal_cwd: Option<String>,
     /// Source directory of the talk; used to resolve relative quake cwds.
@@ -51,6 +66,7 @@ impl Default for TalkMetadata {
             date: Date::today(),
             footer: None,
             head: None,
+            lang: None,
             default_terminal_cwd: None,
             source_dir: None,
         }
@@ -70,6 +86,7 @@ impl ParseResult {
         talk.date = self.talk_metadata.date;
         talk.footer.clone_from(&self.talk_metadata.footer);
         talk.head.clone_from(&self.talk_metadata.head);
+        talk.lang.clone_from(&self.talk_metadata.lang);
         talk.default_terminal_cwd
             .clone_from(&self.talk_metadata.default_terminal_cwd);
         talk.source_dir = self
@@ -196,6 +213,14 @@ pub fn run(settings: &Settings) -> Result<()> {
         return Ok(());
     }
 
+    // Before anything is parsed: the highlighter panics on a theme it cannot
+    // find, from inside comrak, which is neither actionable nor catchable.
+    if !parser::config::is_known_theme(&settings.theme) {
+        return Err(TobogganCliError::UnknownTheme {
+            theme: settings.theme.clone(),
+        });
+    }
+
     let input = validate_input(settings.input.as_ref())?;
     let parse_result = parse_presentation(input, settings)?;
     display_results(&parse_result, settings)?;
@@ -214,7 +239,8 @@ pub fn run(settings: &Settings) -> Result<()> {
     if let Some(output) = &settings.output {
         write_output(&parse_result, output, settings)?;
     } else {
-        display::suggest_output_file(&mut std::io::stdout())?;
+        display::suggest_output_file(&mut std::io::stdout())
+            .map_err(TobogganCliError::write_stdout)?;
     }
 
     Ok(())
@@ -246,7 +272,11 @@ pub fn parse_presentation(input: &Path, settings: &Settings) -> Result<ParseResu
     debug!("Processing folder-based talk from {}", input.display());
 
     let parser = FolderParser::new(input.to_path_buf(), settings.theme.clone())?;
-    let mut parse_result = parser.parse(settings.title.clone(), settings.date)?;
+    let mut parse_result = parser.parse(Overrides {
+        title: settings.title.clone(),
+        date: settings.date,
+        lang: settings.lang.clone(),
+    })?;
 
     if !settings.no_counter {
         add_counters_to_slides(&mut parse_result);
@@ -257,7 +287,9 @@ pub fn parse_presentation(input: &Path, settings: &Settings) -> Result<ParseResu
 
 fn display_results(parse_result: &ParseResult, settings: &Settings) -> Result<()> {
     let display_formatter = display::DisplayFormatter::new();
-    display_formatter.display_results(parse_result, &mut std::io::stdout())?;
+    display_formatter
+        .display_results(parse_result, &mut std::io::stdout())
+        .map_err(TobogganCliError::write_stdout)?;
 
     if !settings.no_stats {
         let stats = stats::PresentationStats::from_parse_result(
@@ -265,10 +297,12 @@ fn display_results(parse_result: &ParseResult, settings: &Settings) -> Result<()
             settings.wpm,
             !settings.exclude_notes_from_duration,
         );
-        stats.display(
-            &mut std::io::stdout(),
-            display::DisplayConfig::should_use_colors(),
-        )?;
+        stats
+            .display(
+                &mut std::io::stdout(),
+                display::DisplayConfig::should_use_colors(),
+            )
+            .map_err(TobogganCliError::write_stdout)?;
     }
 
     Ok(())
@@ -278,7 +312,11 @@ fn display_results(parse_result: &ParseResult, settings: &Settings) -> Result<()
 fn write_output(parse_result: &ParseResult, output: &Path, settings: &Settings) -> Result<()> {
     let format = settings.resolve_format();
     let talk = parse_result.to_talk();
-    let serialized = output::serialize_talk(&talk, format)?;
+    let serialized = output::serialize_talk(
+        &talk,
+        format,
+        settings.base_url.as_deref().unwrap_or_default(),
+    )?;
 
     write_talk(output, &serialized)?;
 
@@ -298,7 +336,123 @@ fn write_output(parse_result: &ParseResult, output: &Path, settings: &Settings) 
         eprintln!("\n⚠️  No slides were processed successfully. File not written.");
     }
 
+    if matches!(format, OutputFormat::Html) {
+        copy_public_assets(&talk, output)?;
+    }
+
     Ok(())
+}
+
+/// Copies the deck's `public/` next to an exported HTML file.
+///
+/// The export references its assets relative to itself (see
+/// [`output::serialize_talk`]), which is only true once they are actually
+/// there. Without this the file is published with every image 404ing — which is
+/// what the GitHub Action has been doing.
+///
+/// Nothing to do for a deck with no `public/`, and nothing to do when the
+/// directory is already where it needs to be, which is the case for an export
+/// written into the deck root.
+#[allow(clippy::print_stderr)]
+fn copy_public_assets(talk: &Talk, output: &Path) -> Result<()> {
+    let Some(source) = output::deck_root(talk).map(|root| root.join(PUBLIC_DIR)) else {
+        return Ok(());
+    };
+    if !source.is_dir() {
+        return Ok(());
+    }
+
+    let destination = output
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(PUBLIC_DIR);
+    if same_directory(&source, &destination) || is_inside(&source, &destination) {
+        return Ok(());
+    }
+
+    let count = copy_dir(&source, &destination)?;
+    eprintln!(
+        "📦 Copied {count} asset(s) to {} so the deck's images resolve",
+        destination.display()
+    );
+    Ok(())
+}
+
+/// Whether two paths name the same directory, as far as the filesystem knows.
+///
+/// Compared after canonicalising, so `deck/public` and `./deck/../deck/public`
+/// are recognised as one and the copy is skipped rather than attempting to copy
+/// a directory onto itself.
+fn same_directory(left: &Path, right: &Path) -> bool {
+    match (left.canonicalize(), right.canonicalize()) {
+        (Ok(left), Ok(right)) => left == right,
+        // A destination that does not exist yet is the ordinary case, and it is
+        // not the source. Anything else — a permission error, a symlink loop —
+        // is not evidence that the two differ, but the copy below reports it
+        // with the path it failed on, which is the better message.
+        _ => false,
+    }
+}
+
+/// Whether `destination` sits inside `source`.
+///
+/// Copying a directory into its own subtree never terminates: the destination
+/// is created, then found in the source's listing, then descended into. The
+/// deck that triggers it is ordinary — `public/` beside `slides/`, exported
+/// with `-o public/index.html`.
+fn is_inside(source: &Path, destination: &Path) -> bool {
+    // The destination usually does not exist yet, so its nearest existing
+    // ancestor is what can be canonicalised and compared.
+    let Ok(source) = source.canonicalize() else {
+        return false;
+    };
+    let mut candidate = destination.to_path_buf();
+    loop {
+        if let Ok(candidate) = candidate.canonicalize() {
+            return candidate.starts_with(&source);
+        }
+        if !candidate.pop() {
+            return false;
+        }
+    }
+}
+
+/// Recursively copies `source` into `destination`, returning the file count.
+///
+/// The listing is taken *before* the destination is created. Creating it first
+/// meant that a destination inside the source — `-o public/index.html` in a deck
+/// that has a `public/` — appeared in its own listing and was copied into
+/// itself, without bound: `public/public/public/…` until the path length or the
+/// disk gave out, shredding the author's assets on the way.
+fn copy_dir(source: &Path, destination: &Path) -> Result<usize> {
+    let entries = std::fs::read_dir(source)
+        .map_err(|err| TobogganCliError::read_file(source.to_path_buf(), err))?
+        .collect::<std::io::Result<Vec<_>>>()
+        .map_err(|err| TobogganCliError::read_file(source.to_path_buf(), err))?;
+
+    std::fs::create_dir_all(destination)
+        .map_err(|err| TobogganCliError::create_file(destination.to_path_buf(), err))?;
+
+    let mut count = 0;
+    for entry in entries {
+        let from = entry.path();
+        let to = destination.join(entry.file_name());
+        let file_type = entry
+            .file_type()
+            .map_err(|err| TobogganCliError::read_file(from.clone(), err))?;
+        if file_type.is_symlink() {
+            // A symlink to an ancestor recurses by the same mechanism, and a
+            // deck's assets have no reason to contain one.
+            continue;
+        }
+        if file_type.is_dir() {
+            count += copy_dir(&from, &to)?;
+        } else {
+            std::fs::copy(&from, &to).map_err(|err| TobogganCliError::create_file(to, err))?;
+            count += 1;
+        }
+    }
+    Ok(count)
 }
 
 fn write_talk(out: &Path, content: &[u8]) -> Result<()> {
@@ -312,9 +466,24 @@ fn write_talk(out: &Path, content: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// Prints the themes the highlighter can load, from the one list that decides.
+///
+/// Generated rather than read from a text file: the file said twenty-two, the
+/// highlighter knew seven, and the fifteen it did not know panicked.
 #[allow(clippy::print_stdout)]
 fn list_available_themes() {
-    println!("{}", include_str!("available_themes.txt"));
+    use crate::parser::config::{AVAILABLE_THEMES, DEFAULT_THEME};
+
+    println!("Available syntax highlighting themes:\n");
+    for theme in AVAILABLE_THEMES {
+        let default = if theme == DEFAULT_THEME {
+            " (default)"
+        } else {
+            ""
+        };
+        println!("  {theme}{default}");
+    }
+    println!("\nNote: theme names are case-sensitive.");
 }
 
 fn parse_date_string(date_str: &str) -> Result<Date> {
@@ -326,6 +495,7 @@ fn parse_date_string(date_str: &str) -> Result<Date> {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
     use toboggan_core::Slide;
 
@@ -337,6 +507,7 @@ mod tests {
             date: Date::today(),
             footer: None,
             head: None,
+            lang: None,
             default_terminal_cwd: None,
             source_dir: None,
         };
@@ -395,6 +566,7 @@ mod tests {
             date: Date::today(),
             footer: None,
             head: None,
+            lang: None,
             default_terminal_cwd: None,
             source_dir: None,
         };
@@ -427,5 +599,39 @@ mod tests {
             // This should still be in part context even though the part was skipped
             assert_eq!(slide.title.to_string(), "Topic B");
         }
+    }
+
+    /// `toboggan build -p slides -o public/index.html` in a deck that has a
+    /// `public/` used to copy that directory into itself, for ever: the
+    /// destination was created first, so it turned up in the source's own
+    /// listing. It stopped only at `PATH_MAX` or a full disk, and it destroyed
+    /// the author's assets on the way there.
+    #[test]
+    fn a_destination_inside_the_source_is_refused() {
+        let root = tempfile::tempdir().expect("temp dir");
+        let source = root.path().join(PUBLIC_DIR);
+        std::fs::create_dir_all(&source).expect("create public/");
+
+        // The destination the export would compute for `-o public/index.html`.
+        assert!(is_inside(&source, &source.join(PUBLIC_DIR)));
+        // And the directory itself, however it is spelled.
+        assert!(is_inside(&source, &source));
+    }
+
+    /// The everyday export, one directory up, must still copy.
+    #[test]
+    fn a_destination_beside_the_source_is_copied() {
+        let root = tempfile::tempdir().expect("temp dir");
+        let source = root.path().join(PUBLIC_DIR);
+        std::fs::create_dir_all(source.join("images")).expect("create public/images");
+        std::fs::write(source.join("logo.png"), b"png").expect("write logo");
+        std::fs::write(source.join("images/diagram.svg"), b"svg").expect("write diagram");
+
+        let destination = root.path().join("out").join(PUBLIC_DIR);
+        assert!(!is_inside(&source, &destination));
+
+        let count = copy_dir(&source, &destination).expect("copy assets");
+        assert_eq!(count, 2, "both files, at both depths");
+        assert!(destination.join("images/diagram.svg").is_file());
     }
 }

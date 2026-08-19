@@ -21,7 +21,7 @@ pub(crate) fn build_pdf(
     let output = output.unwrap_or_else(|| default_pdf_path(&deck.slides));
 
     let talk = super::deck::build_talk(&deck.slides, &settings)?;
-    let typst_source = toboggan_cli::output::serialize_talk(&talk, OutputFormat::Typst)
+    let typst_source = toboggan_cli::output::serialize_talk(&talk, OutputFormat::Typst, "")
         .map_err(|err| anyhow::anyhow!("{err}"))?;
 
     // Two things have to line up for a slide's `#image("../public/logo.png")` to

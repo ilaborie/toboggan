@@ -31,13 +31,42 @@
 use std::collections::BTreeMap;
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::Context as _;
-use serde::Deserialize;
-use toboggan_core::Date;
+use serde::{Deserialize, Deserializer};
+use toboggan_core::{Date, Secret};
 use toboggan_lint::Severity;
 
-use crate::cli::DenyLevel;
+use crate::cli::{DenyLevel, LintFormat};
+
+/// Reads a duration written as a number of seconds or a humantime string.
+///
+/// The same two spellings a slide's `duration` front matter accepts, and
+/// rejected here rather than at use: this struct is `deny_unknown_fields` so a
+/// typo'd *key* already fails the run, and a typo'd *value* should not be
+/// quietly worth nothing.
+fn deserialize_duration<'de, D>(deserializer: D) -> Result<Option<Duration>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::Error as _;
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Written {
+        Seconds(u64),
+        Text(String),
+    }
+
+    match Option::<Written>::deserialize(deserializer)? {
+        None => Ok(None),
+        Some(Written::Seconds(seconds)) => Ok(Some(Duration::from_secs(seconds))),
+        Some(Written::Text(text)) => humantime::parse_duration(&text)
+            .map(Some)
+            .map_err(|err| D::Error::custom(format!("invalid duration \"{text}\": {err}"))),
+    }
+}
 
 /// Accepted file names within one directory, most-specific first.
 const CONFIG_NAMES: [&str; 2] = [".toboggan.toml", "toboggan.toml"];
@@ -94,6 +123,8 @@ pub(crate) struct Config {
 pub(crate) struct BuildConfig {
     pub(crate) title: Option<String>,
     pub(crate) date: Option<Date>,
+    pub(crate) lang: Option<String>,
+    pub(crate) base_url: Option<String>,
     pub(crate) theme: Option<String>,
     pub(crate) no_counter: Option<bool>,
     pub(crate) wpm: Option<u16>,
@@ -111,6 +142,13 @@ pub(crate) struct ServeConfig {
     pub(crate) thumbnails_dir: Option<PathBuf>,
     pub(crate) shell: Option<String>,
     pub(crate) open: Option<bool>,
+    /// Also open the presenter view — notes, next slide, and a timer.
+    pub(crate) open_presenter: Option<bool>,
+    /// Secret that lets a client not on this machine drive the deck.
+    ///
+    /// Only consulted when the server is reachable from the network — a client
+    /// on this machine always presents.
+    pub(crate) presenter_token: Option<Secret>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -121,6 +159,18 @@ pub(crate) struct LintConfig {
     pub(crate) max_steps_per_slide: Option<usize>,
     pub(crate) max_words_per_slide: Option<usize>,
     pub(crate) max_images_per_slide: Option<usize>,
+    pub(crate) max_code_lines: Option<usize>,
+    /// Speaking-time budget for the whole talk, as a number of seconds or a
+    /// humantime string like `"45m"` — the same two spellings a slide's
+    /// `duration` front matter accepts.
+    ///
+    /// Enables `structure/over-budget`, which is silent without one.
+    #[serde(default, deserialize_with = "deserialize_duration")]
+    pub(crate) max_duration: Option<Duration>,
+    /// Enables `content/missing-notes`.
+    pub(crate) require_notes: Option<bool>,
+    /// How the report is rendered: `human`, `json`, `github` or `sarif`.
+    pub(crate) format: Option<LintFormat>,
     /// Rule ids to switch off. Unknown ids are reported by the linter itself.
     pub(crate) disabled: Option<Vec<String>>,
     /// Per-rule severity overrides, keyed by rule id.
@@ -165,6 +215,8 @@ impl BuildConfig {
             weaker,
             title,
             date,
+            lang,
+            base_url,
             theme,
             no_counter,
             wpm,
@@ -186,6 +238,8 @@ impl ServeConfig {
             thumbnails_dir,
             shell,
             open,
+            open_presenter,
+            presenter_token,
         );
     }
 }
@@ -200,6 +254,10 @@ impl LintConfig {
             max_steps_per_slide,
             max_words_per_slide,
             max_images_per_slide,
+            max_code_lines,
+            max_duration,
+            require_notes,
+            format,
             disabled,
             severity,
         );

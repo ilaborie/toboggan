@@ -1,6 +1,6 @@
 use iced::widget::markdown;
 use toboggan_client::ConnectionStatus;
-use toboggan_core::{Content, Slide, SlideId, State as PresentationState, Talk};
+use toboggan_core::{ClientRole, Slide, SlideId, State as PresentationState, Talk};
 
 /// Cached markdown content for a slide
 #[derive(Debug, Clone, Default)]
@@ -22,16 +22,14 @@ pub(crate) struct AppState {
     pub show_help: bool,
     pub show_sidebar: bool,
     pub fullscreen: bool,
+    /// The role the server granted, once it has said.
+    ///
+    /// `None` before the handshake answers — not the same as "audience", so the
+    /// footer says nothing rather than guessing. A client connecting across the
+    /// network without a token can watch but not navigate, and used to learn
+    /// that by pressing a key and being refused.
+    pub role: Option<ClientRole>,
     pub error_message: Option<String>,
-}
-
-/// Parse Content to markdown text
-fn content_to_markdown_text(content: &Content) -> String {
-    match content {
-        Content::Empty => String::new(),
-        Content::Text { text } => text.clone(),
-        Content::Html { raw, alt, .. } => alt.as_ref().unwrap_or(raw).clone(),
-    }
 }
 
 /// Parse slides into cached markdown items
@@ -39,8 +37,8 @@ pub(crate) fn parse_slides_markdown(slides: &[Slide]) -> Vec<CachedMarkdown> {
     slides
         .iter()
         .map(|slide| {
-            let body_text = content_to_markdown_text(&slide.body);
-            let notes_text = content_to_markdown_text(&slide.notes);
+            let body_text = slide.body.display_text().to_owned();
+            let notes_text = slide.notes.display_text().to_owned();
 
             CachedMarkdown {
                 body_items: markdown::parse(&body_text).collect(),
@@ -63,6 +61,7 @@ impl Default for AppState {
             show_help: false,
             show_sidebar: true,
             fullscreen: false,
+            role: None,
             error_message: None,
         }
     }

@@ -24,6 +24,18 @@
 # title = "{{title}}"
 # date = "{{date}}"
 
+# Language of the deck, as a BCP 47 tag. It becomes the `lang` attribute on
+# every page Toboggan renders, which is what tells a screen reader how to
+# pronounce the deck and a browser how to hyphenate it. `slides/_cover.md` can
+# set it in its frontmatter instead; this wins.
+# lang = "en"
+
+# Base URL the exported HTML is served from, for `toboggan build -o deck.html`.
+# The deck's `public/` assets are referenced relative to the exported file by
+# default (and copied next to it), which is right on a GitHub Pages project page
+# as well as at a site root. Set this only if they must be addressed absolutely.
+# base-url = "/my-talk/"
+
 # Syntax-highlighting theme for code blocks. `toboggan build --list-themes`
 # prints the available names.
 # theme = "base16-ocean.light"
@@ -59,6 +71,18 @@
 # Open the presentation in a browser once the server is ready.
 # open = false
 
+# Also open the presenter view — notes, the next slide, and a timer. Implies
+# `open`. Two windows for one talk: this one on your screen, the deck on the
+# projector.
+# open-presenter = false
+
+# Secret that lets a client somewhere other than this machine drive the deck.
+# Only relevant with `host` opened up: a client on this machine always presents,
+# and without a token a client on the network can watch but not navigate, and
+# cannot open the embedded terminals. Remote clients pass it in the URL —
+# `http://<your-ip>:8080/run?token=…`.
+# presenter-token = "change-me"
+
 [lint]
 # Severity at or above which `toboggan lint` exits non-zero: info, warning, error.
 # deny = "error"
@@ -66,10 +90,25 @@
 # Skip spell checking (it runs via the `typos` CLI when that is installed).
 # no-spell = false
 
+# How the report is rendered: human, json, github, or sarif. `github` prints
+# workflow commands, which a GitHub Actions run turns into annotations on the
+# slide files themselves; `sarif` feeds code scanning.
+# format = "human"
+
 # Per-slide budgets before the corresponding rule complains.
 # max-steps-per-slide = 20
 # max-words-per-slide = 120
 # max-images-per-slide = 8
+# max-code-lines = 20
+
+# Two rules stay silent until you set these, because no deck has a natural
+# length and plenty deliberately carry no speaker notes.
+#
+# max-duration is the slot you were given; `structure/over-budget` compares it
+# against the `duration` your slides declare in their front matter. Seconds or
+# a humantime string.
+# max-duration = "45m"
+# require-notes = true
 
 # Rules to switch off entirely, by id. `toboggan lint` names the id of every
 # diagnostic it reports, and an unknown id here is reported rather than ignored.
@@ -77,7 +116,7 @@
 
 # Change a rule's severity instead of disabling it.
 # [lint.severity]
-# "slide/too-many-words" = "info"
+# "content/excessive-words" = "info"
 
 # Note on the boolean keys above (no-counter, open, no-spell, …): a flag can turn
 # one on, but cannot turn one back off if it is enabled here. If you need it off

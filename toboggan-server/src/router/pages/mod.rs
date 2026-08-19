@@ -8,7 +8,7 @@ pub(super) mod pdf;
 use std::sync::OnceLock;
 
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::http::{StatusCode, Uri};
 use axum::response::{Html, IntoResponse, Response};
 use toboggan_cli::OutputFormat;
 use toboggan_core::{SlideKind, Talk};
@@ -17,17 +17,46 @@ use tracing::error;
 use crate::services::TalkService;
 
 /// Landing page at `/`.
-pub(super) async fn homepage(State(talk_service): State<TalkService>) -> Html<String> {
+///
+/// Takes the request's own query string so the links below can carry the token
+/// it was opened with. Without that, a remote presenter who opened `/?token=…`
+/// was demoted to audience by clicking "Run the presentation" — and, before the
+/// presenter view could show a toast, told nothing about it.
+pub(super) async fn homepage(State(talk_service): State<TalkService>, uri: Uri) -> Html<String> {
     let talk = talk_service.talk().await;
-    Html(render_homepage(&talk))
+    Html(render_homepage(&talk, &carried_query(&uri)))
+}
+
+/// The part of this request's query string worth passing to the next page.
+///
+/// Only the token: everything else on a page URL is that page's own business.
+fn carried_query(uri: &Uri) -> String {
+    uri.query()
+        .into_iter()
+        .flat_map(|query| query.split('&'))
+        .find(|pair| pair.starts_with("token="))
+        .map(|pair| format!("?{pair}"))
+        .unwrap_or_default()
 }
 
 /// Serves the embedded present/run single-page app at `/run`.
 pub(super) async fn run_app() -> Response {
-    match super::static_assets::WebAppAssets::get("index.html") {
-        Some(content) => {
-            super::static_assets::asset_response("index.html", content.data.into_owned())
-        }
+    embedded_page("index.html")
+}
+
+/// Serves the presenter view at `/presenter`.
+///
+/// A second page of the same application, not a second client: it opens its own
+/// socket, follows the same broadcast state and drives the deck with the same
+/// keys. Two windows, one talk — which is the point, since the presenter's
+/// screen and the projector are two different screens.
+pub(super) async fn presenter_app() -> Response {
+    embedded_page("presenter.html")
+}
+
+fn embedded_page(name: &'static str) -> Response {
+    match super::static_assets::WebAppAssets::get(name) {
+        Some(content) => super::static_assets::asset_response(name, content.data.into_owned()),
         None => (StatusCode::NOT_FOUND, "web app not built").into_response(),
     }
 }
@@ -67,22 +96,18 @@ const GUIDE_TOML: &str = include_str!("../../../../examples/toboggan-guide/tobog
 
 fn render_guide() -> anyhow::Result<String> {
     let talk = toml::from_str::<Talk>(GUIDE_TOML)?;
-    let bytes = toboggan_cli::output::serialize_talk(&talk, OutputFormat::Html)
+    // The guide's own assets are served at `/guide/public/`, not `/public/`, so
+    // that is the base its export is rendered against. This used to be a pair of
+    // string replacements here; the renderer does it now, and does it for every
+    // spelling of the URL rather than the one the guide happens to use.
+    let bytes = toboggan_cli::output::serialize_talk(&talk, OutputFormat::Html, "/guide/")
         .map_err(|err| anyhow::anyhow!("{err}"))?;
-    let html = String::from_utf8(bytes)?;
-    // The guide's `_head.html` links assets relative to the deck root (e.g.
-    // `<link href="./public/style.css">`); rebase those `href`/`src` attributes
-    // onto the `/guide/public/` route so they resolve when the guide is served at
-    // `/guide` rather than `/public`. Anchor on the attribute (not a bare
-    // `./public/`) so the guide's own documentation — which shows commands like
-    // `--public-dir ./public/` in code blocks — is left untouched.
-    Ok(html
-        .replace("href=\"./public/", "href=\"/guide/public/")
-        .replace("src=\"./public/", "src=\"/guide/public/"))
+    Ok(String::from_utf8(bytes)?)
 }
 
-fn render_homepage(talk: &Talk) -> String {
+fn render_homepage(talk: &Talk, query: &str) -> String {
     let title = escape(&talk.title);
+    let lang = escape_attribute(talk.lang());
     let date = talk.date.to_string();
     let total = talk.slides.len();
     let parts = talk
@@ -98,7 +123,7 @@ fn render_homepage(talk: &Talk) -> String {
 
     format!(
         r#"<!doctype html>
-<html lang="en">
+<html lang="{lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -137,8 +162,9 @@ fn render_homepage(talk: &Talk) -> String {
       <div><b>{parts}</b> parts</div>
     </div>
     <nav class="links">
-      <a class="btn primary" href="/run">▶ Run the presentation</a>
-      <a class="btn" href="/slides">🗂 Slide overview</a>
+      <a class="btn primary" href="/run{query}">▶ Run the presentation</a>
+      <a class="btn" href="/presenter{query}">🎙 Presenter view</a>
+      <a class="btn" href="/slides{query}">🗂 Slide overview</a>
       <a class="btn" href="/guide">📖 User guide</a>
       <a class="btn" href="/download.pdf">⬇ Download PDF</a>
       <a class="btn" href="/doc">🔌 API docs</a>
@@ -152,9 +178,21 @@ fn render_homepage(talk: &Talk) -> String {
 /// Escapes the three characters that would break out of HTML text content.
 ///
 /// Shared with [`overview`], which renders the same kind of server-side error
-/// page.
+/// page. **Text content only** — an attribute value needs
+/// [`escape_attribute`], which also handles the quote that would end it.
 pub(super) fn escape(text: &str) -> String {
     text.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
+}
+
+/// Escapes text for a double-quoted HTML attribute value.
+///
+/// [`escape`] leaves `"` alone, which is correct between tags and wrong inside
+/// them: the deck's `lang` is author-supplied and lands in `<html lang="…">`, so
+/// a quote in it used to close the attribute and open whatever followed as
+/// markup. Both escapers in `toboggan-cli` already handled this; the server's
+/// did not.
+pub(super) fn escape_attribute(text: &str) -> String {
+    escape(text).replace('"', "&quot;")
 }

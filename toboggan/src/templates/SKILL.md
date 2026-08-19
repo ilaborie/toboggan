@@ -48,15 +48,15 @@ hidden_in = ["pdf"]      # exclude from a render target (web | pdf)
 - `<!-- notes -->` — everything after is speaker notes.
 - `<!-- code:rust:snippets/hello.rs -->` embeds an external file as a fenced code
   block, so snippets never drift from the real source. The part after `code:` is
-  the fence info string (`rust`, `js`, …). The path is resolved from where
-  `toboggan` runs (the deck folder), not from the slide file, and a missing file
-  fails the build.
+  the fence info string (`rust`, `js`, …). The path is resolved against the deck
+  root — the folder *containing* the one you pass to `--path`, so `snippets/`
+  sits beside `slides/`, not inside it — and a missing file fails the build.
 - `<!-- term: . -->` embeds a live terminal; add the `term-50vh` class to pin its
   pane to half the viewport height.
 
 ## CLI
 
-- `toboggan <folder>` — build + serve with live reload (the default action).
+- `toboggan -p <folder>` — build + serve with live reload (the default action).
 - `toboggan build -p ./slides -o talk.toml` — build to toml/json/yaml/html/typst.
 - `toboggan lint -p ./slides` — lint the deck.
 - `toboggan pdf -p ./slides` / `toboggan thumbnails -p ./slides` — PDF / overview.

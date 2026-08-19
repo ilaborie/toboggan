@@ -6,7 +6,7 @@ use clap_complete::Shell;
 use serde::Deserialize;
 use toboggan_cli::OutputFormat;
 use toboggan_client::TobogganConfig;
-use toboggan_core::Date;
+use toboggan_core::{Date, Secret};
 
 use crate::config;
 
@@ -119,6 +119,14 @@ pub(crate) struct BuildOptions {
     #[arg(short, long, value_parser = parse_date)]
     pub(crate) date: Option<Date>,
 
+    /// Deck language tag, e.g. `fr` [default: en, or the cover's frontmatter]
+    #[arg(long)]
+    pub(crate) lang: Option<String>,
+
+    /// Base URL the exported HTML is served from, e.g. `/my-talk/`
+    #[arg(long)]
+    pub(crate) base_url: Option<String>,
+
     /// Syntax-highlighting theme for code blocks [default: base16-ocean.light]
     #[arg(long)]
     pub(crate) theme: Option<String>,
@@ -147,6 +155,8 @@ impl BuildOptions {
         self.title = self.title.take().or(config.title);
         self.date = self.date.or(config.date);
         self.theme = self.theme.take().or(config.theme);
+        self.lang = self.lang.take().or(config.lang);
+        self.base_url = self.base_url.take().or(config.base_url);
         self.wpm = self.wpm.or(config.wpm);
         self.no_counter |= config.no_counter.unwrap_or(false);
         self.exclude_notes_from_duration |= config.exclude_notes_from_duration.unwrap_or(false);
@@ -168,6 +178,8 @@ impl BuildOptions {
             output: None,
             title: self.title,
             date: self.date,
+            lang: self.lang,
+            base_url: self.base_url,
             theme: self.theme.unwrap_or_else(|| DEFAULT_THEME.to_owned()),
             list_themes: false,
             format: None,
@@ -214,6 +226,20 @@ pub(crate) struct ServeOptions {
     /// Open the presentation in the default browser once the server is ready
     #[arg(long, env = "TOBOGGAN_OPEN")]
     pub(crate) open: bool,
+
+    /// Also open the presenter view — notes, next slide, and a timer
+    ///
+    /// Two windows for one talk: this one on your screen, the deck on the
+    /// projector. Implies `--open`.
+    #[arg(long, env = "TOBOGGAN_OPEN_PRESENTER")]
+    pub(crate) open_presenter: bool,
+
+    /// Secret that lets a client not on this machine drive the deck
+    ///
+    /// Only relevant with `--host` set to something reachable: a client on this
+    /// machine always presents. Remote clients pass it as `?token=…`.
+    #[arg(long, env = "TOBOGGAN_PRESENTER_TOKEN")]
+    pub(crate) presenter_token: Option<Secret>,
 }
 
 impl ServeOptions {
@@ -228,7 +254,9 @@ impl ServeOptions {
         self.public_dir = self.public_dir.take().or(config.public_dir);
         self.thumbnails_dir = self.thumbnails_dir.take().or(config.thumbnails_dir);
         self.shell = self.shell.take().or(config.shell);
+        self.presenter_token = self.presenter_token.take().or(config.presenter_token);
         self.open |= config.open.unwrap_or(false);
+        self.open_presenter |= config.open_presenter.unwrap_or(false);
     }
 
     fn into_server_settings(self) -> toboggan_server::ServerSettings {
@@ -244,6 +272,8 @@ impl ServeOptions {
             thumbnails_dir: self.thumbnails_dir,
             shell: self.shell,
             open: self.open,
+            open_presenter: self.open_presenter,
+            presenter_token: self.presenter_token,
         }
     }
 }
@@ -318,6 +348,7 @@ impl DefaultArgs {
             output: None,
             format: None,
             no_stats: false,
+            list_themes: false,
             build: self.build,
         }
     }
@@ -333,6 +364,7 @@ impl DefaultArgs {
         LintArgs {
             path: self.path,
             deny: None,
+            format: None,
             json: false,
             no_spell: false,
             build: self.build,
@@ -371,7 +403,9 @@ impl DefaultArgs {
             (self.serve.public_dir.is_some(), "--public-dir"),
             (self.serve.thumbnails_dir.is_some(), "--thumbnails-dir"),
             (self.serve.shell.is_some(), "--shell"),
+            (self.serve.presenter_token.is_some(), "--presenter-token"),
             (self.serve.open, "--open"),
+            (self.serve.open_presenter, "--open-presenter"),
         ] {
             if set {
                 unused.push(flag);
@@ -403,6 +437,10 @@ pub(crate) struct BuildArgs {
     #[arg(long)]
     pub(crate) no_stats: bool,
 
+    /// Print the syntax-highlighting theme names accepted by `--theme` and exit
+    #[arg(long)]
+    pub(crate) list_themes: bool,
+
     #[command(flatten)]
     pub(crate) build: BuildOptions,
 }
@@ -414,6 +452,9 @@ impl BuildArgs {
         let mut settings = self.build.into_cli_settings(input, self.no_stats);
         settings.output = self.output;
         settings.format = self.format;
+        // Handled before the deck is read, so it works from anywhere — which is
+        // what the scaffolded `toboggan.toml` tells the user to expect.
+        settings.list_themes = self.list_themes;
         settings
     }
 }
@@ -500,11 +541,20 @@ pub(crate) struct ClientArgs {
     /// Server port to connect to
     #[arg(long, default_value_t = DEFAULT_PORT)]
     pub(crate) port: u16,
+
+    /// Presenter token, when the server is on another machine
+    ///
+    /// Not needed for the usual `--host localhost`: a client on the server's
+    /// own machine always presents. Without it, a client connecting across the
+    /// network can watch but not navigate.
+    #[arg(long, env = "TOBOGGAN_PRESENTER_TOKEN")]
+    pub(crate) presenter_token: Option<Secret>,
 }
 
 impl From<ClientArgs> for TobogganConfig {
     fn from(args: ClientArgs) -> Self {
         TobogganConfig::new(&args.host, args.port)
+            .with_presenter_token(args.presenter_token.clone())
     }
 }
 
@@ -537,7 +587,7 @@ pub(crate) struct PdfArgs {
     #[command(flatten)]
     pub(crate) path: PathArg,
 
-    /// Output PDF path (default: <deck-name>.pdf in the current directory)
+    /// Output PDF path (default: `<deck-name>.pdf` in the current directory)
     #[arg(short, long, value_hint = ValueHint::FilePath)]
     pub(crate) output: Option<PathBuf>,
 
@@ -564,8 +614,12 @@ pub(crate) struct LintArgs {
     #[arg(long, value_enum)]
     pub(crate) deny: Option<DenyLevel>,
 
-    /// Output the report as JSON
-    #[arg(long)]
+    /// How to render the report [default: human]
+    #[arg(long, value_enum)]
+    pub(crate) format: Option<LintFormat>,
+
+    /// Output the report as JSON (shorthand for `--format json`)
+    #[arg(long, conflicts_with = "format")]
     pub(crate) json: bool,
 
     /// Skip spell checking (runs by default via the `typos` CLI when available)
@@ -576,12 +630,27 @@ pub(crate) struct LintArgs {
     pub(crate) build: BuildOptions,
 }
 
+/// How `toboggan lint` renders its report.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, clap::ValueEnum)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum LintFormat {
+    /// Coloured lines for a terminal
+    #[default]
+    Human,
+    /// The `LintReport` as JSON
+    Json,
+    /// GitHub Actions workflow commands, which become inline PR annotations
+    Github,
+    /// SARIF 2.1.0, for GitHub code scanning and other analysis tools
+    Sarif,
+}
+
 /// Everything `lint` needs once the flags and the config file are merged.
 pub(crate) struct ResolvedLint {
     pub(crate) input: PathBuf,
     pub(crate) settings: toboggan_cli::Settings,
     pub(crate) deny: DenyLevel,
-    pub(crate) json: bool,
+    pub(crate) format: LintFormat,
     pub(crate) lint: toboggan_lint::LintConfig,
 }
 
@@ -602,6 +671,14 @@ impl LintArgs {
         if let Some(max) = file.max_images_per_slide {
             lint.max_images_per_slide = max;
         }
+        if let Some(max) = file.max_code_lines {
+            lint.max_code_lines = max;
+        }
+        // Both stay `None`/`false` unless the config asks: the two rules they
+        // enable are silent by default, because no deck has a natural length
+        // and plenty deliberately carry no notes.
+        lint.max_duration = file.max_duration;
+        lint.require_notes = file.require_notes.unwrap_or(false);
         lint.disabled.extend(file.disabled.unwrap_or_default());
         lint.severity_overrides
             .extend(file.severity.unwrap_or_default());
@@ -611,11 +688,19 @@ impl LintArgs {
             lint.disable(toboggan_lint::rules::ids::SPELLING_TYPO);
         }
 
+        // `--json` predates `--format` and still works. clap rejects passing
+        // both, so the precedence here only ever picks one of them.
+        let format = if self.json {
+            Some(LintFormat::Json)
+        } else {
+            self.format
+        };
+
         ResolvedLint {
             input,
             settings,
             deny: self.deny.or(file.deny).unwrap_or(DenyLevel::Error),
-            json: self.json,
+            format: format.or(file.format).unwrap_or_default(),
             lint,
         }
     }
@@ -716,6 +801,7 @@ fn parse_date(input: &str) -> Result<Date, String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
     use clap::CommandFactory as _;
 
@@ -729,5 +815,23 @@ mod tests {
     #[test]
     fn cli_definition_is_valid() {
         Cli::command().debug_assert();
+    }
+
+    /// `toboggan mcp init` and `toboggan new` both register this binary with
+    /// Claude Code, and neither can start a server this CLI refuses to parse.
+    /// They emitted `--dir` for a flag named `--path`, so every scaffolded deck
+    /// shipped an MCP server that died at argument parsing — invisible from
+    /// this side, because nothing ever ran the argv it wrote.
+    #[test]
+    fn mcp_registration_args_parse() {
+        let registered = std::iter::once("toboggan")
+            .chain(toboggan_mcp::SERVER_ARGS)
+            .chain(std::iter::once("/tmp/deck"));
+
+        let cli = Cli::try_parse_from(registered).expect("the argv we register must parse");
+        let Some(Commands::Mcp(mcp)) = cli.command else {
+            panic!("expected the mcp subcommand, got {:?}", cli.command);
+        };
+        assert_eq!(mcp.path.as_deref(), Some(Path::new("/tmp/deck")));
     }
 }

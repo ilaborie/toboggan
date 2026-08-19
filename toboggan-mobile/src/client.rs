@@ -1,12 +1,12 @@
 //! UniFFI-compatible Toboggan client wrapper.
 
-#![allow(clippy::print_stdout, clippy::missing_panics_doc, clippy::expect_used)]
+#![allow(clippy::missing_panics_doc)]
 
 use std::sync::Arc;
 use std::time::Duration;
 
 use toboggan_client::{TobogganClientCore, TobogganWebsocketConfig};
-use toboggan_core::{Slide as CoreSlide, TalkResponse};
+use toboggan_core::{RetryConfig, Secret, Slide as CoreSlide, TalkResponse};
 use tokio::runtime::Runtime;
 use tokio::sync::{Mutex, watch};
 
@@ -16,7 +16,13 @@ use crate::types::{Command, Slide, State, Talk};
 /// Client configuration for connecting to a Toboggan server.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct ClientConfig {
-    /// The server URL, like `http://localhost:8080`
+    /// The server URL, like `http://localhost:8080`.
+    ///
+    /// May carry a presenter token — `http://192.168.1.10:8080/?token=s3cr3t`,
+    /// exactly as the server prints it. A phone is never on the machine running
+    /// the server, so without a token it registers as audience and its buttons
+    /// do nothing; carrying the token in the URL means the one string the user
+    /// already has to type is the whole configuration.
     pub url: String,
 
     /// The maximum number of retries if the connection is not working
@@ -24,6 +30,26 @@ pub struct ClientConfig {
 
     /// The delay between retries
     pub retry_delay: Duration,
+}
+
+/// Splits a configured URL into the server address and a presenter token.
+///
+/// Only `token` is understood; anything else in the query string is dropped
+/// along with it, because what remains has to be usable as the base of both the
+/// REST and WebSocket URLs.
+fn split_presenter_token(url: &str) -> (String, Option<Secret>) {
+    let Some((base, query)) = url.split_once('?') else {
+        return (url.to_owned(), None);
+    };
+    // `Secret::from_query_value` decodes it, which this used not to do at all:
+    // a token with a space or a `+` reached the server as different text than
+    // the web client sent, and only one of them could match.
+    let token = query
+        .split('&')
+        .find_map(|pair| Secret::from_query_value(pair.strip_prefix("token=")?));
+    // A URL written as `http://host:8080/?token=…` leaves a trailing slash the
+    // API paths would double up.
+    (base.trim_end_matches('/').to_owned(), token)
 }
 
 /// The Toboggan client for mobile platforms.
@@ -54,21 +80,25 @@ impl TobogganClient {
         client_name: String,
         handler: Arc<dyn ClientNotificationHandler>,
     ) -> Self {
-        println!("using {config:#?}");
-
         let ClientConfig {
             url,
             max_retries,
             retry_delay,
         } = config;
+        let (url, presenter_token) = split_presenter_token(&url);
 
-        // Convert HTTP URL to WebSocket URL
-        let websocket_url = if url.starts_with("http://") {
-            format!("ws://{}/api/ws", url.trim_start_matches("http://"))
-        } else if url.starts_with("https://") {
-            format!("wss://{}/api/ws", url.trim_start_matches("https://"))
-        } else {
-            panic!("invalid url '{url}', expected 'http(s)://<host>:<port>'");
+        // Convert HTTP URL to WebSocket URL.
+        //
+        // An unrecognised scheme used to `panic!` here. This constructor is
+        // called across the UniFFI boundary, where a panic unwinds into foreign
+        // code and takes the host app down — for a mistyped server address, and
+        // with nothing shown to the user. The URL is passed through instead: the
+        // connection then fails and is reported through the handler's connection
+        // status, which the app already surfaces as an error.
+        let websocket_url = match url.split_once("://") {
+            Some(("http", rest)) => format!("ws://{rest}/api/ws"),
+            Some(("https", rest)) => format!("wss://{rest}/api/ws"),
+            _ => url.clone(),
         };
 
         let websocket_config = TobogganWebsocketConfig {
@@ -76,6 +106,17 @@ impl TobogganClient {
             max_retries: max_retries as usize,
             retry_delay,
             max_retry_delay: retry_delay * max_retries,
+            // Built from the same numbers, so a phone that loses signal backs
+            // off and jitters like every other client rather than retrying on a
+            // flat timer.
+            retry: RetryConfig::new(
+                max_retries as usize,
+                retry_delay.into(),
+                (retry_delay * max_retries).into(),
+                2.0,
+                true,
+            ),
+            presenter_token,
         };
 
         // Create watch channels for slides and talk (shared between core and adapter)
@@ -100,11 +141,17 @@ impl TobogganClient {
             talk_rx.clone(),
         );
 
-        // Create tokio runtime
+        // Create tokio runtime.
+        //
+        // Scoped rather than allowed for the whole module: unlike the URL above
+        // this genuinely has no local recovery — without a runtime the client
+        // cannot do anything at all — and it fails only if the OS refuses to
+        // give us a thread, at which point the app is over regardless.
+        #[allow(clippy::expect_used)]
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
-            .expect("having a tokio runtime");
+            .expect("the OS should be able to start the client's worker threads");
 
         Self {
             slides_rx,
@@ -123,7 +170,6 @@ impl TobogganClient {
             core.connect().await;
             // Slides are automatically synced via watch channel - no manual update needed
         });
-        println!("connected");
     }
 
     /// Check if the client is connected.

@@ -66,9 +66,17 @@ impl ConnectionHandler {
                     CommunicationMessage::Error { error } => {
                         let _ = event_tx_clone.send(AppEvent::Error(error));
                     }
-                    // Client registration events - no UI action needed in TUI
-                    CommunicationMessage::Registered { .. }
-                    | CommunicationMessage::ClientConnected { .. }
+                    // The grant decides whether the arrow keys do anything, so
+                    // it reaches the UI. Dropping it here meant a client that
+                    // connected across the network without a token found out it
+                    // was read-only by pressing a key and getting an error
+                    // dialog back from the server.
+                    CommunicationMessage::Registered { client_id, role } => {
+                        let _ = event_tx_clone.send(AppEvent::NotificationReceived(
+                            Notification::registered(client_id, role),
+                        ));
+                    }
+                    CommunicationMessage::ClientConnected { .. }
                     | CommunicationMessage::ClientDisconnected { .. } => {}
                 }
             }

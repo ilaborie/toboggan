@@ -54,7 +54,8 @@ overview (`/slides`), the bundled guide (`/guide`), and a PDF (`/download.pdf`).
 toboggan build --path examples/riir-folder -o talk.toml
 toboggan build --path examples/riir-folder -o talk.html      # single self-contained file
 
-# Lint the deck (CI gate with --deny; --json for tooling; --spell via `typos`)
+# Lint the deck (CI gate with --deny; --format json for tooling; spell check
+# runs by default via `typos`, and --no-spell turns it off)
 toboggan lint --path examples/riir-folder
 
 # Export a PDF and a per-slide overview (both need the `typst` binary)
@@ -65,7 +66,7 @@ toboggan thumbnails --path examples/riir-folder
 Serve a prebuilt `.toml` (e.g. the guide artifact) with assets:
 
 ```bash
-toboggan serve --public-dir examples/toboggan-guide/public examples/toboggan-guide/toboggan-guide.toml
+toboggan serve --public-dir examples/toboggan-guide/public -p examples/toboggan-guide/toboggan-guide.toml
 ```
 
 ## The user guide deck
@@ -98,9 +99,13 @@ comments.
 `github-pages/pages.yml` shows the composite action in use:
 
 ```yaml
-- uses: ilaborie/toboggan@v1
+- uses: ilaborie/toboggan@v0.1.0
   with:
     folder: ./slides
     outputs: html,pdf,thumbnails
-    deploy-pages: true
+    out-dir: dist
 ```
+
+The action only *builds* — `folder`, `outputs`, `out-dir` and `version` are its
+whole input set. Publishing is a separate step; `github-pages/pages.yml` hands
+`out-dir` to `actions/upload-pages-artifact`.

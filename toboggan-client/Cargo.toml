@@ -1,6 +1,6 @@
 [package]
 name = "toboggan-client"
-version = "0.1.0"
+version.workspace = true
 description = "Async WebSocket and HTTP client library for connecting to Toboggan presentation servers"
 edition.workspace = true
 rust-version.workspace = true
@@ -25,7 +25,7 @@ futures = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
 tracing-subscriber = { workspace = true }
 
 [lints]
