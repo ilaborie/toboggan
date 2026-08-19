@@ -39,39 +39,39 @@ Branch: `feat/review-program` (everything lands here before #55 merges)
 ## E. Lint, build, CLI
 
 - [x] E1 — Terminal rules: key on `(cwd, cmd)`; fix `unresolved-cwd` + its test; DRY test helpers
-- [ ] E2 — Normalise `--base-url` trailing slash
+- [x] E2 — Normalise `--base-url` trailing slash
 - [x] E3 — Drop the `source_dir/public` candidate
-- [ ] E4 — `build.rs` gates on `presenter.html`
-- [ ] E5 — Lint stdout through `WriteStdout` (EPIPE)
-- [ ] E6 — `examples/slide.md` `css` → `style`; part `duration` dropped
-- [ ] E7 — Desktop fullscreen: implement or remove
+- [x] E4 — `build.rs` gates on `presenter.html`
+- [x] E5 — Lint stdout through `WriteStdout` (EPIPE)
+- [x] E6 — `examples/slide.md` `css` → `style`; part `duration` dropped
+- [x] E7 — Desktop fullscreen: implement or remove
 
 ## F. Tests
 
 - [x] F1 — Router tests with a configured token
 - [x] F2 — Cross-origin refusal test
-- [ ] F3 — WS audience-refusal test
+- [x] F3 — WS audience-refusal test
 - [x] F4 — Fenced code block containing backticks
-- [ ] F5 — `all_rules()` registration + severity table
+- [x] F5 — `all_rules()` registration + severity table
 - [x] F6 — First wasm tests + CI step
 - [x] F7 — `layout.spec.ts` serial + `expect.poll`
-- [ ] F8 — Desktop `command()`; TUI key bindings
-- [ ] F9 — `HtmlDocument` unit tests
-- [ ] F10 — `expect()` over `unwrap()` in `core/config.rs` tests
+- [~] F8 — Desktop `command()`; TUI key bindings (desktop done; TUI key bindings remain)
+- [x] F9 — `HtmlDocument` unit tests
+- [x] F10 — `expect()` over `unwrap()` in `core/config.rs` tests
 
 ## G. Documentation
 
 - [x] G1 — Delete the stale Typst doc line
-- [~] G2 — Security wording: constant-time, loopback, `ssh -L` (auth.rs done; SECURITY.md pending)
-- [ ] G3 — README protocol frames; `examples/README.md` commands
-- [ ] G4 — Dead mechanisms: retry backoff, `connection_timeouts`, `hidden_in`
-- [ ] G5 — Long tail of factual corrections
-- [ ] G6 — Workspace/`mise check` claims
+- [x] G2 — Security wording: constant-time, loopback, `ssh -L` (auth.rs done; SECURITY.md pending)
+- [x] G3 — README protocol frames; `examples/README.md` commands
+- [x] G4 — Dead mechanisms: retry backoff, `connection_timeouts`, `hidden_in`
+- [x] G5 — Long tail of factual corrections
+- [x] G6 — Workspace/`mise check` claims
 
 ## H. Pre-existing (not regressions from #55)
 
-- [ ] H1 — Mid-session reconnection is dead code
-- [ ] H2 — `inject_head_html` loops forever on error
+- [x] H1 — Mid-session reconnection is dead code
+- [x] H2 — `inject_head_html` loops forever on error
 
 ## Review
 

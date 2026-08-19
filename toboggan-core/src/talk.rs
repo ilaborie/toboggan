@@ -138,7 +138,13 @@ pub struct TalkResponse {
     pub lang: Option<String>,
     /// Every slide's title, in order.
     pub titles: Vec<String>,
-    /// Step counts per slide (for clients that display step progress)
+    /// Step counts per slide, for clients that show step progress. Either
+    /// absent, or exactly as long as `titles` and read against it by index.
+    // Absent means "not computed", not "no steps". The conversions below cannot
+    // fill it: counting a slide's reveals means parsing its HTML, which lives
+    // in `toboggan-stats`, and this crate depends on nothing in the workspace.
+    // So the response is built here and completed by the server through
+    // `with_step_counts`, which is what keeps the two in step.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub step_counts: Vec<usize>,
     /// Planned speaking time per slide, in seconds, from each slide's
@@ -183,6 +189,28 @@ impl From<&Talk> for TalkResponse {
             step_counts: vec![], // Populated by server with SlideStats
             durations: value.slides.iter().map(planned_seconds).collect(),
         }
+    }
+}
+
+impl TalkResponse {
+    /// Attaches step counts, which only the server can compute.
+    ///
+    /// Rejects a count that does not line up with `titles` rather than
+    /// storing it: the two are read by index — `step_counts[i]` is the number
+    /// of reveals on the slide `titles[i]` names — so a length mismatch puts
+    /// one slide's progress against another slide's name, silently and only on
+    /// the slides past the point where they diverge.
+    #[must_use]
+    pub fn with_step_counts(mut self, step_counts: Vec<usize>) -> Self {
+        debug_assert_eq!(
+            step_counts.len(),
+            self.titles.len(),
+            "step counts must line up with the slides they describe"
+        );
+        if step_counts.len() == self.titles.len() {
+            self.step_counts = step_counts;
+        }
+        self
     }
 }
 
@@ -236,5 +264,28 @@ mod tests {
 
         let response = TalkResponse::from(talk);
         assert_eq!(response.titles, vec![String::new()]);
+    }
+
+    /// Step counts and titles are read against each other by index, so a set
+    /// that does not line up would put one slide's progress under another
+    /// slide's name — on every slide past the point they diverge.
+    #[test]
+    fn step_counts_that_do_not_line_up_are_refused() {
+        let talk = Talk::new("t")
+            .add_slide(Slide::new("one"))
+            .add_slide(Slide::new("two"));
+        let response = TalkResponse::from(&talk);
+        assert_eq!(response.titles.len(), 2);
+
+        let filled = response.with_step_counts(vec![3, 1]);
+        assert_eq!(filled.step_counts, vec![3, 1]);
+    }
+
+    /// Until the server attaches them, there are none — which is "not computed"
+    /// rather than "no steps", and is why the field is allowed to be empty.
+    #[test]
+    fn a_converted_talk_carries_no_step_counts_yet() {
+        let talk = Talk::new("t").add_slide(Slide::new("one"));
+        assert!(TalkResponse::from(&talk).step_counts.is_empty());
     }
 }

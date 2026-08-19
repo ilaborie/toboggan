@@ -28,10 +28,12 @@ pub(super) async fn get_talk(
 ) -> impl IntoResponse {
     let talk = talk_service.talk().await;
 
-    let mut result = TalkResponse::from(talk.as_ref());
-    // Computed when the deck loaded, not per request: deriving them here meant
-    // several HTML parses per slide on every call.
-    result.step_counts = talk_service.step_counts().await.to_vec();
+    // Step counts are computed when the deck loads, not per request: deriving
+    // them here meant several HTML parses per slide on every call. They are
+    // attached through `with_step_counts`, which refuses a set that does not
+    // line up with the titles it will be read against.
+    let mut result = TalkResponse::from(talk.as_ref())
+        .with_step_counts(talk_service.step_counts().await.to_vec());
 
     if !param.footer {
         result.footer.take();

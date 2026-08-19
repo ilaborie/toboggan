@@ -909,7 +909,7 @@
               "type": "integer",
               "minimum": 0
             },
-            "description": "Step counts per slide (for clients that display step progress)"
+            "description": "Step counts per slide, for clients that show step progress. Either\nabsent, or exactly as long as `titles` and read against it by index."
           },
           "title": {
             "type": "string",
