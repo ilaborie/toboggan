@@ -1,6 +1,7 @@
 //! The desktop client: a native [iced] window that connects to a running server.
 //!
-//! Run it with `toboggan desktop`; this crate declares no binary of its own.
+//! Run it with `toboggan desktop`. A standalone `toboggan-desktop` binary is
+//! also built from `src/main.rs`, kept from before the unified command.
 //!
 //! Every shortcut is described once, in `actions`, and the help panel reads
 //! those descriptions — so what the panel lists and what the keys do cannot

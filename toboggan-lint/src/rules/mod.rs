@@ -1,9 +1,13 @@
 //! The rules themselves, and the registry that names them.
 //!
-//! Each rule is a small unit: it reads a [`crate::RuleContext`] and returns a
-//! `Vec<`[`crate::LintDiagnostic`]`>`. Every diagnostic carries the id of the
-//! rule that produced it, which is also what a deck writes in `disabled_rules`
-//! or a `<!-- lint-disable -->` comment to silence it.
+//! Each rule is a small unit: it reads a [`crate::RuleContext`] and *pushes*
+//! any [`crate::LintDiagnostic`] it finds into an `&mut Vec` — a rule returns
+//! nothing, so one allocation serves the whole run. Talk-level rules implement
+//! [`crate::Rule::check_talk`] instead and never see a `RuleContext`.
+//!
+//! Every diagnostic carries the id of the rule that produced it, which is also
+//! what a deck writes in `disabled_rules` or a `<!-- lint-disable -->` comment
+//! to silence it.
 
 pub(crate) mod code;
 pub(crate) mod content;

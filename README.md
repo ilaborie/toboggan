@@ -299,9 +299,10 @@ A session in outline:
                                                         // NextStep PreviousStep
                                                         // Blink Unregister Ping
 
-// server → client
-{"notification": "Registered", "client_id": 1, "role": "Presenter"}
-{"notification": "State", "state": {…}}                 // broadcast on every change
+// server → client — tagged "type", not "notification", and `client_id` is a
+// slotmap key rather than a number
+{"type": "Registered", "client_id": {"idx": 3, "version": 1}, "role": "Presenter"}
+{"type": "State", "state": {…}}                         // broadcast on every change
 ```
 
 A client *offers* a token; it never claims a role. The server decides, and tells
@@ -319,7 +320,7 @@ the client what it got in `Registered`.
 ### Everyday commands
 
 ```bash
-mise check        # fmt + clippy + nextest, both workspaces — run this before pushing
+mise check        # fmt + clippy + nextest, root workspace — run this before pushing
 mise build:web    # rebuild the embedded web dist (wasm-pack + vite)
 mise serve        # build + serve examples/riir-folder with live reload
 

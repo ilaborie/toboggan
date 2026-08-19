@@ -9,11 +9,16 @@ use tracing::{info, warn};
 /// A loaded talk together with the values derived from it.
 ///
 /// Both fields are behind an `Arc` so a reader can take a snapshot without
-/// copying the deck. `GET /api/talk` and `GET /api/slides` used to deep-clone
-/// every slide — rendered HTML and all — on every request, and `/api/talk` then
-/// recomputed `SlideStats` for each of them on top of that, which is itself
-/// several HTML parses per slide. Step counts are a function of the slides, so
-/// they are computed once when a deck is loaded.
+/// copying the deck. `GET /api/talk` used to deep-clone every slide — rendered
+/// HTML and all — on every request, and then recompute `SlideStats` for each of
+/// them on top of that, which is itself several HTML parses per slide. Step
+/// counts are a function of the slides, so they are computed once when a deck
+/// is loaded.
+///
+/// `GET /api/slides` still clones: [`SlidesResponse`](toboggan_core::SlidesResponse)
+/// owns its `Vec<Slide>`, so the copy is the wire type's, not this service's.
+/// It is one clone rather than a clone plus a re-parse, and narrowing it means
+/// changing a published response shape.
 #[derive(Clone)]
 struct LoadedTalk {
     talk: Arc<Talk>,

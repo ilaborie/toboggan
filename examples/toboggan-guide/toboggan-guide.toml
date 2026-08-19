@@ -609,8 +609,10 @@ It is served at `/public/`, so that is how a slide asks for it:
 ```
 
 > [!WARNING]
-> The leading `/public/` is not optional — `![…](diagram.webp)` asks for
+> The `public/` segment is not optional — `![…](diagram.webp)` asks for
 > `/diagram.webp`, which nothing serves. The `link/broken` rule catches it.
+> The leading slash *is* optional: `/public/x`, `public/x` and `./public/x`
+> all resolve, which is why `_head.html` can write `./public/style.css`.
 """
 
 [slides.style]
@@ -641,8 +643,10 @@ raw = """
 </span></code></pre>
 <div class="markdown-alert markdown-alert-warning">
 <p class="markdown-alert-title">Warning</p>
-<p>The leading <code>/public/</code> is not optional — <code>![…](diagram.webp)</code> asks for
-<code>/diagram.webp</code>, which nothing serves. The <code>link/broken</code> rule catches it.</p>
+<p>The <code>public/</code> segment is not optional — <code>![…](diagram.webp)</code> asks for
+<code>/diagram.webp</code>, which nothing serves. The <code>link/broken</code> rule catches it.
+The leading slash <em>is</em> optional: <code>/public/x</code>, <code>public/x</code> and <code>./public/x</code>
+all resolve, which is why <code>_head.html</code> can write <code>./public/style.css</code>.</p>
 </div>
 </div><!-- end step -->
 """
@@ -664,8 +668,10 @@ It is served at `/public/`, so that is how a slide asks for it:
 ```
 
 > [!WARNING]
-> The leading `/public/` is not optional — `![…](diagram.webp)` asks for
+> The `public/` segment is not optional — `![…](diagram.webp)` asks for
 > `/diagram.webp`, which nothing serves. The `link/broken` rule catches it.
+> The leading slash *is* optional: `/public/x`, `public/x` and `./public/x`
+> all resolve, which is why `_head.html` can write `./public/style.css`.
 """
 
 [slides.body.style]
@@ -683,8 +689,9 @@ which is why the prefix matters.</p>
 projector: the image is right there on disk, the URL is one segment off, and the
 slide renders with a broken image icon in front of the room.</p>
 <p><code>toboggan build -o deck.html</code> copies <code>public/</code> next to the exported file, so a
-deck stays self-contained when you publish it. <code>--public-dir</code> overrides the
-location if the folder is somewhere else.</p>
+deck stays self-contained when you publish it. When <em>serving</em>, <code>--public-dir</code>
+overrides which folder is mounted at <code>/public</code> — it is a serve flag, not a
+build one.</p>
 """
 alt = """
 Slides render at `/run`, and only `/public/` is mapped to a directory on disk,
@@ -695,8 +702,9 @@ projector: the image is right there on disk, the URL is one segment off, and the
 slide renders with a broken image icon in front of the room.
 
 `toboggan build -o deck.html` copies `public/` next to the exported file, so a
-deck stays self-contained when you publish it. `--public-dir` overrides the
-location if the folder is somewhere else.
+deck stays self-contained when you publish it. When *serving*, `--public-dir`
+overrides which folder is mounted at `/public` — it is a serve flag, not a
+build one.
 """
 
 [slides.notes.style]
@@ -1117,8 +1125,8 @@ body_source = """
 # Rich Markdown
 
 Tables, task lists, footnotes, strikethrough, `==highlight==`, and
-GitHub-style **alerts** all work out of the box — `NOTE`, `TIP`, `WARNING`
-and `CAUTION`:
+GitHub-style **alerts** all work out of the box — `NOTE`, `TIP`, `IMPORTANT`,
+`WARNING` and `CAUTION`:
 
 ```markdown
 > [!TIP]
@@ -1150,8 +1158,8 @@ type = "Html"
 raw = """
 <h1>Rich Markdown</h1>
 <p>Tables, task lists, footnotes, strikethrough, <code>==highlight==</code>, and
-GitHub-style <strong>alerts</strong> all work out of the box — <code>NOTE</code>, <code>TIP</code>, <code>WARNING</code>
-and <code>CAUTION</code>:</p>
+GitHub-style <strong>alerts</strong> all work out of the box — <code>NOTE</code>, <code>TIP</code>, <code>IMPORTANT</code>,
+<code>WARNING</code> and <code>CAUTION</code>:</p>
 <pre style="background-color:#eff1f5;"><code class="language-markdown"><span style="color:#d08770;">&gt; [!TIP]
 </span><span style="color:#d08770;">&gt; Optional advice that helps the reader.
 </span></code></pre>
@@ -1175,8 +1183,8 @@ alt = """
 # Rich Markdown
 
 Tables, task lists, footnotes, strikethrough, `==highlight==`, and
-GitHub-style **alerts** all work out of the box — `NOTE`, `TIP`, `WARNING`
-and `CAUTION`:
+GitHub-style **alerts** all work out of the box — `NOTE`, `TIP`, `IMPORTANT`,
+`WARNING` and `CAUTION`:
 
 ```markdown
 > [!TIP]

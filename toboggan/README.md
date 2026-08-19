@@ -1,6 +1,6 @@
 # toboggan
 
-**The `toboggan` command** — the only binary in the workspace, and the entry
+**The `toboggan` command** — the entry point for everything, and the entry
 point for everything [Toboggan](https://github.com/ilaborie/toboggan) does. Every
 other crate here is a library this one dispatches to.
 

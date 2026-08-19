@@ -9,7 +9,9 @@ without a second browser window.
 [ratatui]: https://ratatui.rs/
 
 > [!IMPORTANT]
-> This is a **library crate with no binary**. Run it with `toboggan tui`.
+> Run it with `toboggan tui`. The crate also builds a standalone
+> `toboggan-tui` binary from `src/main.rs`, kept from before the unified
+> command; it takes only `--host` and `--port`.
 
 ```bash
 toboggan -p my-talk          # in one terminal: the server

@@ -6,8 +6,8 @@ classes = ["no_title", "wide"]
 # Rich Markdown
 
 Tables, task lists, footnotes, strikethrough, `==highlight==`, and
-GitHub-style **alerts** all work out of the box — `NOTE`, `TIP`, `WARNING`
-and `CAUTION`:
+GitHub-style **alerts** all work out of the box — `NOTE`, `TIP`, `IMPORTANT`,
+`WARNING` and `CAUTION`:
 
 ```markdown
 > [!TIP]

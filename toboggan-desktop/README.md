@@ -6,7 +6,9 @@ Toboggan server and stays in sync with every other client.
 [iced]: https://github.com/iced-rs/iced
 
 > [!IMPORTANT]
-> This is a **library crate with no binary**. Run it with `toboggan desktop`.
+> Run it with `toboggan desktop`. The crate also builds a standalone
+> `toboggan-desktop` binary from `src/main.rs`, kept from before the unified
+> command; it takes no arguments and always uses the default server.
 
 ```bash
 toboggan -p my-talk          # in one terminal: the server

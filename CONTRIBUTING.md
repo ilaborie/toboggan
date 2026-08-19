@@ -14,7 +14,7 @@ are all welcome.
 Run this yourself, whichever VCS you use:
 
 ```bash
-mise check     # fmt + clippy + nextest, across both Cargo workspaces
+mise check     # fmt + clippy + nextest — the root workspace only
 ```
 
 CI re-runs the same gate on every push and pull request regardless, so a skipped
@@ -38,10 +38,11 @@ committed.
 
 ## Two Cargo workspaces
 
-The embedded web client is a separate workspace — `toboggan-web/toboggan-wasm`
-declares its own empty `[workspace]` table. Neither `--workspace` nor
-`--all-targets` from the repository root reaches it, and neither does
-`cargo nextest run`. If you touch it:
+The embedded web client is a separate workspace, rooted at
+`toboggan-web/Cargo.toml` with `toboggan-wasm` as its only member. Neither
+`--workspace` nor `--all-targets` from the repository root reaches it, and
+neither does `cargo nextest run` — **nor does `mise check`**, which runs
+`check:rust` at the root. CI covers it in a job of its own. If you touch it:
 
 ```bash
 cd toboggan-web/toboggan-wasm

@@ -5,7 +5,7 @@ that serves a deck over REST, keeps every connected client on the same slide ove
 a WebSocket, and hosts the embedded web client.
 
 > [!IMPORTANT]
-> This is a **library crate with no binary**. Run it through the unified
+> Reach this through the unified
 > [`toboggan`](../toboggan) command — `toboggan -p my-talk` to build a folder in
 > memory and serve it with live reload, or `toboggan serve -p talk.toml` to serve
 > an already-built file.

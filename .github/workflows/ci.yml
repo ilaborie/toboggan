@@ -75,8 +75,8 @@ jobs:
           RUSTDOCFLAGS: -D warnings
         run: cargo +stable doc --no-deps --workspace
 
-  # The embedded web client is a *separate* Cargo workspace (its Cargo.toml
-  # carries an empty `[workspace]` table), so the `rust` job above never reaches
+  # The embedded web client is a *separate* Cargo workspace (rooted at
+  # toboggan-web/Cargo.toml), so the `rust` job above never reaches
   # it: neither `--all-targets` nor `nextest run` crosses a workspace boundary,
   # and `mise check:rust` has the same blind spot locally. Until this job
   # existed, `toboggan-wasm` was only ever compiled by the release workflow —
