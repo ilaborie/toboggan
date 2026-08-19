@@ -37,10 +37,15 @@ jobs:
       # shipped: the release workflow builds the real bundle before it produces a
       # binary. Anything that depends on the dist's *contents* is therefore not
       # covered here.
+      # Both entry points, because `build.rs` asserts both: `/presenter` is
+      # served from its own page, and a dist missing it used to compile here and
+      # 404 at runtime.
       - name: Stub embedded web dist
         run: |
           mkdir -p toboggan-web/dist
-          printf '<!doctype html><title>ci stub</title>' > toboggan-web/dist/index.html
+          for page in index.html presenter.html; do
+            printf '<!doctype html><title>ci stub</title>' > "toboggan-web/dist/$page"
+          done
 
       # Install nightly first, stable last, so stable is the default toolchain;
       # the only nightly user is the explicit `cargo +nightly fmt` below. Every
