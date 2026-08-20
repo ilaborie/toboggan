@@ -275,6 +275,13 @@ enum KeyAction {
     Focus,
     Expand,
     Restore,
+    /// The socket closed: end the action loop without touching the screen.
+    ///
+    /// Deliberately not `Shutdown`: there is nothing left to close, and the
+    /// canvas keeps its last frame so the presenter can still read the shell's
+    /// parting words. What matters is that the receiver drops, because a send
+    /// failing is how a click learns the session is dead.
+    SessionEnded,
     /// The terminal body changed size (initial layout, window resize, flex
     /// reflow); re-fit the grid to the new dimensions.
     Resize,
@@ -675,6 +682,7 @@ async fn run_terminal_session(
     let body_action = body.clone();
     let window_el_action = window_el.clone();
     let font_size_action = Rc::clone(&font_size);
+    let tx_key_end = tx_key.clone();
 
     spawn_local(async move {
         let mut rx_key = rx_key;
@@ -764,6 +772,7 @@ async fn run_terminal_session(
                         refit_and_send(&session_action, &body_action, &ws_write_action, last_dims)
                             .await;
                 }
+                KeyAction::SessionEnded => break,
             }
         }
     });
@@ -790,6 +799,19 @@ async fn run_terminal_session(
     }
 
     info!("Terminal session ended");
+    // The action loop is still parked on its channel, and would go on accepting
+    // work for a session that has nothing behind it — including a claim on the
+    // keyboard, which would mute the deck for a terminal that cannot take a
+    // keystroke. Ending it makes the send fail, which is what tells a later
+    // click to leave the keys alone.
+    //
+    // The claim is deliberately *not* released here. `KeyboardOwner` identifies
+    // the element, not the session, so a restart — which ends the old session
+    // while the new one is already claiming — would release the claim the new
+    // session had just taken. The keys come back on the next click instead,
+    // where the failing send is checked.
+    clear_maximized(&tx_key_end);
+    let _ = tx_key_end.unbounded_send(KeyAction::SessionEnded);
     let _ = ws_write.lock().await.close().await;
     // Drop both halves so the underlying socket is released and the server sees
     // the close.

@@ -220,12 +220,14 @@ fn register_click_outside_listener(state: Rc<RefCell<QuakeState>>) {
 }
 
 fn toggle(state_rc: &Rc<RefCell<QuakeState>>) {
-    // Whichever way this goes, the overlay is about to change what is on
-    // screen, and a maximized terminal sits in the top layer where no z-index
-    // can reach it. Opening over one would drop the overlay behind a terminal
-    // it appears to be in front of; closing while this overlay's *own* terminal
-    // is maximized would leave that terminal full-screen after the overlay slid
-    // away.
+    // The overlay is about to change what is on screen, and a maximized terminal
+    // sits in the top layer where no z-index can reach it — opening over one
+    // would drop the overlay behind a terminal it appears to be in front of.
+    //
+    // Called on the way up as well as the way down. That direction is defensive
+    // today: this overlay hides its own terminal's title bar, so there are no
+    // traffic lights to maximize it with. It stops costing nothing the moment
+    // that chrome comes back.
     restore_maximized_terminal();
 
     let (will_open, needs_start) = {
