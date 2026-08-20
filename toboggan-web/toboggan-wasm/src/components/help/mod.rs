@@ -134,6 +134,9 @@ fn build_help_html(mapping: &KeyboardMapping) -> String {
 
     out.push_str("<h3>Tools</h3><dl>");
     out.push_str("<dt><kbd>`</kbd></dt><dd>Toggle terminal overlay</dd>");
+    out.push_str(
+        "<dt><kbd>Shift</kbd>+<kbd>Esc</kbd></dt><dd>Give the deck its keys back from a terminal</dd>",
+    );
     out.push_str("<dt><kbd>F1</kbd></dt><dd>Toggle this help dialog</dd>");
     out.push_str("<dt><kbd>Esc</kbd></dt><dd>Close help dialog</dd>");
     out.push_str("</dl>");

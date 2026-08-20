@@ -25,7 +25,12 @@ const command = binary
 
 export default defineConfig({
 	testDir: "./tests",
-	fullyParallel: true,
+	// One server, one presentation state: `POST /api/command` and every keystroke
+	// move the deck for *every* test in the run. Specs that navigate therefore
+	// cannot share a run with each other, let alone with themselves — so the
+	// suite is serial across files, not just within them.
+	fullyParallel: false,
+	workers: 1,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 1 : 0,
 	reporter: process.env.CI ? "github" : "list",
