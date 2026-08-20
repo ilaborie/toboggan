@@ -37,6 +37,11 @@ for (const viewport of VIEWPORTS) {
 
 		await page.goto("/run");
 		await page.waitForSelector("section", { timeout: 20_000 });
+		// The deck's own faces have to be in before anything is measured. A slide
+		// laid out with fallback metrics is a different height from the same
+		// slide laid out with the font it ships, and only one of the two is the
+		// thing being asserted about.
+		await page.evaluate(() => document.fonts.ready);
 
 		const overflowing: string[] = [];
 		for (let index = 0; index < total; index++) {
@@ -50,7 +55,12 @@ for (const viewport of VIEWPORTS) {
 			// The title is what identifies the slide that actually rendered; the
 			// deck marks nothing else with its index.
 			const measure = () =>
-				page.evaluate(() => {
+				page.evaluate(async () => {
+					// Again per slide, not just once for the deck: `fonts.ready`
+					// resolves for the faces loading at the time, and a slide that
+					// is the first to want a weight starts a fresh load. Cheap when
+					// there is nothing outstanding, which is the usual case.
+					await document.fonts.ready;
 					const host = [...document.querySelectorAll("*")].find((element) =>
 						element.shadowRoot?.querySelector("section"),
 					);
