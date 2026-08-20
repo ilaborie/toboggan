@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use futures::channel::mpsc;
 use futures::{FutureExt, SinkExt, StreamExt};
-use gloo::console::{error, info};
+use gloo::console::{error, info, warn};
 use gloo::net::websocket::Message;
 use gloo::net::websocket::futures::WebSocket;
 use js_sys::Uint8Array;
@@ -171,12 +171,14 @@ impl TobogganTerminalElement {
     /// own would mute the deck without giving the shell anything.
     pub(crate) fn capture_keyboard(&self) {
         let Some(window) = self.window.borrow().clone() else {
+            error!("Terminal has no window to claim the keyboard for; the deck keeps its keys");
             return;
         };
-        claim_keyboard(self.owner, &window);
-        if let Some(tx) = self.session.borrow().as_ref() {
-            let _ = tx.unbounded_send(KeyAction::Focus);
-        }
+        let Some(tx) = self.session.borrow().clone() else {
+            error!("Terminal has no live session to focus; the deck keeps its keys");
+            return;
+        };
+        claim_for_live_session(self.owner, &window, &tx);
     }
 
     /// Gives the deck its keys back.
@@ -193,6 +195,9 @@ impl TobogganTerminalElement {
         // End the session first: clearing the DOM alone leaves the WebSocket open
         // and the server-side PTY running for the life of the page.
         if let Some(tx) = self.session.borrow_mut().take() {
+            // A window that dies while maximized would otherwise leave the
+            // registry pointing at a session that can never restore it.
+            clear_maximized(&tx);
             let _ = tx.unbounded_send(KeyAction::Shutdown);
         }
 
@@ -337,6 +342,40 @@ fn setup_font_shortcuts(body: &HtmlElement, tx: mpsc::UnboundedSender<KeyAction>
     closure.forget();
 }
 
+thread_local! {
+    /// The terminal currently lifted into the top layer, if any.
+    ///
+    /// One slot, because only one window can be maximized. It exists so the
+    /// rest of the deck can take the screen back: the top layer paints above
+    /// every z-index there is, so a maximized terminal would otherwise cover
+    /// the blanking overlay and the quake terminal alike.
+    static MAXIMIZED: RefCell<Option<mpsc::UnboundedSender<KeyAction>>> =
+        const { RefCell::new(None) };
+}
+
+/// Takes whichever terminal is maximized back out of the top layer.
+///
+/// Goes through the session channel rather than hiding the popover directly, so
+/// the grid is re-fitted to the restored box on the way — a terminal left
+/// believing it is full-viewport wraps its shell at the wrong width.
+pub(crate) fn restore_maximized_terminal() {
+    if let Some(tx) = MAXIMIZED.take() {
+        let _ = tx.unbounded_send(KeyAction::Restore);
+    }
+}
+
+/// Forgets `tx`'s hold on the top layer, if it still has it.
+///
+/// Identity-matched like the keyboard claim: a restore from a terminal that is
+/// not the maximized one must not clear the one that is.
+fn clear_maximized(tx: &mpsc::UnboundedSender<KeyAction>) {
+    MAXIMIZED.with_borrow_mut(|held| {
+        if held.as_ref().is_some_and(|held| held.same_receiver(tx)) {
+            *held = None;
+        }
+    });
+}
+
 /// Lifts `window` into the top layer, reporting whether it got there.
 ///
 /// The `popover` attribute is added here rather than when the window is built,
@@ -374,6 +413,28 @@ fn hide_popover(window: &HtmlElement) {
     let _ = window.remove_attribute("popover");
 }
 
+/// Takes the keyboard for `window`, but only if its session can still take a
+/// keystroke.
+///
+/// The claim and the focus are one decision, not two steps. A claim mutes the
+/// deck, so granting one to a session whose loop has already exited leaves the
+/// presenter clicking a dead terminal that shows nothing, wearing the ring that
+/// says it has the keys, while the deck stops answering. `unbounded_send` fails
+/// exactly when that loop is gone — the socket closed, the server restarted, or
+/// the shell was `exit`ed — which makes it the test.
+fn claim_for_live_session(
+    owner: KeyboardOwner,
+    window: &HtmlElement,
+    tx: &mpsc::UnboundedSender<KeyAction>,
+) {
+    if tx.unbounded_send(KeyAction::Focus).is_err() {
+        warn!("Terminal session has ended; leaving the keyboard with the deck");
+        crate::release_keyboard(owner);
+        return;
+    }
+    claim_keyboard(owner, window);
+}
+
 /// Takes the keyboard whenever a click lands anywhere in the terminal window.
 ///
 /// Capture-phase `mousedown` on the window rather than relying on focus: rioterm
@@ -381,9 +442,11 @@ fn hide_popover(window: &HtmlElement) {
 /// container, so the title bar, the traffic lights and the body padding all left
 /// the terminal looking active while the deck still answered `space`.
 ///
-/// Deliberately no `prevent_default` — rioterm's own `mousedown` needs to run for
-/// text selection, and [`KeyAction::Focus`] lands after the browser's default
-/// blur anyway, so focus ends up in the shell either way.
+/// Deliberately no `prevent_default`: rioterm relies on the browser's own
+/// `mousedown` defaults for text selection and `prevent_default` would suppress
+/// them. Propagation is untouched either way — [`KeyAction::Focus`] crosses a
+/// channel, so it lands after those defaults have run, and focus ends up in the
+/// shell regardless.
 fn setup_keyboard_claim(
     window: &HtmlElement,
     owner: KeyboardOwner,
@@ -391,8 +454,7 @@ fn setup_keyboard_claim(
 ) {
     let window_for_claim = window.clone();
     let closure = Closure::<dyn FnMut(_)>::new(move |_: web_sys::Event| {
-        claim_keyboard(owner, &window_for_claim);
-        let _ = tx.unbounded_send(KeyAction::Focus);
+        claim_for_live_session(owner, &window_for_claim, &tx);
     });
     if window
         .add_event_listener_with_callback_and_bool(
@@ -526,12 +588,13 @@ async fn open_session(
 type WsWrite = Rc<futures::lock::Mutex<futures::stream::SplitSink<WebSocket, Message>>>;
 
 /// Re-fits the grid to the body's content box and returns the size it settled
-/// on, or `None` when the box is too small to have a grid.
+/// on, or `None` when that box is empty — `client_width`/`client_height` at or
+/// below the padding, which is what a body measured before layout gives.
 ///
-/// rioterm's own `fit` silently no-ops on a box narrower or shorter than one
-/// cell. Reporting the unchanged grid as the settled one would then tell the
-/// server that a stale size is current — so the caller is left holding the
-/// previous dimensions instead, and the `ResizeObserver` drives the real fit
+/// rioterm's own `fit` silently no-ops on a box it cannot draw a cell in.
+/// Reporting the unchanged grid as the settled one would then tell the server
+/// that a stale size is current — so the caller is left holding the previous
+/// dimensions instead, and the `ResizeObserver` drives the real fit
 /// once layout has caught up.
 fn refit(session: &Session, body: &HtmlElement) -> Option<(u16, u16)> {
     let width = f64::from(body.client_width()) - BODY_H_PADDING;
@@ -677,6 +740,7 @@ async fn run_terminal_session(
                             error!("Failed to add terminal-fullscreen class on expand");
                         }
                     }
+                    MAXIMIZED.set(Some(tx_key.clone()));
                     last_dims =
                         refit_and_send(&session_action, &body_action, &ws_write_action, last_dims)
                             .await;
@@ -689,6 +753,7 @@ async fn run_terminal_session(
                             error!("Failed to remove terminal-fullscreen class on restore");
                         }
                     }
+                    clear_maximized(&tx_key);
                     last_dims =
                         refit_and_send(&session_action, &body_action, &ws_write_action, last_dims)
                             .await;

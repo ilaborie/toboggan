@@ -8,12 +8,16 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use web_sys::{AddEventListenerOptions, Event, EventTarget, HtmlElement};
 
-use crate::components::{TobogganTerminalElement, WasmElement};
+use crate::components::{TobogganTerminalElement, WasmElement, restore_maximized_terminal};
 use crate::{create_html_element, install_capture_keydown, is_editable_target};
 
 const CSS: &str = include_str!("style.css");
 const STYLE_MARKER_ATTR: &str = "data-toboggan-quake-style";
 const TOGGLE_KEY: &str = "`";
+
+/// The non-modifier half of the chord that hands the keyboard back to the deck.
+/// Kept in step with `utils::key_capture`, which owns the release itself.
+const RELEASE_KEY: &str = "Escape";
 const FALLBACK_CWD: &str = ".";
 
 /// Drop-down "Quake-style" terminal overlay toggled by the backtick key.
@@ -109,6 +113,7 @@ impl WasmElement for TobogganQuakeTerminalElement {
         }));
 
         register_toggle_listener(Rc::clone(&state));
+        register_release_key_listener(Rc::clone(&state));
         register_click_outside_listener(Rc::clone(&state));
         self.state = Some(state);
     }
@@ -146,6 +151,30 @@ fn register_toggle_listener(state: Rc<RefCell<QuakeState>>) {
         }
         event.prevent_default();
         event.stop_propagation();
+        toggle(&state);
+    });
+}
+
+/// Takes the overlay up when the presenter hands the keyboard back.
+///
+/// `Shift`+`Escape` releases whichever terminal holds the claim, and this
+/// overlay must not be left down without it: it would still be covering the top
+/// of the slide, still showing a live shell, while `space` quietly drove the
+/// presentation — and the slide change would then restart the very session the
+/// presenter was demoing in.
+///
+/// Registered separately from the release itself, which stays generic: this is
+/// the overlay's business, not the keyboard's. Both listeners run — the release
+/// is identity-matched, so whichever order they fire in, the end state is the
+/// same.
+fn register_release_key_listener(state: Rc<RefCell<QuakeState>>) {
+    install_capture_keydown(move |event| {
+        if event.key() != RELEASE_KEY || !event.shift_key() {
+            return;
+        }
+        if !state.borrow().is_open {
+            return;
+        }
         toggle(&state);
     });
 }
@@ -191,6 +220,14 @@ fn register_click_outside_listener(state: Rc<RefCell<QuakeState>>) {
 }
 
 fn toggle(state_rc: &Rc<RefCell<QuakeState>>) {
+    // Whichever way this goes, the overlay is about to change what is on
+    // screen, and a maximized terminal sits in the top layer where no z-index
+    // can reach it. Opening over one would drop the overlay behind a terminal
+    // it appears to be in front of; closing while this overlay's *own* terminal
+    // is maximized would leave that terminal full-screen after the overlay slid
+    // away.
+    restore_maximized_terminal();
+
     let (will_open, needs_start) = {
         let state = state_rc.borrow();
         let will_open = !state.is_open;
@@ -209,11 +246,11 @@ fn toggle(state_rc: &Rc<RefCell<QuakeState>>) {
     if will_open {
         let _ = class_list.add_1("open");
         // While the overlay is down every key belongs to the shell, including
-        // the ones the deck binds. Ownership is claimed through the inner
-        // terminal rather than set here, so the overlay and a slide's terminal
-        // take the keyboard by exactly the same route — the overlay only covers
-        // the top of the viewport, and this is what keeps its keys its own even
-        // when a click lands on the slide behind it.
+        // the ones the deck binds. Nothing claims the keyboard implicitly on
+        // the way down — the overlay is shown by a transform, not by focus — so
+        // the claim is made here, through the inner terminal, which also means
+        // the window the outside-click test measures against is the same
+        // `.terminal-window` a slide's terminal uses.
         state.inner.capture_keyboard();
         info!("🎮 QuakeTerminal opened");
     } else {

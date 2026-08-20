@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 /**
  * Who owns the keyboard, and what maximizing does to the window.
@@ -14,14 +14,6 @@ test.describe.configure({ mode: "serial" });
 
 /** How long "nothing happened" is given to happen anyway. */
 const SETTLE_MS = 400;
-
-/**
- * How much of the viewport a maximized terminal must cover.
- *
- * Not an equality: the slide is transform-scaled to fit the screen, so every
- * box on it is measured in scaled viewport pixels rather than CSS pixels.
- */
-const MAXIMIZED_COVERAGE = 0.95;
 
 /**
  * Enough of the current slide to tell it apart from the next one.

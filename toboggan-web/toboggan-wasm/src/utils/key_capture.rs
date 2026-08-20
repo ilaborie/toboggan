@@ -81,10 +81,16 @@ pub fn claim_keyboard(owner: KeyboardOwner, window: &HtmlElement) {
 
 /// Gives the deck its keys back, if `owner` is still the one holding them.
 ///
-/// Focus is only taken back when it is still inside the claimed window. A
-/// release triggered by a click elsewhere has already moved focus to whatever
-/// was clicked, and blurring that would be this function undoing someone else's
-/// work.
+/// Taking focus back is not a tidy-up here, it is half the job. Browsers move
+/// focus on a click only when it lands on something focusable, and a slide is a
+/// plain `<div>` — so clicking off a terminal leaves focus sitting in rioterm's
+/// hidden textarea, where `typing_into_editable` would go on muting the deck
+/// long after the claim was dropped. That is the common path, and the blur is
+/// what fixes it.
+///
+/// The `contains` test is for the rarer case where the click *did* land on
+/// something focusable: focus has already moved, and blurring it would be this
+/// function undoing the browser's work.
 pub fn release_keyboard(owner: KeyboardOwner) {
     let held = CLAIM.with_borrow_mut(|claim| {
         if claim.as_ref().is_none_or(|held| held.owner != owner) {
