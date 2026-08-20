@@ -332,6 +332,11 @@ impl TobogganServer {
     }
 }
 
+// `#[tool_handler]` generates `call_tool` as an `async fn` that never awaits.
+// The lint is right, but the body is rmcp's to write, not ours. `unknown_lints`
+// rides along because the lint only exists from clippy 1.98 and nothing here
+// pins a toolchain.
+#[allow(unknown_lints, clippy::unused_async_trait_impl)]
 #[tool_handler]
 impl ServerHandler for TobogganServer {
     fn get_info(&self) -> ServerInfo {

@@ -1,5 +1,6 @@
 //! The extractor that gates the privileged routes.
 
+use std::future::Future;
 use std::net::SocketAddr;
 
 use axum::extract::{ConnectInfo, FromRef, FromRequestParts, Query};
@@ -47,33 +48,52 @@ where
 {
     type Rejection = (StatusCode, &'static str);
 
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        const REFUSED: (StatusCode, &str) = (
-            StatusCode::FORBIDDEN,
-            "This client is watching, not presenting. \
-             Connect from the machine running the server, or pass the presenter token.",
-        );
-
-        // No `ConnectInfo` means the server was not started with
-        // `into_make_service_with_connect_info`, so there is no peer address to
-        // judge. Refusing is the only safe reading of "we cannot tell".
-        let Some(&ConnectInfo(peer)) = parts.extensions.get::<ConnectInfo<SocketAddr>>() else {
-            warn!("Refusing a privileged request: the peer address is unavailable");
-            return Err(REFUSED);
-        };
-
-        let auth = PresenterAuth::from_ref(state);
-        let token = offered_token(parts);
-        if auth
-            .role_for(peer.ip(), token.as_ref().map(Secret::expose))
-            .is_presenter()
-        {
-            return Ok(Self(()));
-        }
-
-        warn!(%peer, path = %parts.uri.path(), "Refused a privileged request");
-        Err(REFUSED)
+    /// Not an `async fn`: nothing in the decision awaits, so the trait is handed
+    /// a future that is already finished rather than a state machine that can
+    /// never suspend. Axum's signature asks for a future; it does not ask for
+    /// the work to be asynchronous.
+    fn from_request_parts(
+        parts: &mut Parts,
+        state: &S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
+        std::future::ready(authorize(parts, state))
     }
+}
+
+/// Whether this request may drive the deck.
+///
+/// Split out from the extractor so the decision stays ordinary synchronous code
+/// that can be read — and tested — without a runtime.
+fn authorize<S>(parts: &Parts, state: &S) -> Result<Presenter, (StatusCode, &'static str)>
+where
+    PresenterAuth: FromRef<S>,
+    S: Send + Sync,
+{
+    const REFUSED: (StatusCode, &str) = (
+        StatusCode::FORBIDDEN,
+        "This client is watching, not presenting. \
+         Connect from the machine running the server, or pass the presenter token.",
+    );
+
+    // No `ConnectInfo` means the server was not started with
+    // `into_make_service_with_connect_info`, so there is no peer address to
+    // judge. Refusing is the only safe reading of "we cannot tell".
+    let Some(&ConnectInfo(peer)) = parts.extensions.get::<ConnectInfo<SocketAddr>>() else {
+        warn!("Refusing a privileged request: the peer address is unavailable");
+        return Err(REFUSED);
+    };
+
+    let auth = PresenterAuth::from_ref(state);
+    let token = offered_token(parts);
+    if auth
+        .role_for(peer.ip(), token.as_ref().map(Secret::expose))
+        .is_presenter()
+    {
+        return Ok(Presenter(()));
+    }
+
+    warn!(%peer, path = %parts.uri.path(), "Refused a privileged request");
+    Err(REFUSED)
 }
 
 /// Reads the token from `Authorization: Bearer …`, else from `?token=`.
