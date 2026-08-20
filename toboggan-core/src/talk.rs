@@ -1,6 +1,8 @@
+use std::borrow::Cow;
+
 use serde::{Deserialize, Serialize};
 
-use crate::{Date, Slide};
+use crate::{Date, RenderTarget, Slide};
 
 /// A whole deck: what it is called, when it is given, and its slides in order.
 ///
@@ -38,6 +40,24 @@ pub struct Talk {
 }
 
 impl Talk {
+    /// The deck as `target` sees it, with the slides that named `target` in
+    /// their `hidden_in` removed.
+    ///
+    /// Borrowed when the deck hides nothing, which is the usual case, so asking
+    /// costs no clone. The slides that survive keep their order; their indices
+    /// do not survive, which is why this is applied once at the edge that owns
+    /// the numbering rather than per-request.
+    #[must_use]
+    pub fn visible_in(&self, target: RenderTarget) -> Cow<'_, Self> {
+        if self.slides.iter().any(|slide| slide.is_hidden_from(target)) {
+            let mut visible = self.clone();
+            visible.slides.retain(|slide| !slide.is_hidden_from(target));
+            Cow::Owned(visible)
+        } else {
+            Cow::Borrowed(self)
+        }
+    }
+
     /// An empty deck with the given title, dated today.
     pub fn new(title: impl Into<String>) -> Self {
         let title = title.into();
@@ -251,6 +271,59 @@ impl From<Talk> for TalkResponse {
 mod tests {
     use super::*;
     use crate::{Content, Slide};
+
+    /// The common deck hides nothing, and asking what the web sees must not
+    /// cost it a clone of every slide.
+    #[test]
+    fn a_deck_that_hides_nothing_is_borrowed() {
+        let talk = Talk::new("t")
+            .add_slide(Slide::new("one"))
+            .add_slide(Slide::new("two"));
+
+        let visible = talk.visible_in(RenderTarget::Web);
+        assert!(matches!(visible, Cow::Borrowed(_)));
+        assert_eq!(visible.slides.len(), 2);
+    }
+
+    /// Each target sees only what was not hidden from it — and the two targets
+    /// disagree, which is the whole point of the twin-slide pattern.
+    #[test]
+    fn each_target_sees_only_its_own_slides() {
+        let talk = Talk::new("t")
+            .add_slide(Slide::new("shared"))
+            .add_slide(Slide::new("live").with_hidden_in([RenderTarget::Pdf]))
+            .add_slide(Slide::new("handout").with_hidden_in([RenderTarget::Web]));
+
+        let web = talk.visible_in(RenderTarget::Web);
+        assert_eq!(
+            web.slides
+                .iter()
+                .map(|slide| slide.title.to_string())
+                .collect::<Vec<_>>(),
+            ["shared", "live"]
+        );
+
+        let pdf = talk.visible_in(RenderTarget::Pdf);
+        assert_eq!(
+            pdf.slides
+                .iter()
+                .map(|slide| slide.title.to_string())
+                .collect::<Vec<_>>(),
+            ["shared", "handout"]
+        );
+    }
+
+    /// A slide can be hidden from everything; the deck is then empty for both,
+    /// which callers have to handle rather than being handed a phantom slide.
+    #[test]
+    fn a_slide_hidden_from_every_target_survives_nowhere() {
+        let talk = Talk::new("t").add_slide(
+            Slide::new("nowhere").with_hidden_in([RenderTarget::Web, RenderTarget::Pdf]),
+        );
+
+        assert!(talk.visible_in(RenderTarget::Web).slides.is_empty());
+        assert!(talk.visible_in(RenderTarget::Pdf).slides.is_empty());
+    }
 
     /// An untitled slide contributes an empty name, not a placeholder that
     /// every client then renders as if it were the author's own title.

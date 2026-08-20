@@ -218,7 +218,7 @@ impl ThumbnailService {
     fn spawn(&self, talk_service: TalkService, epoch: u64) {
         let inner = self.inner.clone();
         tokio::spawn(async move {
-            let talk = talk_service.talk().await;
+            let talk = talk_service.source_talk().await;
             let result = tokio::task::spawn_blocking(move || generate(&talk)).await;
 
             let mut guard = inner.write().await;
