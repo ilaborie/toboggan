@@ -16,7 +16,7 @@ use crate::{
     StateClassMapper, ToastType, TobogganApi, TobogganFooterElement, TobogganHelpElement,
     TobogganPresenterElement, TobogganQuakeTerminalElement, TobogganSlideElement,
     TobogganToastElement, WasmElement, create_html_element, inject_head_html,
-    install_focus_release_on_outside_click, play_tada, set_document_lang,
+    install_keyboard_release, play_tada, set_document_lang,
 };
 
 /// Holds metadata about the presentation
@@ -238,9 +238,10 @@ impl WasmElement for App {
         }
 
         self.kbd.start();
-        // The deck's keys stand down while a terminal holds focus, so there has
-        // to be a way to hand focus back. Clicking off the terminal is it.
-        install_focus_release_on_outside_click();
+        // The deck's keys stand down while a terminal holds the keyboard, so
+        // there has to be a way to hand them back: a click off the terminal, or
+        // Shift+Escape for a presenter who has no mouse to hand.
+        install_keyboard_release();
 
         let com = Rc::clone(&self.com);
         spawn_local(async move {

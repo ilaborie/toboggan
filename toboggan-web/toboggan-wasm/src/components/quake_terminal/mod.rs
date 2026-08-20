@@ -9,10 +9,7 @@ use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use web_sys::{AddEventListenerOptions, Event, EventTarget, HtmlElement};
 
 use crate::components::{TobogganTerminalElement, WasmElement};
-use crate::{
-    blur_active_element, create_html_element, install_capture_keydown, is_editable_target,
-    set_deck_keys_captured,
-};
+use crate::{create_html_element, install_capture_keydown, is_editable_target};
 
 const CSS: &str = include_str!("style.css");
 const STYLE_MARKER_ATTR: &str = "data-toboggan-quake-style";
@@ -95,12 +92,11 @@ impl WasmElement for TobogganQuakeTerminalElement {
         overlay.append_child(&inner_host).unwrap_throw();
         body.append_child(&overlay).unwrap_throw();
 
+        // This host is created once and re-populated on every restart. Nothing
+        // has to be done to protect it: maximizing lifts the window into the top
+        // layer rather than moving it, so no terminal's host ever leaves the
+        // place it was rendered into.
         let mut inner = TobogganTerminalElement::default();
-        // This host is created once and re-populated on every restart, so it must
-        // survive `stop_terminal` — including while the terminal is fullscreen,
-        // when its host is sitting directly under `<body>` like a lifted slide
-        // terminal's.
-        inner.set_persistent(true);
         inner.render(&inner_host);
 
         let state = Rc::new(RefCell::new(QuakeState {
@@ -209,20 +205,22 @@ fn toggle(state_rc: &Rc<RefCell<QuakeState>>) {
 
     let mut state = state_rc.borrow_mut();
     state.is_open = will_open;
-    // While the overlay is down every key belongs to the shell, including the
-    // ones the deck binds. Releasing the deck's bindings here rather than in the
-    // key handler keeps "who owns the keyboard" tied to what is on screen.
-    set_deck_keys_captured(will_open);
     let class_list = state.overlay.class_list();
     if will_open {
         let _ = class_list.add_1("open");
+        // While the overlay is down every key belongs to the shell, including
+        // the ones the deck binds. Ownership is claimed through the inner
+        // terminal rather than set here, so the overlay and a slide's terminal
+        // take the keyboard by exactly the same route — the overlay only covers
+        // the top of the viewport, and this is what keeps its keys its own even
+        // when a click lands on the slide behind it.
+        state.inner.capture_keyboard();
         info!("🎮 QuakeTerminal opened");
     } else {
         let _ = class_list.remove_1("open");
-        // The session keeps running for an instant reopen, so its hidden
-        // textarea keeps focus unless we take it back — and while it has focus
-        // the deck reads every key as typing and ignores it.
-        blur_active_element();
+        // The session keeps running for an instant reopen, so releasing is also
+        // what takes focus back off its hidden textarea.
+        state.inner.release_keyboard();
         debug!("QuakeTerminal closed");
     }
 }
@@ -244,4 +242,12 @@ fn restart_session(state_rc: &Rc<RefCell<QuakeState>>) {
 
     state.active_cwd = Some(cwd);
     state.inner.start_terminal(&config, &api_base);
+
+    // A restart tears the old session down, and tearing down releases its claim
+    // on the keyboard. Reclaiming matters when the restart came from a slide
+    // change rather than a toggle: the overlay is still down, so its keys are
+    // still its own.
+    if state.is_open {
+        state.inner.capture_keyboard();
+    }
 }

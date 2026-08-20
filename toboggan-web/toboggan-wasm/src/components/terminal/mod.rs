@@ -13,11 +13,14 @@ use toboggan_core::{TerminalConfig, Theme};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{Element, HtmlElement, KeyboardEvent, Node, ResizeObserver, ShadowRoot};
+use web_sys::{Element, HtmlElement, KeyboardEvent, Node, ResizeObserver};
 
 use self::rioterm::{CanvasRenderer, OpenOptions, RioTermHandle, RioTheme, Terminal};
 use crate::components::WasmElement;
-use crate::{create_and_append_element, create_shadow_root_with_style, dom_try, presenter_token};
+use crate::{
+    KeyboardOwner, claim_keyboard, create_and_append_element, create_shadow_root_with_style,
+    dom_try, next_keyboard_owner, presenter_token,
+};
 
 const CSS: &str = include_str!("style.css");
 const DEFAULT_FONT_SIZE: f64 = 22.0;
@@ -28,17 +31,29 @@ const FONT_SIZE_MAX: f64 = 32.0;
 /// canvas renderer measures cells with the bundled font rather than a fallback.
 const FONT_FAMILY: &str = "\"JetBrainsMono Nerd Font Mono\", monospace";
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct TobogganTerminalElement {
     container: Option<Element>,
+    /// This terminal's identity when it takes the keyboard from the deck.
+    owner: KeyboardOwner,
+    /// The `.terminal-window` of the live session, or `None` before the first
+    /// `start_terminal`. Held so the keyboard claim can point at it.
+    window: RefCell<Option<HtmlElement>>,
     /// Signals the running session to shut down. `None` when no session is live.
     session: RefCell<Option<mpsc::UnboundedSender<KeyAction>>>,
-    /// Whether this terminal's shadow host outlives its sessions.
-    ///
-    /// Set for the quake overlay, which creates one host at render time and
-    /// re-populates it on every restart — removing that host would leave the
-    /// overlay permanently empty.
-    persistent: bool,
+}
+
+impl Default for TobogganTerminalElement {
+    /// Hand-written because the owner id has to come from the shared counter;
+    /// `KeyboardOwner` has no meaningful default.
+    fn default() -> Self {
+        Self {
+            container: None,
+            owner: next_keyboard_owner(),
+            window: RefCell::new(None),
+            session: RefCell::new(None),
+        }
+    }
 }
 
 impl TobogganTerminalElement {
@@ -124,6 +139,10 @@ impl TobogganTerminalElement {
         setup_resize_observer(&body_el, tx_key.clone());
         setup_button_click(&btn_maximize, tx_key.clone(), KeyAction::Expand);
         setup_button_click(&btn_minimize, tx_key.clone(), KeyAction::Restore);
+        if let Some(window_html) = window_html.as_ref() {
+            setup_keyboard_claim(window_html, self.owner, tx_key.clone());
+        }
+        (*self.window.borrow_mut()).clone_from(&window_html);
         // Kept so `stop_terminal` can end the session (and with it the PTY).
         *self.session.borrow_mut() = Some(tx_key.clone());
 
@@ -145,39 +164,47 @@ impl TobogganTerminalElement {
         Some(())
     }
 
+    /// Takes the keyboard for this terminal and focuses its shell.
+    ///
+    /// The claim is what the deck's key handler reads; the focus is what makes
+    /// the keystrokes actually land in the PTY. Both are needed — a claim on its
+    /// own would mute the deck without giving the shell anything.
+    pub(crate) fn capture_keyboard(&self) {
+        let Some(window) = self.window.borrow().clone() else {
+            return;
+        };
+        claim_keyboard(self.owner, &window);
+        if let Some(tx) = self.session.borrow().as_ref() {
+            let _ = tx.unbounded_send(KeyAction::Focus);
+        }
+    }
+
+    /// Gives the deck its keys back.
+    pub(crate) fn release_keyboard(&self) {
+        crate::release_keyboard(self.owner);
+    }
+
     pub(crate) fn stop_terminal(&self) {
+        // Before anything else: a terminal that owned the keyboard must not take
+        // it to the grave. Advancing off a terminal slide would otherwise leave
+        // the deck permanently deaf.
+        self.release_keyboard();
+
         // End the session first: clearing the DOM alone leaves the WebSocket open
         // and the server-side PTY running for the life of the page.
         if let Some(tx) = self.session.borrow_mut().take() {
             let _ = tx.unbounded_send(KeyAction::Shutdown);
         }
 
-        let Some(container) = &self.container else {
-            return;
-        };
-        container.set_inner_html("");
-        // A fullscreen terminal's shadow host is relocated to <body> (so
-        // `position: fixed` escapes the slide's clipping). Clearing the slide's
-        // own container never touches it, so such a host would keep floating over
-        // later slides — remove it directly.
-        //
-        // Never for a persistent host: `Expand` moves *any* host to <body>, so a
-        // fullscreen quake terminal is a body child too, and removing it would
-        // detach the overlay's one reusable host for good.
-        if self.persistent {
-            return;
+        // A maximized window sits in the top layer; removing the element closes
+        // the popover implicitly, but saying so keeps the invariant local.
+        if let Some(window) = self.window.borrow_mut().take() {
+            hide_popover(&window);
         }
-        if let Ok(root) = container.get_root_node().dyn_into::<ShadowRoot>() {
-            let host = root.host();
-            if is_child_of_body(&host) {
-                host.remove();
-            }
-        }
-    }
 
-    /// Marks this terminal's shadow host as reused across sessions.
-    pub(crate) fn set_persistent(&mut self, persistent: bool) {
-        self.persistent = persistent;
+        if let Some(container) = &self.container {
+            container.set_inner_html("");
+        }
     }
 }
 
@@ -231,33 +258,6 @@ fn append_or_log(parent: &Element, child: &Node, what: &str) {
     }
 }
 
-/// Whether `el` is a direct child of `<body>`, i.e. a terminal host that was lifted
-/// out of its slide for fullscreen and never restored.
-///
-/// Callers must exclude persistent hosts themselves: `KeyAction::Expand` moves
-/// whichever host it is given to `<body>`, so this matches an expanded quake host
-/// as readily as a slide's.
-fn is_child_of_body(el: &Element) -> bool {
-    let Some(parent) = el.parent_node() else {
-        return false;
-    };
-    gloo::utils::document()
-        .body()
-        .is_some_and(|body| body.is_same_node(Some(&parent)))
-}
-
-/// Resolve the shadow-DOM host element for a node living inside the terminal's shadow root.
-///
-/// Used to lift the whole terminal (host + its scoped styles) out of the slide on
-/// fullscreen, since the slide's `overflow`/`transform` would otherwise clip or trap the
-/// `position: fixed` terminal.
-fn shadow_host(el: &HtmlElement) -> Option<Element> {
-    el.get_root_node()
-        .dyn_into::<ShadowRoot>()
-        .ok()
-        .map(|root| root.host())
-}
-
 /// Message from a DOM handler or from rioterm to the session loop.
 #[derive(Clone)]
 enum KeyAction {
@@ -266,6 +266,8 @@ enum KeyAction {
     Output(Vec<u8>),
     FontIncrease,
     FontDecrease,
+    /// Put the keyboard back in the shell after this terminal took the claim.
+    Focus,
     Expand,
     Restore,
     /// The terminal body changed size (initial layout, window resize, flex
@@ -335,6 +337,76 @@ fn setup_font_shortcuts(body: &HtmlElement, tx: mpsc::UnboundedSender<KeyAction>
     closure.forget();
 }
 
+/// Lifts `window` into the top layer, reporting whether it got there.
+///
+/// The `popover` attribute is added here rather than when the window is built,
+/// because the UA stylesheet dresses *any* `[popover]` — `display: none` until
+/// it opens, plus `position: fixed`, `margin: auto`, a border and padding — and
+/// that is not a costume the terminal can wear while it is merely sitting in a
+/// slide.
+///
+/// The top layer is what makes this worth doing: it escapes the slide's
+/// `overflow`/`transform` clipping *without the element leaving the tree*, so
+/// every selector that styles it from the outside keeps matching. Moving the
+/// shadow host to `<body>`, which is how this used to work, silently undressed
+/// the quake terminal — its chrome and sizing come from
+/// `.toboggan-quake-terminal > .toboggan-quake-inner`.
+fn show_as_popover(window: &HtmlElement) -> bool {
+    if window.set_attribute("popover", "manual").is_err() {
+        error!("Failed to make the terminal window a popover");
+        return false;
+    }
+    if let Err(err) = window.show_popover() {
+        error!("Failed to maximize the terminal:", format!("{err:?}"));
+        let _ = window.remove_attribute("popover");
+        return false;
+    }
+    true
+}
+
+/// Returns `window` to the flow, dropping the attribute so the UA popover rules
+/// stop applying to it.
+///
+/// Both calls are allowed to fail: they do so when the window was never
+/// maximized, which is the state being asked for.
+fn hide_popover(window: &HtmlElement) {
+    let _ = window.hide_popover();
+    let _ = window.remove_attribute("popover");
+}
+
+/// Takes the keyboard whenever a click lands anywhere in the terminal window.
+///
+/// Capture-phase `mousedown` on the window rather than relying on focus: rioterm
+/// focuses its hidden textarea only from a `mousedown` on its own canvas
+/// container, so the title bar, the traffic lights and the body padding all left
+/// the terminal looking active while the deck still answered `space`.
+///
+/// Deliberately no `prevent_default` — rioterm's own `mousedown` needs to run for
+/// text selection, and [`KeyAction::Focus`] lands after the browser's default
+/// blur anyway, so focus ends up in the shell either way.
+fn setup_keyboard_claim(
+    window: &HtmlElement,
+    owner: KeyboardOwner,
+    tx: mpsc::UnboundedSender<KeyAction>,
+) {
+    let window_for_claim = window.clone();
+    let closure = Closure::<dyn FnMut(_)>::new(move |_: web_sys::Event| {
+        claim_keyboard(owner, &window_for_claim);
+        let _ = tx.unbounded_send(KeyAction::Focus);
+    });
+    if window
+        .add_event_listener_with_callback_and_bool(
+            "mousedown",
+            closure.as_ref().unchecked_ref(),
+            true,
+        )
+        .is_err()
+    {
+        error!("Failed to register terminal keyboard claim");
+    }
+    closure.forget();
+}
+
 fn setup_button_click(btn: &Element, tx: mpsc::UnboundedSender<KeyAction>, action: KeyAction) {
     let closure = Closure::<dyn FnMut()>::new(move || {
         if tx.unbounded_send(action.clone()).is_err() {
@@ -367,6 +439,8 @@ struct Session {
 const BODY_H_PADDING: f64 = 6.0;
 /// Body vertical padding: top 2px + bottom 3px (CSS: .terminal-body { padding: 2px 3px 3px })
 const BODY_V_PADDING: f64 = 5.0;
+/// Stand-in grid for a body that cannot be measured yet.
+const DEFAULT_GRID: (u16, u16) = (80, 24);
 
 /// Mounts a rioterm terminal into `body` and wires its callbacks to `tx`.
 async fn open_session(
@@ -448,14 +522,43 @@ async fn open_session(
     })
 }
 
+/// The write half of the terminal's socket, shared by every sender.
+type WsWrite = Rc<futures::lock::Mutex<futures::stream::SplitSink<WebSocket, Message>>>;
+
 /// Re-fits the grid to the body's content box and returns the size it settled
-/// on, which rioterm derives from its own cell metrics.
-fn refit(session: &Session, body: &HtmlElement) -> (u16, u16) {
+/// on, or `None` when the box is too small to have a grid.
+///
+/// rioterm's own `fit` silently no-ops on a box narrower or shorter than one
+/// cell. Reporting the unchanged grid as the settled one would then tell the
+/// server that a stale size is current — so the caller is left holding the
+/// previous dimensions instead, and the `ResizeObserver` drives the real fit
+/// once layout has caught up.
+fn refit(session: &Session, body: &HtmlElement) -> Option<(u16, u16)> {
     let width = f64::from(body.client_width()) - BODY_H_PADDING;
     let height = f64::from(body.client_height()) - BODY_V_PADDING;
+    if width <= 0.0 || height <= 0.0 {
+        return None;
+    }
     session.renderer.fit(width, height);
     let options = session.terminal.options();
-    (options.cols(), options.rows())
+    Some((options.cols(), options.rows()))
+}
+
+/// Re-fits and tells the server, returning the dimensions now in force.
+///
+/// Takes the cell rather than a borrow so the `RefCell` is released before the
+/// socket is awaited.
+async fn refit_and_send(
+    session: &Rc<RefCell<Session>>,
+    body: &HtmlElement,
+    ws_write: &WsWrite,
+    last: (u16, u16),
+) -> (u16, u16) {
+    let dims = refit(&session.borrow(), body);
+    let Some(dims) = dims else {
+        return last;
+    };
+    send_resize_if_changed(ws_write, dims, last).await
 }
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -478,7 +581,9 @@ async fn run_terminal_session(
 
     // Size the grid before connecting: the PTY is spawned with the dimensions in
     // the URL, so getting them right here saves the shell an initial redraw.
-    let (initial_cols, initial_rows) = refit(&session, &body);
+    // Pre-layout the body can still measure zero, and the ResizeObserver's first
+    // callback corrects that — so a conventional 80x24 stands in until it does.
+    let (initial_cols, initial_rows) = refit(&session, &body).unwrap_or(DEFAULT_GRID);
     let ws_url = build_terminal_ws_url(api_base_url, config, initial_cols, initial_rows);
     // The URL ends in `&token=…` when one was offered, so it is logged without
     // its query string: this ran on every terminal open.
@@ -511,11 +616,6 @@ async fn run_terminal_session(
     spawn_local(async move {
         let mut rx_key = rx_key;
         let mut tx_stop = Some(tx_stop);
-        // The terminal's styles live in a shadow root, so on fullscreen we move the whole
-        // host (not the inner window) to `<body>` to escape the slide's clipping/transform,
-        // then restore it to its original position on collapse.
-        let host_el = window_el_action.as_ref().and_then(shadow_host);
-        let mut fullscreen_origin: Option<(Node, Option<Node>)> = None;
         // Last grid size sent to the server, so a re-fit that resolves to the
         // same dimensions (a spurious observer callback) is a no-op.
         let mut last_dims = (initial_cols, initial_rows);
@@ -566,50 +666,38 @@ async fn run_terminal_session(
                         last_dims = send_resize_if_changed(&ws_write_action, dims, last_dims).await;
                     }
                 }
+                KeyAction::Focus => session_action.borrow().handle.focus(),
                 KeyAction::Expand => {
                     if let Some(ref win) = window_el_action
-                        && win.class_list().add_1("terminal-fullscreen").is_err()
+                        && !show_as_popover(win)
                     {
-                        error!("Failed to add terminal-fullscreen class on expand");
-                    }
-                    // Lift the host out of the slide so `position: fixed` resolves against
-                    // the viewport (the slide's overflow/transform would otherwise clip it).
-                    if let Some(ref host) = host_el {
-                        if fullscreen_origin.is_none()
-                            && let Some(parent) = host.parent_node()
-                        {
-                            fullscreen_origin = Some((parent, host.next_sibling()));
-                        }
-                        if let Some(body) = gloo::utils::document().body()
-                            && body.append_child(host).is_err()
-                        {
-                            error!("Failed to move terminal host to <body> on expand");
+                        // Still fixed and full-viewport, just back to being
+                        // clipped by whatever the slide does.
+                        if win.class_list().add_1("terminal-fullscreen").is_err() {
+                            error!("Failed to add terminal-fullscreen class on expand");
                         }
                     }
-                    let dims = refit(&session_action.borrow(), &body_action);
-                    last_dims = send_resize_if_changed(&ws_write_action, dims, last_dims).await;
+                    last_dims =
+                        refit_and_send(&session_action, &body_action, &ws_write_action, last_dims)
+                            .await;
                     session_action.borrow().handle.focus();
                 }
                 KeyAction::Restore => {
-                    if let Some(ref win) = window_el_action
-                        && win.class_list().remove_1("terminal-fullscreen").is_err()
-                    {
-                        error!("Failed to remove terminal-fullscreen class on restore");
+                    if let Some(ref win) = window_el_action {
+                        hide_popover(win);
+                        if win.class_list().remove_1("terminal-fullscreen").is_err() {
+                            error!("Failed to remove terminal-fullscreen class on restore");
+                        }
                     }
-                    // Return the host to its original spot in the slide.
-                    if let Some(ref host) = host_el
-                        && let Some((parent, next)) = fullscreen_origin.take()
-                        && parent.insert_before(host, next.as_ref()).is_err()
-                    {
-                        error!("Failed to restore terminal host into slide on collapse");
-                    }
-                    let dims = refit(&session_action.borrow(), &body_action);
-                    last_dims = send_resize_if_changed(&ws_write_action, dims, last_dims).await;
+                    last_dims =
+                        refit_and_send(&session_action, &body_action, &ws_write_action, last_dims)
+                            .await;
                     session_action.borrow().handle.focus();
                 }
                 KeyAction::Resize => {
-                    let dims = refit(&session_action.borrow(), &body_action);
-                    last_dims = send_resize_if_changed(&ws_write_action, dims, last_dims).await;
+                    last_dims =
+                        refit_and_send(&session_action, &body_action, &ws_write_action, last_dims)
+                            .await;
                 }
             }
         }
@@ -672,13 +760,13 @@ async fn rebuild_for_font_size(
     next.terminal.write(dump.as_bytes());
     let dims = refit(&next, body);
     *session.borrow_mut() = next;
-    Some(dims)
+    dims
 }
 
 /// Tells the server to resize the PTY when the grid actually changed, and
 /// returns the dimensions now in force.
 async fn send_resize_if_changed(
-    ws_write: &Rc<futures::lock::Mutex<futures::stream::SplitSink<WebSocket, Message>>>,
+    ws_write: &WsWrite,
     dims: (u16, u16),
     last: (u16, u16),
 ) -> (u16, u16) {
