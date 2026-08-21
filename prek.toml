@@ -75,6 +75,16 @@ entry = "mdformat"
 args = ["--check", "--number"]
 language = "system"
 types = ["markdown"]
+# Slides are content, not documentation, and mdformat rewrites the raw HTML and
+# CSS embedded in them -- dedenting tags and reflowing `radial-gradient(...)` --
+# which changes what `toboggan build` emits and how a slide renders. `examples/`
+# is already excluded from the spell checker for the same reason.
+#
+# SKILL.md is excluded because mdformat does not recognise YAML front matter:
+# it turns the `---` fence into a `___` rule and folds `name:`/`description:`
+# into a heading, so `toboggan skills` would install a file Claude Code cannot
+# read.
+exclude = "^(examples/|toboggan/src/templates/SKILL\\.md$)"
 
 # Web: Biome lint + format (toboggan-web/)
 [[repos.hooks]]
