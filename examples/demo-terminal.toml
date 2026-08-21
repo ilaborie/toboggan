@@ -43,10 +43,7 @@ body_source = """
 """
 
 [slides.style]
-classes = [
-    "no_title",
-    "cover",
-]
+classes = ["no_title", "cover"]
 
 [slides.title]
 type = "Text"
@@ -67,10 +64,7 @@ alt = """
 """
 
 [slides.body.style]
-classes = [
-    "no_title",
-    "cover",
-]
+classes = ["no_title", "cover"]
 
 [[slides]]
 kind = "Standard"
@@ -210,10 +204,7 @@ body_source = """
 """
 
 [slides.style]
-classes = [
-    "no_title",
-    "wide",
-]
+classes = ["no_title", "wide"]
 
 [slides.title]
 type = "Text"
@@ -229,10 +220,7 @@ alt = """
 """
 
 [slides.body.style]
-classes = [
-    "no_title",
-    "wide",
-]
+classes = ["no_title", "wide"]
 
 [[slides.terminals]]
 cwd = "examples/demo-terminal"
@@ -326,10 +314,7 @@ body_source = """
 """
 
 [slides.style]
-classes = [
-    "no_title",
-    "wide",
-]
+classes = ["no_title", "wide"]
 
 [slides.title]
 type = "Text"
@@ -345,10 +330,7 @@ alt = """
 """
 
 [slides.body.style]
-classes = [
-    "no_title",
-    "wide",
-]
+classes = ["no_title", "wide"]
 
 [[slides.terminals]]
 cwd = "examples/demo-terminal"
@@ -361,10 +343,7 @@ body_source = """
 """
 
 [slides.style]
-classes = [
-    "no_title",
-    "wide",
-]
+classes = ["no_title", "wide"]
 
 [slides.title]
 type = "Text"
@@ -380,10 +359,7 @@ alt = """
 """
 
 [slides.body.style]
-classes = [
-    "no_title",
-    "wide",
-]
+classes = ["no_title", "wide"]
 
 [[slides.terminals]]
 cwd = "examples/demo-terminal"
@@ -864,10 +840,7 @@ Toboggan — write slides in Markdown, present from the terminal.
 '''
 
 [slides.style]
-classes = [
-    "no_title",
-    "center",
-]
+classes = ["no_title", "center"]
 
 [slides.title]
 type = "Text"
@@ -886,7 +859,4 @@ Toboggan — write slides in Markdown, present from the terminal.
 '''
 
 [slides.body.style]
-classes = [
-    "no_title",
-    "center",
-]
+classes = ["no_title", "center"]
