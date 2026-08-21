@@ -12,10 +12,17 @@ pub(crate) fn show_stats(mut settings: toboggan_cli::Settings) -> anyhow::Result
     let slides = super::deck::resolve_deck(&input).slides;
     settings.input = Some(slides.clone());
 
-    let parse_result = toboggan_cli::parse_presentation(&slides, &settings)
-        .map_err(|err| anyhow::anyhow!("{err}"))?;
-    for error in parse_result.errors() {
-        tracing::warn!("slide excluded from the stats: {error}");
+    let mut parse_result =
+        toboggan_cli::parse_presentation(&slides, &settings).map_err(anyhow::Error::new)?;
+    // Refuse rather than warn. Word counts and a duration estimate over a deck
+    // that is quietly missing its unparseable slides are worse than no numbers
+    // at all: a rehearsal timed against them is wrong, and the warning that
+    // used to be the only clue is filtered out by default.
+    let failures = parse_result.take_errors();
+    if !failures.is_empty() {
+        return Err(anyhow::Error::new(
+            toboggan_cli::TobogganCliError::SlidesFailedToParse { failures },
+        ));
     }
     let stats = toboggan_cli::stats::PresentationStats::from_parse_result(
         &parse_result,

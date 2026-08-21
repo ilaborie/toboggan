@@ -70,7 +70,7 @@ pub fn generate_thumbnails(talk: &Talk, out_dir: &Path, options: &ThumbnailOptio
     let root = super::typst::deck_root(talk);
     let slides_dir = talk.source_dir.as_deref().map(Path::new);
     for (index, slide) in talk.slides.iter().enumerate() {
-        let typst_source = super::typst::generate_thumbnail_typst(slide, &options.mermaid);
+        let typst_source = super::typst::generate_thumbnail_typst(slide, &options.mermaid)?;
         let png = out_dir.join(format!("thumb-{index:04}.png"));
         compile_first_page_png(&typst_source, &png, root.as_deref(), slides_dir)?;
     }

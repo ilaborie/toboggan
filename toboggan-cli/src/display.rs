@@ -278,7 +278,7 @@ mod tests {
     use toboggan_core::Slide;
 
     use super::*;
-    use crate::TalkMetadata;
+    use crate::{TalkMetadata, TobogganCliError};
 
     fn create_test_results() -> ParseResult {
         let talk_metadata = TalkMetadata {
@@ -298,7 +298,7 @@ mod tests {
             SlideProcessingResult::Skipped(Slide::new("Optional Content")),
             SlideProcessingResult::Processed(Slide::new("Second Topic")),
             SlideProcessingResult::Ignored("Invalid file format".to_owned()),
-            SlideProcessingResult::Error("Parse error in slide".to_owned()),
+            SlideProcessingResult::Error(Box::new(TobogganCliError::MissingTitle)),
         ];
 
         ParseResult {

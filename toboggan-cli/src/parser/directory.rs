@@ -234,19 +234,21 @@ pub(super) fn parse_frontmatter(content: &str, file_path: &str) -> Result<FrontM
         .trim_end_matches(FRONT_MATTER_DELIMITER);
 
     toml::from_str::<FrontMatter>(trimmed_content).map_err(|source| {
-        // Calculate the proper span based on the TOML error location
-        let span = if let Some(span) = source.span() {
-            // Add offset for the frontmatter delimiter and any initial whitespace
-            let delimiter_offset = content.find("+++").unwrap_or(0) + 3;
-            let content_start = content[delimiter_offset..]
-                .find(|char: char| !char.is_whitespace())
-                .unwrap_or(0);
-            let actual_offset = delimiter_offset + content_start;
-            SourceSpan::from((actual_offset + span.start, span.len()))
-        } else {
-            // Fall back to highlighting the entire frontmatter content
-            SourceSpan::from((0, content.len()))
-        };
+        // `toml` reports offsets into `trimmed_content`, but the snippet miette
+        // draws is `content` — so they need rebasing. Every method used to
+        // build `trimmed_content` returns a subslice, so its own address gives
+        // the offset exactly, whatever combination of delimiters and
+        // whitespace was stripped. Deriving it from `find("+++")` instead once
+        // added the leading whitespace a second time, since
+        // `trim_start_matches` strips the delimiter but keeps the newline after
+        // it — which put the caret one column to the right of the offending key.
+        let rebase = trimmed_content.as_ptr() as usize - content.as_ptr() as usize;
+        let span = source.span().map_or_else(
+            // No position from `toml`: highlight the whole block rather than
+            // pointing somewhere arbitrary.
+            || SourceSpan::from((0, content.len())),
+            |span| SourceSpan::from((rebase + span.start, span.len())),
+        );
 
         TobogganCliError::parse_frontmatter(
             file_path,
@@ -394,13 +396,10 @@ fn process_single_file(
                 SlideProcessingResult::Processed(slide)
             }
         }
-        Err(error) => {
-            let filename = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("unknown file");
-            SlideProcessingResult::Error(format!("Error processing {filename}: {error}"))
-        }
+        // Kept whole rather than flattened to a string: every variant that can
+        // arrive here already names the file, and the ones carrying a snippet
+        // can only draw it if the diagnostic survives this far.
+        Err(error) => SlideProcessingResult::Error(Box::new(error)),
     }
 }
 
@@ -461,6 +460,57 @@ mod tests {
         assert_eq!(
             deck_root(Path::new("/tmp/deck/slides")),
             PathBuf::from("/tmp/deck")
+        );
+    }
+
+    /// The caret has to land on the offending key itself.
+    ///
+    /// `toml` reports offsets into the delimiter-stripped block, so they need
+    /// rebasing onto the text miette draws — and getting that arithmetic wrong
+    /// is invisible without checking the bytes the span actually covers, which
+    /// is why this asserts on the slice rather than on the rendered output.
+    #[test]
+    fn a_frontmatter_error_spans_the_offending_key() {
+        // Each case keeps the same key on the same line, but varies what comes
+        // before the block — which is what the rebase has to cope with.
+        for (label, content) in [
+            ("plain", "+++\ntitle = \"T\"\nbogus_key = true\n+++"),
+            (
+                "leading blank line",
+                "\n+++\ntitle = \"T\"\nbogus_key = true\n+++",
+            ),
+            (
+                "no trailing newline",
+                "+++\ntitle = \"T\"\nbogus_key = true+++",
+            ),
+        ] {
+            let error = parse_frontmatter(content, "s.md").expect_err(label);
+            let TobogganCliError::ParseFrontmatter { src, span, .. } = &error else {
+                panic!("{label}: unexpected variant: {error:?}");
+            };
+            let spanned = src
+                .inner()
+                .get(span.offset()..span.offset() + span.len())
+                .unwrap_or_else(|| panic!("{label}: span {span:?} outside the source"));
+            assert_eq!(spanned, "bogus_key", "{label}: caret landed on {spanned:?}");
+        }
+    }
+
+    /// A bad *value* is reported where the value is, not where its key is.
+    #[test]
+    fn a_frontmatter_error_can_span_a_value() {
+        let content = "+++\ntitle = \"T\"\nduration = [1, 2]\n+++";
+        let error = parse_frontmatter(content, "s.md").expect_err("array is not a duration");
+        let TobogganCliError::ParseFrontmatter { src, span, .. } = &error else {
+            panic!("unexpected variant: {error:?}");
+        };
+        let spanned = src
+            .inner()
+            .get(span.offset()..span.offset() + span.len())
+            .expect("span inside the source");
+        assert!(
+            content[..span.offset()].ends_with("duration = "),
+            "caret landed on {spanned:?}, not the value"
         );
     }
 

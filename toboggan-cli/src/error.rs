@@ -22,21 +22,40 @@ pub enum TobogganCliError {
     )]
     ReadFile { path: PathBuf, source: io::Error },
 
-    #[display("{count} slide(s) failed to parse:\n  {details}")]
+    /// Keeps the individual failures rather than only their rendered text.
+    ///
+    /// `#[related]` makes miette draw each one with its own snippet and caret,
+    /// which is the whole reason the variants below carry a span: the folder
+    /// build collects per-slide failures here, so without this every diagnostic
+    /// they produce would be flattened to a line of text and the snippet lost.
+    #[display("{} slide(s) failed to parse", failures.len())]
     #[diagnostic(
         code(toboggan_cli::slides_failed_to_parse),
         help("Fix the slides above, or mark them `skip = true` to exclude them deliberately")
     )]
-    SlidesFailedToParse { count: usize, details: String },
+    SlidesFailedToParse {
+        #[related]
+        failures: Vec<TobogganCliError>,
+    },
 
-    #[display("Invalid code embed `{}`: {reason}", path.display())]
+    /// Names the slide as well as the embed target.
+    ///
+    /// This is one of the two variants whose `Display` mentions only the file
+    /// it *failed on*, not the file that asked for it — so a deck with several
+    /// `<!-- code:… -->` directives reported a bad embed and left the author to
+    /// find which slide held it.
+    #[display("Invalid code embed `{}` in {slide}: {reason}", path.display())]
     #[diagnostic(
         code(toboggan_cli::invalid_code_embed),
         help(
             "`<!-- code:lang:path -->` paths are relative to the deck root and must stay inside it"
         )
     )]
-    InvalidCodeEmbed { path: PathBuf, reason: String },
+    InvalidCodeEmbed {
+        slide: String,
+        path: PathBuf,
+        reason: String,
+    },
 
     #[display("Unknown syntax highlighting theme: {theme}")]
     #[diagnostic(
@@ -102,6 +121,13 @@ pub enum TobogganCliError {
         #[label("{}", source.message())]
         span: SourceSpan,
 
+        /// Not the error's `source()`: `toml::de::Error`'s own `Display` is a
+        /// full report — "TOML parse error at line 5, column 1", the offending
+        /// line, and a caret — so exposing it as a cause made miette print the
+        /// same snippet twice and the same message three times, in two
+        /// coordinate systems. Kept as data for `message()`, which is the
+        /// reason on its own.
+        #[error(not(source))]
         source: Box<toml::de::Error>,
     },
 
@@ -118,7 +144,13 @@ pub enum TobogganCliError {
         message: String,
     },
 
-    #[display("Invalid LaTeX math in {file}: {message}")]
+    /// The offending expression is the diagnostic's own source.
+    ///
+    /// The renderer re-parses each block on its own, so no offset into the
+    /// containing file is available here. `src` therefore holds the expression
+    /// and is *named* after the file, and `span` is relative to the expression
+    /// — which is what miette draws, and where the caret belongs anyway.
+    #[display("Invalid LaTeX math in {}: {reason}", src.name())]
     #[diagnostic(
         code(toboggan_cli::invalid_math),
         help(
@@ -129,12 +161,16 @@ pub enum TobogganCliError {
         )
     )]
     InvalidMath {
-        file: String,
-        latex: String,
-        message: String,
+        #[source_code]
+        src: Arc<NamedSource<String>>,
+        #[label("{reason}")]
+        span: SourceSpan,
+        reason: String,
     },
 
-    #[display("Invalid Mermaid diagram in {file}: {message}")]
+    /// Carries the diagram itself, spanned. See [`Self::InvalidMath`] for why
+    /// the source is the snippet rather than the file it came from.
+    #[display("Invalid Mermaid diagram in {}: {reason}", src.name())]
     #[diagnostic(
         code(toboggan_cli::invalid_mermaid),
         help(
@@ -144,9 +180,37 @@ pub enum TobogganCliError {
         )
     )]
     InvalidMermaid {
-        file: String,
-        diagram: String,
-        message: String,
+        #[source_code]
+        src: Arc<NamedSource<String>>,
+        #[label("{reason}")]
+        span: SourceSpan,
+        reason: String,
+    },
+
+    /// Separate from [`Self::InvalidMermaid`] so the advice can be, too.
+    ///
+    /// A rejected parameter is the common case — a typo beats a malformed
+    /// diagram in practice — and telling its author to "fix the diagram, or
+    /// fence it as ` ```text `" points at a diagram that is fine and suggests
+    /// throwing it away.
+    #[display("Invalid Mermaid fence in {}: {reason}", src.name())]
+    #[diagnostic(
+        code(toboggan_cli::invalid_mermaid_fence),
+        help(
+            "` ```mermaid:key=value,… ` accepts theme, background, width, nodeSpacing, \
+             rankSpacing, maxLabelWidth, aspectRatio, fastText, class and alt. Every \
+             value with a fixed set of spellings is checked, so a misspelled one is \
+             reported here too; `class` and `alt` are free text. `class` styles the \
+             HTML only. Put `alt` last — its label runs to the end of the fence, so a \
+             comma in it is part of the sentence rather than the next parameter."
+        )
+    )]
+    InvalidMermaidFence {
+        #[source_code]
+        src: Arc<NamedSource<String>>,
+        #[label("{reason}")]
+        span: SourceSpan,
+        reason: String,
     },
 
     #[display("Invalid Mermaid config {}: {message}", path.display())]
@@ -253,6 +317,49 @@ impl TobogganCliError {
         }
     }
 
+    /// Spans the whole expression: the `MathML` converter reports a reason, not
+    /// a position.
+    #[must_use]
+    pub fn invalid_math(file: &str, latex: String, reason: String) -> Self {
+        let span = (0, latex.len()).into();
+        Self::InvalidMath {
+            src: Arc::new(NamedSource::new(snippet_name(file, "math"), latex)),
+            span,
+            reason,
+        }
+    }
+
+    /// Spans the offending parameter within the fence's info string, so the
+    /// caret lands on `width=200px` rather than on the whole fence.
+    #[must_use]
+    pub fn invalid_mermaid_fence(
+        file: &str,
+        params: String,
+        span: SourceSpan,
+        reason: String,
+    ) -> Self {
+        Self::InvalidMermaidFence {
+            src: Arc::new(NamedSource::new(
+                snippet_name(file, "mermaid fence"),
+                params,
+            )),
+            span,
+            reason,
+        }
+    }
+
+    #[must_use]
+    pub fn invalid_mermaid(file: &str, diagram: String, span: SourceSpan, reason: String) -> Self {
+        Self::InvalidMermaid {
+            src: Arc::new(NamedSource::new(
+                snippet_name(file, "mermaid fence"),
+                diagram,
+            )),
+            span,
+            reason,
+        }
+    }
+
     #[must_use]
     pub fn format_commonmark(
         file_path: &str,
@@ -345,4 +452,16 @@ impl From<serde_saphyr::Error> for TobogganCliError {
             message: source.to_string(),
         }
     }
+}
+
+/// Names a snippet so miette's header cannot be read as a file location.
+///
+/// These diagnostics hold the *expression* or the *diagram*, not the file it
+/// came from — the renderer re-parses each block on its own, so no offset into
+/// the containing file survives to rebase the span with. Naming the source after
+/// the file alone made miette print `slide.md:3:3` for a caret three lines into
+/// a fence that starts at line 12, sending both a reader and an editor's
+/// jump-to-error to the wrong place.
+fn snippet_name(file: &str, kind: &str) -> String {
+    format!("{file} ({kind})")
 }

@@ -487,6 +487,11 @@ pub(crate) struct ServeArgs {
     #[arg(long)]
     pub(crate) watch: bool,
 
+    /// Mermaid config JSON used when redrawing a diagram for the PDF or the
+    /// slide overview [default: `[build] mermaid-config` beside the talk]
+    #[arg(long, value_name = "FILE", value_hint = ValueHint::FilePath)]
+    pub(crate) mermaid_config: Option<PathBuf>,
+
     #[command(flatten)]
     pub(crate) serve: ServeOptions,
 }
@@ -498,6 +503,10 @@ impl ServeArgs {
             server: self.serve.into_server_settings(),
             talk: self.path,
             watch: self.watch,
+            // `serve` takes a built talk rather than a folder, so it has no
+            // `[build]` options of its own — but the PDF and the thumbnails
+            // redraw diagrams from Markdown, so this one still applies.
+            mermaid_config: self.mermaid_config.or(config.build.mermaid_config),
         }
     }
 }

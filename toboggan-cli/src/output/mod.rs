@@ -43,7 +43,7 @@ pub fn serialize_talk(
 
         OutputFormat::Typst => {
             let filtered = filter_for(talk, RenderTarget::Pdf);
-            Ok(typst::generate_typst(&filtered, mermaid))
+            typst::generate_typst(&filtered, mermaid)
         }
     }
 }

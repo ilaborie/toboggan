@@ -104,8 +104,9 @@ fn render_guide() -> anyhow::Result<String> {
         &talk,
         OutputFormat::Html,
         "/guide/",
-        // The guide is a prebuilt talk whose diagrams, if it ever grows any,
-        // were already drawn into its HTML; the HTML path never re-renders one.
+        // The guide's diagrams were already drawn into its HTML when the
+        // checked-in artifact was built, and the HTML path never re-renders
+        // one — so the renderer handed over here is never consulted.
         &toboggan_cli::mermaid::MermaidRenderer::default(),
     )
     .map_err(|err| anyhow::anyhow!("{err}"))?;

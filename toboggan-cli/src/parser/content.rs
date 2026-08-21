@@ -60,10 +60,18 @@ impl InnerContent {
             if let NodeValue::HtmlBlock(html) = &data.value
                 && let Some((info, path)) = parse_code(&html.literal)
             {
-                let resolved = resolve_embed(&path, source.asset_root)?;
-                // Instead of modifying the AST, generate markdown directly
-                let file_content = std::fs::read_to_string(&resolved)
-                    .map_err(|err| TobogganCliError::read_file(resolved.clone(), err))?;
+                let resolved = resolve_embed(&path, source.asset_root, source.name)?;
+                // Instead of modifying the AST, generate markdown directly.
+                // A read failure is reported as a bad embed rather than a bare
+                // `ReadFile`, which would name the target and not the slide
+                // asking for it — leaving the author nothing to search for.
+                let file_content = std::fs::read_to_string(&resolved).map_err(|err| {
+                    TobogganCliError::InvalidCodeEmbed {
+                        slide: source.name.to_owned(),
+                        path: path.clone(),
+                        reason: err.to_string(),
+                    }
+                })?;
 
                 // Generate a fenced code block markdown
                 code_block_md = Some(format!("```{info}\n{file_content}\n```\n"));
@@ -156,9 +164,10 @@ fn append_md_block(dest: &mut String, block: &str) {
 /// # Errors
 /// Returns an error if the path is absolute, escapes the deck, or the deck root
 /// is unknown.
-fn resolve_embed(path: &Path, asset_root: Option<&Path>) -> Result<PathBuf> {
+fn resolve_embed(path: &Path, asset_root: Option<&Path>, slide: &str) -> Result<PathBuf> {
     let invalid = |reason: &str| {
         Err(TobogganCliError::InvalidCodeEmbed {
+            slide: slide.to_owned(),
             path: path.to_path_buf(),
             reason: reason.to_owned(),
         })
@@ -999,15 +1008,41 @@ End of notes."
     /// MCP server, both of which build decks on someone else's behalf.
     #[test]
     fn code_embed_rejects_absolute_paths() {
-        let err = resolve_embed(Path::new("/etc/passwd"), Some(Path::new("/deck")))
+        let err = resolve_embed(Path::new("/etc/passwd"), Some(Path::new("/deck")), "s.md")
             .expect_err("absolute path must be rejected");
         assert!(matches!(err, TobogganCliError::InvalidCodeEmbed { .. }));
     }
 
+    /// The error has to name the slide, not just the embed target. It used to
+    /// name only the target, so a deck with several `<!-- code:… -->`
+    /// directives said one of them was bad and left the author to find which.
+    #[test]
+    fn code_embed_errors_name_the_slide_that_asked_for_it() {
+        let error = resolve_embed(
+            Path::new("../escaped.rs"),
+            Some(Path::new("/deck")),
+            "slides/3-demo.md",
+        )
+        .expect_err("`..` must be rejected");
+        let rendered = error.to_string();
+        assert!(
+            rendered.contains("slides/3-demo.md"),
+            "the slide is not named: {rendered}"
+        );
+        assert!(
+            rendered.contains("escaped.rs"),
+            "the embed target is not named: {rendered}"
+        );
+    }
+
     #[test]
     fn code_embed_rejects_parent_traversal() {
-        let err = resolve_embed(Path::new("../../etc/passwd"), Some(Path::new("/deck")))
-            .expect_err("`..` must be rejected");
+        let err = resolve_embed(
+            Path::new("../../etc/passwd"),
+            Some(Path::new("/deck")),
+            "s.md",
+        )
+        .expect_err("`..` must be rejected");
         assert!(matches!(err, TobogganCliError::InvalidCodeEmbed { .. }));
     }
 
@@ -1015,14 +1050,18 @@ End of notes."
     /// building the guide from the repo root used to drop its embed slide.
     #[test]
     fn code_embed_resolves_against_the_deck_root() {
-        let resolved = resolve_embed(Path::new("snippets/hello.rs"), Some(Path::new("/deck")))
-            .expect("valid embed");
+        let resolved = resolve_embed(
+            Path::new("snippets/hello.rs"),
+            Some(Path::new("/deck")),
+            "s.md",
+        )
+        .expect("valid embed");
         assert_eq!(resolved, Path::new("/deck/snippets/hello.rs"));
     }
 
     #[test]
     fn code_embed_without_a_deck_root_is_an_error_not_a_cwd_lookup() {
-        let err = resolve_embed(Path::new("snippets/hello.rs"), None)
+        let err = resolve_embed(Path::new("snippets/hello.rs"), None, "s.md")
             .expect_err("no root means no lookup");
         assert!(matches!(err, TobogganCliError::InvalidCodeEmbed { .. }));
     }

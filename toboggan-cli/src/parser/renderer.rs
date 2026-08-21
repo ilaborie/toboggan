@@ -154,11 +154,7 @@ impl<'a> HtmlRenderer<'a> {
     }
 
     fn math_error(&self, latex: &str, reason: &str) -> TobogganCliError {
-        TobogganCliError::InvalidMath {
-            file: self.source_name.to_owned(),
-            latex: latex.to_owned(),
-            message: format!("`{latex}` — {reason}"),
-        }
+        TobogganCliError::invalid_math(self.source_name, latex.to_owned(), reason.to_owned())
     }
 }
 
@@ -301,9 +297,13 @@ mod tests {
             .expect_err("invalid LaTeX should be rejected");
 
         match error {
-            TobogganCliError::InvalidMath { file, latex, .. } => {
-                assert_eq!(file, "math.md");
+            TobogganCliError::InvalidMath { src, span, .. } => {
+                assert!(src.name().starts_with("math.md"), "{}", src.name());
+                let latex = src.inner();
                 assert!(latex.contains(r"\this"), "latex not reported: {latex}");
+                // The whole expression is spanned, so miette draws all of it.
+                assert_eq!(span.offset(), 0);
+                assert_eq!(span.len(), latex.len());
             }
             other => panic!("Expected InvalidMath, got {other:?}"),
         }
@@ -350,11 +350,17 @@ mod tests {
             .expect_err("invalid diagram should be rejected");
 
         match error {
-            TobogganCliError::InvalidMermaid { file, diagram, .. } => {
-                assert_eq!(file, "math.md");
+            TobogganCliError::InvalidMermaid { src, span, .. } => {
+                assert!(src.name().starts_with("math.md"), "{}", src.name());
+                let diagram = src.inner();
                 assert!(
                     diagram.contains("nonsense"),
                     "diagram not reported: {diagram}"
+                );
+                // The caret must land inside the diagram, not past its end.
+                assert!(
+                    span.offset() + span.len() <= diagram.len(),
+                    "span {span:?} runs past the diagram: {diagram:?}"
                 );
             }
             other => panic!("Expected InvalidMermaid, got {other:?}"),

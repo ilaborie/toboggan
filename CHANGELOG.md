@@ -21,8 +21,15 @@ Entries are grouped the way the commits are: this repository uses
   `maxLabelWidth`, `fastText`, `class`, `alt`; an unknown parameter is an
   error), and set deck-wide defaults with `--mermaid-config` or
   `[build] mermaid-config` in `toboggan.toml`, pointing at a JSON file in
-  Mermaid's own config shape. The background defaults to transparent so a
-  diagram does not punch a white rectangle into a themed slide.
+  Mermaid's own config shape — where an unknown setting or a misspelled theme
+  name is a build error too, rather than being quietly ignored. The background
+  defaults to transparent so a diagram does not punch a white rectangle into a
+  themed slide. `width` accepts only units CSS and Typst share (`%`, `pt`, `mm`,
+  `cm`, `in`, `em`) so a deck cannot look right on the projector and then fail to
+  export, and `background` takes only a real colour, so a misspelled one is a
+  build error rather than a black rectangle. `class` and `alt` are free text;
+  `class` styles the HTML only, and `alt` runs to the end of the fence so a
+  label can contain commas — write it last.
 - **A presenter view at `/presenter`** — the current slide beside the next one,
   the notes for where you are, and a status strip with the wall clock, an
   elapsed timer, deck progress, slide and reveal counters, and how far ahead or

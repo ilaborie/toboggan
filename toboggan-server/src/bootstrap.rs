@@ -31,7 +31,10 @@ pub async fn launch(settings: Settings) -> anyhow::Result<()> {
         }
     });
 
-    launch_with_talk(talk, settings.server, watch, MermaidRenderer::default()).await
+    let mermaid = MermaidRenderer::from_config(settings.mermaid_config.as_deref())
+        .context("Loading the Mermaid config")?;
+
+    launch_with_talk(talk, settings.server, watch, mermaid).await
 }
 
 /// Serves an already-built [`Talk`], optionally watching a path for reloads.

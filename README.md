@@ -34,9 +34,9 @@ presenter view with notes and a timer, and an MCP server for writing slides with
 an LLM.
 
 Mermaid diagrams and LaTeX math are drawn while the deck builds, not in the
-browser, so a `.mmd` fence and a `$…$` expression look the same on the projector,
-in the exported HTML and in the PDF — and a broken one fails the build rather
-than the talk.
+browser, so a `mermaid` fence and a `$…$` expression look the same on the
+projector, in the exported HTML and in the PDF — and a broken one fails the
+build rather than the talk.
 
 > **Note**: this is an educational and fun project, built to explore how far
 > Rust reaches — the same domain crate drives an axum server, a WebAssembly
