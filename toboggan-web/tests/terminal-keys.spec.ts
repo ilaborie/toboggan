@@ -405,3 +405,34 @@ test("blanking the screen covers a maximized terminal", async ({ page }) => {
 		)
 		.toBe("toboggan-blank");
 });
+
+test("a terminal whose shell has exited does not mute the deck", async ({
+	page,
+}) => {
+	// A claim mutes the deck, so a session that can no longer take a keystroke
+	// must not be given one: the presenter would be left clicking a dead terminal
+	// that wears the ring while the deck stops answering.
+	//
+	// This needs the server to notice the shell died — nothing else does, and
+	// until it did, the browser went on believing the session was live.
+	await page.locator(".terminal-canvas").click();
+	await expect(slideWindow(page)).toHaveClass(/terminal-has-keys/);
+
+	// `type` inserts text; the newline has to be a real Enter or the shell never
+	// sees a command at all.
+	await page.keyboard.type("exit");
+	await page.keyboard.press("Enter");
+	await expect(slideWindow(page)).not.toHaveClass(/terminal-has-keys/, {
+		timeout: 10_000,
+	});
+
+	await page.locator(".terminal-titlebar").click();
+	await expect(
+		slideWindow(page),
+		"a dead terminal took the keyboard anyway",
+	).not.toHaveClass(/terminal-has-keys/);
+
+	const before = await slideFingerprint(page);
+	await page.keyboard.press("Space");
+	await expectDeckMoved(page, before);
+});

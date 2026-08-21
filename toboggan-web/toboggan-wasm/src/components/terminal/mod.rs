@@ -1,6 +1,6 @@
 mod rioterm;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use futures::channel::mpsc;
@@ -35,7 +35,13 @@ const FONT_FAMILY: &str = "\"JetBrainsMono Nerd Font Mono\", monospace";
 pub(crate) struct TobogganTerminalElement {
     container: Option<Element>,
     /// This terminal's identity when it takes the keyboard from the deck.
-    owner: KeyboardOwner,
+    ///
+    /// Re-minted per session rather than per element, so that a session ending
+    /// can give the keyboard back without taking it from whatever claimed it
+    /// since. A restart tears the old session down while the new one is already
+    /// claiming; matched on the element, that release would land on the wrong
+    /// claim.
+    owner: Cell<KeyboardOwner>,
     /// The `.terminal-window` of the live session, or `None` before the first
     /// `start_terminal`. Held so the keyboard claim can point at it.
     window: RefCell<Option<HtmlElement>>,
@@ -49,7 +55,7 @@ impl Default for TobogganTerminalElement {
     fn default() -> Self {
         Self {
             container: None,
-            owner: next_keyboard_owner(),
+            owner: Cell::new(next_keyboard_owner()),
             window: RefCell::new(None),
             session: RefCell::new(None),
         }
@@ -131,6 +137,10 @@ impl TobogganTerminalElement {
 
         // Set up action channel (shared between font shortcuts, button clicks,
         // the resize observer, and rioterm's own output callback).
+        // A fresh identity for a fresh session; see the field's doc.
+        self.owner.set(next_keyboard_owner());
+        let owner = self.owner.get();
+
         let (tx_key, rx_key) = mpsc::unbounded::<KeyAction>();
         setup_font_shortcuts(&body_el, tx_key.clone());
         // Re-fit the grid whenever the body's box changes: the very first
@@ -140,7 +150,7 @@ impl TobogganTerminalElement {
         setup_button_click(&btn_maximize, tx_key.clone(), KeyAction::Expand);
         setup_button_click(&btn_minimize, tx_key.clone(), KeyAction::Restore);
         if let Some(window_html) = window_html.as_ref() {
-            setup_keyboard_claim(window_html, self.owner, tx_key.clone());
+            setup_keyboard_claim(window_html, owner, tx_key.clone());
         }
         (*self.window.borrow_mut()).clone_from(&window_html);
         // Kept so `stop_terminal` can end the session (and with it the PTY).
@@ -158,6 +168,7 @@ impl TobogganTerminalElement {
                 window_html,
                 tx_key,
                 rx_key,
+                owner,
             )
             .await;
         });
@@ -178,12 +189,12 @@ impl TobogganTerminalElement {
             error!("Terminal has no live session to focus; the deck keeps its keys");
             return;
         };
-        claim_for_live_session(self.owner, &window, &tx);
+        claim_for_live_session(self.owner.get(), &window, &tx);
     }
 
     /// Gives the deck its keys back.
     pub(crate) fn release_keyboard(&self) {
-        crate::release_keyboard(self.owner);
+        crate::release_keyboard(self.owner.get());
     }
 
     pub(crate) fn stop_terminal(&self) {
@@ -641,6 +652,7 @@ async fn run_terminal_session(
     window_el: Option<HtmlElement>,
     tx_key: mpsc::UnboundedSender<KeyAction>,
     rx_key: mpsc::UnboundedReceiver<KeyAction>,
+    owner: KeyboardOwner,
 ) {
     let font_size = Rc::new(RefCell::new(DEFAULT_FONT_SIZE));
     let Some(session) =
@@ -804,14 +816,14 @@ async fn run_terminal_session(
     // keyboard, which would mute the deck for a terminal that cannot take a
     // keystroke. Ending it makes the send fail, which is what tells a later
     // click to leave the keys alone.
-    //
-    // The claim is deliberately *not* released here. `KeyboardOwner` identifies
-    // the element, not the session, so a restart — which ends the old session
-    // while the new one is already claiming — would release the claim the new
-    // session had just taken. The keys come back on the next click instead,
-    // where the failing send is checked.
     clear_maximized(&tx_key_end);
     let _ = tx_key_end.unbounded_send(KeyAction::SessionEnded);
+    // And the keyboard goes back to the deck, so a shell that exits does not
+    // leave the presenter holding a ring over a dead terminal. Safe from here
+    // because the owner names this session: a restart's teardown releases the id
+    // the old session claimed with, which no longer matches the one the new
+    // session already holds, so it is a no-op rather than a theft.
+    crate::release_keyboard(owner);
     let _ = ws_write.lock().await.close().await;
     // Drop both halves so the underlying socket is released and the server sees
     // the close.
