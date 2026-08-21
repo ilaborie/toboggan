@@ -6,8 +6,6 @@ speaker notes, the next slide, and a slide list beside it.
 Good over ssh, good on a second machine, and good when you want a presenter view
 without a second browser window.
 
-[ratatui]: https://ratatui.rs/
-
 > [!IMPORTANT]
 > Run it with `toboggan tui`. The crate also builds a standalone
 > `toboggan-tui` binary from `src/main.rs`, kept from before the unified
@@ -51,3 +49,5 @@ watch — see [SECURITY.md](../SECURITY.md).
 ## License
 
 MIT or Apache-2.0, at your option.
+
+[ratatui]: https://ratatui.rs/

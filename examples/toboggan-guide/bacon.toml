@@ -7,14 +7,28 @@
 default_job = "toml"
 
 [jobs.toml]
-command = ["toboggan", "build", "-p", "./slides/", "--output", "toboggan-guide.toml"]
+command = [
+  "toboggan",
+  "build",
+  "-p",
+  "./slides/",
+  "--output",
+  "toboggan-guide.toml",
+]
 need_stdout = true
 allow_warnings = true
 default_watch = false
 watch = ["slides"]
 
 [jobs.html]
-command = ["toboggan", "build", "-p", "./slides/", "--output", "toboggan-guide.html"]
+command = [
+  "toboggan",
+  "build",
+  "-p",
+  "./slides/",
+  "--output",
+  "toboggan-guide.html",
+]
 need_stdout = true
 allow_warnings = true
 default_watch = false

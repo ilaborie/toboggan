@@ -135,7 +135,7 @@ a:visited {
 }
 
 /* Inline code.
-   
+
    No hover treatment: this rule matches every `code`, including the one inside
    every `<pre>`, so moving the mouse across a slide drew a box around whole
    code blocks. On a projector that is a rectangle appearing for no reason the

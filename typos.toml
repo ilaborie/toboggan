@@ -22,3 +22,14 @@ limite = "limite"
 Moteur = "Moteur"
 # ratatui is a Rust TUI crate name, not a misspelling of ratatouille
 ratatui = "ratatui"
+# "unparseable" is a standard variant spelling, and the one this codebase uses
+# consistently for a slide or a front-matter block that will not parse
+unparseable = "unparseable"
+Unparseable = "Unparseable"
+# `classe` is a deliberate misspelling of `classes`: the front-matter parser has
+# a test asserting that an unknown key is *named* in the rejection, and this is
+# the key it offers. Correcting it would delete the thing under test.
+classe = "classe"
+# typos tokenizes "PNGs" as `PN` + `Gs` and reads the first half as a
+# misspelling of "ON"
+PN = "PN"

@@ -32,8 +32,6 @@ roughly ten [scraper] parses for every slide, and the linter, which asks more
 questions, reached about twenty-five. Parse the body once and hand the document
 to whatever needs to inspect it.
 
-[scraper]: https://github.com/causal-agent/scraper
-
 ## Duration
 
 Estimates come from a words-per-minute rate (`--wpm`, default 150). Speaker
@@ -47,3 +45,5 @@ drifting.
 ## License
 
 MIT or Apache-2.0, at your option.
+
+[scraper]: https://github.com/causal-agent/scraper

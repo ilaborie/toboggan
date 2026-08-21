@@ -7,8 +7,6 @@ here; the platform app only draws.
 Both [`TobogganApp/`](../TobogganApp) (SwiftUI, iOS) and
 [`toboggan-android/`](../toboggan-android) (Kotlin) are hosts for this crate.
 
-[UniFFI]: https://github.com/mozilla/uniffi-rs
-
 ## Modules
 
 | Module | What it holds |
@@ -75,3 +73,5 @@ crate that does not is a mismatch that only shows up at link time.
 ## License
 
 MIT or Apache-2.0, at your option.
+
+[uniffi]: https://github.com/mozilla/uniffi-rs

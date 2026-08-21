@@ -62,8 +62,6 @@ what makes the one-word invocation above the whole authoring loop.
 Errors are reported with [`miette`], so a bad slide points at the file and the
 line rather than at a stack trace.
 
-[`miette`]: https://github.com/zkat/miette
-
 ## Installing
 
 Releases publish `x86_64-unknown-linux-gnu` and `aarch64-apple-darwin` binaries.
@@ -78,3 +76,5 @@ See the [root README](../README.md) for details.
 ## License
 
 MIT or Apache-2.0, at your option.
+
+[`miette`]: https://github.com/zkat/miette

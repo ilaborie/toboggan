@@ -107,12 +107,12 @@
 
 /* The root size every slide is measured in: headings, code, tables and the
    slide's own padding are all relative to it.
-   
+
    It was a flat 32px, so a deck laid out for a 1920x1080 projector kept those
    exact pixels on a 1024x768 one — where the same slide is 47% narrower. Code
    blocks ran off the right edge and the last lines fell off the bottom, with
    nothing to scroll.
-   
+
    Now it tracks the smaller of the two viewport dimensions, so a slide keeps
    the same proportions — the same characters per line, the same lines per
    slide — whatever it is shown on. The 32px ceiling is the old value: at

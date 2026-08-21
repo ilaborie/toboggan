@@ -3,8 +3,6 @@
 Present from a native window. An [iced] client that connects to a running
 Toboggan server and stays in sync with every other client.
 
-[iced]: https://github.com/iced-rs/iced
-
 > [!IMPORTANT]
 > Run it with `toboggan desktop`. The crate also builds a standalone
 > `toboggan-desktop` binary from `src/main.rs`, kept from before the unified
@@ -45,3 +43,5 @@ A client on the server's own machine presents. Across the network it needs
 ## License
 
 MIT or Apache-2.0, at your option.
+
+[iced]: https://github.com/iced-rs/iced

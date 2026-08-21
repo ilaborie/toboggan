@@ -25,7 +25,11 @@ futures = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
+tokio = { workspace = true, features = [
+  "macros",
+  "rt-multi-thread",
+  "test-util",
+] }
 tracing-subscriber = { workspace = true }
 
 [lints]

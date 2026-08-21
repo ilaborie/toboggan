@@ -365,23 +365,23 @@ Built with excellent Rust crates, including:
 
 And many more that make Rust development a joy.
 
-[tokio]: https://github.com/tokio-rs/tokio
-[axum]: https://github.com/tokio-rs/axum
-[serde]: https://github.com/serde-rs/serde
 [anyhow]: https://github.com/dtolnay/anyhow
-[miette]: https://github.com/zkat/miette
-[comrak]: https://github.com/kivikakk/comrak
+[axum]: https://github.com/tokio-rs/axum
 [clap]: https://github.com/clap-rs/clap
-[tracing]: https://github.com/tokio-rs/tracing
-[jiff]: https://github.com/BurntSushi/jiff
-[toml]: https://github.com/toml-rs/toml
-[wasm-bindgen]: https://github.com/rustwasm/wasm-bindgen
-[gloo]: https://github.com/rustwasm/gloo
-[rioterm]: https://github.com/raphamorim/rio
-[ratatui]: https://ratatui.rs/
+[comrak]: https://github.com/kivikakk/comrak
 [crossterm]: https://github.com/crossterm-rs/crossterm
+[gloo]: https://github.com/rustwasm/gloo
 [iced]: https://github.com/iced-rs/iced
-[uniffi]: https://github.com/mozilla/uniffi-rs
-[tokio-tungstenite]: https://github.com/snapview/tokio-tungstenite
+[jiff]: https://github.com/BurntSushi/jiff
+[miette]: https://github.com/zkat/miette
+[ratatui]: https://ratatui.rs/
 [reqwest]: https://github.com/seanmonstar/reqwest
+[rioterm]: https://github.com/raphamorim/rio
+[serde]: https://github.com/serde-rs/serde
+[tokio]: https://github.com/tokio-rs/tokio
+[tokio-tungstenite]: https://github.com/snapview/tokio-tungstenite
+[toml]: https://github.com/toml-rs/toml
 [tower-http]: https://github.com/tower-rs/tower-http
+[tracing]: https://github.com/tokio-rs/tracing
+[uniffi]: https://github.com/mozilla/uniffi-rs
+[wasm-bindgen]: https://github.com/rustwasm/wasm-bindgen
