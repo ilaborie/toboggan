@@ -55,6 +55,13 @@ static ANCHOR_SELECTOR: LazyLock<Selector> =
 /// Tags whose content should be excluded from text extraction
 const EXCLUDED_TAGS: &[&str] = &["style", "script", "svg", "figure"];
 
+/// Tags excluded on top of [`EXCLUDED_TAGS`] when counting *spoken* words.
+///
+/// Only `pre`, never `code`: comrak renders a fenced or indented block as
+/// `<pre><code>`, so `pre` covers block code, while an inline `` `code` `` span
+/// is a bare `<code>` — and an identifier written inline is read out loud.
+const UNSPOKEN_TAGS: &[&str] = &["style", "script", "svg", "figure", "pre"];
+
 /// Prefix comrak puts on a fenced block's language class.
 const LANGUAGE_CLASS_PREFIX: &str = "language-";
 
@@ -204,12 +211,31 @@ impl HtmlDocument {
     }
 
     /// Extract text content, excluding content from style, script, svg, and figure tags
+    ///
+    /// This is the *whole* readable text of the fragment, code blocks included,
+    /// and it is what the slide-overview search index is built from — searching
+    /// a deck for a snippet it visibly contains has to find it. Word counts use
+    /// [`Self::extract_spoken_text`] instead.
     #[must_use]
     pub fn extract_text(&self) -> String {
+        self.extract_text_excluding(EXCLUDED_TAGS)
+    }
+
+    /// Extract only the text a speaker actually says, dropping block code.
+    ///
+    /// Word counts drive the duration estimate, and nobody reads a fenced block
+    /// out word by word — counting it made a code-heavy deck look far longer
+    /// than it is.
+    #[must_use]
+    pub fn extract_spoken_text(&self) -> String {
+        self.extract_text_excluding(UNSPOKEN_TAGS)
+    }
+
+    fn extract_text_excluding(&self, excluded: &[&str]) -> String {
         let mut result = String::new();
         for element in self.document.root_element().children() {
             if let Some(element_ref) = ElementRef::wrap(element) {
-                Self::extract_text_recursive(element_ref, &mut result);
+                Self::extract_text_recursive(element_ref, excluded, &mut result);
             } else if let Some(text) = element.value().as_text() {
                 Self::append_text(&mut result, text.trim());
             }
@@ -217,17 +243,17 @@ impl HtmlDocument {
         result
     }
 
-    fn extract_text_recursive(element: ElementRef<'_>, result: &mut String) {
+    fn extract_text_recursive(element: ElementRef<'_>, excluded: &[&str], result: &mut String) {
         let tag_name = element.value().name();
 
         // Skip excluded tags entirely
-        if EXCLUDED_TAGS.contains(&tag_name) {
+        if excluded.contains(&tag_name) {
             return;
         }
 
         for child in element.children() {
             if let Some(child_element) = ElementRef::wrap(child) {
-                Self::extract_text_recursive(child_element, result);
+                Self::extract_text_recursive(child_element, excluded, result);
             } else if let Some(text) = child.value().as_text() {
                 Self::append_text(result, text.trim());
             }
@@ -496,5 +522,51 @@ mod query_tests {
         assert_eq!(blocks.len(), 2);
         assert_eq!(blocks[0].language.as_deref(), Some("sh"));
         assert_eq!(blocks[1].language, None);
+    }
+}
+
+/// The split between "all the text" and "the text someone says out loud".
+///
+/// These two extractions feed different consumers — the slide-overview search
+/// index reads [`HtmlDocument::extract_text`], word counts read
+/// [`HtmlDocument::extract_spoken_text`] — so collapsing them back into one
+/// would either make code unsearchable or make code-heavy decks read as far
+/// longer than they are. Pinned here so that cannot happen quietly.
+#[cfg(test)]
+mod spoken_text_tests {
+    use super::*;
+
+    const FENCED: &str =
+        "<p>Run this</p><pre><code class=\"language-sh\">cargo build --release</code></pre>";
+
+    #[test]
+    fn block_code_is_searchable_but_not_spoken() {
+        let document = HtmlDocument::parse_fragment(FENCED);
+
+        let searchable = document.extract_text();
+        assert!(
+            searchable.contains("cargo build --release"),
+            "the search index must still find code: {searchable:?}"
+        );
+
+        let spoken = document.extract_spoken_text();
+        assert_eq!(spoken, "Run this");
+    }
+
+    #[test]
+    fn inline_code_is_still_spoken() {
+        let spoken = HtmlDocument::parse_fragment("<p>Set <code>hidden_in</code> to skip it</p>")
+            .extract_spoken_text();
+
+        assert_eq!(spoken, "Set hidden_in to skip it");
+    }
+
+    #[test]
+    fn a_style_block_is_in_neither() {
+        let document =
+            HtmlDocument::parse_fragment("<style>.card { color: red; }</style><p>Cards</p>");
+
+        assert_eq!(document.extract_text(), "Cards");
+        assert_eq!(document.extract_spoken_text(), "Cards");
     }
 }
