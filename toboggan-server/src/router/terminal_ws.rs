@@ -28,6 +28,12 @@ fn default_cols() -> u16 {
     80
 }
 
+/// How long the shell's last output is given to reach the client after it dies.
+///
+/// Long enough for a `logout` line already through the PTY, short enough that
+/// nobody notices the socket staying open for it.
+const EXIT_DRAIN: Duration = Duration::from_millis(120);
+
 fn default_rows() -> u16 {
     24
 }
@@ -124,16 +130,49 @@ async fn handle_terminal(
 
     let ws_reader_task = spawn_ws_reader(ws_receiver, tx_pty, pair.master);
     let ws_sender_task = spawn_ws_sender(rx_ws, ws_sender);
+    let reader_abort = ws_reader_task.abort_handle();
+    let sender_abort = ws_sender_task.abort_handle();
+
+    // Watching the child is the only way to learn that the shell exited.
+    //
+    // Nothing else reports it. The PTY reader treats a zero-length read as "no
+    // output yet" and sleeps rather than as end-of-file, so it spins for the
+    // life of the page; and the two socket tasks are both waiting on a client
+    // that has no reason to say anything. Without this arm a shell that ran
+    // `exit` left a session the browser still believed was live: a terminal
+    // painting its last frame, a PTY the server had not reaped, and a click
+    // that could still hand it the keyboard.
+    //
+    // `wait` blocks, so it goes to a blocking thread, and the killer is cloned
+    // first because waiting takes the child.
+    let mut killer = child.clone_killer();
+    let child_exit = tokio::task::spawn_blocking(move || child.wait());
 
     tokio::select! {
         _ = ws_reader_task => { info!("WebSocket reader ended"); }
         _ = ws_sender_task => { info!("WebSocket sender ended"); }
+        status = child_exit => {
+            match status {
+                Ok(Ok(status)) => info!(%status, "Shell exited"),
+                Ok(Err(err)) => warn!(?err, "Could not wait for the shell"),
+                Err(err) => warn!(?err, "The task waiting on the shell failed"),
+            }
+            // The shell's parting words are written before it exits, so they may
+            // still be in flight through the reader thread. Closing the socket
+            // the instant it dies would swallow them.
+            tokio::time::sleep(EXIT_DRAIN).await;
+        }
     }
 
     info!("Terminal session ended, killing child process");
-    if let Err(err) = child.kill() {
+    if let Err(err) = killer.kill() {
         warn!(?err, "Failed to kill child process");
     }
+    // Both tasks outlive the arm that did not fire, and one of them owns the PTY
+    // master: dropping it is what unblocks the reader thread, which would
+    // otherwise go on polling a shell nobody is listening to.
+    reader_abort.abort();
+    sender_abort.abort();
 }
 
 /// Forwards PTY output to the WebSocket verbatim.
