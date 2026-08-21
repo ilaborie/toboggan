@@ -21,8 +21,15 @@ test("the deck renders a slide", async ({ page }) => {
 	// `section` lives inside the slide component's shadow root; Playwright
 	// pierces open shadow roots, so this only passes if wasm booted and the
 	// component rendered.
+	//
+	// The budget is deliberately tight. Getting here used to mean a WebSocket
+	// handshake, a whole `/api/talk` round trip wedged in front of the state
+	// frame, and ~700 KB of terminal font — none of which the first slide needs
+	// — so 15s was generous enough to hide all of it. Locally this is a few tens
+	// of milliseconds; a second is still far more than it should ever take, and
+	// little enough that putting any of that back fails here.
 	await expect(page.locator("section").first()).toBeVisible({
-		timeout: 15_000,
+		timeout: 1_000,
 	});
 });
 

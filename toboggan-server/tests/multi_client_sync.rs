@@ -10,6 +10,7 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use anyhow::bail;
+use axum::extract::FromRef;
 use common::create_multi_slide_talk;
 use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
@@ -246,4 +247,49 @@ async fn test_client_disconnect_and_reconnect_sync() {
     println!("\n🎉 Client disconnect/reconnect test passed!");
     println!("✅ Disconnected clients are properly cleaned up");
     println!("✅ Reconnected clients receive the current state immediately");
+}
+
+/// Two notifications sent back to back must both arrive.
+///
+/// Each client's queue used to be a `tokio::sync::watch`, which keeps only the
+/// newest value. Two notifications landing before the reading task was polled
+/// collapsed into one, and the one dropped could be the `State` that tells a
+/// freshly connected deck which slide to paint — leaving it blank with nothing
+/// further coming, since the heartbeat only carries `Pong`.
+#[tokio::test]
+async fn back_to_back_notifications_are_not_collapsed() {
+    let (server_url, state) = create_test_server().await;
+
+    let (_sender, mut receiver, _client_id) = connect_and_register_client(&server_url, "Watcher")
+        .await
+        .expect("Failed to register client");
+
+    // Sent with no await in between, so they are queued before the connection's
+    // sending task gets a chance to drain the first one — the exact ordering
+    // that a `watch` channel silently discards.
+    let client_service = ClientService::from_ref(&state);
+    client_service
+        .notify_all(&Notification::error("first"))
+        .await;
+    client_service
+        .notify_all(&Notification::error("second"))
+        .await;
+
+    let mut messages = Vec::new();
+    while messages.len() < 2 {
+        let notification = wait_for_notification(&mut receiver, "Watcher", 1000)
+            .await
+            .unwrap_or_else(|err| {
+                panic!("expected both notifications, got {messages:?} then: {err}")
+            });
+        if let Notification::Error { message } = notification {
+            messages.push(message);
+        }
+    }
+
+    // `Notification::error` takes `impl Debug`, so a `&str` arrives quoted.
+    assert_eq!(
+        messages,
+        vec!["\"first\"".to_owned(), "\"second\"".to_owned()]
+    );
 }

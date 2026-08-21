@@ -285,7 +285,7 @@ async fn handle_messages(mut rx: UnboundedReceiver<CommunicationMessage>, sessio
     while let Some(msg) = rx.next().await {
         match msg {
             CommunicationMessage::ConnectionStatusChange { status } => {
-                handle_connection_status(&status, &session).await;
+                handle_connection_status(&status, &session);
             }
             CommunicationMessage::StateChange { state } => {
                 handle_state_change(state, &session).await;
@@ -331,7 +331,7 @@ async fn handle_messages(mut rx: UnboundedReceiver<CommunicationMessage>, sessio
     }
 }
 
-async fn handle_connection_status(status: &ConnectionStatus, session: &Session) {
+fn handle_connection_status(status: &ConnectionStatus, session: &Rc<Session>) {
     {
         let elems = session.elements.borrow();
 
@@ -370,35 +370,46 @@ async fn handle_connection_status(status: &ConnectionStatus, session: &Session) 
 
         // Register command is sent automatically by CommunicationService
 
-        match session.api.get_talk().await {
-            Ok(talk) => {
-                // Update presentation metadata with total slides count
-                session.meta.borrow_mut().total_slides = talk.titles.len();
+        // Deliberately *not* awaited here. `handle_messages` reads one message
+        // at a time, so awaiting this fetch left the `Registered` and `State`
+        // frames — the ones that decide which slide to paint — sitting unread
+        // for a whole HTTP round trip, in front of the first slide. Nothing on
+        // that path needs the talk metadata: it is the footer, the slide count
+        // and the custom head, all of which can land a moment later.
+        spawn_local(fetch_talk_metadata(Rc::clone(session)));
+    }
+}
 
-                let mut elem = session.elements.borrow_mut();
-                elem.footer.set_content(talk.footer.clone());
-                if let Some(presenter) = &elem.presenter {
-                    presenter.set_plan(
-                        talk.titles.len(),
-                        talk.durations.clone(),
-                        talk.step_counts.clone(),
-                    );
-                }
-                drop(elem);
+/// Fills in the deck's metadata: footer, slide count, presenter plan, custom head.
+async fn fetch_talk_metadata(session: Rc<Session>) {
+    match session.api.get_talk().await {
+        Ok(talk) => {
+            // Update presentation metadata with total slides count
+            session.meta.borrow_mut().total_slides = talk.titles.len();
 
-                // Inject custom head HTML if provided
-                inject_head_html(talk.head.as_deref());
-                set_document_lang(talk.lang.as_deref());
+            let mut elem = session.elements.borrow_mut();
+            elem.footer.set_content(talk.footer.clone());
+            if let Some(presenter) = &elem.presenter {
+                presenter.set_plan(
+                    talk.titles.len(),
+                    talk.durations.clone(),
+                    talk.step_counts.clone(),
+                );
             }
-            // Report what actually failed, and what the presenter will see: the
-            // slide counter stays at 0 and the deck's `_head.html` (fonts, custom
-            // CSS) is never injected, so the deck renders unstyled.
-            Err(err) => error!(
-                "Failed to fetch talk:",
-                err.to_string(),
-                "— slide count and custom head styles are unavailable"
-            ),
+            drop(elem);
+
+            // Inject custom head HTML if provided
+            inject_head_html(talk.head.as_deref());
+            set_document_lang(talk.lang.as_deref());
         }
+        // Report what actually failed, and what the presenter will see: the
+        // slide counter stays at 0 and the deck's `_head.html` (fonts, custom
+        // CSS) is never injected, so the deck renders unstyled.
+        Err(err) => error!(
+            "Failed to fetch talk:",
+            err.to_string(),
+            "— slide count and custom head styles are unavailable"
+        ),
     }
 }
 

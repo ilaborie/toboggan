@@ -2,12 +2,25 @@ use std::net::IpAddr;
 use std::time::Duration;
 
 use toboggan_core::{ClientId, ClientRole, ClientsResponse, Notification, Timestamp};
-use tokio::sync::watch;
+use tokio::sync::mpsc;
 use tracing::info;
 
 mod repository;
 use self::repository::ClientRepository;
 use crate::ApiError;
+
+/// Both ends of one client's notification queue.
+///
+/// Handed out together because a WebSocket connection needs both: the receiver
+/// feeds the task writing frames to that client, and the sender is how the
+/// connection's own tasks — an error reply, the heartbeat — put a notification
+/// on the very same queue, in order, rather than racing the socket directly.
+pub struct ClientChannel {
+    /// Puts a notification on this client's queue.
+    pub tx: mpsc::UnboundedSender<Notification>,
+    /// Yields the notifications queued for this client, oldest first.
+    pub rx: mpsc::UnboundedReceiver<Notification>,
+}
 
 /// Service for managing client life cycle and notifications
 #[derive(Clone)]
@@ -33,8 +46,7 @@ impl ClientService {
         name: String,
         ip_addr: IpAddr,
         role: ClientRole,
-        initial_notification: Notification,
-    ) -> Result<(ClientId, watch::Receiver<Notification>), ApiError> {
+    ) -> Result<(ClientId, ClientChannel), ApiError> {
         // Cleanup before checking capacity
         self.repository.cleanup_disconnected().await;
 
@@ -42,12 +54,14 @@ impl ClientService {
             return Err(ApiError::TooManyClients);
         }
 
-        let (tx, rx) = watch::channel(initial_notification);
+        // No seed value: the caller sends the initial state down the socket
+        // itself, and seeding it here only read `current_state` a second time.
+        let (tx, rx) = mpsc::unbounded_channel();
         let connected_at = Timestamp::now();
 
         let Some(client_id) = self
             .repository
-            .insert(name.clone(), ip_addr, role, connected_at, tx)
+            .insert(name.clone(), ip_addr, role, connected_at, tx.clone())
             .await
         else {
             return Err(ApiError::TooManyClients);
@@ -69,7 +83,7 @@ impl ClientService {
             "Client registered"
         );
 
-        Ok((client_id, rx))
+        Ok((client_id, ClientChannel { tx, rx }))
     }
 
     /// Unregisters a client and broadcasts disconnection to others

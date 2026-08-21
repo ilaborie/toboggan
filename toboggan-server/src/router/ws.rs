@@ -5,13 +5,13 @@ use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, FromRef, State};
 use axum::response::Response;
 use futures::{SinkExt, StreamExt};
-use toboggan_core::timeouts::HEARTBEAT_INTERVAL;
+use toboggan_core::timeouts::{CONNECTION_TIMEOUT, HEARTBEAT_INTERVAL};
 use toboggan_core::{ClientId, ClientRole, Command, Notification, Secret};
-use tokio::sync::{mpsc, watch};
+use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
 use crate::TobogganState;
-use crate::services::{ClientService, TalkService};
+use crate::services::{ClientChannel, ClientService, TalkService};
 
 pub(super) async fn websocket_handler(
     ws: WebSocketUpgrade,
@@ -28,57 +28,73 @@ async fn handle_websocket(socket: WebSocket, state: TobogganState, ip_addr: IpAd
     let (mut ws_sender, mut ws_receiver) = socket.split();
     let client_service = ClientService::from_ref(&state);
 
-    // Wait for Register command from client
-    let (client_id, client_name, client_role, notification_rx) = loop {
-        match ws_receiver.next().await {
-            Some(Ok(Message::Text(text))) => match serde_json::from_str::<Command>(&text) {
-                Ok(Command::Register { name, token }) => {
-                    // The handshake is where the role is settled, once: the
-                    // socket's peer address cannot change under it, so there is
-                    // no need to re-derive it per command.
-                    let role = state.role_for(ip_addr, token.as_ref().map(Secret::expose));
-                    let initial_notification = TalkService::from_ref(&state)
-                        .create_initial_notification()
-                        .await;
-                    match client_service
-                        .register_client(name.clone(), ip_addr, role, initial_notification)
-                        .await
-                    {
-                        Ok((id, rx)) => {
-                            // Send Registered notification to this client
-                            let registered = Notification::registered(id, role);
-                            if let Ok(msg) = serde_json::to_string(&registered)
-                                && ws_sender.send(Message::Text(msg.into())).await.is_err()
-                            {
-                                error!("Failed to send Registered notification");
-                                return;
+    // Wait for Register command from client.
+    //
+    // Under a timeout, because the server says nothing at all until this frame
+    // arrives: a client that connects and never registers used to hold the
+    // socket — and its slot — for as long as the process lived, showing the
+    // reader a blank deck with no clue why. Now it is closed and logged.
+    let registration = async {
+        loop {
+            match ws_receiver.next().await {
+                Some(Ok(Message::Text(text))) => match serde_json::from_str::<Command>(&text) {
+                    Ok(Command::Register { name, token }) => {
+                        // The handshake is where the role is settled, once: the
+                        // socket's peer address cannot change under it, so there is
+                        // no need to re-derive it per command.
+                        let role = state.role_for(ip_addr, token.as_ref().map(Secret::expose));
+                        match client_service
+                            .register_client(name.clone(), ip_addr, role)
+                            .await
+                        {
+                            Ok((id, channel)) => {
+                                // Send Registered notification to this client
+                                let registered = Notification::registered(id, role);
+                                if let Ok(msg) = serde_json::to_string(&registered)
+                                    && ws_sender.send(Message::Text(msg.into())).await.is_err()
+                                {
+                                    error!("Failed to send Registered notification");
+                                    return None;
+                                }
+                                break Some((id, name, role, channel));
                             }
-                            break (id, name, role, rx);
-                        }
-                        Err(err) => {
-                            error!("Failed to register client: {err}");
-                            let error_notification = Notification::error(err.to_string());
-                            if let Ok(msg) = serde_json::to_string(&error_notification) {
-                                let _ = ws_sender.send(Message::Text(msg.into())).await;
+                            Err(err) => {
+                                error!("Failed to register client: {err}");
+                                let error_notification = Notification::error(err.to_string());
+                                if let Ok(msg) = serde_json::to_string(&error_notification) {
+                                    let _ = ws_sender.send(Message::Text(msg.into())).await;
+                                }
+                                return None;
                             }
-                            return;
                         }
                     }
+                    Ok(_) => {
+                        // Ignore other commands until registered
+                        warn!("Received command before registration, ignoring");
+                    }
+                    Err(err) => {
+                        warn!(?err, "Failed to parse command");
+                    }
+                },
+                Some(Ok(Message::Close(_))) | None => {
+                    info!("WebSocket closed before registration");
+                    return None;
                 }
-                Ok(_) => {
-                    // Ignore other commands until registered
-                    warn!("Received command before registration, ignoring");
-                }
-                Err(err) => {
-                    warn!(?err, "Failed to parse command");
-                }
-            },
-            Some(Ok(Message::Close(_))) | None => {
-                info!("WebSocket closed before registration");
-                return;
+                _ => {}
             }
-            _ => {}
         }
+    };
+
+    let Ok(registered) = tokio::time::timeout(CONNECTION_TIMEOUT, registration).await else {
+        warn!(
+            %ip_addr,
+            timeout_secs = CONNECTION_TIMEOUT.as_secs(),
+            "No Register command arrived in time, closing the connection"
+        );
+        return;
+    };
+    let Some((client_id, client_name, client_role, channel)) = registered else {
+        return;
     };
 
     info!(?client_id, %client_name, %ip_addr, ?client_role, "Client registered via WebSocket");
@@ -89,13 +105,15 @@ async fn handle_websocket(socket: WebSocket, state: TobogganState, ip_addr: IpAd
         return;
     }
 
-    let (notification_tx, notification_rx_internal) = mpsc::unbounded_channel::<Notification>();
+    // The client's own queue is the sender task's input: there is no second
+    // channel to bridge, and errors this task raises go back onto the same queue.
+    let ClientChannel {
+        tx: notification_tx,
+        rx: notification_rx,
+    } = channel;
     let error_notification_tx = notification_tx.clone();
 
-    let watcher_task =
-        spawn_notification_watcher_task(notification_rx, notification_tx.clone(), client_id);
-    let sender_task =
-        spawn_notification_sender_task(notification_rx_internal, ws_sender, client_id);
+    let sender_task = spawn_notification_sender_task(notification_rx, ws_sender, client_id);
     let receiver_task = spawn_message_receiver_task(
         ws_receiver,
         state.clone(),
@@ -106,9 +124,6 @@ async fn handle_websocket(socket: WebSocket, state: TobogganState, ip_addr: IpAd
     let heartbeat_task = spawn_heartbeat_task(notification_tx, client_id, HEARTBEAT_INTERVAL);
 
     tokio::select! {
-        _ = watcher_task => {
-            info!(?client_id, "Watcher task completed");
-        }
         _ = sender_task => {
             info!(?client_id, "Sender task completed");
         }
@@ -161,26 +176,6 @@ async fn send_initial_state(
     }
 
     Ok(())
-}
-
-fn spawn_notification_watcher_task(
-    mut notification_rx: watch::Receiver<Notification>,
-    notification_tx: mpsc::UnboundedSender<Notification>,
-    client_id: ClientId,
-) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
-        while notification_rx.changed().await.is_ok() {
-            let notification = notification_rx.borrow().clone();
-            if notification_tx.send(notification).is_err() {
-                warn!(
-                    ?client_id,
-                    "Failed to send notification to internal channel, receiver may be closed"
-                );
-                break;
-            }
-        }
-        info!(?client_id, "Notification watcher task finished");
-    })
 }
 
 fn spawn_notification_sender_task(
