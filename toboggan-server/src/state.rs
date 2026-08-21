@@ -120,7 +120,7 @@ impl TobogganState {
     /// talk with a fresh epoch and cache a stale PDF as current.
     pub(crate) async fn pdf_render_input(&self) -> (u64, Arc<Talk>) {
         let epoch = self.pdf_cache.read().await.epoch;
-        (epoch, self.talk_service.talk().await)
+        (epoch, self.talk_service.source_talk().await)
     }
 
     /// Waits for the right to render the PDF.

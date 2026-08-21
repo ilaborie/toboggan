@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::bail;
-use toboggan_core::{Command, Content, Notification, Slide, SlideId, State, Talk};
+use toboggan_core::{Command, Content, Notification, RenderTarget, Slide, SlideId, State, Talk};
 use toboggan_stats::SlideStats;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
@@ -21,21 +21,41 @@ use tracing::{info, warn};
 /// changing a published response shape.
 #[derive(Clone)]
 struct LoadedTalk {
+    /// The deck as it is presented: `hidden_in = ["web"]` slides removed.
+    ///
+    /// Everything that numbers slides reads this one, so a slide the deck does
+    /// not show is not a slide the deck can be told to go to.
     talk: Arc<Talk>,
+    /// The deck as it was authored, hiding nothing.
+    ///
+    /// The PDF is exported from here — it applies its own `hidden_in = ["pdf"]`
+    /// filter, and a deck already stripped of its pdf-only slides would have
+    /// nothing left to put in their place. The thumbnail overview reads it too,
+    /// because it is an authoring view: it lists every slide and badges the ones
+    /// the web will not show.
+    source: Arc<Talk>,
+    /// Reveal-step counts for `talk`, by index — so they line up with it.
     step_counts: Arc<[usize]>,
 }
 
 impl LoadedTalk {
     fn new(talk: Talk) -> Self {
-        let step_counts = talk
+        let presented = talk.visible_in(RenderTarget::Web).into_owned();
+        let step_counts = presented
             .slides
             .iter()
             .map(|slide| SlideStats::from_slide(slide).steps)
             .collect();
         Self {
-            talk: Arc::new(talk),
+            talk: Arc::new(presented),
+            source: Arc::new(talk),
             step_counts,
         }
+    }
+
+    /// How many slides the deck hides from the web.
+    fn hidden_count(&self) -> usize {
+        self.source.slides.len() - self.talk.slides.len()
     }
 }
 
@@ -55,22 +75,39 @@ impl TalkService {
         if talk.slides.is_empty() {
             bail!("Empty talk, need at least one slide, got {talk:#?}");
         }
+        let loaded = LoadedTalk::new(talk);
+        if loaded.talk.slides.is_empty() {
+            bail!(
+                "Every one of the {} slides is `hidden_in = [\"web\"]`, so there is \
+                 nothing to present",
+                loaded.source.slides.len()
+            );
+        }
 
         info!(
             "\n=== Slides ===\n{}",
-            talk.slides
+            loaded
+                .talk
+                .slides
                 .iter()
                 .enumerate()
                 .map(|(index, slide)| format!("[{index:02}] {slide}"))
                 .collect::<Vec<_>>()
                 .join("\n")
         );
+        if loaded.hidden_count() > 0 {
+            info!(
+                "{} slide(s) are `hidden_in = [\"web\"]` and are not served; they are \
+                 still exported to PDF and listed in the slide overview",
+                loaded.hidden_count()
+            );
+        }
 
         let current_state = State::default();
         let current_state = Arc::new(RwLock::new(current_state));
 
         Ok(Self {
-            talk: Arc::new(RwLock::new(LoadedTalk::new(talk))),
+            talk: Arc::new(RwLock::new(loaded)),
             current_state,
         })
     }
@@ -84,6 +121,15 @@ impl TalkService {
     /// Returns a shared handle to the current talk.
     pub async fn talk(&self) -> Arc<Talk> {
         Arc::clone(&self.talk.read().await.talk)
+    }
+
+    /// Returns the deck as authored, including slides hidden from the web.
+    ///
+    /// For the exporters, which do their own per-target filtering, and for the
+    /// slide overview. Anything that presents or numbers slides wants
+    /// [`Self::talk`] instead.
+    pub async fn source_talk(&self) -> Arc<Talk> {
+        Arc::clone(&self.talk.read().await.source)
     }
 
     /// Returns the per-slide reveal-step counts, computed when the deck loaded.
@@ -143,6 +189,15 @@ impl TalkService {
         if new_talk.slides.is_empty() {
             bail!("Cannot reload talk with empty slides");
         }
+        // Filter before anything looks at the slides: the position below is
+        // preserved by comparing the old deck against the new one, and comparing
+        // a presented deck against an authored one would line the two up wrong
+        // wherever a web-hidden slide sits between them.
+        let loaded = LoadedTalk::new(new_talk);
+        if loaded.talk.slides.is_empty() {
+            bail!("Cannot reload: every slide in the new deck is `hidden_in = [\"web\"]`");
+        }
+        let new_talk = &loaded.talk;
 
         let mut state = self.current_state.write().await;
         let current_slide_id = state.current().unwrap_or(SlideId::FIRST);
@@ -172,7 +227,7 @@ impl TalkService {
 
         // Replace the talk
         let mut talk = self.talk.write().await;
-        *talk = LoadedTalk::new(new_talk);
+        *talk = loaded;
         drop(talk);
 
         // Return TalkChange notification
@@ -398,5 +453,98 @@ impl TalkService {
             };
             slide_text == title_text
         })
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use toboggan_core::{RenderTarget, Slide};
+
+    use super::*;
+
+    /// A deck with a web-only slide, a pdf-only twin, and one shown everywhere.
+    fn twinned_deck() -> Talk {
+        Talk::new("Deck")
+            .add_slide(Slide::new("shared"))
+            .add_slide(Slide::new("live").with_hidden_in([RenderTarget::Pdf]))
+            .add_slide(Slide::new("handout").with_hidden_in([RenderTarget::Web]))
+            .add_slide(Slide::new("last"))
+    }
+
+    fn titles(talk: &Arc<Talk>) -> Vec<String> {
+        talk.slides
+            .iter()
+            .map(|slide| slide.title.to_string())
+            .collect()
+    }
+
+    /// The deck that is presented is the web deck: a slide the projector will
+    /// never show is not a slide the presenter can land on by pressing space.
+    #[tokio::test]
+    async fn the_served_deck_drops_web_hidden_slides() {
+        let service = TalkService::new(twinned_deck()).expect("build service");
+
+        assert_eq!(titles(&service.talk().await), ["shared", "live", "last"]);
+        assert_eq!(service.slides().await.len(), 3);
+    }
+
+    /// Numbering follows the served deck, or `GoTo 2` means one slide to the
+    /// deck and another to everything that reads its index.
+    #[tokio::test]
+    async fn indices_and_step_counts_follow_the_served_deck() {
+        let service = TalkService::new(twinned_deck()).expect("build service");
+
+        assert_eq!(service.step_counts().await.len(), 3);
+        let third = service
+            .slide_by_index(SlideId::new(2))
+            .await
+            .expect("a third slide");
+        assert_eq!(third.title.to_string(), "last");
+        assert!(service.slide_by_index(SlideId::new(3)).await.is_none());
+    }
+
+    /// The exporters and the overview still get every slide: the PDF applies
+    /// its own filter, and a deck already stripped of its pdf-only twins would
+    /// have nothing to put in place of the live ones.
+    #[tokio::test]
+    async fn the_authored_deck_is_still_available_whole() {
+        let service = TalkService::new(twinned_deck()).expect("build service");
+
+        assert_eq!(
+            titles(&service.source_talk().await),
+            ["shared", "live", "handout", "last"]
+        );
+    }
+
+    /// A reload lines the old deck up against the new one by title, and both
+    /// sides have to be the *served* deck or the match slips wherever a hidden
+    /// slide sits between them.
+    #[tokio::test]
+    async fn a_reload_keeps_the_position_it_was_on() {
+        let service = TalkService::new(twinned_deck()).expect("build service");
+        service
+            .handle_command(&Command::GoTo {
+                slide: SlideId::new(2),
+            })
+            .await;
+
+        service
+            .reload_talk(twinned_deck())
+            .await
+            .expect("reload the deck");
+
+        let state = service.current_state().await;
+        assert_eq!(state.current(), Some(SlideId::new(2)));
+        assert_eq!(titles(&service.talk().await), ["shared", "live", "last"]);
+    }
+
+    /// Refused rather than served as an empty deck the clients cannot render.
+    #[tokio::test]
+    async fn a_deck_hidden_entirely_from_the_web_is_refused() {
+        let all_hidden =
+            Talk::new("Deck").add_slide(Slide::new("only").with_hidden_in([RenderTarget::Web]));
+
+        assert!(TalkService::new(all_hidden).is_err());
     }
 }

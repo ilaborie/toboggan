@@ -54,21 +54,12 @@ pub fn get_extension(format: &OutputFormat) -> &'static str {
 }
 
 /// Returns a `Talk` with slides hidden for `target` removed.
-/// Returns `Cow::Borrowed` when no slides need to be dropped (avoids cloning).
+///
+/// Thin wrapper over [`Talk::visible_in`], which the server applies to the deck
+/// it serves — one definition of "hidden", so an exported deck and a presented
+/// one cannot disagree about which slides exist.
 fn filter_for(talk: &Talk, target: RenderTarget) -> Cow<'_, Talk> {
-    if talk
-        .slides
-        .iter()
-        .any(|slide| slide.hidden_in.contains(&target))
-    {
-        let mut filtered = talk.clone();
-        filtered
-            .slides
-            .retain(|slide| !slide.hidden_in.contains(&target));
-        Cow::Owned(filtered)
-    } else {
-        Cow::Borrowed(talk)
-    }
+    talk.visible_in(target)
 }
 
 #[cfg(test)]
