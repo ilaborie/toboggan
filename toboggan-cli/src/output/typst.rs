@@ -30,14 +30,74 @@ use comrak::nodes::{AlertType, AstNode, ListType, NodeValue};
 use comrak::{Arena, parse_document};
 use toboggan_core::{Content, Slide, SlideBody, SlideKind, Talk};
 
+use crate::error::Result;
+use crate::mermaid::{MermaidFence, MermaidRenderer};
 use crate::parser::default_options;
 
-pub(super) fn generate_typst(talk: &Talk) -> Vec<u8> {
+/// What [`render_node`] needs beyond the node it is rendering.
+///
+/// `list_depth` and `tight` used to be positional arguments on every helper;
+/// bundling them with the deck's Mermaid settings keeps one value to thread
+/// instead of three.
+#[derive(Debug, Clone, Copy)]
+struct RenderCtx<'a> {
+    /// Deck-level Mermaid settings for ` ```mermaid ` fences.
+    mermaid: &'a MermaidRenderer,
+    /// The slide the markdown came from, used in diagnostics.
+    source_name: &'a str,
+    /// Nesting depth of the enclosing list.
+    list_depth: usize,
+    /// Whether the enclosing list is tight, i.e. has no blank line between items.
+    tight: bool,
+}
+
+impl<'a> RenderCtx<'a> {
+    const fn new(mermaid: &'a MermaidRenderer, source_name: &'a str) -> Self {
+        Self {
+            mermaid,
+            source_name,
+            list_depth: 0,
+            tight: false,
+        }
+    }
+
+    const fn with_tight(self, tight: bool) -> Self {
+        Self { tight, ..self }
+    }
+
+    /// One level further into a list, where items are always tight.
+    const fn nested(self) -> Self {
+        Self {
+            list_depth: self.list_depth + 1,
+            tight: true,
+            ..self
+        }
+    }
+
+    /// Inside a table cell, which starts its own list nesting.
+    const fn in_cell(self) -> Self {
+        Self {
+            list_depth: 0,
+            tight: true,
+            ..self
+        }
+    }
+}
+
+/// The slide file a Typst diagnostic should name.
+fn slide_name(slide: &Slide) -> String {
+    slide.source_path.as_deref().map_or_else(
+        || slide.title.display_text().to_owned(),
+        |path| path.to_string_lossy().into_owned(),
+    )
+}
+
+pub(super) fn generate_typst(talk: &Talk, mermaid: &MermaidRenderer) -> Vec<u8> {
     let mut out = String::new();
     write_header(&mut out);
     write_title_slide(&mut out, &talk.title, &talk.date.to_string());
     for slide in &talk.slides {
-        write_slide(&mut out, slide);
+        write_slide(&mut out, slide, mermaid);
     }
     out.into_bytes()
 }
@@ -49,7 +109,7 @@ pub(super) fn generate_typst(talk: &Talk) -> Vec<u8> {
 /// isolated slide) and instead uses a plain fixed-size page so the slide always
 /// renders on page 1; overflowing content is simply clipped in the thumbnail.
 /// The markdown-to-Typst conversion (code blocks, alerts, lists, …) is reused.
-pub(super) fn generate_thumbnail_typst(slide: &Slide) -> Vec<u8> {
+pub(super) fn generate_thumbnail_typst(slide: &Slide, mermaid: &MermaidRenderer) -> Vec<u8> {
     let mut out = String::new();
     out.push_str(
         r#"#import "@preview/codly:1.3.0": *
@@ -74,7 +134,10 @@ pub(super) fn generate_thumbnail_typst(slide: &Slide) -> Vec<u8> {
     let body = match slide.body_view() {
         SlideBody::Empty => String::new(),
         SlideBody::Rendered(content) => content_to_typst(content),
-        SlideBody::FromMarkdown { source, .. } => strip_leading_heading(&md_to_typst(source)),
+        SlideBody::FromMarkdown { source, .. } => strip_leading_heading(&md_to_typst(
+            source,
+            RenderCtx::new(mermaid, &slide_name(slide)),
+        )),
     };
     out.push_str(&body);
 
@@ -116,19 +179,19 @@ fn write_title_slide(out: &mut String, title: &str, date: &str) {
     );
 }
 
-fn write_slide(out: &mut String, slide: &Slide) {
+fn write_slide(out: &mut String, slide: &Slide, mermaid: &MermaidRenderer) {
     match slide.kind {
         // The cover's title and date are emitted by `write_header` /
         // `write_title_slide`; there is nothing more to render here.
         SlideKind::Cover => {}
-        SlideKind::Part => write_section(out, slide),
-        SlideKind::Standard => write_standard(out, slide),
+        SlideKind::Part => write_section(out, slide, mermaid),
+        SlideKind::Standard => write_standard(out, slide, mermaid),
     }
 }
 
-fn write_section(out: &mut String, slide: &Slide) {
+fn write_section(out: &mut String, slide: &Slide, mermaid: &MermaidRenderer) {
     let title = content_to_typst(&slide.title);
-    let body = section_body(slide);
+    let body = section_body(slide, mermaid);
     let body_block = if body.trim().is_empty() {
         String::new()
     } else {
@@ -145,11 +208,14 @@ fn write_section(out: &mut String, slide: &Slide) {
 /// Render the body of a Part slide.
 ///
 /// Routes on the `SlideBody` view so the three meaningful states are explicit.
-fn section_body(slide: &Slide) -> String {
+fn section_body(slide: &Slide, mermaid: &MermaidRenderer) -> String {
     match slide.body_view() {
         SlideBody::Empty => String::new(),
         SlideBody::Rendered(content) => content_to_typst(content),
-        SlideBody::FromMarkdown { source, .. } => strip_leading_heading(&md_to_typst(source)),
+        SlideBody::FromMarkdown { source, .. } => strip_leading_heading(&md_to_typst(
+            source,
+            RenderCtx::new(mermaid, &slide_name(slide)),
+        )),
     }
 }
 
@@ -169,10 +235,10 @@ fn strip_leading_heading(typst: &str) -> String {
     rest[nl + 1..].trim_start().to_owned()
 }
 
-fn write_standard(out: &mut String, slide: &Slide) {
+fn write_standard(out: &mut String, slide: &Slide, mermaid: &MermaidRenderer) {
     // Slides with live terminals that weren't filtered out get a placeholder.
     if slide.terminals.is_empty() {
-        write_standard_body(out, slide);
+        write_standard_body(out, slide, mermaid);
     } else {
         write_terminal_placeholder(out, slide);
     }
@@ -197,9 +263,9 @@ fn write_terminal_placeholder(out: &mut String, slide: &Slide) {
     );
 }
 
-fn write_standard_body(out: &mut String, slide: &Slide) {
+fn write_standard_body(out: &mut String, slide: &Slide, mermaid: &MermaidRenderer) {
     let title = content_to_typst(&slide.title);
-    let body = standard_body(slide);
+    let body = standard_body(slide, mermaid);
     let title_block = if title.trim().is_empty() {
         String::new()
     } else {
@@ -225,11 +291,14 @@ fn write_standard_body(out: &mut String, slide: &Slide) {
 /// Routes on the `SlideBody` view. The leading H1 from a markdown source is
 /// stripped because the slide title is emitted separately via `==` inside
 /// `#slide[..]`.
-fn standard_body(slide: &Slide) -> String {
+fn standard_body(slide: &Slide, mermaid: &MermaidRenderer) -> String {
     match slide.body_view() {
         SlideBody::Empty => String::new(),
         SlideBody::Rendered(content) => content_to_typst(content),
-        SlideBody::FromMarkdown { source, .. } => strip_leading_heading(&md_to_typst(source)),
+        SlideBody::FromMarkdown { source, .. } => strip_leading_heading(&md_to_typst(
+            source,
+            RenderCtx::new(mermaid, &slide_name(slide)),
+        )),
     }
 }
 
@@ -253,6 +322,50 @@ fn content_to_typst(content: &Content) -> String {
     }
 }
 
+/// Emit a Mermaid diagram, drawn while the deck builds and embedded as SVG.
+///
+/// Without an explicit `width=`, the diagram keeps its natural size but is
+/// clamped to the width available to it — what `max-width: 100%` does on the
+/// web. `#layout` is what makes `available.width` knowable at that point.
+///
+/// The diagram was already drawn once, for the HTML the parser produced, so a
+/// failure here means the two pipelines disagree rather than that the author
+/// wrote a bad diagram. It gets the same visible red placeholder as any other
+/// content this renderer cannot express, so the gap is obvious in the PDF.
+fn write_mermaid(out: &mut String, ctx: RenderCtx<'_>, fence: Result<MermaidFence>, diagram: &str) {
+    let drawn = fence.and_then(|fence| {
+        let svg = ctx.mermaid.render_svg(&fence, diagram, ctx.source_name)?;
+        Ok((fence, svg))
+    });
+    let (fence, svg) = match drawn {
+        Ok(drawn) => drawn,
+        Err(error) => {
+            tracing::warn!("{error}");
+            out.push_str("#text(fill: red)[\\[Mermaid diagram could not be drawn\\]]\n\n");
+            return;
+        }
+    };
+    let data = escape_typst_string(&svg);
+    match fence.width() {
+        Some(width) => {
+            let _ = writeln!(
+                out,
+                "#align(center, image(bytes(\"{data}\"), format: \"svg\", width: {width}))\n"
+            );
+        }
+        None => {
+            let _ = writeln!(
+                out,
+                "#align(center, layout(available => {{\n\
+                 let diagram = bytes(\"{data}\")\n\
+                 let natural = measure(image(diagram, format: \"svg\")).width\n\
+                 image(diagram, format: \"svg\", width: calc.min(natural, available.width))\n\
+                 }}))\n"
+            );
+        }
+    }
+}
+
 /// Escape text for use inside a Typst double-quoted string argument.
 ///
 /// Typst string literals use `\` as the escape character, so both `"` and `\`
@@ -267,30 +380,25 @@ fn escape_typst_string(text: &str) -> String {
 }
 
 /// Convert a `CommonMark` source string to Typst markup.
-pub(super) fn md_to_typst(source: &str) -> String {
+fn md_to_typst(source: &str, ctx: RenderCtx<'_>) -> String {
     let arena = Arena::new();
     let options = default_options();
     let root = parse_document(&arena, source, &options);
     let mut out = String::new();
-    render_node(root, &mut out, 0, false);
+    render_node(root, &mut out, ctx);
     out
 }
 
 type MarkdownNode<'a> = AstNode<'a>;
 
-fn render_children<'a>(
-    node: &'a MarkdownNode<'a>,
-    out: &mut String,
-    list_depth: usize,
-    tight: bool,
-) {
+fn render_children<'a>(node: &'a MarkdownNode<'a>, out: &mut String, ctx: RenderCtx<'_>) {
     for child in node.children() {
-        render_node(child, out, list_depth, tight);
+        render_node(child, out, ctx);
     }
 }
 
 #[allow(clippy::too_many_lines)]
-fn render_node<'a>(node: &'a MarkdownNode<'a>, out: &mut String, list_depth: usize, tight: bool) {
+fn render_node<'a>(node: &'a MarkdownNode<'a>, out: &mut String, ctx: RenderCtx<'_>) {
     match &node.data.borrow().value {
         NodeValue::FrontMatter(_) | NodeValue::HtmlBlock(_) | NodeValue::HtmlInline(_) => {
             // Typst has no HTML, so raw markup is dropped. Note this is *not*
@@ -301,8 +409,8 @@ fn render_node<'a>(node: &'a MarkdownNode<'a>, out: &mut String, list_depth: usi
         }
 
         NodeValue::Paragraph => {
-            render_children(node, out, list_depth, tight);
-            if tight {
+            render_children(node, out, ctx);
+            if ctx.tight {
                 out.push('\n');
             } else {
                 out.push_str("\n\n");
@@ -314,7 +422,7 @@ fn render_node<'a>(node: &'a MarkdownNode<'a>, out: &mut String, list_depth: usi
                 out.push('=');
             }
             out.push(' ');
-            render_children(node, out, list_depth, tight);
+            render_children(node, out, ctx);
             out.push('\n');
         }
 
@@ -326,32 +434,32 @@ fn render_node<'a>(node: &'a MarkdownNode<'a>, out: &mut String, list_depth: usi
 
         NodeValue::Strong => {
             out.push_str("#strong[");
-            render_children(node, out, list_depth, tight);
+            render_children(node, out, ctx);
             out.push(']');
         }
 
         NodeValue::Emph => {
             out.push_str("#emph[");
-            render_children(node, out, list_depth, tight);
+            render_children(node, out, ctx);
             out.push(']');
         }
 
         NodeValue::Strikethrough => {
             out.push_str("#strike[");
-            render_children(node, out, list_depth, tight);
+            render_children(node, out, ctx);
             out.push(']');
         }
 
         NodeValue::Code(code) => write_inline_code(out, &code.literal),
 
-        NodeValue::CodeBlock(cb) => {
-            let lang = cb.info.trim();
-            write_fenced_code(out, lang, &cb.literal);
-        }
+        NodeValue::CodeBlock(cb) => match ctx.mermaid.parse_info(&cb.info, ctx.source_name) {
+            Some(fence) => write_mermaid(out, ctx, fence, &cb.literal),
+            None => write_fenced_code(out, cb.info.trim(), &cb.literal),
+        },
 
         NodeValue::BlockQuote => {
             out.push_str("#quote(block: true)[\n");
-            render_children(node, out, list_depth, tight);
+            render_children(node, out, ctx);
             out.push_str("]\n\n");
         }
 
@@ -359,13 +467,13 @@ fn render_node<'a>(node: &'a MarkdownNode<'a>, out: &mut String, list_depth: usi
 
         NodeValue::List(list) => {
             let is_ordered = list.list_type == ListType::Ordered;
-            render_list(node, out, list_depth, is_ordered);
+            render_list(node, out, ctx, is_ordered);
         }
 
         NodeValue::Link(link) => {
             let url = escape_typst_string(&link.url);
             let _ = write!(out, "#link(\"{url}\")[");
-            render_children(node, out, list_depth, tight);
+            render_children(node, out, ctx);
             out.push(']');
         }
 
@@ -375,17 +483,11 @@ fn render_node<'a>(node: &'a MarkdownNode<'a>, out: &mut String, list_depth: usi
         }
 
         NodeValue::Table(_) => {
-            render_table(node, out);
+            render_table(node, out, ctx);
         }
 
         NodeValue::Alert(alert) => {
-            render_alert(
-                node,
-                out,
-                list_depth,
-                alert.alert_type,
-                alert.title.as_deref(),
-            );
+            render_alert(node, out, ctx, alert.alert_type, alert.title.as_deref());
         }
 
         // Handed to MiTeX rather than dropped between Typst's own `$…$`.
@@ -396,7 +498,7 @@ fn render_node<'a>(node: &'a MarkdownNode<'a>, out: &mut String, list_depth: usi
             write_math(out, &math.literal, math.display_math);
         }
 
-        _ => render_children(node, out, list_depth, tight),
+        _ => render_children(node, out, ctx),
     }
 }
 
@@ -408,7 +510,7 @@ fn render_node<'a>(node: &'a MarkdownNode<'a>, out: &mut String, list_depth: usi
 fn render_alert<'a>(
     node: &'a MarkdownNode<'a>,
     out: &mut String,
-    list_depth: usize,
+    ctx: RenderCtx<'_>,
     kind: AlertType,
     title_override: Option<&str>,
 ) {
@@ -419,7 +521,7 @@ fn render_alert<'a>(
     // compile. Same class as the backtick that used to cost the guide its PDF.
     let label = escape_typst_string(label);
     let _ = writeln!(out, "#{clue}(title: \"{label}\")[");
-    render_children(node, out, list_depth, false);
+    render_children(node, out, ctx.with_tight(false));
     out.push_str("]\n\n");
 }
 
@@ -434,28 +536,33 @@ const fn clue_fn(kind: AlertType) -> &'static str {
     }
 }
 
-fn render_list<'a>(node: &'a MarkdownNode<'a>, out: &mut String, depth: usize, ordered: bool) {
+fn render_list<'a>(
+    node: &'a MarkdownNode<'a>,
+    out: &mut String,
+    ctx: RenderCtx<'_>,
+    ordered: bool,
+) {
     for child in node.children() {
-        let indent = "  ".repeat(depth);
+        let indent = "  ".repeat(ctx.list_depth);
         out.push_str(&indent);
         if ordered {
             out.push_str("+ ");
         } else {
             out.push_str("- ");
         }
-        render_children(child, out, depth + 1, true);
+        render_children(child, out, ctx.nested());
     }
     out.push('\n');
 }
 
-fn render_table<'a>(node: &'a MarkdownNode<'a>, out: &mut String) {
+fn render_table<'a>(node: &'a MarkdownNode<'a>, out: &mut String, ctx: RenderCtx<'_>) {
     let mut rows: Vec<Vec<String>> = Vec::new();
 
     for row_node in node.children() {
         let mut cells: Vec<String> = Vec::new();
         for cell_node in row_node.children() {
             let mut cell = String::new();
-            render_children(cell_node, &mut cell, 0, true);
+            render_children(cell_node, &mut cell, ctx.in_cell());
             cells.push(cell.trim().to_owned());
         }
         rows.push(cells);
@@ -590,6 +697,15 @@ mod tests {
 
     use super::*;
 
+    /// The renderer with stock Mermaid settings, which is what every test here
+    /// wants; shadows the two-argument version so the tests stay readable.
+    fn md_to_typst(source: &str) -> String {
+        super::md_to_typst(
+            source,
+            RenderCtx::new(&MermaidRenderer::default(), "test.md"),
+        )
+    }
+
     fn make_talk(title: &str) -> Talk {
         let mut talk = Talk::new(title);
         talk.date = Date::new(2024, 1, 15).expect("valid date");
@@ -607,7 +723,7 @@ mod tests {
     #[test]
     fn test_cover_slide_preamble() {
         let talk = make_talk("My Presentation");
-        let bytes = generate_typst(&talk);
+        let bytes = generate_typst(&talk, &MermaidRenderer::default());
         let output = String::from_utf8(bytes).expect("utf8");
 
         assert!(output.contains("My Presentation"), "title in preamble");
@@ -628,7 +744,8 @@ mod tests {
         let mut talk = make_talk("Talk");
         talk.slides
             .push(slide_with_source("# Heading\n\nBody text.\n"));
-        let output = String::from_utf8(generate_typst(&talk)).expect("utf8");
+        let output =
+            String::from_utf8(generate_typst(&talk, &MermaidRenderer::default())).expect("utf8");
         assert!(
             output.contains("#slide["),
             "standard slide wrapped in #slide[..]"
@@ -647,7 +764,8 @@ mod tests {
             .push(slide_with_source("# Demo\n\nFirst body.\n"));
         talk.slides
             .push(slide_with_source("# Other\n\nSecond body.\n"));
-        let output = String::from_utf8(generate_typst(&talk)).expect("utf8");
+        let output =
+            String::from_utf8(generate_typst(&talk, &MermaidRenderer::default())).expect("utf8");
 
         // Two #slide[..] blocks and zero stray top-level `= ..` headings that
         // would cause touying to inject extra section-slide pages.
@@ -672,7 +790,7 @@ mod tests {
         let source = "# Demo\n\n```rust\nfn main() {}\n```\n";
         talk.slides.push(slide_with_source(source));
 
-        let bytes = generate_typst(&talk);
+        let bytes = generate_typst(&talk, &MermaidRenderer::default());
         let output = String::from_utf8(bytes).expect("utf8");
 
         assert!(output.contains("```rust"), "fenced code block");
@@ -694,7 +812,7 @@ $$x = \frac{-b}{2a}$$
 ";
         talk.slides.push(slide_with_source(source));
 
-        let bytes = generate_typst(&talk);
+        let bytes = generate_typst(&talk, &MermaidRenderer::default());
         let output = String::from_utf8(bytes).expect("utf8");
 
         assert!(
@@ -717,7 +835,7 @@ $$x = \frac{-b}{2a}$$
         talk.slides
             .push(slide_with_source("# Q\n\nQuote $x = `y$ here\n"));
 
-        let bytes = generate_typst(&talk);
+        let bytes = generate_typst(&talk, &MermaidRenderer::default());
         let output = String::from_utf8(bytes).expect("utf8");
 
         assert!(output.contains(r#"#raw("x = `y")"#), "fallback: {output}");
@@ -735,7 +853,7 @@ $$x = \frac{-b}{2a}$$
         };
         talk.slides.push(slide);
 
-        let bytes = generate_typst(&talk);
+        let bytes = generate_typst(&talk, &MermaidRenderer::default());
         let output = String::from_utf8(bytes).expect("utf8");
 
         assert!(
@@ -773,7 +891,7 @@ $$x = \frac{-b}{2a}$$
         let mut filtered_talk = talk.clone();
         filtered_talk.slides = filtered_slides;
 
-        let bytes = generate_typst(&filtered_talk);
+        let bytes = generate_typst(&filtered_talk, &MermaidRenderer::default());
         let output = String::from_utf8(bytes).expect("utf8");
 
         assert!(
@@ -913,7 +1031,8 @@ $$x = \frac{-b}{2a}$$
             body_source: Some(String::new()),
             ..Default::default()
         });
-        let output = String::from_utf8(generate_typst(&talk)).expect("utf8");
+        let output =
+            String::from_utf8(generate_typst(&talk, &MermaidRenderer::default())).expect("utf8");
         assert!(output.contains("Ghost Slide"), "slide title still emitted");
         assert!(
             output.contains("Empty slide"),
@@ -978,6 +1097,43 @@ $$x = \frac{-b}{2a}$$
 
     /// A code block reaches `#raw` as a string literal, so its own line breaks
     /// have to be escaped or they end the literal.
+    /// A Mermaid fence becomes an embedded SVG rather than a code block, so the
+    /// PDF shows the diagram the web client shows.
+    #[test]
+    fn a_mermaid_fence_becomes_an_embedded_svg() {
+        let output = md_to_typst("```mermaid\nflowchart LR\n  A --> B\n```\n");
+        assert!(
+            output.contains(r#"image(diagram, format: "svg""#),
+            "diagram not embedded: {output}"
+        );
+        assert!(
+            output.contains("calc.min(natural, available.width)"),
+            "diagram not clamped to the available width: {output}"
+        );
+        assert!(!output.contains("```"), "fence left as code: {output}");
+    }
+
+    /// An explicit `width=` wins over the natural-size clamp, and is the same
+    /// value the HTML wrapper carries.
+    #[test]
+    fn a_mermaid_fence_honours_an_explicit_width() {
+        let output = md_to_typst("```mermaid:width=60%\nflowchart LR\n  A --> B\n```\n");
+        assert!(output.contains("width: 60%"), "{output}");
+        assert!(!output.contains("calc.min"), "{output}");
+    }
+
+    /// The SVG lands inside a Typst string literal, so its quotes and
+    /// backslashes have to be escaped or the whole compile fails — the same
+    /// class of bug as the backtick that once cost the guide its PDF.
+    #[test]
+    fn an_embedded_diagram_escapes_its_quotes() {
+        let output = md_to_typst("```mermaid\nflowchart LR\n  A --> B\n```\n");
+        assert!(
+            output.contains(r#"bytes("<svg xmlns=\"http:"#),
+            "svg quotes not escaped: {output}"
+        );
+    }
+
     #[test]
     fn a_raw_code_block_escapes_its_line_breaks() {
         let result = md_to_typst("````text\n``\nsecond line\n````\n");
@@ -1035,7 +1191,7 @@ $$x = \frac{-b}{2a}$$
         };
         talk.slides.push(slide);
 
-        let bytes = generate_typst(&talk);
+        let bytes = generate_typst(&talk, &MermaidRenderer::default());
         let output = String::from_utf8(bytes).expect("utf8");
 
         assert!(output.contains("Part One"), "section title present");
@@ -1055,7 +1211,8 @@ $$x = \frac{-b}{2a}$$
         };
         talk.slides.push(slide);
 
-        let output = String::from_utf8(generate_typst(&talk)).expect("utf8");
+        let output =
+            String::from_utf8(generate_typst(&talk, &MermaidRenderer::default())).expect("utf8");
 
         assert!(output.contains("Success Stories"), "part title present");
         assert!(
@@ -1133,7 +1290,8 @@ $$x = \frac{-b}{2a}$$
         };
         talk.slides.push(slide);
 
-        let output = String::from_utf8(generate_typst(&talk)).expect("utf8");
+        let output =
+            String::from_utf8(generate_typst(&talk, &MermaidRenderer::default())).expect("utf8");
         assert!(
             output.contains("Content."),
             "slide body present despite style classes"

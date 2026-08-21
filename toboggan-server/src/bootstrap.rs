@@ -3,6 +3,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use anyhow::Context;
+use toboggan_cli::mermaid::MermaidRenderer;
 use toboggan_core::Talk;
 use tracing::{info, instrument, warn};
 use utoipa::openapi::OpenApi;
@@ -30,7 +31,7 @@ pub async fn launch(settings: Settings) -> anyhow::Result<()> {
         }
     });
 
-    launch_with_talk(talk, settings.server, watch).await
+    launch_with_talk(talk, settings.server, watch, MermaidRenderer::default()).await
 }
 
 /// Serves an already-built [`Talk`], optionally watching a path for reloads.
@@ -47,6 +48,7 @@ pub async fn launch_with_talk(
     talk: Talk,
     settings: ServerSettings,
     watch: Option<WatchConfig>,
+    mermaid: MermaidRenderer,
 ) -> anyhow::Result<()> {
     info!(?settings, "launching server...");
     let ServerSettings {
@@ -87,8 +89,9 @@ pub async fn launch_with_talk(
     info!(%terminal_shell, "Embedded terminals will use this shell");
     let auth = PresenterAuth::new(settings.presenter_token.clone());
     report_access_posture(host, port, &auth);
-    let state =
-        TobogganState::new(talk_service, client_service, terminal_shell.into()).with_auth(auth);
+    let state = TobogganState::new(talk_service, client_service, terminal_shell.into())
+        .with_auth(auth)
+        .with_mermaid(mermaid);
 
     // A pre-generated overview directory (`--thumbnails-dir`) seeds the cache as
     // ready; otherwise the overview is generated lazily on the first request.

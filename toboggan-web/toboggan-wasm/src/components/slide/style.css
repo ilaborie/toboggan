@@ -82,6 +82,31 @@ table {
 	font-size: var(--slide-table-size, 100%);
 }
 
+/* A Mermaid diagram, drawn to SVG while the deck built. The SVG carries its own
+   pixel width and height, so without this a diagram wider than the slide simply
+   spills off the side rather than scaling down — `height: auto` keeps the aspect
+   ratio while `max-width` does the clamping. */
+.mermaid {
+	display: flex;
+	justify-content: center;
+	/* `auto` rather than `0`: a `mermaid:width=…` wrapper is narrower than the
+	   slide, and without it the diagram sits against the left edge while the
+	   same fence is centred in the PDF. */
+	margin: 0.5em auto;
+}
+
+.mermaid svg {
+	max-width: 100%;
+	height: auto;
+}
+
+/* `mermaid:width=…` asked for a size, so the diagram fills it rather than
+   stopping at its own pixel width — the same thing the fence does in the PDF,
+   where `image(…, width: …)` scales both ways. */
+.mermaid-sized svg {
+	width: 100%;
+}
+
 /* Layout */
 /* Width goes through a custom property for the same reason the type sizes do,
    plus one this shadow tree cannot solve on its own: `vw` is the *viewport*, so

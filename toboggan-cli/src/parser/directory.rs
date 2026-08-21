@@ -9,8 +9,8 @@ use toboggan_core::{Content, Date, Slide, SlideKind};
 use tracing::debug;
 
 use super::{
-    DEFAULT_PART_TITLE, FRONT_MATTER_DELIMITER, FrontMatter, SlideContentParser,
-    create_syntax_highlighter, default_options, default_plugins,
+    DEFAULT_PART_TITLE, FRONT_MATTER_DELIMITER, FrontMatter, ParseContext, SlideContentParser,
+    SlideContext, create_syntax_highlighter, default_options, default_plugins,
 };
 use crate::error::{Result, TobogganCliError};
 use crate::{SlideProcessingResult, TalkMetadata, parse_date_string};
@@ -138,7 +138,7 @@ pub(super) fn is_slide_file(path: &Path) -> bool {
 
 pub(super) fn create_slide_from_file(
     file_path: &Path,
-    theme: &str,
+    ctx: ParseContext<'_>,
     asset_root: Option<&Path>,
 ) -> Result<(Slide, FrontMatter)> {
     let filename = file_path
@@ -167,7 +167,7 @@ pub(super) fn create_slide_from_file(
             slide_kind,
             Some(filename),
             Some(file_path),
-            theme,
+            ctx,
             asset_root,
         )?
     };
@@ -180,12 +180,12 @@ pub(super) fn parse_slide_from_markdown(
     kind: SlideKind,
     filename: Option<&str>,
     file_path: Option<&Path>,
-    theme: &str,
+    ctx: ParseContext<'_>,
     asset_root: Option<&Path>,
 ) -> Result<(Slide, FrontMatter)> {
     let arena = Arena::new();
     let options = default_options();
-    let highlighter = create_syntax_highlighter(theme);
+    let highlighter = create_syntax_highlighter(ctx.theme);
     let mut plugins = default_plugins();
     plugins.render.codefence_syntax_highlighter = Some(&highlighter);
 
@@ -197,9 +197,12 @@ pub(super) fn parse_slide_from_markdown(
         root.children(),
         &options,
         &plugins,
-        filename,
-        file_path,
-        asset_root,
+        SlideContext {
+            name: filename,
+            path: file_path,
+            asset_root,
+            mermaid: ctx.mermaid,
+        },
     )?;
 
     slide.kind = kind;
@@ -293,7 +296,7 @@ fn deck_root(slides: &Path) -> PathBuf {
 
 pub(super) fn process_talk_metadata(
     toboggan_dir: &TobogganDir,
-    theme: &str,
+    ctx: ParseContext<'_>,
 ) -> Result<TalkMetadata> {
     let mut metadata = TalkMetadata {
         source_dir: Some(toboggan_dir.as_ref().to_path_buf()),
@@ -305,7 +308,7 @@ pub(super) fn process_talk_metadata(
         debug!("Processing cover slide: {}", path.display());
         let asset_root = deck_root(toboggan_dir.as_ref());
         let (cover_slide, front_matter) =
-            create_slide_from_file(&path, theme, Some(asset_root.as_path()))?;
+            create_slide_from_file(&path, ctx, Some(asset_root.as_path()))?;
         metadata.title = cover_slide.title.to_string();
         metadata.date = front_matter
             .date
@@ -337,7 +340,7 @@ pub(super) fn process_talk_metadata(
 
 pub(super) fn process_all_entries(
     toboggan_dir: &TobogganDir,
-    theme: &str,
+    ctx: ParseContext<'_>,
 ) -> Result<Vec<SlideProcessingResult>> {
     // `<!-- code:lang:path -->` resolves against the deck root, i.e. the slides
     // folder's parent — that is where a deck's `snippets/` and `public/` live.
@@ -349,7 +352,7 @@ pub(super) fn process_all_entries(
     if let Some(cover) = toboggan_dir.get_cover()? {
         let path = cover.path();
         debug!("Processing cover slide: {}", path.display());
-        let slide_result = process_single_file(&path, theme, asset_root);
+        let slide_result = process_single_file(&path, ctx, asset_root);
         result.push(slide_result);
     }
 
@@ -359,11 +362,11 @@ pub(super) fn process_all_entries(
         let path = entry.path();
 
         if path.is_dir() {
-            let folder_results = process_folder_comprehensive(&path, theme, asset_root)?;
+            let folder_results = process_folder_comprehensive(&path, ctx, asset_root)?;
             result.extend(folder_results);
         } else if is_slide_file(&path) {
             debug!("Processing file as slide: {}", path.display());
-            let slide_result = process_single_file(&path, theme, asset_root);
+            let slide_result = process_single_file(&path, ctx, asset_root);
             result.push(slide_result);
         } else {
             let filename = path
@@ -380,10 +383,10 @@ pub(super) fn process_all_entries(
 
 fn process_single_file(
     path: &Path,
-    theme: &str,
+    ctx: ParseContext<'_>,
     asset_root: Option<&Path>,
 ) -> SlideProcessingResult {
-    match create_slide_from_file(path, theme, asset_root) {
+    match create_slide_from_file(path, ctx, asset_root) {
         Ok((slide, front_matter)) => {
             if front_matter.skip {
                 SlideProcessingResult::Skipped(slide)
@@ -403,7 +406,7 @@ fn process_single_file(
 
 fn process_folder_comprehensive(
     folder: &Path,
-    theme: &str,
+    ctx: ParseContext<'_>,
     asset_root: Option<&Path>,
 ) -> Result<Vec<SlideProcessingResult>> {
     let mut results = vec![];
@@ -414,7 +417,7 @@ fn process_folder_comprehensive(
     // Process part slide if it exists
     if let Some(part_entry) = toboggan_dir.get_part()? {
         let path = part_entry.path();
-        let part_result = process_single_file(&path, theme, asset_root);
+        let part_result = process_single_file(&path, ctx, asset_root);
         results.push(part_result);
     } else {
         // Create implicit part slide from folder name
@@ -430,7 +433,7 @@ fn process_folder_comprehensive(
     for entry in toboggan_dir.get_slide_files()? {
         let path = entry.path();
         debug!("Processing folder content file: {}", path.display());
-        results.push(process_single_file(&path, theme, asset_root));
+        results.push(process_single_file(&path, ctx, asset_root));
     }
 
     Ok(results)
@@ -447,6 +450,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+    use crate::mermaid::MermaidRenderer;
 
     /// `-p slides` and `-p ./slides/` name the same folder, so they have to
     /// resolve `<!-- code:… -->` paths and `public/` against the same root.
@@ -586,7 +590,13 @@ mod tests {
         .expect("write cover");
 
         let toboggan_dir = TobogganDir::new(dir_path.to_path_buf())?;
-        let metadata = process_talk_metadata(&toboggan_dir, "base16-ocean.light")?;
+        let metadata = process_talk_metadata(
+            &toboggan_dir,
+            ParseContext {
+                theme: "base16-ocean.light",
+                mermaid: &MermaidRenderer::default(),
+            },
+        )?;
 
         assert_eq!(metadata.source_dir.as_deref(), Some(dir_path));
         assert_eq!(

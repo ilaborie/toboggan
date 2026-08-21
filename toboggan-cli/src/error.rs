@@ -134,6 +134,31 @@ pub enum TobogganCliError {
         message: String,
     },
 
+    #[display("Invalid Mermaid diagram in {file}: {message}")]
+    #[diagnostic(
+        code(toboggan_cli::invalid_mermaid),
+        help(
+            "` ```mermaid ` fences are drawn while the deck builds, so a broken diagram is \
+             caught here rather than rendering as nothing in front of an audience. Fix the \
+             diagram, or fence it as ` ```text ` if it was meant to stay source."
+        )
+    )]
+    InvalidMermaid {
+        file: String,
+        diagram: String,
+        message: String,
+    },
+
+    #[display("Invalid Mermaid config {}: {message}", path.display())]
+    #[diagnostic(
+        code(toboggan_cli::mermaid_config),
+        help(
+            "`--mermaid-config` / `[build] mermaid-config` points at a JSON file in Mermaid's \
+             own config shape: `theme`, `themeVariables`, `preferredAspectRatio`, `flowchart`"
+        )
+    )]
+    MermaidConfig { path: PathBuf, message: String },
+
     #[display("Invalid date format: '{input}'")]
     #[diagnostic(
         code(toboggan_cli::invalid_date_format),

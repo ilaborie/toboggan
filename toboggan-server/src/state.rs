@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::extract::FromRef;
+use toboggan_cli::mermaid::MermaidRenderer;
 use toboggan_core::{Command, Notification, Talk, Timestamp};
 use tokio::sync::RwLock;
 
@@ -64,6 +65,9 @@ pub struct TobogganState {
     thumbnail_service: ThumbnailService,
     /// Decides which connections may drive the deck and open terminals.
     auth: PresenterAuth,
+    /// Deck-level Mermaid settings, so `/download.pdf` and the slide overview
+    /// draw a diagram the same way the web client does.
+    mermaid: Arc<MermaidRenderer>,
 }
 
 impl TobogganState {
@@ -83,7 +87,25 @@ impl TobogganState {
             pdf_render_lock: Arc::new(tokio::sync::Mutex::new(())),
             thumbnail_service: ThumbnailService::new(),
             auth: PresenterAuth::default(),
+            mermaid: Arc::new(MermaidRenderer::default()),
         }
+    }
+
+    /// Installs the deck's Mermaid settings.
+    ///
+    /// Separate from [`Self::new`] for the same reason as [`Self::with_auth`]:
+    /// a state built without thinking about it still draws diagrams, it just
+    /// draws them with the stock theme. Without this, `/download.pdf` would
+    /// theme its diagrams differently from `/run`.
+    #[must_use]
+    pub fn with_mermaid(mut self, mermaid: MermaidRenderer) -> Self {
+        self.mermaid = Arc::new(mermaid);
+        self
+    }
+
+    /// The deck's Mermaid settings.
+    pub(crate) fn mermaid(&self) -> Arc<MermaidRenderer> {
+        Arc::clone(&self.mermaid)
     }
 
     /// Installs the presenter gate.
@@ -152,7 +174,7 @@ impl TobogganState {
     /// Ensures slide-overview thumbnails are being generated and reports status.
     pub(crate) async fn ensure_thumbnails(&self) -> ThumbStatus {
         self.thumbnail_service
-            .ensure(self.talk_service.clone())
+            .ensure(self.talk_service.clone(), self.mermaid())
             .await
     }
 

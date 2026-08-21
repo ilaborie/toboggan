@@ -11,17 +11,35 @@ use serde::Serialize;
 use toboggan_core::{Content, RenderTarget, Slide, SlideId, SlideKind, Talk};
 
 use crate::error::{Result, TobogganCliError};
+use crate::mermaid::MermaidRenderer;
 
 /// Options controlling thumbnail generation.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct ThumbnailOptions {
     /// Whether to emit `search-index.json` and a search box in the overview.
     pub search: bool,
+    /// Deck-level Mermaid settings, so a thumbnail draws its diagrams the same
+    /// way the web client does.
+    pub mermaid: MermaidRenderer,
 }
 
 impl Default for ThumbnailOptions {
     fn default() -> Self {
-        Self { search: true }
+        Self {
+            search: true,
+            mermaid: MermaidRenderer::default(),
+        }
+    }
+}
+
+impl ThumbnailOptions {
+    /// The defaults, drawing Mermaid diagrams the way this deck asks for.
+    #[must_use]
+    pub fn new(mermaid: MermaidRenderer) -> Self {
+        Self {
+            mermaid,
+            ..Self::default()
+        }
     }
 }
 
@@ -42,7 +60,7 @@ struct SlideEntry {
 /// # Errors
 /// Returns an error if the output directory cannot be created, the `typst`
 /// binary is missing or fails, or the index/overview files cannot be written.
-pub fn generate_thumbnails(talk: &Talk, out_dir: &Path, options: ThumbnailOptions) -> Result<()> {
+pub fn generate_thumbnails(talk: &Talk, out_dir: &Path, options: &ThumbnailOptions) -> Result<()> {
     std::fs::create_dir_all(out_dir)
         .map_err(|source| TobogganCliError::create_file(out_dir.to_path_buf(), source))?;
 
@@ -52,7 +70,7 @@ pub fn generate_thumbnails(talk: &Talk, out_dir: &Path, options: ThumbnailOption
     let root = super::typst::deck_root(talk);
     let slides_dir = talk.source_dir.as_deref().map(Path::new);
     for (index, slide) in talk.slides.iter().enumerate() {
-        let typst_source = super::typst::generate_thumbnail_typst(slide);
+        let typst_source = super::typst::generate_thumbnail_typst(slide, &options.mermaid);
         let png = out_dir.join(format!("thumb-{index:04}.png"));
         compile_first_page_png(&typst_source, &png, root.as_deref(), slides_dir)?;
     }

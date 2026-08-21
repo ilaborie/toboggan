@@ -126,6 +126,10 @@ pub(crate) struct BuildConfig {
     pub(crate) lang: Option<String>,
     pub(crate) base_url: Option<String>,
     pub(crate) theme: Option<String>,
+    /// Mermaid config JSON applied to every ` ```mermaid ` fence.
+    ///
+    /// Relative to the directory holding this config file, like `path`.
+    pub(crate) mermaid_config: Option<PathBuf>,
     pub(crate) no_counter: Option<bool>,
     pub(crate) wpm: Option<u16>,
     pub(crate) exclude_notes_from_duration: Option<bool>,
@@ -218,6 +222,7 @@ impl BuildConfig {
             lang,
             base_url,
             theme,
+            mermaid_config,
             no_counter,
             wpm,
             exclude_notes_from_duration,
@@ -327,13 +332,15 @@ fn read_dir_config(dir: &Path) -> anyhow::Result<Option<Config>> {
 /// "./slides relative to wherever you happen to have run `toboggan`", which is
 /// the same cwd-relative trap the deck resolution already had to fix once.
 fn anchor_path(config: &mut Config, file: &Path) {
-    let Some(declared) = config.path.as_ref() else {
+    let Some(dir) = file.parent() else {
         return;
     };
-    if declared.is_relative()
-        && let Some(dir) = file.parent()
-    {
-        config.path = Some(dir.join(declared));
+    for declared in [&mut config.path, &mut config.build.mermaid_config] {
+        if let Some(path) = declared.as_ref()
+            && path.is_relative()
+        {
+            *declared = Some(dir.join(path));
+        }
     }
 }
 

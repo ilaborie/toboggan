@@ -40,6 +40,12 @@
 # prints the available names.
 # theme = "base16-ocean.light"
 
+# Mermaid configuration for ```mermaid fences, as a JSON file in Mermaid's own
+# config shape: `theme`, `themeVariables`, `preferredAspectRatio`, `flowchart`.
+# The path is relative to this file. Individual fences override it with
+# `mermaid:theme=dark,rankSpacing=80`.
+# mermaid-config = "mermaid.json"
+
 # Speaking rate used for the duration estimates in `toboggan stats`.
 # wpm = 150
 

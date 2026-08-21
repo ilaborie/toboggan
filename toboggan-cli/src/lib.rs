@@ -23,6 +23,8 @@ pub use self::error::{Result, TobogganCliError};
 pub mod parser;
 use parser::{FolderParser, Overrides};
 
+pub mod mermaid;
+
 pub mod output;
 
 pub mod scaffold;
@@ -268,10 +270,27 @@ fn validate_input(input: Option<&PathBuf>) -> Result<&PathBuf> {
 ///
 /// # Errors
 /// Returns an error if the folder cannot be parsed.
+/// Builds the deck's Mermaid renderer from `settings`.
+///
+/// Deliberately cheap to call more than once per build: it reads one small
+/// JSON file, and having every path derive it from the same `Settings` is what
+/// keeps the PDF and the web client drawing the same diagram.
+///
+/// # Errors
+/// Returns an error if the configured file is missing or is not valid Mermaid
+/// configuration JSON.
+pub fn mermaid_renderer(settings: &Settings) -> Result<mermaid::MermaidRenderer> {
+    mermaid::MermaidRenderer::from_config(settings.mermaid_config.as_deref())
+}
+
 pub fn parse_presentation(input: &Path, settings: &Settings) -> Result<ParseResult> {
     debug!("Processing folder-based talk from {}", input.display());
 
-    let parser = FolderParser::new(input.to_path_buf(), settings.theme.clone())?;
+    let parser = FolderParser::new(
+        input.to_path_buf(),
+        settings.theme.clone(),
+        mermaid_renderer(settings)?,
+    )?;
     let mut parse_result = parser.parse(Overrides {
         title: settings.title.clone(),
         date: settings.date,
@@ -316,6 +335,7 @@ fn write_output(parse_result: &ParseResult, output: &Path, settings: &Settings) 
         &talk,
         format,
         settings.base_url.as_deref().unwrap_or_default(),
+        &mermaid_renderer(settings)?,
     )?;
 
     write_talk(output, &serialized)?;

@@ -8,6 +8,7 @@ use miette::SourceSpan;
 use toboggan_core::{Content, Slide, SlideKind, TerminalConfig};
 
 use crate::error::{Result, TobogganCliError};
+use crate::mermaid::MermaidRenderer;
 use crate::parser::comments::{is_notes, parse_code, parse_lint_disable, parse_pause, parse_term};
 use crate::parser::directory::{extract_node_text, parse_frontmatter};
 use crate::parser::{
@@ -15,8 +16,26 @@ use crate::parser::{
     default_options,
 };
 
-/// Where a slide came from: its display name for diagnostics, and the deck root
-/// that `<!-- code:lang:path -->` directives resolve against.
+/// Everything a slide needs from outside its own Markdown.
+///
+/// Bundled rather than passed as four positional arguments: `name` and `path`
+/// are both optional and describe the same file, and a caller that swapped them
+/// would still compile.
+#[derive(Debug, Clone, Copy)]
+pub struct SlideContext<'a> {
+    /// Display name, used when the slide declares no title of its own.
+    pub name: Option<&'a str>,
+    /// The slide file, used in diagnostics.
+    pub path: Option<&'a Path>,
+    /// Deck root for `<!-- code:lang:path -->` embeds. `None` disables them.
+    pub asset_root: Option<&'a Path>,
+    /// Deck-level Mermaid settings for ` ```mermaid ` fences.
+    pub mermaid: &'a MermaidRenderer,
+}
+
+/// Where a slide came from: its display name for diagnostics, the deck root
+/// that `<!-- code:lang:path -->` directives resolve against, and how to draw a
+/// ` ```mermaid ` fence.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct SlideSource<'a> {
     /// The slide's path, used in error messages.
@@ -378,20 +397,18 @@ impl SlideContentParser {
         iterator: I,
         options: &Options<'_>,
         plugins: &Plugins<'_>,
-        name: Option<&str>,
-        path: Option<&Path>,
-        asset_root: Option<&Path>,
+        context: SlideContext<'_>,
     ) -> Result<(Slide, FrontMatter)>
     where
         I: Iterator<Item = &'a MarkdownNode<'a>>,
     {
-        let file_name = path.map_or_else(
+        let file_name = context.path.map_or_else(
             || "<unknown>".to_owned(),
             |path| path.to_string_lossy().to_string(),
         );
         let source = SlideSource {
             name: &file_name,
-            asset_root,
+            asset_root: context.asset_root,
         };
 
         for elt in iterator {
@@ -400,7 +417,8 @@ impl SlideContentParser {
 
         let front_matter = self.front_matter();
         let style = front_matter.to_style()?;
-        let renderer = HtmlRenderer::new(options, plugins, style.clone(), &file_name);
+        let renderer =
+            HtmlRenderer::new(options, plugins, style.clone(), &file_name, context.mermaid);
 
         let body = self.body(&renderer)?;
 
@@ -419,7 +437,7 @@ impl SlideContentParser {
             title: Content::Text {
                 text: self
                     .title()
-                    .or_else(|| name.map(str::to_owned))
+                    .or_else(|| context.name.map(str::to_owned))
                     .unwrap_or_else(|| DEFAULT_SLIDE_TITLE.to_owned()),
             },
             body,
@@ -432,7 +450,7 @@ impl SlideContentParser {
                 .into_iter()
                 .map(|mut tc| {
                     // Resolve cwd relative to the slide file's parent directory
-                    if let Some(base_dir) = path.and_then(Path::parent) {
+                    if let Some(base_dir) = context.path.and_then(Path::parent) {
                         let resolved = base_dir.join(&tc.cwd);
                         tc.cwd = resolved.components().collect();
                     }
@@ -441,7 +459,7 @@ impl SlideContentParser {
                 .collect(),
             quake_terminal_cwd: front_matter.quake_cwd.clone(),
             lint_disabled,
-            source_path: path.map(Path::to_path_buf),
+            source_path: context.path.map(Path::to_path_buf),
         };
 
         Ok((result, front_matter))
@@ -451,9 +469,7 @@ impl SlideContentParser {
     pub fn parse_with_defaults<'a, I>(
         self,
         iterator: I,
-        name: Option<&str>,
-        path: Option<&Path>,
-        asset_root: Option<&Path>,
+        context: SlideContext<'_>,
     ) -> Result<(Slide, FrontMatter)>
     where
         I: Iterator<Item = &'a MarkdownNode<'a>>,
@@ -461,7 +477,7 @@ impl SlideContentParser {
         use crate::parser::{default_options, default_plugins};
         let options = default_options();
         let plugins = default_plugins();
-        self.parse(iterator, &options, &plugins, name, path, asset_root)
+        self.parse(iterator, &options, &plugins, context)
     }
 }
 
@@ -496,7 +512,17 @@ mod tests {
         let root = parse_document(&arena, content, &options);
 
         let parser = SlideContentParser::new();
-        parser.parse(root.children(), &options, &plugins, None, None, asset_root)
+        parser.parse(
+            root.children(),
+            &options,
+            &plugins,
+            SlideContext {
+                name: None,
+                path: None,
+                asset_root,
+                mermaid: &MermaidRenderer::default(),
+            },
+        )
     }
 
     #[test]
@@ -678,9 +704,12 @@ Highlighted content.";
             root.children(),
             &options,
             &plugins,
-            Some("my-slide"),
-            None,
-            None,
+            SlideContext {
+                name: Some("my-slide"),
+                path: None,
+                asset_root: None,
+                mermaid: &MermaidRenderer::default(),
+            },
         )?;
 
         assert_eq!(slide.title.to_string(), "my-slide");
@@ -702,9 +731,12 @@ Highlighted content.";
             root.children(),
             &options,
             &plugins,
-            Some("filename"),
-            None,
-            None,
+            SlideContext {
+                name: Some("filename"),
+                path: None,
+                asset_root: None,
+                mermaid: &MermaidRenderer::default(),
+            },
         )?;
 
         // Explicit title should take precedence over filename

@@ -173,6 +173,7 @@ mod tests {
             lang: None,
             base_url: None,
             theme: "base16-ocean.light".to_owned(),
+            mermaid_config: None,
             list_themes: false,
             format: None,
             no_counter: false,

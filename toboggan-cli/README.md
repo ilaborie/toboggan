@@ -110,6 +110,49 @@ Everything after this is speaker notes, and never reaches the projector.
 > `./my-talk/snippets/main.rs` — which is why a deck keeps its snippets beside
 > `slides/` rather than inside it.
 
+## Diagrams
+
+A ```` ```mermaid ```` fence is drawn to SVG while the deck builds, so the diagram is
+part of the document: the web client, the exported HTML, the PDF and the slide
+thumbnails all show the same picture, with no script and no network. A diagram
+that does not parse fails the build and names the slide.
+
+````markdown
+```mermaid:theme=dark,width=60%
+flowchart LR
+  Write --> Build --> Present
+```
+````
+
+| Parameter | What it does |
+| --- | --- |
+| `theme` | `default`, `dark`, `forest`, `neutral`, `modern` |
+| `background` | `transparent` (the default), `theme`, or a colour |
+| `width` | How much of the slide the diagram fills, e.g. `60%` |
+| `nodeSpacing`, `rankSpacing` | Loosen or tighten the layout |
+| `aspectRatio` | Bias the shape, e.g. `16:9` |
+| `maxLabelWidth` | Characters before a label wraps |
+| `fastText` | Measure labels without the system font database (on by default) |
+| `class`, `alt` | Extra CSS class; accessible label |
+
+An unknown parameter is an error rather than a silent no-op, like everything
+else here. Deck-wide defaults come from a JSON file in Mermaid's own config
+shape, named by `--mermaid-config` or `[build] mermaid-config`; a fence's own
+parameters win over it, and Mermaid's `%%{init: {…}}%%` still works inside the
+diagram.
+
+`background` defaults to `transparent` rather than Mermaid's opaque page colour,
+because a themed slide rarely wants a white rectangle punched into it.
+
+> [!NOTE]
+> Rendering is [`mermaid-rs-renderer`][mmdr] — pure Rust, no Node and no
+> headless browser. It covers 23 diagram types and is close to mermaid.js, but
+> not pixel-identical: the crate is young and says so.
+>
+> `fastText` also keeps geometry reproducible across machines. Turning it off,
+> or using non-ASCII labels, measures against whatever fonts the *building*
+> machine has installed, so the same deck can lay out differently elsewhere.
+
 ## Using it as a library
 
 ```rust,ignore
@@ -128,4 +171,5 @@ a parse failure points at the offending line in the offending file.
 
 MIT or Apache-2.0, at your option.
 
+[mmdr]: https://crates.io/crates/mermaid-rs-renderer
 [`miette`]: https://github.com/zkat/miette

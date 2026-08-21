@@ -53,5 +53,9 @@ pub(crate) async fn build_and_serve(
     });
 
     info!(slides = %slides_dir.display(), watch, "build + serve");
-    toboggan_server::launch_with_talk(talk, server_settings, watch_config).await
+    // The served deck's diagrams must be drawn the same way whether they come
+    // out of `/run` or out of `/download.pdf`, so the renderer travels with the
+    // server rather than being rebuilt from defaults inside it.
+    let mermaid = toboggan_cli::mermaid_renderer(&cli_settings)?;
+    toboggan_server::launch_with_talk(talk, server_settings, watch_config, mermaid).await
 }

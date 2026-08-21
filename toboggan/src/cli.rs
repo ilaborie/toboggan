@@ -131,6 +131,14 @@ pub(crate) struct BuildOptions {
     #[arg(long)]
     pub(crate) theme: Option<String>,
 
+    /// Mermaid config JSON applied to every Mermaid fence
+    ///
+    /// Mermaid's own config shape: `theme`, `themeVariables`,
+    /// `preferredAspectRatio`, `flowchart`. Per-fence `mermaid:key=value`
+    /// parameters override it.
+    #[arg(long, value_name = "FILE", value_hint = clap::ValueHint::FilePath)]
+    pub(crate) mermaid_config: Option<PathBuf>,
+
     /// Disable automatic numbering of parts and slides
     #[arg(long)]
     pub(crate) no_counter: bool,
@@ -157,6 +165,7 @@ impl BuildOptions {
         self.theme = self.theme.take().or(config.theme);
         self.lang = self.lang.take().or(config.lang);
         self.base_url = self.base_url.take().or(config.base_url);
+        self.mermaid_config = self.mermaid_config.take().or(config.mermaid_config);
         self.wpm = self.wpm.or(config.wpm);
         self.no_counter |= config.no_counter.unwrap_or(false);
         self.exclude_notes_from_duration |= config.exclude_notes_from_duration.unwrap_or(false);
@@ -181,6 +190,7 @@ impl BuildOptions {
             lang: self.lang,
             base_url: self.base_url,
             theme: self.theme.unwrap_or_else(|| DEFAULT_THEME.to_owned()),
+            mermaid_config: self.mermaid_config,
             list_themes: false,
             format: None,
             no_counter: self.no_counter,

@@ -1341,6 +1341,265 @@ classes = [
 ]
 
 [[slides]]
+kind = "Standard"
+body_source = """
+# Mermaid diagrams
+
+Fence a diagram as `mermaid` and it is drawn while the deck builds:
+
+````markdown
+```mermaid
+flowchart LR
+  Write --> Build --> Present
+```
+````
+
+```mermaid:width=38%
+flowchart LR
+  Write --> Build --> Present
+```
+
+> [!IMPORTANT]
+> A diagram that does not parse stops the build and names the slide, the same
+> way bad `$…$` math does.
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "2.7 Mermaid diagrams"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Mermaid diagrams</h1>
+<p>Fence a diagram as <code>mermaid</code> and it is drawn while the deck builds:</p>
+<pre style="background-color:#eff1f5;"><code class="language-markdown"><span style="color:#4f5b66;">```</span><span style="color:#d08770;">mermaid
+</span><span style="color:#4f5b66;">flowchart LR
+</span><span style="color:#4f5b66;">  Write --&gt; Build --&gt; Present
+</span><span style="color:#4f5b66;">```
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<div class="mermaid mermaid-sized" style="width: 38%"><svg xmlns="http://www.w3.org/2000/svg" width="414.99335" height="75" viewBox="0 0 414.99335 75"><defs><marker id="m12933a92-arrow-0" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#64748B" stroke="#64748B" stroke-width="1" stroke-dasharray="1,0"/></marker><marker id="m12933a92-arrow-start-0" viewBox="0 0 10 10" refX="4.5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 5 L 10 10 L 10 0 z" fill="#64748B" stroke="#64748B" stroke-width="1" stroke-dasharray="1,0"/></marker></defs><path id="m12933a92-edge-0" class="edgePath" data-edge-id="edge-0" d="M 107.200,33.500 L 146.057,33.500" fill="none" stroke="#64748B" stroke-width="2"    stroke-linecap="round" stroke-linejoin="round" /><g transform="translate(146.06 33.50) rotate(0.00)"><polygon points="0,0 -7.50,3.90 -7.50,-3.90" fill="#64748B" stroke="#64748B" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></g><path id="m12933a92-edge-1" class="edgePath" data-edge-id="edge-1" d="M 245.257,33.500 L 284.113,33.500" fill="none" stroke="#64748B" stroke-width="2"    stroke-linecap="round" stroke-linejoin="round" /><g transform="translate(284.11 33.50) rotate(0.00)"><polygon points="0,0 -7.50,3.90 -7.50,-3.90" fill="#64748B" stroke="#64748B" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></g><rect x="146.06" y="8.00" width="99.20" height="51.00" rx="3" ry="3" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1" stroke-linejoin="round" stroke-linecap="round"/><text x="195.66" y="37.00" text-anchor="middle" font-family="Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,DejaVu Sans,Liberation Sans,sans-serif,Noto Color Emoji,Apple Color Emoji,Segoe UI Emoji" font-size="14" fill="#0F172A"><tspan x="195.66" dy="0.00">Build</tspan></text><rect x="284.11" y="8.00" width="114.88" height="51.00" rx="3" ry="3" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1" stroke-linejoin="round" stroke-linecap="round"/><text x="341.55" y="37.00" text-anchor="middle" font-family="Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,DejaVu Sans,Liberation Sans,sans-serif,Noto Color Emoji,Apple Color Emoji,Segoe UI Emoji" font-size="14" fill="#0F172A"><tspan x="341.55" dy="0.00">Present</tspan></text><rect x="8.00" y="8.00" width="99.20" height="51.00" rx="3" ry="3" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1" stroke-linejoin="round" stroke-linecap="round"/><text x="57.60" y="37.00" text-anchor="middle" font-family="Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,DejaVu Sans,Liberation Sans,sans-serif,Noto Color Emoji,Apple Color Emoji,Segoe UI Emoji" font-size="14" fill="#0F172A"><tspan x="57.60" dy="0.00">Write</tspan></text></svg></div>
+</div><!-- end step -->
+
+<div class="step step-1"><!-- begin step -->
+<div class="markdown-alert markdown-alert-important">
+<p class="markdown-alert-title">Important</p>
+<p>A diagram that does not parse stops the build and names the slide, the same
+way bad <code>$…$</code> math does.</p>
+</div>
+</div><!-- end step -->
+"""
+alt = """
+# Mermaid diagrams
+
+Fence a diagram as `mermaid` and it is drawn while the deck builds:
+
+````markdown
+```mermaid
+flowchart LR
+  Write --> Build --> Present
+```
+````
+
+```mermaid:width=38%
+flowchart LR
+  Write --> Build --> Present
+```
+
+> [!IMPORTANT]
+> A diagram that does not parse stops the build and names the slide, the same
+> way bad `$…$` math does.
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>The renderer is <code>mermaid-rs-renderer</code> — pure Rust, no Node and no headless
+browser — so a diagram costs a couple of milliseconds at build time rather than
+a script tag at present time. Same trade the math directive makes: the SVG is
+part of the document, so the deck draws its diagrams offline, in the PDF, and in
+the slide thumbnails from one source of truth.</p>
+<p>Output is close to mermaid.js but not identical; the crate is young and says so.</p>
+<p><code>&lt;!-- code:mermaid:diagrams/architecture.mmd --&gt;</code> embeds a diagram from a file.
+Fence parameters cannot be combined with that form — the directive splits on the
+first colon, so they would be read as part of the path.</p>
+"""
+alt = """
+The renderer is `mermaid-rs-renderer` — pure Rust, no Node and no headless
+browser — so a diagram costs a couple of milliseconds at build time rather than
+a script tag at present time. Same trade the math directive makes: the SVG is
+part of the document, so the deck draws its diagrams offline, in the PDF, and in
+the slide thumbnails from one source of truth.
+
+Output is close to mermaid.js but not identical; the crate is young and says so.
+
+`<!-- code:mermaid:diagrams/architecture.mmd -->` embeds a diagram from a file.
+Fence parameters cannot be combined with that form — the directive splits on the
+first colon, so they would be read as part of the path.
+"""
+
+[slides.notes.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
+kind = "Standard"
+body_source = """
+# Mermaid options
+
+Tune one diagram from its fence — `mermaid:key=value,key=value`:
+
+| Parameter | Values |
+| --- | --- |
+| `theme` | `default`, `dark`, `forest`, `neutral`, `modern` |
+| `background` | `transparent` (default), `theme`, a colour |
+| `width` | `60%`, `8cm`, … |
+| `nodeSpacing`, `rankSpacing`, `aspectRatio`, `maxLabelWidth` | layout |
+| `alt`, `class` | accessible label, extra CSS class |
+
+Deck-wide defaults live in a Mermaid JSON config, named from `toboggan.toml`:
+
+```toml
+[build]
+mermaid-config = "mermaid.json"
+```
+"""
+
+[slides.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.title]
+type = "Text"
+text = "2.8 Mermaid options"
+
+[slides.body]
+type = "Html"
+raw = """
+<h1>Mermaid options</h1>
+<p>Tune one diagram from its fence — <code>mermaid:key=value,key=value</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Values</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>theme</code></td>
+<td><code>default</code>, <code>dark</code>, <code>forest</code>, <code>neutral</code>, <code>modern</code></td>
+</tr>
+<tr>
+<td><code>background</code></td>
+<td><code>transparent</code> (default), <code>theme</code>, a colour</td>
+</tr>
+<tr>
+<td><code>width</code></td>
+<td><code>60%</code>, <code>8cm</code>, …</td>
+</tr>
+<tr>
+<td><code>nodeSpacing</code>, <code>rankSpacing</code>, <code>aspectRatio</code>, <code>maxLabelWidth</code></td>
+<td>layout</td>
+</tr>
+<tr>
+<td><code>alt</code>, <code>class</code></td>
+<td>accessible label, extra CSS class</td>
+</tr>
+</tbody>
+</table>
+
+<div class="step step-0"><!-- begin step -->
+<p>Deck-wide defaults live in a Mermaid JSON config, named from <code>toboggan.toml</code>:</p>
+<pre style="background-color:#eff1f5;"><code class="language-toml"><span style="color:#4f5b66;">[build]
+</span><span style="color:#4f5b66;">mermaid-config = &quot;mermaid.json&quot;
+</span></code></pre>
+</div><!-- end step -->
+"""
+alt = """
+# Mermaid options
+
+Tune one diagram from its fence — `mermaid:key=value,key=value`:
+
+| Parameter | Values |
+| --- | --- |
+| `theme` | `default`, `dark`, `forest`, `neutral`, `modern` |
+| `background` | `transparent` (default), `theme`, a colour |
+| `width` | `60%`, `8cm`, … |
+| `nodeSpacing`, `rankSpacing`, `aspectRatio`, `maxLabelWidth` | layout |
+| `alt`, `class` | accessible label, extra CSS class |
+
+Deck-wide defaults live in a Mermaid JSON config, named from `toboggan.toml`:
+
+```toml
+[build]
+mermaid-config = "mermaid.json"
+```
+"""
+
+[slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>A fence's own parameters win over the config file, and Mermaid's
+<code>%%{init: {…}}%%</code> still works inside the diagram itself.</p>
+<p>An unknown parameter is an error, not a silent no-op — the same rule the front
+matter and <code>toboggan.toml</code> already follow, for the same reason: a typo that does
+nothing is only discovered on stage.</p>
+<p><code>background</code> defaults to <code>transparent</code> rather than Mermaid's opaque page colour,
+because a themed slide almost never wants a white rectangle punched into it.
+Pass <code>background=theme</code> to get Mermaid's own back.</p>
+<p>The config file is Mermaid's own shape — <code>theme</code>, <code>themeVariables</code>,
+<code>preferredAspectRatio</code>, <code>flowchart</code> — so a <code>mermaid.json</code> from elsewhere works
+here unchanged.</p>
+"""
+alt = """
+A fence's own parameters win over the config file, and Mermaid's
+`%%{init: {…}}%%` still works inside the diagram itself.
+
+An unknown parameter is an error, not a silent no-op — the same rule the front
+matter and `toboggan.toml` already follow, for the same reason: a typo that does
+nothing is only discovered on stage.
+
+`background` defaults to `transparent` rather than Mermaid's opaque page colour,
+because a themed slide almost never wants a white rectangle punched into it.
+Pass `background=theme` to get Mermaid's own back.
+
+The config file is Mermaid's own shape — `theme`, `themeVariables`,
+`preferredAspectRatio`, `flowchart` — so a `mermaid.json` from elsewhere works
+here unchanged.
+"""
+
+[slides.notes.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[[slides]]
 kind = "Part"
 body_source = """
 # Styling
@@ -3705,8 +3964,8 @@ progress bar with pure CSS, no assets.
 
 ### 🖼️ Pre-render diagrams
 
-Compile D2 / Mermaid / Graphviz to `.webp` in `public/`, embed with `<img>`.
-Keeps the `.toml` small and the render fast.
+Mermaid draws itself — see the directives part. For D2 / Graphviz, compile to
+`.webp` in `public/` and embed with `<img>`.
 
 ### 📐 `spread-steps`
 
@@ -3749,8 +4008,8 @@ stylesheet — exactly how this deck loads Space Grotesk.</p>
 <p>The footer reads <code>--current-slide</code> / <code>--total-slides</code>; this guide's 🛝 rides the
 progress bar with pure CSS, no assets.</p>
 <h3>🖼️ Pre-render diagrams</h3>
-<p>Compile D2 / Mermaid / Graphviz to <code>.webp</code> in <code>public/</code>, embed with <code>&lt;img&gt;</code>.
-Keeps the <code>.toml</code> small and the render fast.</p>
+<p>Mermaid draws itself — see the directives part. For D2 / Graphviz, compile to
+<code>.webp</code> in <code>public/</code> and embed with <code>&lt;img&gt;</code>.</p>
 <h3>📐 <code>spread-steps</code></h3>
 <p>Combine with <code>&lt;!-- pause --&gt;</code> to space reveals evenly down a tall slide.</p>
 </div>
@@ -3783,8 +4042,8 @@ progress bar with pure CSS, no assets.
 
 ### 🖼️ Pre-render diagrams
 
-Compile D2 / Mermaid / Graphviz to `.webp` in `public/`, embed with `<img>`.
-Keeps the `.toml` small and the render fast.
+Mermaid draws itself — see the directives part. For D2 / Graphviz, compile to
+`.webp` in `public/` and embed with `<img>`.
 
 ### 📐 `spread-steps`
 

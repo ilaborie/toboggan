@@ -11,6 +11,18 @@ Entries are grouped the way the commits are: this repository uses
 
 ### Added
 
+- **Mermaid diagrams in slides.** A ```` ```mermaid ```` fence is drawn to SVG while
+  the deck builds — pure Rust, no Node and no headless browser — so the web
+  client, the exported HTML, the PDF and the slide thumbnails all show the same
+  picture with no script and no network, and a diagram that does not parse fails
+  the build and names the slide rather than rendering as nothing in front of an
+  audience. Tune one fence with `mermaid:theme=dark,width=60%` (`theme`,
+  `background`, `width`, `nodeSpacing`, `rankSpacing`, `aspectRatio`,
+  `maxLabelWidth`, `fastText`, `class`, `alt`; an unknown parameter is an
+  error), and set deck-wide defaults with `--mermaid-config` or
+  `[build] mermaid-config` in `toboggan.toml`, pointing at a JSON file in
+  Mermaid's own config shape. The background defaults to transparent so a
+  diagram does not punch a white rectangle into a themed slide.
 - **A presenter view at `/presenter`** — the current slide beside the next one,
   the notes for where you are, and a status strip with the wall clock, an
   elapsed timer, deck progress, slide and reveal counters, and how far ahead or

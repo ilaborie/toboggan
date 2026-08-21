@@ -22,7 +22,7 @@ const PRINT_CSS: &str = include_str!("../print.css");
 const NAVIGATE_JS: &str = include_str!("../navigate.js");
 
 /// Escape HTML special characters
-fn escape_html(text: &str) -> String {
+pub(crate) fn escape_html(text: &str) -> String {
     text.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")

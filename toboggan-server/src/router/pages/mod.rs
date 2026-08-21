@@ -100,8 +100,15 @@ fn render_guide() -> anyhow::Result<String> {
     // that is the base its export is rendered against. This used to be a pair of
     // string replacements here; the renderer does it now, and does it for every
     // spelling of the URL rather than the one the guide happens to use.
-    let bytes = toboggan_cli::output::serialize_talk(&talk, OutputFormat::Html, "/guide/")
-        .map_err(|err| anyhow::anyhow!("{err}"))?;
+    let bytes = toboggan_cli::output::serialize_talk(
+        &talk,
+        OutputFormat::Html,
+        "/guide/",
+        // The guide is a prebuilt talk whose diagrams, if it ever grows any,
+        // were already drawn into its HTML; the HTML path never re-renders one.
+        &toboggan_cli::mermaid::MermaidRenderer::default(),
+    )
+    .map_err(|err| anyhow::anyhow!("{err}"))?;
     Ok(String::from_utf8(bytes)?)
 }
 

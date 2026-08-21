@@ -16,8 +16,8 @@ The footer reads `--current-slide` / `--total-slides`; this guide's 🛝 rides t
 progress bar with pure CSS, no assets.
 
 ### 🖼️ Pre-render diagrams
-Compile D2 / Mermaid / Graphviz to `.webp` in `public/`, embed with `<img>`.
-Keeps the `.toml` small and the render fast.
+Mermaid draws itself — see the directives part. For D2 / Graphviz, compile to
+`.webp` in `public/` and embed with `<img>`.
 
 ### 📐 `spread-steps`
 Combine with `<!-- pause -->` to space reveals evenly down a tall slide.

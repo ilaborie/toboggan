@@ -26,6 +26,7 @@ miette = { workspace = true, features = ["fancy"] }
 derive_more = { workspace = true, features = ["error", "from", "display"] }
 comrak = { workspace = true }
 math-core = { workspace = true }
+mermaid-rs-renderer = { workspace = true }
 owo-colors = { workspace = true, features = ["supports-colors"] }
 humantime = { workspace = true }
 comfy-table = { workspace = true }
