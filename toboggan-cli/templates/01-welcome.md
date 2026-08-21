@@ -11,4 +11,5 @@ title = "Welcome"
 - Add speaker notes with a `notes` comment
 
 <!-- notes -->
+
 This paragraph is a speaker note — visible in the presenter views only.

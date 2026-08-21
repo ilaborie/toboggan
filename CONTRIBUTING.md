@@ -67,13 +67,9 @@ runs. CI has a dedicated job for exactly this.
   diagnostic to), the server uses [`anyhow`], and `toboggan-lint` stays
   framework-neutral — it emits serializable diagnostics and the CLI adds the
   miette layer on top.
-- **Derive order**: `Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash,
-  Default`, then `Serialize, Deserialize` unprefixed, then anything else fully
+- **Derive order**: `Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default`, then `Serialize, Deserialize` unprefixed, then anything else fully
   qualified (`sqlx::FromRow`, `clap::Parser`, …).
 - Prefer turbofish (`parse::<u32>()`) over a type annotation on the binding.
-
-[`miette`]: https://github.com/zkat/miette
-[`anyhow`]: https://github.com/dtolnay/anyhow
 
 ## Tests
 
@@ -107,6 +103,7 @@ Documentation is part of the change, not a follow-up:
 
 - A new flag belongs in the guide deck (`examples/toboggan-guide/slides/`) and in
   the scaffolded `toboggan-cli/templates/toboggan.toml`.
+
 - **The guide's built artifact is checked in.** `toboggan-guide.toml` is
   `include_str!`-embedded into the server, so after editing any slide under
   `examples/toboggan-guide/slides/`, rebuild it:
@@ -119,12 +116,15 @@ Documentation is part of the change, not a follow-up:
 
   CI does this and fails on a diff, so a forgotten rebuild is caught rather than
   shipped.
+
 - Crate README examples are doctests where they can be, so they cannot drift.
 
 ## Reporting a bug
 
-A deck that reproduces it is worth more than a description. `toboggan new -p
-/tmp/repro`, add the slide that breaks, and attach the folder — it is Markdown,
+A deck that reproduces it is worth more than a description. `toboggan new -p /tmp/repro`, add the slide that breaks, and attach the folder — it is Markdown,
 it will be small.
 
 For anything with a security dimension, read [SECURITY.md](SECURITY.md) first.
+
+[`anyhow`]: https://github.com/dtolnay/anyhow
+[`miette`]: https://github.com/zkat/miette

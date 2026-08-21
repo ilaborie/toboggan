@@ -5,8 +5,6 @@
 Open a [private security advisory][advisory] on this repository. Please do not
 open a public issue for anything exploitable.
 
-[advisory]: https://github.com/ilaborie/toboggan/security/advisories/new
-
 This is a hobby project with no service behind it and no SLA. Expect a reply
 when the maintainer next sits down with it — but do report, because the thing
 this software does is run on a laptop on a conference network.
@@ -30,7 +28,7 @@ So the server does not treat every connection alike.
 > **A connection from the machine running the server presents. A connection
 > from anywhere else presents only if it carries the presenter token.**
 
-|  | `/`, `/run`, `/api/talk`, `/api/slides` | navigation (`/api/command`, WS commands) | `/api/terminal`, `/api/clients` |
+| | `/`, `/run`, `/api/talk`, `/api/slides` | navigation (`/api/command`, WS commands) | `/api/terminal`, `/api/clients` |
 | --- | :-: | :-: | :-: |
 | default bind (`127.0.0.1`) | ✅ | ✅ | ✅ |
 | `--host 0.0.0.0`, no token | ✅ | ✗ 403 | ✗ 403 |
@@ -96,3 +94,5 @@ against the server from a single connection.
 
 Out of scope: the plaintext transport and the missing rate limit named above,
 and the fact that a deck's own author can run commands — that is the product.
+
+[advisory]: https://github.com/ilaborie/toboggan/security/advisories/new

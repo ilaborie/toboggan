@@ -10,8 +10,6 @@ a WebSocket, and hosts the embedded web client.
 > memory and serve it with live reload, or `toboggan serve -p talk.toml` to serve
 > an already-built file.
 
-[axum]: https://github.com/tokio-rs/axum
-
 ## Routes
 
 | Method | Path | What it is |
@@ -111,3 +109,5 @@ Also public: `routes` / `routes_with_cors` to mount the router yourself,
 ## License
 
 MIT or Apache-2.0, at your option.
+
+[axum]: https://github.com/tokio-rs/axum

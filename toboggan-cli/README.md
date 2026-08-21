@@ -124,8 +124,8 @@ Also public: `output` (the renderers), `scaffold` (what `toboggan new` writes),
 `stats`, `display`, and `TobogganCliError`, which is a [`miette`] diagnostic — so
 a parse failure points at the offending line in the offending file.
 
-[`miette`]: https://github.com/zkat/miette
-
 ## License
 
 MIT or Apache-2.0, at your option.
+
+[`miette`]: https://github.com/zkat/miette
