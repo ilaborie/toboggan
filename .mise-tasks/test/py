@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+#MISE description="Build the Python bindings and run their test suite"
+
+set -eu
+
+echo "🐍 Testing the Python bindings..."
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "⚠️  uv not found, skipping Python binding tests (install with: mise install uv)"
+  exit 0
+fi
+
+cd toboggan-py
+
+echo "📦 Installing the dev dependencies..."
+uv sync --group dev
+
+# `maturin develop` is what compiles the Rust source that is on disk right now.
+# `uv sync` does not: it reuses a cached wheel and will leave a stale extension
+# in place after a Rust change. That is also why every command below passes
+# `--no-sync` — without it `uv run` re-syncs first and puts the stale wheel
+# straight back over the build we just made, so the tests exercise the wrong
+# code and pass when they should fail.
+echo "🔧 Building the extension..."
+uv run --no-sync maturin develop --uv
+
+echo "🧪 Running the tests..."
+uv run --no-sync pytest
+
+cd ..
+
+echo "✅ Python binding tests passed!"

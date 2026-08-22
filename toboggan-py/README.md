@@ -99,14 +99,19 @@ Type stubs in `toboggan_py.pyi` provide full IDE support and type checking.
 ## Development
 
 ```bash
-cargo fmt && cargo clippy              # Format and lint
-maturin develop                        # Build and install
-python example.py localhost 8097       # Drive a scratch server
-maturin build --release                # Build release wheel
+mise check:py            # fmt + clippy + the test suite (from the repo root)
+mise test:py             # just the tests
+maturin build --release  # Build release wheel
 ```
 
-This crate is excluded from the cargo workspace, so `mise check` at the
-repository root does not reach it — run `cargo clippy` from *this* directory.
+`mise check` at the repository root runs `check:py` along with the Rust, web and
+iOS lanes. The crate is excluded from the cargo workspace, so the root `cargo`
+commands do not reach it — that is what these tasks are for.
+
+The tests start a real server and drive it, because nothing about a client can
+be tested honestly without one. They pick a free port, so they will not disturb
+a deck you already have running. Set `TOBOGGAN_BIN` to a prebuilt `toboggan` to
+skip the `cargo run` they otherwise fall back to.
 
 ## Troubleshooting
 

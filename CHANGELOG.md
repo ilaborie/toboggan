@@ -11,6 +11,17 @@ Entries are grouped the way the commits are: this repository uses
 
 ### Added
 
+- **The Python bindings are under test, in `mise` and in CI.** `toboggan-py` is
+  the repository's third Cargo workspace, so the root `cargo` commands, `mise
+  check:rust` and every CI job all went straight past it — long enough for two
+  real defects to ship unnoticed. It now has `mise check:py` and `mise test:py`
+  (both run by the top-level `mise check` and `mise test`) and a CI job of its
+  own. The suite drives a real server on a free port: navigation must have
+  landed by the time the call returns, a refused command must raise, a network
+  call must not freeze other Python threads, and `toboggan_py.pyi` must still
+  describe the module that was actually built — which is the one check nothing
+  about a PyO3 build does for you.
+
 - **Mermaid diagrams in slides.** A ```` ```mermaid ```` fence is drawn to SVG while
   the deck builds — pure Rust, no Node and no headless browser — so the web
   client, the exported HTML, the PDF and the slide thumbnails all show the same

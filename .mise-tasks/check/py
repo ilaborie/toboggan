@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+#MISE description="Run Python binding checks: formatting, linting, and tests"
+
+set -eu
+
+echo "🐍 Running Python binding checks..."
+
+# `toboggan-py` is excluded from the cargo workspace, so `mise check:rust` never
+# reaches it — `--all-targets` and `nextest` do not cross a workspace boundary.
+# These commands have to run from inside the crate, which is the whole reason
+# this task exists.
+cd toboggan-py
+
+echo "🔧 Checking formatting..."
+cargo +nightly fmt --all --check
+
+echo "🔍 Linting with clippy..."
+cargo clippy --all-targets -- -D warnings
+
+cd ..
+
+mise test:py
+
+echo "✅ All Python binding checks passed!"
