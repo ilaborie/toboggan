@@ -33,6 +33,11 @@ self-contained HTML deck, a PDF, a thumbnail overview), a presentation linter, a
 presenter view with notes and a timer, and an MCP server for writing slides with
 an LLM.
 
+Mermaid diagrams and LaTeX math are drawn while the deck builds, not in the
+browser, so a `mermaid` fence and a `$…$` expression look the same on the
+projector, in the exported HTML and in the PDF — and a broken one fails the
+build rather than the talk.
+
 > **Note**: this is an educational and fun project, built to explore how far
 > Rust reaches — the same domain crate drives an axum server, a WebAssembly
 > browser client, a ratatui terminal, an iced desktop window, and an iOS app
@@ -135,6 +140,7 @@ default-command = "lint"   # what a bare `toboggan` does
 [build]
 theme = "Solarized (dark)"
 wpm = 130
+mermaid-config = "mermaid.json"   # defaults for mermaid diagrams
 
 [serve]
 open-presenter = true

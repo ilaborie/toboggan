@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use clap::error::ErrorKind;
 use clap::{CommandFactory, Parser};
-use miette::IntoDiagnostic;
+use toboggan_cli::TobogganCliError;
 use tracing_subscriber::EnvFilter;
 
 mod cli;
@@ -62,7 +62,7 @@ fn dispatch(cli: Cli) -> miette::Result<()> {
         Some(Commands::Build(args)) => {
             let config = load_config(&args.path.search_root())?;
             let settings = args.resolve(config);
-            toboggan_cli::run(&settings).into_diagnostic()
+            toboggan_cli::run(&settings).map_err(miette::Report::new)
         }
         Some(Commands::Serve(args)) => {
             // The talk is a file, so a config would live beside it, not "in" it.
@@ -112,7 +112,7 @@ fn run_default(args: DefaultArgs) -> miette::Result<()> {
         DefaultCommand::Serve => serve_default(args),
         DefaultCommand::Build => {
             let settings = args.into_build_args().resolve(config);
-            toboggan_cli::run(&settings).into_diagnostic()
+            toboggan_cli::run(&settings).map_err(miette::Report::new)
         }
         DefaultCommand::Stats => to_miette(commands::misc::show_stats(
             args.into_stats_args().resolve(config),
@@ -185,8 +185,19 @@ where
     to_miette(runtime.block_on(future))
 }
 
-/// Bridges an `anyhow::Result` into a `miette::Result`, preserving the context
-/// chain via the debug representation.
+/// Bridges an `anyhow::Result` into a `miette::Result`.
+///
+/// A [`TobogganCliError`] is handed to miette whole rather than stringified:
+/// it is a `Diagnostic`, so it carries the per-slide snippets, carets and help
+/// text that make a parse failure findable. Flattening it here is what used to
+/// leave `lint`, `pdf` and `thumbnails` printing one bare line where `build`
+/// drew a caret under the offending token.
+///
+/// Anything else keeps the debug representation, which is what preserves an
+/// `anyhow` context chain.
 fn to_miette(result: anyhow::Result<()>) -> miette::Result<()> {
-    result.map_err(|err| miette::miette!("{err:?}"))
+    result.map_err(|err| match err.downcast::<TobogganCliError>() {
+        Ok(diagnostic) => miette::Report::new(diagnostic),
+        Err(err) => miette::miette!("{err:?}"),
+    })
 }

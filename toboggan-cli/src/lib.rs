@@ -23,6 +23,8 @@ pub use self::error::{Result, TobogganCliError};
 pub mod parser;
 use parser::{FolderParser, Overrides};
 
+pub mod mermaid;
+
 pub mod output;
 
 pub mod scaffold;
@@ -37,12 +39,16 @@ pub mod stats;
 /// The one directory a deck's assets live in, beside its slides folder.
 const PUBLIC_DIR: &str = "public";
 
-#[derive(Debug, Clone)]
+/// Not `Clone`: a failure carries its whole [`TobogganCliError`], which owns
+/// non-cloneable sources such as `io::Error`. Keeping the diagnostic rather
+/// than its rendered text is what lets [`TobogganCliError::SlidesFailedToParse`]
+/// draw each failure's own snippet.
+#[derive(Debug)]
 pub enum SlideProcessingResult {
     Processed(Slide),
     Skipped(Slide),
     Ignored(String),
-    Error(String),
+    Error(Box<TobogganCliError>),
 }
 
 #[derive(Debug, Clone)]
@@ -73,7 +79,7 @@ impl Default for TalkMetadata {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ParseResult {
     pub talk_metadata: TalkMetadata,
     pub slides: Vec<SlideProcessingResult>,
@@ -115,21 +121,45 @@ impl ParseResult {
         talk
     }
 
-    /// The message of every slide that failed to parse, in discovery order.
+    /// The diagnostic for every slide that failed to parse, in discovery order.
     ///
     /// [`Self::to_talk`] silently drops those slides, so any caller that renders
     /// or analyses the talk has to decide what to do about them. Without this a
     /// single front-matter typo makes a slide vanish from the deck while the
     /// command still reports success.
     #[must_use]
-    pub fn errors(&self) -> Vec<&str> {
+    pub fn errors(&self) -> Vec<&TobogganCliError> {
         self.slides
             .iter()
             .filter_map(|slide_result| match slide_result {
-                SlideProcessingResult::Error(message) => Some(message.as_str()),
+                SlideProcessingResult::Error(error) => Some(&**error),
                 _ => None,
             })
             .collect()
+    }
+
+    /// Moves the failures out, so they can be attached to a diagnostic.
+    ///
+    /// `#[related]` needs owned values, and the slides they came from are
+    /// dropped by [`Self::to_talk`] anyway.
+    ///
+    /// The failed slides are *removed*, so afterwards [`Self::errors`] is empty
+    /// and [`Self::stats`] counts a deck that looks whole. Call it last, after
+    /// anything that reports numbers.
+    #[must_use]
+    pub fn take_errors(&mut self) -> Vec<TobogganCliError> {
+        let mut failures = Vec::new();
+        self.slides = std::mem::take(&mut self.slides)
+            .into_iter()
+            .filter_map(|slide_result| match slide_result {
+                SlideProcessingResult::Error(error) => {
+                    failures.push(*error);
+                    None
+                }
+                kept => Some(kept),
+            })
+            .collect();
+        failures
     }
 
     #[must_use]
@@ -222,18 +252,15 @@ pub fn run(settings: &Settings) -> Result<()> {
     }
 
     let input = validate_input(settings.input.as_ref())?;
-    let parse_result = parse_presentation(input, settings)?;
+    let mut parse_result = parse_presentation(input, settings)?;
     display_results(&parse_result, settings)?;
 
     // Fail before writing anything. `to_talk` drops unparseable slides, so
     // continuing here wrote a silently-truncated deck and still exited 0 — which
     // the GitHub Action turns into a published deck with slides missing.
-    let errors = parse_result.errors();
-    if !errors.is_empty() {
-        return Err(TobogganCliError::SlidesFailedToParse {
-            count: errors.len(),
-            details: errors.join("\n  "),
-        });
+    let failures = parse_result.take_errors();
+    if !failures.is_empty() {
+        return Err(TobogganCliError::SlidesFailedToParse { failures });
     }
 
     if let Some(output) = &settings.output {
@@ -268,10 +295,27 @@ fn validate_input(input: Option<&PathBuf>) -> Result<&PathBuf> {
 ///
 /// # Errors
 /// Returns an error if the folder cannot be parsed.
+/// Builds the deck's Mermaid renderer from `settings`.
+///
+/// Deliberately cheap to call more than once per build: it reads one small
+/// JSON file, and having every path derive it from the same `Settings` is what
+/// keeps the PDF and the web client drawing the same diagram.
+///
+/// # Errors
+/// Returns an error if the configured file is missing or is not valid Mermaid
+/// configuration JSON.
+pub fn mermaid_renderer(settings: &Settings) -> Result<mermaid::MermaidRenderer> {
+    mermaid::MermaidRenderer::from_config(settings.mermaid_config.as_deref())
+}
+
 pub fn parse_presentation(input: &Path, settings: &Settings) -> Result<ParseResult> {
     debug!("Processing folder-based talk from {}", input.display());
 
-    let parser = FolderParser::new(input.to_path_buf(), settings.theme.clone())?;
+    let parser = FolderParser::new(
+        input.to_path_buf(),
+        settings.theme.clone(),
+        mermaid_renderer(settings)?,
+    )?;
     let mut parse_result = parser.parse(Overrides {
         title: settings.title.clone(),
         date: settings.date,
@@ -316,6 +360,7 @@ fn write_output(parse_result: &ParseResult, output: &Path, settings: &Settings) 
         &talk,
         format,
         settings.base_url.as_deref().unwrap_or_default(),
+        &mermaid_renderer(settings)?,
     )?;
 
     write_talk(output, &serialized)?;

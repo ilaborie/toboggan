@@ -95,6 +95,17 @@ pub struct Settings {
     )]
     pub theme: String,
 
+    /// Mermaid configuration file, in Mermaid's own JSON config shape.
+    ///
+    /// Deck-level defaults for every ` ```mermaid ` fence; per-fence
+    /// `mermaid:key=value` parameters override it.
+    #[clap(
+        long,
+        value_hint = clap::ValueHint::FilePath,
+        help = "Mermaid config JSON applied to every ```mermaid fence"
+    )]
+    pub mermaid_config: Option<PathBuf>,
+
     /// List all available syntax highlighting themes and exit.
     #[clap(long, help = "List all available syntax highlighting themes and exit")]
     pub list_themes: bool,

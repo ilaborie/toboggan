@@ -110,6 +110,65 @@ Everything after this is speaker notes, and never reaches the projector.
 > `./my-talk/snippets/main.rs` — which is why a deck keeps its snippets beside
 > `slides/` rather than inside it.
 
+## Diagrams
+
+A ```` ```mermaid ```` fence is drawn to SVG while the deck builds, so the diagram is
+part of the document: the web client, the exported HTML, the PDF and the slide
+thumbnails all show the same picture, with no script and no network. A diagram
+that does not parse fails the build and names the slide.
+
+````markdown
+```mermaid:theme=dark,width=60%
+flowchart LR
+  Write --> Build --> Present
+```
+````
+
+| Parameter | What it does |
+| --- | --- |
+| `theme` | `default` (aka `base`, `mermaid`), `dark`, `forest`, `neutral`, `modern` |
+| `background` | `transparent` (the default), `theme`, or a colour: `#1e293b`, `slategray`, `rgb(30,41,59)` |
+| `width` | How much of the slide the diagram fills, e.g. `60%` or `8cm` |
+| `nodeSpacing`, `rankSpacing` | Loosen or tighten the layout |
+| `aspectRatio` | Bias the shape, e.g. `16:9` |
+| `maxLabelWidth` | Characters before a label wraps |
+| `fastText` | Measure a flowchart's ASCII labels without the system font database (on by default) |
+| `class`, `alt` | Extra CSS class (HTML only); accessible label — put it last |
+
+An unrecognised parameter — or an unrecognised *value* for one — is an error
+rather than a silent no-op, like everything else here: a misspelled `background`
+colour fails the build instead of being painted, which for an invalid paint
+means black. `class` and `alt` are free text, so they are the two values not
+checked. `alt` runs to the end of the fence, because an accessible label is a
+sentence and a sentence has commas in it — so write it last. Deck-wide defaults
+come from a JSON file in Mermaid's own config shape, named by
+`--mermaid-config` or `[build] mermaid-config`; a fence's own parameters win
+over it. The same strictness applies there: an unknown setting or a misspelled
+theme name in that file is a build error too, rather than being ignored.
+
+`background` defaults to `transparent` rather than Mermaid's opaque page colour,
+because a themed slide rarely wants a white rectangle punched into it.
+
+`width` takes only the units CSS and Typst both understand — `%`, `pt`, `mm`,
+`cm`, `in`, `em`. `px` and `rem` are refused, because a deck that used them
+would render on the projector and then fail `toboggan pdf`.
+
+> [!WARNING]
+> Mermaid's in-diagram `%%{init: {…}}%%` directive is **accepted and ignored**.
+> The renderer parses it but only its CLI applies it, and that is not the code
+> path here. Use fence parameters or the config file instead.
+
+> [!NOTE]
+> Rendering is [`mermaid-rs-renderer`][mmdr] — pure Rust, no Node and no
+> headless browser. It covers 23 diagram types and is close to mermaid.js, but
+> not pixel-identical: the crate is young and says so.
+>
+> `fastText` also keeps geometry reproducible across machines, for the case it
+> covers: a flowchart's ASCII labels. Turning it off, using non-ASCII labels, or
+> using a diagram kind it does not reach (pie percentages, class and ER
+> attribute columns) measures against whatever fonts the *building* machine has
+> installed, so the same deck can lay out differently elsewhere.
+
 ## Using it as a library
 
 ```rust,ignore
@@ -128,4 +187,5 @@ a parse failure points at the offending line in the offending file.
 
 MIT or Apache-2.0, at your option.
 
+[mmdr]: https://crates.io/crates/mermaid-rs-renderer
 [`miette`]: https://github.com/zkat/miette

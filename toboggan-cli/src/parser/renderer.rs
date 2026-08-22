@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use comrak::nodes::{AstNode, NodeValue};
+use comrak::nodes::{AstNode, NodeHtmlBlock, NodeValue};
 use comrak::options::Plugins;
 use comrak::{Arena, Options, format_html_with_plugins, parse_document};
 use math_core::{LatexToMathML, MathCoreConfig, MathDisplay};
@@ -8,6 +8,10 @@ use toboggan_core::{Content, Style};
 
 use super::CssClasses;
 use crate::error::{Result, TobogganCliError};
+use crate::mermaid::MermaidRenderer;
+
+/// `CommonMark`'s HTML block type 6 — a block-level element, emitted verbatim.
+const HTML_BLOCK_TYPE_RAW: u8 = 6;
 
 pub(super) trait ContentRenderer {
     fn render_steps(&self, before_steps: &str, steps: &[(String, CssClasses)]) -> Result<Content>;
@@ -17,8 +21,11 @@ pub(super) struct HtmlRenderer<'a> {
     options: &'a Options<'a>,
     plugins: &'a Plugins<'a>,
     style: Style,
-    /// Slide file the markdown came from, used to name the file in a math error.
+    /// Slide file the markdown came from, used to name the file in a math or
+    /// Mermaid error.
     source_name: &'a str,
+    /// Deck-level Mermaid settings for ` ```mermaid ` fences.
+    mermaid: &'a MermaidRenderer,
 }
 
 impl<'a> HtmlRenderer<'a> {
@@ -28,12 +35,14 @@ impl<'a> HtmlRenderer<'a> {
         plugins: &'a Plugins<'_>,
         style: Style,
         source_name: &'a str,
+        mermaid: &'a MermaidRenderer,
     ) -> Self {
         Self {
             options,
             plugins,
             style,
             source_name,
+            mermaid,
         }
     }
 
@@ -43,6 +52,7 @@ impl<'a> HtmlRenderer<'a> {
         let arena = Arena::new();
         let root = parse_document(&arena, markdown, self.options);
         self.inline_math_as_mathml(root)?;
+        self.mermaid_fences_as_svg(root)?;
 
         let mut html = String::new();
         format_html_with_plugins(root, self.options, &mut html, self.plugins)
@@ -88,6 +98,47 @@ impl<'a> HtmlRenderer<'a> {
         Ok(())
     }
 
+    /// Replaces every ` ```mermaid ` fence with the diagram it denotes.
+    ///
+    /// Same reasoning as [`Self::inline_math_as_mathml`]: drawing here rather
+    /// than in the browser keeps an exported deck self-contained, and turns a
+    /// broken diagram into a build failure naming the file instead of a blank
+    /// space in front of an audience.
+    fn mermaid_fences_as_svg<'arena>(&self, node: &'arena AstNode<'arena>) -> Result<()> {
+        let converted = {
+            let mut data = node.data.borrow_mut();
+            let rendered = match &data.value {
+                NodeValue::CodeBlock(block) => match self
+                    .mermaid
+                    .parse_info(&block.info, self.source_name)
+                    .transpose()?
+                {
+                    Some(fence) => Some(self.mermaid.render_html(
+                        &fence,
+                        &block.literal,
+                        self.source_name,
+                    )?),
+                    None => None,
+                },
+                _ => None,
+            };
+            rendered.map(|html| {
+                data.value = NodeValue::HtmlBlock(NodeHtmlBlock {
+                    block_type: HTML_BLOCK_TYPE_RAW,
+                    literal: html,
+                });
+            })
+        };
+        // A code block holds its contents in `literal`, so a converted node has
+        // nothing left to walk into.
+        if converted.is_none() {
+            for child in node.children() {
+                self.mermaid_fences_as_svg(child)?;
+            }
+        }
+        Ok(())
+    }
+
     fn latex_to_mathml(&self, latex: &str, display: MathDisplay) -> Result<String> {
         // Cheap to build (the default config defines no macros, which is the
         // only thing `new` can reject), and math is rare enough that hoisting
@@ -103,11 +154,7 @@ impl<'a> HtmlRenderer<'a> {
     }
 
     fn math_error(&self, latex: &str, reason: &str) -> TobogganCliError {
-        TobogganCliError::InvalidMath {
-            file: self.source_name.to_owned(),
-            latex: latex.to_owned(),
-            message: format!("`{latex}` — {reason}"),
-        }
+        TobogganCliError::invalid_math(self.source_name, latex.to_owned(), reason.to_owned())
     }
 }
 
@@ -168,13 +215,25 @@ mod tests {
     fn setup_test_renderer() -> HtmlRenderer<'static> {
         let options = Box::leak(Box::new(Options::default()));
         let plugins = Box::leak(Box::new(Plugins::default()));
-        HtmlRenderer::new(options, plugins, Style::default(), "test.md")
+        HtmlRenderer::new(
+            options,
+            plugins,
+            Style::default(),
+            "test.md",
+            Box::leak(Box::new(MermaidRenderer::default())),
+        )
     }
 
     fn math_renderer() -> HtmlRenderer<'static> {
         let options = Box::leak(Box::new(super::super::default_options()));
         let plugins = Box::leak(Box::new(Plugins::default()));
-        HtmlRenderer::new(options, plugins, Style::default(), "math.md")
+        HtmlRenderer::new(
+            options,
+            plugins,
+            Style::default(),
+            "math.md",
+            Box::leak(Box::new(MermaidRenderer::default())),
+        )
     }
 
     fn raw_of(content: Content) -> String {
@@ -238,9 +297,13 @@ mod tests {
             .expect_err("invalid LaTeX should be rejected");
 
         match error {
-            TobogganCliError::InvalidMath { file, latex, .. } => {
-                assert_eq!(file, "math.md");
+            TobogganCliError::InvalidMath { src, span, .. } => {
+                assert!(src.name().starts_with("math.md"), "{}", src.name());
+                let latex = src.inner();
                 assert!(latex.contains(r"\this"), "latex not reported: {latex}");
+                // The whole expression is spanned, so miette draws all of it.
+                assert_eq!(span.offset(), 0);
+                assert_eq!(span.len(), latex.len());
             }
             other => panic!("Expected InvalidMath, got {other:?}"),
         }
@@ -256,5 +319,107 @@ mod tests {
 
         let raw = raw_of(content);
         assert!(raw.contains("<mfrac>"), "step math not converted: {raw}");
+    }
+
+    const FLOWCHART_FENCE: &str = "```mermaid\nflowchart LR\n  A[Start] --> B[Finish]\n```";
+
+    /// The fence is drawn here, not handed to the browser as source.
+    #[test]
+    fn a_mermaid_fence_becomes_an_svg_at_build_time() {
+        let renderer = math_renderer();
+        let raw = raw_of(renderer.render_steps(FLOWCHART_FENCE, &[]).expect("render"));
+
+        assert!(raw.contains("<svg "), "diagram not drawn: {raw}");
+        assert!(
+            !raw.contains(r#"class="language-mermaid""#),
+            "fence left as a code block: {raw}"
+        );
+        assert!(
+            raw.contains(r#"<div class="mermaid""#),
+            "diagram not wrapped: {raw}"
+        );
+    }
+
+    /// A broken diagram has to stop the build, for the same reason broken math
+    /// does: the alternative is discovering it in front of an audience.
+    #[test]
+    fn an_invalid_mermaid_diagram_fails_the_build_and_names_the_file() {
+        let renderer = math_renderer();
+        let error = renderer
+            .render_steps("```mermaid\n--> nonsense\n```", &[])
+            .expect_err("invalid diagram should be rejected");
+
+        match error {
+            TobogganCliError::InvalidMermaid { src, span, .. } => {
+                assert!(src.name().starts_with("math.md"), "{}", src.name());
+                let diagram = src.inner();
+                assert!(
+                    diagram.contains("nonsense"),
+                    "diagram not reported: {diagram}"
+                );
+                // The caret must land inside the diagram, not past its end.
+                assert!(
+                    span.offset() + span.len() <= diagram.len(),
+                    "span {span:?} runs past the diagram: {diagram:?}"
+                );
+            }
+            other => panic!("Expected InvalidMermaid, got {other:?}"),
+        }
+    }
+
+    /// A diagram inside a `<!-- pause -->` step is drawn too, not just one
+    /// before the steps.
+    #[test]
+    fn a_mermaid_fence_inside_a_step_is_converted() {
+        let renderer = math_renderer();
+        let content = renderer
+            .render_steps("Intro", &[(FLOWCHART_FENCE.to_owned(), vec![])])
+            .expect("render");
+
+        assert!(raw_of(content).contains("<svg "), "step diagram not drawn");
+    }
+
+    /// A non-Mermaid fence is left for the syntax highlighter.
+    #[test]
+    fn other_fences_are_untouched() {
+        let renderer = math_renderer();
+        let raw = raw_of(
+            renderer
+                .render_steps("```rust\nlet x = 1;\n```", &[])
+                .expect("render"),
+        );
+        assert!(raw.contains("language-rust"), "rust fence changed: {raw}");
+        assert!(
+            !raw.contains("<svg "),
+            "rust fence drawn as a diagram: {raw}"
+        );
+    }
+
+    /// A diagram is one image and no words. `toboggan-stats` already excludes
+    /// `svg` from text extraction and counts it as an image; the wrapper is a plain
+    /// `<div>` rather than a `<figure>` precisely so this stays true —
+    /// `count_images` counts `img`, `svg` *and* `figure`, so a `<figure><svg>`
+    /// pair would be two images.
+    #[test]
+    fn a_diagram_counts_as_one_image_and_contributes_no_spoken_words() {
+        let renderer = math_renderer();
+        let raw = raw_of(renderer.render_steps(FLOWCHART_FENCE, &[]).expect("render"));
+
+        let document = toboggan_stats::HtmlDocument::parse_fragment(&raw);
+        assert_eq!(document.count_images(), 1, "expected exactly one image");
+        assert_eq!(
+            document.count_images_without_alt(),
+            0,
+            "an inline svg is not an <img>, so it cannot be missing alt text"
+        );
+        let text = document.extract_text();
+        assert!(
+            !text.contains("Start") && !text.contains("Finish"),
+            "diagram labels leaked into the word count: {text}"
+        );
+        assert!(
+            document.code_blocks().is_empty(),
+            "the fence should no longer look like a code block"
+        );
     }
 }

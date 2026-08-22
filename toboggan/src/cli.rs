@@ -131,6 +131,14 @@ pub(crate) struct BuildOptions {
     #[arg(long)]
     pub(crate) theme: Option<String>,
 
+    /// Mermaid config JSON applied to every Mermaid fence
+    ///
+    /// Mermaid's own config shape: `theme`, `themeVariables`,
+    /// `preferredAspectRatio`, `flowchart`. Per-fence `mermaid:key=value`
+    /// parameters override it.
+    #[arg(long, value_name = "FILE", value_hint = clap::ValueHint::FilePath)]
+    pub(crate) mermaid_config: Option<PathBuf>,
+
     /// Disable automatic numbering of parts and slides
     #[arg(long)]
     pub(crate) no_counter: bool,
@@ -157,6 +165,7 @@ impl BuildOptions {
         self.theme = self.theme.take().or(config.theme);
         self.lang = self.lang.take().or(config.lang);
         self.base_url = self.base_url.take().or(config.base_url);
+        self.mermaid_config = self.mermaid_config.take().or(config.mermaid_config);
         self.wpm = self.wpm.or(config.wpm);
         self.no_counter |= config.no_counter.unwrap_or(false);
         self.exclude_notes_from_duration |= config.exclude_notes_from_duration.unwrap_or(false);
@@ -181,6 +190,7 @@ impl BuildOptions {
             lang: self.lang,
             base_url: self.base_url,
             theme: self.theme.unwrap_or_else(|| DEFAULT_THEME.to_owned()),
+            mermaid_config: self.mermaid_config,
             list_themes: false,
             format: None,
             no_counter: self.no_counter,
@@ -477,6 +487,11 @@ pub(crate) struct ServeArgs {
     #[arg(long)]
     pub(crate) watch: bool,
 
+    /// Mermaid config JSON used when redrawing a diagram for the PDF or the
+    /// slide overview [default: `[build] mermaid-config` beside the talk]
+    #[arg(long, value_name = "FILE", value_hint = ValueHint::FilePath)]
+    pub(crate) mermaid_config: Option<PathBuf>,
+
     #[command(flatten)]
     pub(crate) serve: ServeOptions,
 }
@@ -488,6 +503,10 @@ impl ServeArgs {
             server: self.serve.into_server_settings(),
             talk: self.path,
             watch: self.watch,
+            // `serve` takes a built talk rather than a folder, so it has no
+            // `[build]` options of its own — but the PDF and the thumbnails
+            // redraw diagrams from Markdown, so this one still applies.
+            mermaid_config: self.mermaid_config.or(config.build.mermaid_config),
         }
     }
 }

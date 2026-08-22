@@ -22,8 +22,11 @@ pub(crate) fn generate(
     let talk = super::deck::build_talk(&slides, &settings)?;
 
     let out_dir = output.unwrap_or_else(|| PathBuf::from("overview"));
-    let options = ThumbnailOptions { search };
-    generate_thumbnails(&talk, &out_dir, options).map_err(|err| anyhow::anyhow!("{err}"))?;
+    let options = ThumbnailOptions {
+        search,
+        ..ThumbnailOptions::new(toboggan_cli::mermaid_renderer(&settings)?)
+    };
+    generate_thumbnails(&talk, &out_dir, &options).map_err(|err| anyhow::anyhow!("{err}"))?;
 
     println!(
         "✅ Wrote {} thumbnails + overview.html to {}",

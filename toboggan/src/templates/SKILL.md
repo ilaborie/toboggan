@@ -54,6 +54,19 @@ hidden_in = ["pdf"]      # exclude from a render target (web | pdf)
 - `<!-- term: . -->` embeds a live terminal; add the `term-50vh` class to pin its
   pane to half the viewport height.
 
+## Diagrams
+
+A ` ```mermaid ` fence is drawn to SVG while the deck builds — no browser, no
+script, and it shows up in the web client, the exported HTML, the PDF and the
+thumbnails alike. A diagram that does not parse fails the build.
+
+Tune one from its fence: ` ```mermaid:theme=dark,width=60% `. Parameters are
+`theme` (`default`/`dark`/`forest`/`neutral`/`modern`), `background`
+(`transparent` by default, or `theme`, or a colour), `width`, `nodeSpacing`,
+`rankSpacing`, `aspectRatio`, `maxLabelWidth`, `fastText`, `class`, `alt`.
+An unknown parameter fails the build. Deck-wide defaults live in a Mermaid JSON
+config named by `[build] mermaid-config` in `toboggan.toml`.
+
 ## CLI
 
 - `toboggan -p <folder>` — build + serve with live reload (the default action).

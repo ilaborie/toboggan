@@ -6,6 +6,7 @@ use axum::extract::State;
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use toboggan_cli::OutputFormat;
+use toboggan_cli::mermaid::MermaidRenderer;
 use toboggan_cli::scaffold::slugify;
 use toboggan_core::Talk;
 use tracing::{error, info};
@@ -32,7 +33,7 @@ pub(crate) async fn download_pdf(State(state): State<TobogganState>) -> Response
 
     let (epoch, talk) = state.pdf_render_input().await;
     let slug: Arc<str> = Arc::from(slugify(&talk.title));
-    match render_pdf(talk).await {
+    match render_pdf(talk, state.mermaid()).await {
         Ok(bytes) => {
             let bytes: Arc<[u8]> = Arc::from(bytes);
             let cached = CachedPdf {
@@ -70,9 +71,10 @@ fn pdf_response(bytes: &[u8], slug: &str) -> Response {
 }
 
 /// Renders the talk to Typst, then compiles it to PDF in a blocking task.
-async fn render_pdf(talk: Arc<Talk>) -> anyhow::Result<Vec<u8>> {
-    let typst_source = toboggan_cli::output::serialize_talk(&talk, OutputFormat::Typst, "")
-        .map_err(|err| anyhow::anyhow!("{err}"))?;
+async fn render_pdf(talk: Arc<Talk>, mermaid: Arc<MermaidRenderer>) -> anyhow::Result<Vec<u8>> {
+    let typst_source =
+        toboggan_cli::output::serialize_talk(&talk, OutputFormat::Typst, "", &mermaid)
+            .map_err(|err| anyhow::anyhow!("{err}"))?;
     // Compile with the deck as the project root so slides that reference
     // `../public/...` images resolve; without it typst rejects each one and the
     // whole download fails with a bare exit status.

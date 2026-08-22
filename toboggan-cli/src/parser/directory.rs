@@ -9,8 +9,8 @@ use toboggan_core::{Content, Date, Slide, SlideKind};
 use tracing::debug;
 
 use super::{
-    DEFAULT_PART_TITLE, FRONT_MATTER_DELIMITER, FrontMatter, SlideContentParser,
-    create_syntax_highlighter, default_options, default_plugins,
+    DEFAULT_PART_TITLE, FRONT_MATTER_DELIMITER, FrontMatter, ParseContext, SlideContentParser,
+    SlideContext, create_syntax_highlighter, default_options, default_plugins,
 };
 use crate::error::{Result, TobogganCliError};
 use crate::{SlideProcessingResult, TalkMetadata, parse_date_string};
@@ -138,7 +138,7 @@ pub(super) fn is_slide_file(path: &Path) -> bool {
 
 pub(super) fn create_slide_from_file(
     file_path: &Path,
-    theme: &str,
+    ctx: ParseContext<'_>,
     asset_root: Option<&Path>,
 ) -> Result<(Slide, FrontMatter)> {
     let filename = file_path
@@ -167,7 +167,7 @@ pub(super) fn create_slide_from_file(
             slide_kind,
             Some(filename),
             Some(file_path),
-            theme,
+            ctx,
             asset_root,
         )?
     };
@@ -180,12 +180,12 @@ pub(super) fn parse_slide_from_markdown(
     kind: SlideKind,
     filename: Option<&str>,
     file_path: Option<&Path>,
-    theme: &str,
+    ctx: ParseContext<'_>,
     asset_root: Option<&Path>,
 ) -> Result<(Slide, FrontMatter)> {
     let arena = Arena::new();
     let options = default_options();
-    let highlighter = create_syntax_highlighter(theme);
+    let highlighter = create_syntax_highlighter(ctx.theme);
     let mut plugins = default_plugins();
     plugins.render.codefence_syntax_highlighter = Some(&highlighter);
 
@@ -197,9 +197,12 @@ pub(super) fn parse_slide_from_markdown(
         root.children(),
         &options,
         &plugins,
-        filename,
-        file_path,
-        asset_root,
+        SlideContext {
+            name: filename,
+            path: file_path,
+            asset_root,
+            mermaid: ctx.mermaid,
+        },
     )?;
 
     slide.kind = kind;
@@ -231,19 +234,21 @@ pub(super) fn parse_frontmatter(content: &str, file_path: &str) -> Result<FrontM
         .trim_end_matches(FRONT_MATTER_DELIMITER);
 
     toml::from_str::<FrontMatter>(trimmed_content).map_err(|source| {
-        // Calculate the proper span based on the TOML error location
-        let span = if let Some(span) = source.span() {
-            // Add offset for the frontmatter delimiter and any initial whitespace
-            let delimiter_offset = content.find("+++").unwrap_or(0) + 3;
-            let content_start = content[delimiter_offset..]
-                .find(|char: char| !char.is_whitespace())
-                .unwrap_or(0);
-            let actual_offset = delimiter_offset + content_start;
-            SourceSpan::from((actual_offset + span.start, span.len()))
-        } else {
-            // Fall back to highlighting the entire frontmatter content
-            SourceSpan::from((0, content.len()))
-        };
+        // `toml` reports offsets into `trimmed_content`, but the snippet miette
+        // draws is `content` — so they need rebasing. Every method used to
+        // build `trimmed_content` returns a subslice, so its own address gives
+        // the offset exactly, whatever combination of delimiters and
+        // whitespace was stripped. Deriving it from `find("+++")` instead once
+        // added the leading whitespace a second time, since
+        // `trim_start_matches` strips the delimiter but keeps the newline after
+        // it — which put the caret one column to the right of the offending key.
+        let rebase = trimmed_content.as_ptr() as usize - content.as_ptr() as usize;
+        let span = source.span().map_or_else(
+            // No position from `toml`: highlight the whole block rather than
+            // pointing somewhere arbitrary.
+            || SourceSpan::from((0, content.len())),
+            |span| SourceSpan::from((rebase + span.start, span.len())),
+        );
 
         TobogganCliError::parse_frontmatter(
             file_path,
@@ -293,7 +298,7 @@ fn deck_root(slides: &Path) -> PathBuf {
 
 pub(super) fn process_talk_metadata(
     toboggan_dir: &TobogganDir,
-    theme: &str,
+    ctx: ParseContext<'_>,
 ) -> Result<TalkMetadata> {
     let mut metadata = TalkMetadata {
         source_dir: Some(toboggan_dir.as_ref().to_path_buf()),
@@ -305,7 +310,7 @@ pub(super) fn process_talk_metadata(
         debug!("Processing cover slide: {}", path.display());
         let asset_root = deck_root(toboggan_dir.as_ref());
         let (cover_slide, front_matter) =
-            create_slide_from_file(&path, theme, Some(asset_root.as_path()))?;
+            create_slide_from_file(&path, ctx, Some(asset_root.as_path()))?;
         metadata.title = cover_slide.title.to_string();
         metadata.date = front_matter
             .date
@@ -337,7 +342,7 @@ pub(super) fn process_talk_metadata(
 
 pub(super) fn process_all_entries(
     toboggan_dir: &TobogganDir,
-    theme: &str,
+    ctx: ParseContext<'_>,
 ) -> Result<Vec<SlideProcessingResult>> {
     // `<!-- code:lang:path -->` resolves against the deck root, i.e. the slides
     // folder's parent — that is where a deck's `snippets/` and `public/` live.
@@ -349,7 +354,7 @@ pub(super) fn process_all_entries(
     if let Some(cover) = toboggan_dir.get_cover()? {
         let path = cover.path();
         debug!("Processing cover slide: {}", path.display());
-        let slide_result = process_single_file(&path, theme, asset_root);
+        let slide_result = process_single_file(&path, ctx, asset_root);
         result.push(slide_result);
     }
 
@@ -359,11 +364,11 @@ pub(super) fn process_all_entries(
         let path = entry.path();
 
         if path.is_dir() {
-            let folder_results = process_folder_comprehensive(&path, theme, asset_root)?;
+            let folder_results = process_folder_comprehensive(&path, ctx, asset_root)?;
             result.extend(folder_results);
         } else if is_slide_file(&path) {
             debug!("Processing file as slide: {}", path.display());
-            let slide_result = process_single_file(&path, theme, asset_root);
+            let slide_result = process_single_file(&path, ctx, asset_root);
             result.push(slide_result);
         } else {
             let filename = path
@@ -380,10 +385,10 @@ pub(super) fn process_all_entries(
 
 fn process_single_file(
     path: &Path,
-    theme: &str,
+    ctx: ParseContext<'_>,
     asset_root: Option<&Path>,
 ) -> SlideProcessingResult {
-    match create_slide_from_file(path, theme, asset_root) {
+    match create_slide_from_file(path, ctx, asset_root) {
         Ok((slide, front_matter)) => {
             if front_matter.skip {
                 SlideProcessingResult::Skipped(slide)
@@ -391,19 +396,16 @@ fn process_single_file(
                 SlideProcessingResult::Processed(slide)
             }
         }
-        Err(error) => {
-            let filename = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("unknown file");
-            SlideProcessingResult::Error(format!("Error processing {filename}: {error}"))
-        }
+        // Kept whole rather than flattened to a string: every variant that can
+        // arrive here already names the file, and the ones carrying a snippet
+        // can only draw it if the diagnostic survives this far.
+        Err(error) => SlideProcessingResult::Error(Box::new(error)),
     }
 }
 
 fn process_folder_comprehensive(
     folder: &Path,
-    theme: &str,
+    ctx: ParseContext<'_>,
     asset_root: Option<&Path>,
 ) -> Result<Vec<SlideProcessingResult>> {
     let mut results = vec![];
@@ -414,7 +416,7 @@ fn process_folder_comprehensive(
     // Process part slide if it exists
     if let Some(part_entry) = toboggan_dir.get_part()? {
         let path = part_entry.path();
-        let part_result = process_single_file(&path, theme, asset_root);
+        let part_result = process_single_file(&path, ctx, asset_root);
         results.push(part_result);
     } else {
         // Create implicit part slide from folder name
@@ -430,7 +432,7 @@ fn process_folder_comprehensive(
     for entry in toboggan_dir.get_slide_files()? {
         let path = entry.path();
         debug!("Processing folder content file: {}", path.display());
-        results.push(process_single_file(&path, theme, asset_root));
+        results.push(process_single_file(&path, ctx, asset_root));
     }
 
     Ok(results)
@@ -447,6 +449,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+    use crate::mermaid::MermaidRenderer;
 
     /// `-p slides` and `-p ./slides/` name the same folder, so they have to
     /// resolve `<!-- code:… -->` paths and `public/` against the same root.
@@ -457,6 +460,57 @@ mod tests {
         assert_eq!(
             deck_root(Path::new("/tmp/deck/slides")),
             PathBuf::from("/tmp/deck")
+        );
+    }
+
+    /// The caret has to land on the offending key itself.
+    ///
+    /// `toml` reports offsets into the delimiter-stripped block, so they need
+    /// rebasing onto the text miette draws — and getting that arithmetic wrong
+    /// is invisible without checking the bytes the span actually covers, which
+    /// is why this asserts on the slice rather than on the rendered output.
+    #[test]
+    fn a_frontmatter_error_spans_the_offending_key() {
+        // Each case keeps the same key on the same line, but varies what comes
+        // before the block — which is what the rebase has to cope with.
+        for (label, content) in [
+            ("plain", "+++\ntitle = \"T\"\nbogus_key = true\n+++"),
+            (
+                "leading blank line",
+                "\n+++\ntitle = \"T\"\nbogus_key = true\n+++",
+            ),
+            (
+                "no trailing newline",
+                "+++\ntitle = \"T\"\nbogus_key = true+++",
+            ),
+        ] {
+            let error = parse_frontmatter(content, "s.md").expect_err(label);
+            let TobogganCliError::ParseFrontmatter { src, span, .. } = &error else {
+                panic!("{label}: unexpected variant: {error:?}");
+            };
+            let spanned = src
+                .inner()
+                .get(span.offset()..span.offset() + span.len())
+                .unwrap_or_else(|| panic!("{label}: span {span:?} outside the source"));
+            assert_eq!(spanned, "bogus_key", "{label}: caret landed on {spanned:?}");
+        }
+    }
+
+    /// A bad *value* is reported where the value is, not where its key is.
+    #[test]
+    fn a_frontmatter_error_can_span_a_value() {
+        let content = "+++\ntitle = \"T\"\nduration = [1, 2]\n+++";
+        let error = parse_frontmatter(content, "s.md").expect_err("array is not a duration");
+        let TobogganCliError::ParseFrontmatter { src, span, .. } = &error else {
+            panic!("unexpected variant: {error:?}");
+        };
+        let spanned = src
+            .inner()
+            .get(span.offset()..span.offset() + span.len())
+            .expect("span inside the source");
+        assert!(
+            content[..span.offset()].ends_with("duration = "),
+            "caret landed on {spanned:?}, not the value"
         );
     }
 
@@ -586,7 +640,13 @@ mod tests {
         .expect("write cover");
 
         let toboggan_dir = TobogganDir::new(dir_path.to_path_buf())?;
-        let metadata = process_talk_metadata(&toboggan_dir, "base16-ocean.light")?;
+        let metadata = process_talk_metadata(
+            &toboggan_dir,
+            ParseContext {
+                theme: "base16-ocean.light",
+                mermaid: &MermaidRenderer::default(),
+            },
+        )?;
 
         assert_eq!(metadata.source_dir.as_deref(), Some(dir_path));
         assert_eq!(

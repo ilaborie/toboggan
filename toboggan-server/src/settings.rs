@@ -88,6 +88,15 @@ pub struct Settings {
     /// Enable watch mode to automatically reload the talk file when it changes
     #[clap(long, env = "TOBOGGAN_WATCH")]
     pub watch: bool,
+
+    /// Mermaid config JSON applied when redrawing a diagram
+    ///
+    /// A prebuilt talk carries the HTML its diagrams were drawn into, but
+    /// `/download.pdf` and the slide overview redraw every fence from the
+    /// slide's Markdown. Without the deck's own config they would redraw it
+    /// with the stock theme, so the handout would not match the projector.
+    #[clap(long, env = "TOBOGGAN_MERMAID_CONFIG", value_name = "FILE", value_hint = clap::ValueHint::FilePath)]
+    pub mermaid_config: Option<PathBuf>,
 }
 
 impl ServerSettings {

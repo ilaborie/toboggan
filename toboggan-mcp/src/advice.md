@@ -36,6 +36,13 @@ disabled_rules = ["html/img-missing-alt"]  # silence lint rules for this slide
   `--path`, so `snippets/` sits beside `slides/` — not from the slide file and
   not from the current directory; a missing file fails the build.
 - `<!-- lint-disable rule-id … -->` — silence lint rules for this slide.
+- ```` ```mermaid ```` fences are drawn to SVG at build time — web, HTML export, PDF
+  and thumbnails all show the same diagram, and one that does not parse fails
+  the build. Tune a single fence with ```` ```mermaid:theme=dark,width=60% ````
+  (`theme`, `background`, `width`, `nodeSpacing`, `rankSpacing`, `aspectRatio`,
+  `maxLabelWidth`, `fastText`, `class`, `alt`); an unknown parameter is an
+  error. Deck-wide defaults come from `[build] mermaid-config` in
+  `toboggan.toml`.
 - terminals — see the guide for the `terminal` directive. Add the `term-50vh`
   class to pin an embedded terminal pane to half the viewport height.
 

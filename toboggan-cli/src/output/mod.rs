@@ -5,7 +5,7 @@ pub use self::renderer::{OutputRenderer, RenderError};
 mod text;
 pub use self::text::TextRenderer;
 
-mod html;
+pub(crate) mod html;
 mod thumbnails;
 pub use self::thumbnails::{ThumbnailOptions, generate_thumbnails};
 mod typst;
@@ -15,6 +15,7 @@ use toboggan_core::{RenderTarget, Talk};
 
 pub use self::typst::deck_root;
 use crate::error::Result;
+use crate::mermaid::MermaidRenderer;
 use crate::settings::OutputFormat;
 
 /// Serializes `talk` in `format`.
@@ -24,7 +25,12 @@ use crate::settings::OutputFormat;
 ///
 /// # Errors
 /// Returns an error if the talk cannot be rendered in `format`.
-pub fn serialize_talk(talk: &Talk, format: OutputFormat, base_url: &str) -> Result<Vec<u8>> {
+pub fn serialize_talk(
+    talk: &Talk,
+    format: OutputFormat,
+    base_url: &str,
+    mermaid: &MermaidRenderer,
+) -> Result<Vec<u8>> {
     match format {
         OutputFormat::Toml => TextRenderer::toml(talk),
         OutputFormat::Json => TextRenderer::json(talk),
@@ -37,7 +43,7 @@ pub fn serialize_talk(talk: &Talk, format: OutputFormat, base_url: &str) -> Resu
 
         OutputFormat::Typst => {
             let filtered = filter_for(talk, RenderTarget::Pdf);
-            Ok(typst::generate_typst(&filtered))
+            typst::generate_typst(&filtered, mermaid)
         }
     }
 }
@@ -112,7 +118,7 @@ mod tests {
         ];
 
         for format in &formats {
-            let result = serialize_talk(&talk, *format, "");
+            let result = serialize_talk(&talk, *format, "", &MermaidRenderer::default());
             assert!(result.is_ok(), "Failed to serialize format: {format:?}");
             assert!(
                 !result.expect("ok").is_empty(),
@@ -134,7 +140,7 @@ mod tests {
     #[test]
     fn test_html_excludes_web_hidden_slides() -> anyhow::Result<()> {
         let talk = talk_with_hidden_slides()?;
-        let bytes = serialize_talk(&talk, OutputFormat::Html, "")?;
+        let bytes = serialize_talk(&talk, OutputFormat::Html, "", &MermaidRenderer::default())?;
         let html = String::from_utf8(bytes).expect("utf8");
 
         assert!(
@@ -152,7 +158,7 @@ mod tests {
     #[test]
     fn test_typst_excludes_pdf_hidden_slides() -> anyhow::Result<()> {
         let talk = talk_with_hidden_slides()?;
-        let bytes = serialize_talk(&talk, OutputFormat::Typst, "")?;
+        let bytes = serialize_talk(&talk, OutputFormat::Typst, "", &MermaidRenderer::default())?;
         let typ = String::from_utf8(bytes).expect("utf8");
 
         assert!(
@@ -173,7 +179,7 @@ mod tests {
     #[test]
     fn test_toml_retains_all_slides() -> anyhow::Result<()> {
         let talk = talk_with_hidden_slides()?;
-        let bytes = serialize_talk(&talk, OutputFormat::Toml, "")?;
+        let bytes = serialize_talk(&talk, OutputFormat::Toml, "", &MermaidRenderer::default())?;
         let toml = String::from_utf8(bytes).expect("utf8");
 
         assert!(toml.contains("Live Slide"), "live slide in TOML");

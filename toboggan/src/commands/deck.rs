@@ -72,15 +72,16 @@ pub(crate) fn resolve_deck(input: &Path) -> Deck {
 /// [`build_talk_lossy`] instead so a typo mid-rehearsal does not tear down a
 /// running server.
 pub(crate) fn build_talk(slides: &Path, settings: &toboggan_cli::Settings) -> anyhow::Result<Talk> {
-    let parse_result = toboggan_cli::parse_presentation(slides, settings)
-        .map_err(|err| anyhow::anyhow!("{err}"))?;
-    let errors = parse_result.errors();
-    if !errors.is_empty() {
-        anyhow::bail!(
-            "{} slide(s) failed to parse:\n  {}",
-            errors.len(),
-            errors.join("\n  ")
-        );
+    let mut parse_result =
+        toboggan_cli::parse_presentation(slides, settings).map_err(anyhow::Error::new)?;
+    // Hand back the diagnostic itself rather than a line of text: each failure
+    // carries its own snippet and caret, and `main`'s `to_miette` recovers the
+    // type so these commands render what `build` renders.
+    let failures = parse_result.take_errors();
+    if !failures.is_empty() {
+        return Err(anyhow::Error::new(
+            toboggan_cli::TobogganCliError::SlidesFailedToParse { failures },
+        ));
     }
     Ok(parse_result.to_talk())
 }
@@ -94,8 +95,8 @@ pub(crate) fn build_talk_lossy(
     slides: &Path,
     settings: &toboggan_cli::Settings,
 ) -> anyhow::Result<Talk> {
-    let parse_result = toboggan_cli::parse_presentation(slides, settings)
-        .map_err(|err| anyhow::anyhow!("{err}"))?;
+    let parse_result =
+        toboggan_cli::parse_presentation(slides, settings).map_err(anyhow::Error::new)?;
     for error in parse_result.errors() {
         tracing::error!("slide dropped from the deck: {error}");
     }

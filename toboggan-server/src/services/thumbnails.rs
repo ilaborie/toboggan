@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use tempfile::TempDir;
+use toboggan_cli::mermaid::MermaidRenderer;
 use toboggan_cli::output::{ThumbnailOptions, generate_thumbnails};
 use tokio::sync::RwLock;
 use tracing::{error, info, warn};
@@ -143,7 +144,11 @@ impl ThumbnailService {
     }
 
     /// Ensures generation is underway (using `talk_service`) and reports status.
-    pub(crate) async fn ensure(&self, talk_service: TalkService) -> ThumbStatus {
+    pub(crate) async fn ensure(
+        &self,
+        talk_service: TalkService,
+        mermaid: Arc<MermaidRenderer>,
+    ) -> ThumbStatus {
         if let Some(status) = self.snapshot().await {
             return status;
         }
@@ -164,7 +169,7 @@ impl ThumbnailService {
                 }
             }
         };
-        self.spawn(talk_service, epoch);
+        self.spawn(talk_service, mermaid, epoch);
         ThumbStatus::Pending
     }
 
@@ -215,11 +220,11 @@ impl ThumbnailService {
         }
     }
 
-    fn spawn(&self, talk_service: TalkService, epoch: u64) {
+    fn spawn(&self, talk_service: TalkService, mermaid: Arc<MermaidRenderer>, epoch: u64) {
         let inner = self.inner.clone();
         tokio::spawn(async move {
             let talk = talk_service.source_talk().await;
-            let result = tokio::task::spawn_blocking(move || generate(&talk)).await;
+            let result = tokio::task::spawn_blocking(move || generate(&talk, &mermaid)).await;
 
             let mut guard = inner.write().await;
             // A reload (invalidate) bumps the epoch; if ours is stale, a newer
@@ -246,9 +251,9 @@ impl ThumbnailService {
     }
 }
 
-fn generate(talk: &toboggan_core::Talk) -> anyhow::Result<TempDir> {
+fn generate(talk: &toboggan_core::Talk, mermaid: &MermaidRenderer) -> anyhow::Result<TempDir> {
     let dir = tempfile::tempdir()?;
-    generate_thumbnails(talk, dir.path(), ThumbnailOptions::default())
+    generate_thumbnails(talk, dir.path(), &ThumbnailOptions::new(mermaid.clone()))
         .map_err(|err| anyhow::anyhow!("{err}"))?;
     Ok(dir)
 }

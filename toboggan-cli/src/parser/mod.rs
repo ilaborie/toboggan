@@ -10,9 +10,10 @@ use toboggan_core::{Date, RenderTarget, Style};
 
 use crate::ParseResult;
 use crate::error::Result;
+use crate::mermaid::MermaidRenderer;
 
 mod content;
-pub use self::content::SlideContentParser;
+pub use self::content::{SlideContentParser, SlideContext};
 
 mod renderer;
 use self::renderer::{ContentRenderer, HtmlRenderer};
@@ -98,18 +99,40 @@ pub struct Overrides {
     pub lang: Option<String>,
 }
 
+/// Deck-wide settings every slide is parsed with.
+///
+/// A struct rather than one more positional `&str`: `theme` used to be threaded
+/// by hand through six functions, and each new deck-wide setting made that
+/// worse.
+#[derive(Debug, Clone, Copy)]
+pub struct ParseContext<'a> {
+    /// Syntect theme name for fenced code blocks.
+    pub theme: &'a str,
+    /// Deck-level Mermaid settings for ` ```mermaid ` fences.
+    pub mermaid: &'a MermaidRenderer,
+}
+
 pub struct FolderParser {
     toboggan_dir: TobogganDir,
     theme: String,
+    mermaid: MermaidRenderer,
 }
 
 impl FolderParser {
-    pub fn new(path: PathBuf, theme: String) -> Result<Self> {
+    pub fn new(path: PathBuf, theme: String, mermaid: MermaidRenderer) -> Result<Self> {
         let toboggan_dir = TobogganDir::new(path)?;
         Ok(Self {
             toboggan_dir,
             theme,
+            mermaid,
         })
+    }
+
+    fn context(&self) -> ParseContext<'_> {
+        ParseContext {
+            theme: &self.theme,
+            mermaid: &self.mermaid,
+        }
     }
 
     /// Parses the folder, applying `overrides` over what the deck declares.
@@ -117,7 +140,8 @@ impl FolderParser {
     /// # Errors
     /// Returns an error if the folder cannot be read or a slide fails to parse.
     pub fn parse(&self, overrides: Overrides) -> Result<ParseResult> {
-        let mut talk_metadata = process_talk_metadata(&self.toboggan_dir, &self.theme)?;
+        let context = self.context();
+        let mut talk_metadata = process_talk_metadata(&self.toboggan_dir, context)?;
         if let Some(title) = overrides.title {
             talk_metadata.title = title;
         }
@@ -128,7 +152,7 @@ impl FolderParser {
             talk_metadata.lang = Some(lang);
         }
 
-        let slides = process_all_entries(&self.toboggan_dir, &self.theme)?;
+        let slides = process_all_entries(&self.toboggan_dir, context)?;
 
         Ok(ParseResult {
             talk_metadata,
@@ -160,7 +184,11 @@ mod tests {
         )?;
         create_test_file(dir_path, "slide1.md", "# First Slide\n\nContent here.")?;
 
-        let parser = FolderParser::new(dir_path.to_path_buf(), "base16-ocean.light".to_owned())?;
+        let parser = FolderParser::new(
+            dir_path.to_path_buf(),
+            "base16-ocean.light".to_owned(),
+            MermaidRenderer::default(),
+        )?;
         let result = parser.parse(Overrides::default())?;
         let talk = result.to_talk();
 
@@ -182,7 +210,11 @@ mod tests {
         create_test_file(&part_dir, "_part.md", "# Introduction")?;
         create_test_file(&part_dir, "slide1.md", "# Content Slide")?;
 
-        let parser = FolderParser::new(dir_path.to_path_buf(), "base16-ocean.light".to_owned())?;
+        let parser = FolderParser::new(
+            dir_path.to_path_buf(),
+            "base16-ocean.light".to_owned(),
+            MermaidRenderer::default(),
+        )?;
         let result = parser.parse(Overrides::default())?;
         let talk = result.to_talk();
 
@@ -200,7 +232,11 @@ mod tests {
 
         create_test_file(dir_path, "_cover.md", "# Original Title")?;
 
-        let parser = FolderParser::new(dir_path.to_path_buf(), "base16-ocean.light".to_owned())?;
+        let parser = FolderParser::new(
+            dir_path.to_path_buf(),
+            "base16-ocean.light".to_owned(),
+            MermaidRenderer::default(),
+        )?;
         let custom_date = Date::new(2024, 12, 25).expect("valid date");
         let result = parser.parse(Overrides {
             title: Some("Override Title".to_owned()),
@@ -244,7 +280,11 @@ mod tests {
             "# Another Regular Slide\n\nThis should be included.",
         )?;
 
-        let parser = FolderParser::new(dir_path.to_path_buf(), "base16-ocean.light".to_owned())?;
+        let parser = FolderParser::new(
+            dir_path.to_path_buf(),
+            "base16-ocean.light".to_owned(),
+            MermaidRenderer::default(),
+        )?;
         let result = parser.parse(Overrides::default())?;
         let talk = result.to_talk();
 
@@ -295,7 +335,11 @@ mod tests {
             "# Content Slide\n\nThis should be included.",
         )?;
 
-        let parser = FolderParser::new(dir_path.to_path_buf(), "base16-ocean.light".to_owned())?;
+        let parser = FolderParser::new(
+            dir_path.to_path_buf(),
+            "base16-ocean.light".to_owned(),
+            MermaidRenderer::default(),
+        )?;
         let result = parser.parse(Overrides::default())?;
         let talk = result.to_talk();
 
@@ -342,7 +386,11 @@ mod tests {
             "# Content Slide\n\nThis should be included.",
         )?;
 
-        let parser = FolderParser::new(dir_path.to_path_buf(), "base16-ocean.light".to_owned())?;
+        let parser = FolderParser::new(
+            dir_path.to_path_buf(),
+            "base16-ocean.light".to_owned(),
+            MermaidRenderer::default(),
+        )?;
         let result = parser.parse(Overrides::default())?;
         let talk = result.to_talk();
 
