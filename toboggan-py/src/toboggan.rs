@@ -14,6 +14,7 @@ use tokio::runtime::Runtime;
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 use tokio::sync::{RwLock, watch};
 use tokio::try_join;
+use tracing::warn;
 
 use crate::client_info::role_name;
 use crate::{ClientInfo, Slides, State, Talk};
@@ -32,6 +33,20 @@ const PRESENTER_TOKEN_ENV: &str = "TOBOGGAN_PRESENTER_TOKEN";
 /// must not leave `Toboggan(...)` hanging in a REPL — the role then reads as
 /// `None`, which is honest.
 const REGISTRATION_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// How long the constructor waits for the socket to come up.
+///
+/// [`REGISTRATION_TIMEOUT`] is bounded so `Toboggan(...)` cannot hang in a
+/// REPL, but it is only reached once the socket is up and the deck is fetched —
+/// and the socket was not bounded, so the wait it was written to prevent
+/// happened one step earlier. A server that completes the TCP handshake and
+/// then never answers the upgrade leaves `connect_async` waiting forever, and
+/// because the call is detached from the GIL, Ctrl-C only sets a flag.
+///
+/// Just the socket: the REST fetches carry their own timeouts from
+/// `TobogganApi`, and `/api/slides` on a large deck deserves a longer budget
+/// than a handshake ever does.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Toboggan presentation client.
 ///
@@ -132,7 +147,7 @@ impl Toboggan {
         // deck is network work, and the registration wait below can take
         // seconds. Holding the GIL across either freezes the interpreter — a
         // constructor is no better a place to do that than a method.
-        let (initial_talk, initial_slides) = py
+        let (connected, fetched) = py
             .detach(|| {
                 rt.block_on(async {
                     let _read_messages = tokio::spawn(handle_state(
@@ -143,11 +158,30 @@ impl Toboggan {
                         api.clone(),
                         rx_msg,
                     ));
-                    ws.connect().await;
-                    try_join!(api.talk(), api.slides())
+                    // `connect` cannot report failure — it reconnects forever
+                    // by design — so a bound here is the only thing standing
+                    // between a silent server and a constructor that never
+                    // returns. Expiry is not fatal on its own: the reconnect
+                    // loop keeps trying, and the deck fetch below decides
+                    // whether the server is reachable at all.
+                    let connected = tokio::time::timeout(CONNECT_TIMEOUT, ws.connect())
+                        .await
+                        .is_ok();
+                    (connected, try_join!(api.talk(), api.slides()))
                 })
-            })
-            .map_err(|err| PyConnectionError::new_err(err.to_string()))?;
+            });
+
+        if !connected {
+            warn!(
+                host,
+                port,
+                seconds = CONNECT_TIMEOUT.as_secs(),
+                "the socket did not come up in time; moves made by other \
+                 clients will not be seen until it does"
+            );
+        }
+
+        let (initial_talk, initial_slides) = fetched.map_err(|err| refused_or_unreachable(&err))?;
 
         py.detach(|| {
             rt.block_on(async {

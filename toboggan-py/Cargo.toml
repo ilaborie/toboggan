@@ -19,6 +19,11 @@ toboggan-core = { path = "../toboggan-core", default-features = false, features 
 toboggan-client = { path = "../toboggan-client" }
 
 pyo3 = { version = "0.29.0", features = ["abi3-py38"] }
+# `log` so the records reach `pyo3-log`, which is a `log::Log` implementation:
+# that is the bridge onto Python's own `logging`, and the reason an importable
+# extension module has no business writing to stdout.
+tracing = { version = "0.1.44", features = ["log"] }
+pyo3-log = "0.13.4"
 tokio = { version = "1.53.0", features = [
   "rt-multi-thread",
   "sync",

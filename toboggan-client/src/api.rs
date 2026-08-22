@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use toboggan_core::{
@@ -22,11 +24,31 @@ pub struct TobogganApi {
     presenter_token: Option<Secret>,
 }
 
+/// How long to wait for a server to accept a connection.
+///
+/// Bounded because the alternative is unbounded: a host that drops packets
+/// rather than refusing them answers nothing at all, and a caller waiting on
+/// that has no way to tell it apart from a slow server.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// How long a whole request may take, connection included.
+///
+/// Generous, because `/api/slides` carries every slide's rendered HTML and a
+/// large deck on a slow link is not an error. It exists so that a server which
+/// accepts a connection and then goes quiet still ends the call.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
 impl TobogganApi {
     #[must_use]
     pub fn new(api_url: impl Into<String>) -> Self {
         let api_url = api_url.into();
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .connect_timeout(CONNECT_TIMEOUT)
+            .timeout(REQUEST_TIMEOUT)
+            .build()
+            // Only fails if the TLS backend cannot start, which is exactly when
+            // the default client would fail too. Nothing is lost by falling back.
+            .unwrap_or_else(|_| reqwest::Client::new());
         Self {
             client,
             api_url,
