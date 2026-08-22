@@ -34,6 +34,21 @@ PRESENTER_TOKEN = "test-presenter-token"
 READY_TIMEOUT = 300.0
 
 
+def _skip_or_fail(reason):
+    """Skip locally, fail where the precondition was promised.
+
+    pytest exits 0 when every test skipped, so a session-scoped skip is
+    indistinguishable from a suite that passed. That is tolerable on a laptop
+    missing a prerequisite and not tolerable in CI, which controls its own
+    environment and is the only place anyone is watching. `TOBOGGAN_PY_STRICT`
+    is what CI sets to say "these preconditions are my job, so their absence is
+    a failure, not a fact of life".
+    """
+    if os.environ.get("TOBOGGAN_PY_STRICT"):
+        pytest.fail(f"{reason} (TOBOGGAN_PY_STRICT is set)")
+    pytest.skip(reason)
+
+
 def _free_port():
     """A port nobody is on, asked of the OS rather than guessed.
 
@@ -99,9 +114,9 @@ def server():
     that makes the Playwright suite set `workers: 1`.
     """
     if not os.path.isdir(DECK):
-        pytest.skip(f"the example deck is missing: {DECK}")
+        _skip_or_fail(f"the example deck is missing: {DECK}")
     if not os.environ.get("TOBOGGAN_BIN") and shutil.which("cargo") is None:
-        pytest.skip("neither TOBOGGAN_BIN nor cargo is available to start a server")
+        _skip_or_fail("neither TOBOGGAN_BIN nor cargo is available to start a server")
 
     port = int(os.environ.get("TOBOGGAN_PY_TEST_PORT") or _free_port())
     process = subprocess.Popen(
@@ -151,8 +166,13 @@ def lan_address():
     return None if address.startswith("127.") else address
 
 
+# The role tests are the only coverage of the token-on-REST fix and of the
+# 403 → PermissionError mapping. Skipping them costs the whole security surface
+# of these bindings, so under TOBOGGAN_PY_STRICT a runner without a LAN address
+# is a broken runner rather than a reason to report success over nine absent
+# tests.
 requires_lan = pytest.mark.skipif(
-    lan_address() is None,
+    lan_address() is None and not os.environ.get("TOBOGGAN_PY_STRICT"),
     reason="no non-loopback address; an audience client cannot be created",
 )
 
@@ -163,14 +183,32 @@ def remote_client(port, **kwargs):
     Having such an address does not guarantee it is reachable from here — a
     container or a locked-down runner may route it nowhere. That is a fact about
     the host, not a fault in the bindings, so it skips rather than fails.
+
+    Only that one case skips. Catching `ConnectionError` wholesale used to turn
+    *any* constructor failure into a green skip, and since every API failure was
+    a `ConnectionError` back then, that quietly covered a 403, a 500 and a body
+    the client could not parse — the whole role suite could vanish while
+    reporting success. Anything that is not a routing problem is re-raised.
     """
     from toboggan_py import Toboggan
 
     address = lan_address()
     if address is None:
-        pytest.skip("no non-loopback address available")
+        _skip_or_fail("no non-loopback address available")
 
     try:
         return Toboggan(address, port, **kwargs)
     except ConnectionError as unreachable:
-        pytest.skip(f"this host cannot reach itself at {address}: {unreachable}")
+        if not _is_unroutable(unreachable):
+            raise
+        _skip_or_fail(f"this host cannot reach itself at {address}: {unreachable}")
+
+
+# What the OS says when a packet has nowhere to go. A refusal is *not* here on
+# purpose: a server that refuses is a server that answered, and against a port
+# we know is listening that means the bindings are at fault, not the network.
+_UNROUTABLE = ("no route to host", "network is unreachable", "host is unreachable")
+
+
+def _is_unroutable(error):
+    return any(phrase in str(error).lower() for phrase in _UNROUTABLE)

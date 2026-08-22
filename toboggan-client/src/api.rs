@@ -2,14 +2,49 @@ use std::time::Duration;
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+/// Re-exported so a caller can tell one refusal from another without taking on
+/// a `reqwest` dependency of its own just to name a status code.
+pub use reqwest::StatusCode;
 use toboggan_core::{
     ClientInfo, ClientsResponse, Command, Notification, Secret, Slide, SlideId, SlidesResponse,
     TalkResponse,
 };
 
-#[derive(Debug, derive_more::Error, derive_more::From, derive_more::Display)]
+/// Why a call to the server did not produce an answer.
+///
+/// Three genuinely different failures, kept apart. They used to be one variant
+/// wrapping [`reqwest::Error`], which is how a deserialization bug in
+/// [`TobogganApi::clients`] went unnoticed: the decode failure reached Python
+/// as a `ConnectionError`, sending anyone who saw it hunting for a network
+/// problem that was not there. Collapsing them again would hide the next one
+/// the same way.
+#[derive(Debug, derive_more::Error, derive_more::Display)]
 pub enum TobogganApiError {
-    ReqwestError(reqwest::Error),
+    /// The server could not be reached: refused, unresolvable, or timed out.
+    #[display("{_0}")]
+    Transport(reqwest::Error),
+
+    /// The server answered, and the answer was a refusal.
+    ///
+    /// Carries the body, because that is where the server explains itself and
+    /// `error_for_status` throws it away.
+    #[display("the server answered {code}{}", if body.is_empty() {
+        String::new()
+    } else {
+        format!(": {body}")
+    })]
+    Status {
+        code: StatusCode,
+        #[error(not(source))]
+        body: String,
+    },
+
+    /// The server answered, and the answer could not be read.
+    ///
+    /// Almost always a client and a server that disagree about a shape — which
+    /// is a version skew, not a network fault.
+    #[display("the server's answer could not be read: {_0}")]
+    Decode(reqwest::Error),
 }
 
 #[derive(Debug, Clone)]
@@ -18,9 +53,9 @@ pub struct TobogganApi {
     api_url: String,
     /// Offered as `Authorization: Bearer …` on every request.
     ///
-    /// Only the socket used to carry the token, so `/api/command` and
-    /// `/api/clients` — the two guarded endpoints this type can reach — were
-    /// refused for *every* remote presenter, however good their token.
+    /// The same token the socket offers in `Register`, because `/api/command`
+    /// and `/api/clients` — the two guarded endpoints this type can reach — are
+    /// gated the same way the socket is.
     presenter_token: Option<Secret>,
 }
 
@@ -63,7 +98,10 @@ impl TobogganApi {
     /// usually gets one.
     #[must_use]
     pub fn with_presenter_token(mut self, token: Option<Secret>) -> Self {
-        self.presenter_token = token.and_then(|token| Secret::new(token.expose()));
+        // Stored as given. Holding a `Secret` *is* the proof it is usable —
+        // that is the type's entire job — so re-validating it would say
+        // otherwise, and would mean exposing it here for no gain.
+        self.presenter_token = token;
         self
     }
 
@@ -83,15 +121,40 @@ impl TobogganApi {
         )
     }
 
+    /// Turns an answer into the value it carries, or into the reason it cannot.
+    ///
+    /// The classification lives here so that every endpoint gets it: a refusal
+    /// keeps its status *and* its body, and a shape the client cannot read is
+    /// reported as such rather than as an unreachable server.
+    async fn read<T>(response: reqwest::Response) -> Result<T, TobogganApiError>
+    where
+        T: DeserializeOwned,
+    {
+        let status = response.status();
+        if !status.is_success() {
+            // Read before discarding: this is the only place the server's own
+            // explanation exists, and `error_for_status` drops it.
+            let body = response.text().await.unwrap_or_default();
+            return Err(TobogganApiError::Status {
+                code: status,
+                body: body.trim().to_owned(),
+            });
+        }
+
+        response.json().await.map_err(TobogganApiError::Decode)
+    }
+
     async fn get<T>(&self, path: &str) -> Result<T, TobogganApiError>
     where
         T: DeserializeOwned,
     {
         let url = self.build_url(path);
-        let response = self.authorized(self.client.get(&url)).send().await?;
-        let response = response.error_for_status()?;
-        let result = response.json().await?;
-        Ok(result)
+        let response = self
+            .authorized(self.client.get(&url))
+            .send()
+            .await
+            .map_err(TobogganApiError::Transport)?;
+        Self::read(response).await
     }
 
     async fn post<B, R>(&self, path: &str, body: &B) -> Result<R, TobogganApiError>
@@ -103,10 +166,9 @@ impl TobogganApi {
         let response = self
             .authorized(self.client.post(&url).json(body))
             .send()
-            .await?;
-        let response = response.error_for_status()?;
-        let result = response.json().await?;
-        Ok(result)
+            .await
+            .map_err(TobogganApiError::Transport)?;
+        Self::read(response).await
     }
 
     pub async fn talk(&self) -> Result<TalkResponse, TobogganApiError> {
@@ -115,12 +177,12 @@ impl TobogganApi {
 
     /// Who is currently connected.
     ///
-    /// Unwrapped from the `{ "clients": [...] }` the endpoint actually returns.
-    /// This asked for a bare array, so every call failed to deserialize — and
-    /// the only caller is the Python binding, which is why nothing noticed.
+    /// Unwrapped from the `{ "clients": [...] }` the endpoint returns; the test
+    /// below pins that shape.
     ///
     /// Presenter-only on the server: an audience connection gets a 403 here,
-    /// because the room has no business enumerating the room.
+    /// because the audience has no business enumerating the rest of the
+    /// audience.
     pub async fn clients(&self) -> Result<Vec<ClientInfo>, TobogganApiError> {
         let response = self.get::<ClientsResponse>("/api/clients").await?;
         Ok(response.clients)

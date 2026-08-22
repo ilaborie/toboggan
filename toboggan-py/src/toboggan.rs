@@ -4,7 +4,8 @@ use std::time::Duration;
 use pyo3::exceptions::{PyConnectionError, PyPermissionError, PyRuntimeError};
 use pyo3::prelude::*;
 use toboggan_client::{
-    CommunicationMessage, TobogganApi, TobogganApiError, TobogganConfig, WebSocketClient,
+    CommunicationMessage, StatusCode, TobogganApi, TobogganApiError, TobogganConfig,
+    WebSocketClient,
 };
 use toboggan_core::{
     ClientConfig, ClientRole, Command, Notification, Secret, SlidesResponse, State as TState,
@@ -112,9 +113,18 @@ impl Toboggan {
     /// Creates a new Toboggan client and connects to the server.
     ///
     /// # Errors
-    /// Raises `ConnectionError` if the server cannot be reached or the deck
-    /// cannot be fetched. A registration that goes unanswered is *not* an
-    /// error: the deck is there, and `role` reports None until it arrives.
+    /// Raises `ConnectionError` if the server cannot be reached, `RuntimeError`
+    /// if it answers with a refusal or something this client cannot read, and
+    /// `PermissionError` if it answers `403` — the same taxonomy every other
+    /// call uses, so that a token the server rejects does not read as a network
+    /// fault here and a permission problem there.
+    ///
+    /// A registration that goes unanswered is *not* an error: the deck is
+    /// there, and `role` reports None until it arrives. Nor is a socket that
+    /// does not come up in time — the reconnect loop keeps trying.
+    ///
+    /// Raises `OSError` if the async runtime cannot be started, and
+    /// `OverflowError` for a port outside `0..=65535`.
     #[new]
     #[pyo3(signature = (host = "localhost", port = 8080, presenter_token = None))]
     pub fn __new__(
@@ -371,19 +381,37 @@ impl Toboggan {
 
 /// A failed request, as the Python exception that fits it.
 ///
-/// A `403` is not a connection problem: the server understood perfectly and
-/// said no, because this client is watching rather than presenting. Reporting
-/// that as `ConnectionError` would send a reader hunting for a network fault
-/// that is not there.
+/// Only a transport failure is a `ConnectionError`. A `403` is not: the server
+/// understood perfectly and said no, and reporting that as unreachable sends a
+/// reader hunting for a network fault that is not there. Nor is a body this
+/// client cannot parse, which means the two ends disagree about a shape — the
+/// failure that hid in `clients()` for as long as it did precisely because it
+/// arrived in Python wearing a `ConnectionError`.
+///
+/// Exhaustive on purpose: a new [`TobogganApiError`] variant should fail to
+/// compile here rather than fall into a catch-all and be mislabelled.
 fn refused_or_unreachable(err: &TobogganApiError) -> PyErr {
-    let TobogganApiError::ReqwestError(reqwest_error) = err;
-    if reqwest_error.status().is_some_and(|status| status == 403) {
-        return PyPermissionError::new_err(
-            "This client is watching, not presenting. Connect from the machine \
-             running the server, or pass a presenter token.",
-        );
+    match err {
+        TobogganApiError::Transport(_) => PyConnectionError::new_err(err.to_string()),
+
+        TobogganApiError::Status { code, body } if *code == StatusCode::FORBIDDEN => {
+            // The server has more than one reason to refuse — the presenter
+            // gate and the origin guard both answer 403 — so prefer whatever it
+            // said over guessing which one it was.
+            let explanation = if body.is_empty() {
+                "This client is watching, not presenting. Connect from the \
+                 machine running the server, or pass a presenter token."
+                    .to_owned()
+            } else {
+                body.clone()
+            };
+            PyPermissionError::new_err(explanation)
+        }
+
+        TobogganApiError::Status { .. } | TobogganApiError::Decode(_) => {
+            PyRuntimeError::new_err(err.to_string())
+        }
     }
-    PyConnectionError::new_err(err.to_string())
 }
 
 /// The token to offer at registration, from the argument or the environment.
