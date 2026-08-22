@@ -230,7 +230,18 @@ fn analyze_content(content: &Content, strip_counter: bool) -> ContentAnalysis {
         Content::Html { raw, alt, style: _ } => {
             let document = HtmlDocument::parse_fragment(raw);
 
-            let mut text = document.extract_text();
+            let mut text = document.extract_spoken_text();
+            // `alt` is the *same* content in another form — the parser fills it
+            // with the verbatim markdown `raw` was rendered from
+            // (`generate_alt_text`). Adding both counted every slide twice, and
+            // the markdown half smuggled back the CSS, tags and fenced code the
+            // extraction above exists to drop. Prefer the rendered text and fall
+            // back to `alt`, the way `Content::display_text` does.
+            if text.is_empty()
+                && let Some(alt_text) = alt
+            {
+                text.clone_from(alt_text);
+            }
             if strip_counter {
                 text = strip_slide_counter(&text);
             }
@@ -238,11 +249,6 @@ fn analyze_content(content: &Content, strip_counter: bool) -> ContentAnalysis {
             analysis.bullets = document.count_list_items();
             analysis.images = document.count_images();
             analysis.steps = document.count_steps();
-
-            // Also count alt text if present
-            if let Some(alt_text) = alt {
-                analysis.words += count_words(alt_text);
-            }
         }
     }
 
@@ -267,6 +273,63 @@ mod tests {
         assert_eq!(stats.images, 0);
         assert_eq!(stats.steps, 0);
         assert_eq!(stats.notes_words, 0);
+    }
+
+    /// The parser fills `alt` with the verbatim markdown that `raw` was
+    /// rendered from, so counting both made every real deck read as twice its
+    /// length — and dragged the CSS, tags and fenced code back into the count
+    /// along the way.
+    #[test]
+    fn markdown_alt_text_is_not_counted_on_top_of_the_rendered_body() {
+        let slide = Slide::new("Title").with_body(Content::Html {
+            raw: "<p>Three little words</p>".to_owned(),
+            style: Style::default(),
+            alt: Some("Three little words".to_owned()),
+        });
+
+        let stats = SlideStats::from_slide(&slide);
+        assert_eq!(
+            stats.words,
+            1 + 3,
+            "\"Title\" + three body words, counted once"
+        );
+    }
+
+    #[test]
+    fn a_style_block_contributes_no_words_even_when_alt_repeats_it() {
+        let slide = Slide::new("Cards").with_body(Content::Html {
+            raw: "<style>.card { color: red; }</style><p>Two cards</p>".to_owned(),
+            style: Style::default(),
+            alt: Some("<style>\n.card { color: red; }\n</style>\n\nTwo cards".to_owned()),
+        });
+
+        let stats = SlideStats::from_slide(&slide);
+        assert_eq!(stats.words, 1 + 2, "\"Cards\" + \"Two cards\"");
+    }
+
+    #[test]
+    fn block_code_does_not_count_towards_the_spoken_word_total() {
+        let slide = Slide::new("Build").with_body(Content::Html {
+            raw: "<p>Run it</p><pre><code>cargo build --release --all-features</code></pre>"
+                .to_owned(),
+            style: Style::default(),
+            alt: None,
+        });
+
+        let stats = SlideStats::from_slide(&slide);
+        assert_eq!(stats.words, 1 + 2, "\"Build\" + \"Run it\"");
+    }
+
+    #[test]
+    fn alt_text_still_stands_in_when_the_body_renders_no_text() {
+        let slide = Slide::new("Diagram").with_body(Content::Html {
+            raw: "<figure><img src='architecture.svg'></figure>".to_owned(),
+            style: Style::default(),
+            alt: Some("A four box architecture diagram".to_owned()),
+        });
+
+        let stats = SlideStats::from_slide(&slide);
+        assert_eq!(stats.words, 1 + 5, "\"Diagram\" + the five alt words");
     }
 
     #[test]

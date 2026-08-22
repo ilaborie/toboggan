@@ -155,12 +155,6 @@ impl TalkService {
         state.clone()
     }
 
-    /// Creates an initial state notification for new clients
-    pub async fn create_initial_notification(&self) -> Notification {
-        let current_state = self.current_state.read().await;
-        Notification::state(current_state.clone())
-    }
-
     /// Handles a command and returns the notification (without broadcasting)
     pub async fn handle_command(&self, command: &Command) -> Notification {
         let mut state = self.current_state.write().await;

@@ -128,7 +128,7 @@ where
 async fn serve_embedded_web_assets(uri: Uri) -> Response {
     let path = uri.path().trim_start_matches('/');
     match static_assets::WebAppAssets::get(path) {
-        Some(content) => static_assets::asset_response(path, content.data.into_owned()),
+        Some(content) => static_assets::bundle_asset_response(path, content.data.into_owned()),
         None => (StatusCode::NOT_FOUND, "Not found").into_response(),
     }
 }

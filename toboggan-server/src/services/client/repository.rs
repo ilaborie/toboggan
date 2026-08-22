@@ -3,13 +3,19 @@ use std::sync::Arc;
 
 use slotmap::SlotMap;
 use toboggan_core::{ClientId, ClientInfo, ClientRole, ClientsResponse, Notification, Timestamp};
-use tokio::sync::{RwLock, watch};
+use tokio::sync::{RwLock, mpsc};
 use tracing::debug;
 
 /// Entry stored in the client repository
 pub(super) struct ClientEntry {
     pub info: ClientInfo,
-    pub sender: watch::Sender<Notification>,
+    /// Queues notifications for this client.
+    ///
+    /// An mpsc and not a `watch`: a `watch` holds only the newest value, so two
+    /// notifications landing between polls silently collapsed into one — and the
+    /// one thrown away could be the `State` that tells a freshly connected deck
+    /// which slide to paint, leaving it blank.
+    pub sender: mpsc::UnboundedSender<Notification>,
 }
 
 /// Repository for client storage using `SlotMap`
@@ -38,7 +44,7 @@ impl ClientRepository {
         ip_addr: IpAddr,
         role: ClientRole,
         connected_at: Timestamp,
-        sender: watch::Sender<Notification>,
+        sender: mpsc::UnboundedSender<Notification>,
     ) -> Option<ClientId> {
         let mut clients = self.clients.write().await;
 

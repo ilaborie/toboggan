@@ -56,16 +56,8 @@ mod tests {
         let ip_addr = IpAddr::V4(Ipv4Addr::LOCALHOST);
 
         // First register a client to get a valid ClientId
-        let initial_notification = TalkService::from_ref(&state)
-            .create_initial_notification()
-            .await;
         let (client_id, _rx) = ClientService::from_ref(&state)
-            .register_client(
-                "Test Client".to_owned(),
-                ip_addr,
-                ClientRole::Presenter,
-                initial_notification,
-            )
+            .register_client("Test Client".to_owned(), ip_addr, ClientRole::Presenter)
             .await
             .expect("register client");
 
@@ -89,16 +81,8 @@ mod tests {
         let client_service = ClientService::from_ref(&state);
 
         // Register a client
-        let initial_notification = TalkService::from_ref(&state)
-            .create_initial_notification()
-            .await;
         let (client_id, _rx) = client_service
-            .register_client(
-                "Test Client".to_owned(),
-                ip_addr,
-                ClientRole::Presenter,
-                initial_notification,
-            )
+            .register_client("Test Client".to_owned(), ip_addr, ClientRole::Presenter)
             .await
             .expect("register client");
 

@@ -62,24 +62,6 @@ pub async fn launch_with_talk(
         .await
         .with_context(|| format!("Connecting to {addr} ..."))?;
 
-    if settings.open || settings.open_presenter {
-        // The presenter view goes second so it lands on top: the deck belongs on
-        // the projector, and the window the speaker is left looking at should be
-        // the one with their notes in it.
-        let mut pages = vec![browse_url(host, port, "")];
-        if settings.open_presenter {
-            pages.push(browse_url(host, port, "presenter"));
-        }
-        for url in pages {
-            info!(%url, "Opening in the default browser");
-            tokio::task::spawn_blocking(move || {
-                if let Err(err) = open::that(&url) {
-                    warn!(%url, %err, "Could not open the browser");
-                }
-            });
-        }
-    }
-
     let talk_service = TalkService::new(talk).context("build talk service")?;
     let client_service = ClientService::new(max_clients);
     let cleanup_service = client_service.clone();
@@ -115,6 +97,28 @@ pub async fn launch_with_talk(
     )
     .with_state(state);
     let shutdown_signal = setup_shutdown_signal(settings.shutdown_timeout());
+
+    // Opened here rather than straight after `bind`: the socket accepts into the
+    // backlog from that moment, so a browser launched earlier could issue its
+    // `GET /run` and then sit on it, unanswered, until the router below existed
+    // — with the deck's own parse and the OpenAPI build in between.
+    if settings.open || settings.open_presenter {
+        // The presenter view goes second so it lands on top: the deck belongs on
+        // the projector, and the window the speaker is left looking at should be
+        // the one with their notes in it.
+        let mut pages = vec![browse_url(host, port, "")];
+        if settings.open_presenter {
+            pages.push(browse_url(host, port, "presenter"));
+        }
+        for url in pages {
+            info!(%url, "Opening in the default browser");
+            tokio::task::spawn_blocking(move || {
+                if let Err(err) = open::that(&url) {
+                    warn!(%url, %err, "Could not open the browser");
+                }
+            });
+        }
+    }
 
     axum::serve(
         listener,

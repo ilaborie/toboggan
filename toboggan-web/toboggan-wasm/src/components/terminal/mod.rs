@@ -10,8 +10,8 @@ use gloo::net::websocket::Message;
 use gloo::net::websocket::futures::WebSocket;
 use js_sys::Uint8Array;
 use toboggan_core::{TerminalConfig, Theme};
-use wasm_bindgen::JsCast;
 use wasm_bindgen::closure::Closure;
+use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{Element, HtmlElement, KeyboardEvent, Node, ResizeObserver};
 
@@ -523,6 +523,41 @@ const BODY_V_PADDING: f64 = 5.0;
 const DEFAULT_GRID: (u16, u16) = (80, 24);
 
 /// Mounts a rioterm terminal into `body` and wires its callbacks to `tx`.
+/// Loads the bundled terminal font, so the canvas measures cell width against
+/// the real font rather than a system fallback.
+///
+/// Calls the page's memoised starter (`window.tobogganFontsReady`) rather than
+/// waiting on `document.fonts.ready`: that one settles only when the document
+/// has no font work left at all, which on a deck that keeps swapping slides can
+/// take a long time — long enough to stall a terminal waiting on four faces.
+/// This is also what pulls the faces down in the first place, so the ~700 KB is
+/// charged to the terminal that needs it and not to the first slide.
+///
+/// Returns immediately when the starter is absent — the presenter view has no
+/// terminals and never publishes one.
+async fn await_terminal_fonts() {
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Ok(starter) = js_sys::Reflect::get(&window, &JsValue::from_str("tobogganFontsReady"))
+    else {
+        return;
+    };
+    let Ok(starter) = starter.dyn_into::<js_sys::Function>() else {
+        return;
+    };
+    let Ok(promise) = starter.call0(&JsValue::NULL) else {
+        warn!("Could not start the terminal font load");
+        return;
+    };
+    let Ok(promise) = promise.dyn_into::<js_sys::Promise>() else {
+        return;
+    };
+    if let Err(err) = wasm_bindgen_futures::JsFuture::from(promise).await {
+        warn!("Terminal fonts did not finish loading:", err);
+    }
+}
+
 async fn open_session(
     body: &HtmlElement,
     theme: Theme,
@@ -530,6 +565,14 @@ async fn open_session(
     title_el: Option<HtmlElement>,
     tx: &mpsc::UnboundedSender<KeyAction>,
 ) -> Option<Session> {
+    // The canvas renderer measures cell width once, when it is constructed, and
+    // falls back to a system font if the bundled one has not arrived — box
+    // drawing and powerline glyphs then sit out of line for the whole session.
+    // Waited for here, at the one place a terminal is built, rather than in
+    // front of `start_app`: gating the whole deck on a 700 KB font download put
+    // a wait only terminals need in front of the first slide.
+    await_terminal_fonts().await;
+
     let options = OpenOptions {
         renderer: "canvas",
         // We drive fitting ourselves: rioterm's own observer would resize the
