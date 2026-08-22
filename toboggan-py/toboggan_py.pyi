@@ -124,9 +124,12 @@ class Slide:
 
     @property
     def hidden_in(self) -> List[str]:
-        """Render targets this slide is excluded from: `"web"`, `"pdf"`.
+        """Render targets this slide is excluded from — in practice only
+        `"pdf"`.
 
-        Empty means the slide is visible everywhere.
+        The server never sends web-hidden slides to a client at all, so a slide
+        you can see here is a slide that is in the web deck; `"web"` cannot
+        appear. Empty therefore means the slide is in the PDF too.
         """
         ...
 
@@ -156,7 +159,7 @@ class Slides:
         """Returns the number of slides."""
         ...
 
-    def __getitem__(self, index: int) -> Slide:
+    def __getitem__(self, index: int, /) -> Slide:
         """Returns the slide at `index`.
 
         Negative indices count from the end, so `slides[-1]` is the last slide.
@@ -273,11 +276,16 @@ class ClientInfo:
 
     @property
     def ip_addr(self) -> str:
-        """Where the connection came from, which is also what decided its role."""
+        """Where the connection came from.
+
+        Not on its own what decided the role: loopback presents unconditionally,
+        but a connection from anywhere else presents too if it carried the
+        token.
+        """
         ...
 
     @property
-    def role(self) -> str:
+    def role(self) -> Literal["presenter", "audience"]:
         """What the server granted this client: `"presenter"` or `"audience"`."""
         ...
 
@@ -379,7 +387,7 @@ class Toboggan:
 
         Returns information about the presentation including title, date,
         language, footer content, and all slide titles.
-       
+
         Raises:
             RuntimeError: If the deck was reloaded and could not be refetched,
                 so what is cached here is the deck as it was before.
@@ -392,7 +400,7 @@ class Toboggan:
 
         Returns the complete collection of slides with their content,
         metadata, and ordering.
-       
+
         Raises:
             RuntimeError: If the deck was reloaded and could not be refetched,
                 so what is cached here is the deck as it was before.

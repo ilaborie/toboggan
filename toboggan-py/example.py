@@ -55,8 +55,11 @@ def drive(tbg):
 
 
 def main():
-    host = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("TOBOGGAN_HOST", "localhost")
-    port = int(sys.argv[2] if len(sys.argv) > 2 else os.environ.get("TOBOGGAN_PORT", 8080))
+    default_host = os.environ.get("TOBOGGAN_HOST", "localhost")
+    default_port = os.environ.get("TOBOGGAN_PORT", 8080)
+
+    host = sys.argv[1] if len(sys.argv) > 1 else default_host
+    port = sys.argv[2] if len(sys.argv) > 2 else default_port
 
     # A client on the server's own machine always presents. Across the network,
     # pass `presenter_token="…"` (or set TOBOGGAN_PRESENTER_TOKEN) to do more
@@ -65,7 +68,7 @@ def main():
     # As a context manager: closing shuts the client's runtime down
     # deliberately, rather than leaving the garbage collector to do it while
     # holding the GIL.
-    with Toboggan(host, port) as tbg:
+    with Toboggan(host, int(port)) as tbg:
         describe(tbg)
 
         try:

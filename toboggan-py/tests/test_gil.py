@@ -66,6 +66,12 @@ def test_listing_clients_does_not_freeze_other_threads(presenter):
 
 
 def test_navigating_does_not_freeze_other_threads(presenter):
+    # Reset first: the deck is session-scoped shared state, so where this starts
+    # depends on whichever test ran before it. That works today only because the
+    # guide deck is long enough to absorb 30 moves from wherever the previous
+    # file happened to leave it.
+    presenter.first()
+
     with Watchdog() as watchdog:
         for _ in range(30):
             presenter.next()
@@ -80,7 +86,7 @@ def test_navigating_does_not_freeze_other_threads(presenter):
 # so an in-process version of this test does not fail, it wedges the whole
 # session. Isolating it means the regression shows up as a killed child and a
 # readable assertion instead of a CI job that runs until the platform times out.
-PROBE = r'''
+PROBE = r"""
 import socket, sys, threading, time
 from toboggan_py import Toboggan
 
@@ -101,7 +107,7 @@ while time.monotonic() < deadline:
     time.sleep(0.001)
 
 print(worst)
-'''
+"""
 
 
 def test_connecting_to_an_unresponsive_server_does_not_freeze_the_interpreter():

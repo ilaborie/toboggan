@@ -11,6 +11,17 @@ Entries are grouped the way the commits are: this repository uses
 
 ### Added
 
+- **`Toboggan` closes.** `close()` and the context-manager protocol, so the
+  runtime shuts down deliberately with the GIL released rather than whenever the
+  garbage collector gets to it while holding it.
+
+- **`Slides` iterates and takes negative indices.** `for slide in client.slides`
+  now type-checks (it always worked at runtime, invisibly to a checker), and
+  `slides[-1]` is the last slide rather than an `OverflowError`.
+
+- **`State.kind`** — `"init"`, `"running"` or `"done"` — so the three booleans
+  can be asked as the one question they are.
+
 - **The Python bindings are under test, in `mise` and in CI.** `toboggan-py` is
   the repository's third Cargo workspace, so the root `cargo` commands, `mise
   check:rust` and every CI job all went straight past it — long enough for two
@@ -95,9 +106,73 @@ Entries are grouped the way the commits are: this repository uses
   single-file deck is genuinely offline-capable.
 - The workspace version is defined once in `[workspace.package]`.
 
+- **BREAKING (Python): `State.is_first_slide` and `is_last_slide` are
+  properties.** They took the deck's slide count as an argument, which made
+  `state.is_first_slide(999)` a well-typed lie and forced callers to stitch
+  together two reads a deck reload could take from different decks. `State`
+  carries the count itself now, so `state.is_last_slide` replaces
+  `state.is_last_slide(len(client.slides))`.
+
+- **BREAKING (Python): `Slide.kind` is lower-case** — `"cover"`, `"part"`,
+  `"standard"` — matching `hidden_in`, the front matter and serde. It came from
+  `Debug` before, which made renaming a Rust enum variant a silent breaking
+  change.
+
+- **BREAKING (Python): `Talk.durations` is `float` seconds**, matching
+  `Slide.duration`, and it and `step_counts` are always exactly as long as
+  `titles`. They could previously be empty — meaning "not computed" rather than
+  "none" — so `zip(talk.titles, talk.durations)` silently yielded nothing.
+
+- **The bindings log instead of printing.** Eleven `println!`/`eprintln!` calls
+  in an importable extension module went to the caller's stdout, where they
+  corrupted any script whose output is data. They are `tracing` records now,
+  bridged onto Python's own `logging` — silent by default, and available with
+  `logging.basicConfig(level=...)` like anything else. The crate's lint table,
+  which claimed to be in step with the workspace's and was missing seventeen
+  entries including `print_stdout`, is restored; that divergence was the only
+  reason this compiled.
+
+- **The Python type stub is checked, and the Python is linted.** `ruff`,
+  `mypy` over a type-checked usage file, and `mypy.stubtest` all run in
+  `mise check:py` and in CI. Roughly 800 lines of Python had no linter, and the
+  600-line stub had nothing verifying its annotations — `for slide in
+  client.slides` was an error against it while working perfectly at runtime.
+
 ### Fixed
 
-- **The Python bindings' navigation is synchronous again.** `tbg.next()` pushed
+- **`Toboggan(...)` can no longer hang forever.** The socket connect had no
+  timeout and ran *before* the bounded registration wait, so against a server
+  that completes the TCP handshake and then never answers the upgrade, the
+  constructor waited for a reply that was never coming — with the GIL released,
+  so `Ctrl-C` only set a flag and the REPL had to be killed. The socket is
+  bounded now, and `TobogganApi` carries connect and request timeouts of its own.
+
+- **The Python bindings report *why* a call failed.** Every API error was one
+  variant wrapping `reqwest::Error`, so a decode failure, a 403, a 500 and an
+  unreachable server all arrived in Python as `ConnectionError` — which is how
+  the `clients()` deserialization bug stayed hidden as long as it did. They are
+  now told apart: a refusal keeps its status *and* the server's own explanation,
+  a shape the client cannot read says so, and only a genuine transport failure
+  is a `ConnectionError`.
+
+- **A deck reload that fails no longer poisons the cache.** The refetch failure
+  was logged and the new state committed anyway, against the *old* slides — so
+  `state.slide` indexed into a deck that no longer existed. The last coherent
+  snapshot is kept and marked stale, and the getters say so until a later reload
+  succeeds.
+
+- **`goto(0)` raises instead of moving to slide 1.** `saturating_sub` made the
+  one number a caller carrying a 0-based index would actually pass the one
+  number that moved the deck silently to the wrong place.
+
+- **Checks that did not run no longer report success.** `mise test:py` exited 0
+  when `uv` was missing and `mise check` then printed a green summary over a
+  suite that had not run; pytest exits 0 when everything skipped, and a runner
+  without a LAN address silently dropped the nine tests covering the whole
+  token-and-role surface. `TOBOGGAN_PY_STRICT`, which CI sets, turns those
+  missing preconditions into failures.
+
+- **The Python bindings' navigation is synchronous.** `tbg.next()` pushed
   its command onto a channel and returned, while the resulting state only
   arrived a socket round trip later — so `tbg.next()` followed by `tbg.state`
   read the position the deck was in *before* the call, every time. Commands now
@@ -137,7 +212,8 @@ Entries are grouped the way the commits are: this repository uses
   `/api/clients` were refused for every remote presenter however good their
   token; and `clients()` asked for a bare array where the endpoint answers with
   an object wrapping the list, so it failed to deserialize every response. The
-  Python binding is the only caller, which is why neither had been noticed.
+  only caller of `clients()` is the Python binding, and `command()` had no
+  callers anywhere in the workspace — which is why neither had been noticed.
 - **A silent RNG failure** no longer collapses reconnection jitter to zero,
   which had every client reconnecting in lockstep.
 - **The PDF download filename** no longer comes from a second, divergent

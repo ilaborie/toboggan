@@ -6,9 +6,9 @@ connects to this machine's own non-loopback address instead.
 """
 
 import pytest
-from toboggan_py import Toboggan
-
 from conftest import PRESENTER_TOKEN, remote_client, requires_lan
+
+from toboggan_py import Toboggan
 
 
 def test_a_local_client_presents(presenter):
@@ -23,7 +23,11 @@ def test_a_local_client_presents_without_a_token(server):
 
 
 @requires_lan
-def test_a_remote_client_without_a_token_is_audience(server):
+def test_a_remote_client_without_a_token_is_audience(server, monkeypatch):
+    # Explicitly unset: a developer with TOBOGGAN_PRESENTER_TOKEN exported would
+    # otherwise have this client quietly present, and the assertion would fail
+    # for a reason that has nothing to do with the bindings.
+    monkeypatch.delenv("TOBOGGAN_PRESENTER_TOKEN", raising=False)
     _, port = server
     assert remote_client(port).is_presenter is False
 
@@ -87,9 +91,16 @@ def test_a_presenter_can_enumerate_the_room(presenter):
 
 @requires_lan
 @pytest.mark.parametrize("blank", ["", "   ", "\t\n"])
-def test_a_blank_token_is_no_token(server, blank):
+def test_a_blank_token_is_no_token(server, blank, monkeypatch):
     """`Secret::new` decides what counts as a token, on both sides of the wire.
-    A blank one is no token rather than one the server can only refuse."""
+    A blank one is no token rather than one the server can only refuse.
+
+    The environment is set to a *valid* token on purpose. `resolve_token` short
+    circuits on an explicit argument, so a blank one must not fall back to the
+    environment — which is a real design decision, and one a future reader could
+    easily "fix" the other way without a test pinning it.
+    """
+    monkeypatch.setenv("TOBOGGAN_PRESENTER_TOKEN", PRESENTER_TOKEN)
     _, port = server
     assert remote_client(port, presenter_token=blank).is_presenter is False
 

@@ -53,7 +53,7 @@ class _Impostor(http.server.BaseHTTPRequestHandler):
     decode failure from a network one has nothing left to blame but the network.
     """
 
-    def do_GET(self):  # noqa: N802 — the name is BaseHTTPRequestHandler's
+    def do_GET(self):
         body = b'{"not": "the shape you asked for"}'
         self.send_response(200)
         self.send_header("Content-Type", "application/json")

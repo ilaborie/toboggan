@@ -151,8 +151,11 @@ impl Slide {
         self.0.duration.map(|duration| duration.as_secs_f64())
     }
 
-    /// Render targets this slide is excluded from — `"web"`, `"pdf"`. Empty
-    /// means it is visible everywhere.
+    /// Render targets this slide is excluded from — in practice only `"pdf"`.
+    ///
+    /// The server serves `visible_in(RenderTarget::Web)`, so web-hidden slides
+    /// never reach a client at all and `"web"` cannot appear here. Empty means
+    /// the slide is in the PDF too.
     #[getter]
     fn hidden_in(&self) -> Vec<String> {
         // `RenderTarget` is `#[non_exhaustive]`, so a match would need a

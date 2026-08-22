@@ -72,12 +72,16 @@ def _server_command(port):
     why the path arrives in an environment variable rather than being guessed —
     the same reason `playwright.config.ts` takes `TOBOGGAN_BIN`.
     """
+    # Each flag stays on one line with its value; split, they read as eight
+    # unrelated strings.
+    # fmt: off
     common = [
         "-p", DECK,
         "--host", "0.0.0.0",
         "--port", str(port),
         "--presenter-token", PRESENTER_TOKEN,
     ]
+    # fmt: on
 
     binary = os.environ.get("TOBOGGAN_BIN")
     if binary:

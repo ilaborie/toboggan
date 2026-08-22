@@ -201,6 +201,17 @@ jobs:
           uv run --no-sync maturin develop --uv
           uv run --no-sync pytest
 
+      # After the build: `stubtest` imports the module to compare it against the
+      # stub, and `mypy` checks the documented usage against that same stub.
+      - name: Lint and type-check the Python
+        working-directory: toboggan-py
+        run: |
+          uv run --no-sync ruff format --check .
+          uv run --no-sync ruff check .
+          uv run --no-sync mypy
+          uv run --no-sync python -m mypy.stubtest toboggan_py \
+            --allowlist stubtest-allowlist.txt
+
   # Unused dependencies. `cargo machete` is a mise tool locally, but the repo's
   # prek hooks are git hooks and jj does not run them, so it never fired for the
   # VCS this project actually uses.

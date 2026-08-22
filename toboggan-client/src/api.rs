@@ -1,10 +1,10 @@
 use std::time::Duration;
 
-use serde::Serialize;
-use serde::de::DeserializeOwned;
 /// Re-exported so a caller can tell one refusal from another without taking on
 /// a `reqwest` dependency of its own just to name a status code.
 pub use reqwest::StatusCode;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use toboggan_core::{
     ClientInfo, ClientsResponse, Command, Notification, Secret, Slide, SlideId, SlidesResponse,
     TalkResponse,

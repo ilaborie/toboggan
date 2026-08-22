@@ -62,13 +62,24 @@ deserialize on *every* call, unnoticed because the bindings are its only caller.
 It now has its own mise lane and its own CI job:
 
 ```bash
-mise check:py   # fmt + clippy + the test suite
+mise check:py   # cargo fmt + clippy, ruff, mypy, stubtest, and the test suite
 mise test:py    # just the tests
 ```
 
 Its tests start a real server on a free port and drive it, so they need `uv`
 (declared in `.mise.toml`) and either a prebuilt `toboggan` in `TOBOGGAN_BIN` or
 a working `cargo run`. `mise check` runs this lane along with the others.
+
+Both tasks **fail** rather than skip without `uv`. That is deliberate: they used
+to exit 0, so `mise check` printed a green Python summary over a suite that had
+not run — and the point of this lane is that the crate stops being invisible.
+
+The Python side is linted with `ruff` and the hand-written `toboggan_py.pyi` is
+checked twice: `mypy` over `tests/typing/usage.py`, which exercises every
+documented call so the stub's *annotations* are verified rather than just its
+names, and `mypy.stubtest`, which compares the stub against the built module.
+When you change the Python API, change the stub and add the new call to
+`usage.py` — a promise no caller has written down is a promise nobody checks.
 
 ## Code guidelines
 

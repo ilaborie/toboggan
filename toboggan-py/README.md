@@ -31,20 +31,42 @@ pip install maturin
 maturin develop
 ```
 
+Contributing rather than consuming? Use `uv`, which is what the tasks and CI
+use and what the committed `uv.lock` pins:
+
+```bash
+uv sync --group dev
+uv run --no-sync maturin develop --uv
+```
+
+`--no-sync` on the second line is not optional: a bare `uv run` re-syncs first
+and puts the cached wheel back over the extension `maturin develop` just built,
+so you would be testing the previous build.
+
 ## Quick Start
 
 ```python
 from toboggan_py import Toboggan
 
-client = Toboggan("localhost", 8080)
+# As a context manager, so the client's runtime shuts down deliberately.
+with Toboggan("localhost", 8080) as client:
+    # Access metadata and navigate
+    print(f"Talk: {client.talk}, Slides: {len(client.slides)}")
+    client.next()  # Navigate to next slide
+    client.previous()  # Navigate to previous slide
+    client.goto(12)  # Jump to the slide numbered 12, counting from 1
 
-# Access metadata and navigate
-print(f"Talk: {client.talk}, Slides: {len(client.slides)}, State: {client.state}")
-client.next()      # Navigate to next slide
-client.previous()  # Navigate to previous slide
-client.goto(12)    # Jump to the slide numbered 12
+    print(client.state)  # correct straight away — no sleep needed
+    print(client.state.is_last_slide)  # the state knows its own deck
+```
 
-print(client.state)  # correct straight away — no sleep needed
+The bindings report over Python's `logging` rather than printing, so nothing
+lands on your stdout unless you ask:
+
+```python
+import logging
+
+logging.basicConfig(level=logging.DEBUG)  # socket, deck reloads, clients
 ```
 
 Navigation is synchronous: a call returns once the server has applied it, so
@@ -98,11 +120,21 @@ Type stubs in `toboggan_py.pyi` provide full IDE support and type checking.
 
 ## Development
 
+From the repository root:
+
 ```bash
-mise check:py            # fmt + clippy + the test suite (from the repo root)
-mise test:py             # just the tests
-maturin build --release  # Build release wheel
+mise check:py  # cargo fmt + clippy, ruff, mypy, stubtest, and the test suite
+mise test:py   # just the tests
 ```
+
+From this directory:
+
+```bash
+maturin build --release  # build a release wheel
+```
+
+`uv` is required for both tasks — they fail rather than skip without it, so a
+green summary always means the checks actually ran.
 
 `mise check` at the repository root runs `check:py` along with the Rust, web and
 iOS lanes. The crate is excluded from the cargo workspace, so the root `cargo`
@@ -110,8 +142,16 @@ commands do not reach it — that is what these tasks are for.
 
 The tests start a real server and drive it, because nothing about a client can
 be tested honestly without one. They pick a free port, so they will not disturb
-a deck you already have running. Set `TOBOGGAN_BIN` to a prebuilt `toboggan` to
-skip the `cargo run` they otherwise fall back to.
+a deck you already have running — or set `TOBOGGAN_PY_TEST_PORT` to pin one.
+Set `TOBOGGAN_BIN` to a prebuilt `toboggan` to skip the `cargo run` they
+otherwise fall back to; `mise test:py` does this for you when the workspace has
+already built one.
+
+Some tests need a non-loopback address, because the server grants the presenter
+role to loopback unconditionally and an audience client cannot be made over
+`localhost` at all. They skip without one. Set `TOBOGGAN_PY_STRICT=1` — as CI
+does — to make that a failure instead: a runner that silently drops the whole
+role suite should not report success.
 
 ## Troubleshooting
 

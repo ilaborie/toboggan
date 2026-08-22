@@ -220,33 +220,32 @@ impl Toboggan {
         // deck is network work, and the registration wait below can take
         // seconds. Holding the GIL across either freezes the interpreter — a
         // constructor is no better a place to do that than a method.
-        let (connected, fetched) = py
-            .detach(|| {
-                rt.block_on(async {
-                    let _read_messages = tokio::spawn(handle_state(
-                        Caches {
-                            state: Arc::clone(&state),
-                            talk: Arc::clone(&talk),
-                            slides: Arc::clone(&slides),
-                            deck_stale: Arc::clone(&deck_stale),
-                            in_flight: Arc::clone(&in_flight),
-                        },
-                        role_tx,
-                        api.clone(),
-                        rx_msg,
-                    ));
-                    // `connect` cannot report failure — it reconnects forever
-                    // by design — so a bound here is the only thing standing
-                    // between a silent server and a constructor that never
-                    // returns. Expiry is not fatal on its own: the reconnect
-                    // loop keeps trying, and the deck fetch below decides
-                    // whether the server is reachable at all.
-                    let connected = tokio::time::timeout(CONNECT_TIMEOUT, ws.connect())
-                        .await
-                        .is_ok();
-                    (connected, try_join!(api.talk(), api.slides()))
-                })
-            });
+        let (connected, fetched) = py.detach(|| {
+            rt.block_on(async {
+                let _read_messages = tokio::spawn(handle_state(
+                    Caches {
+                        state: Arc::clone(&state),
+                        talk: Arc::clone(&talk),
+                        slides: Arc::clone(&slides),
+                        deck_stale: Arc::clone(&deck_stale),
+                        in_flight: Arc::clone(&in_flight),
+                    },
+                    role_tx,
+                    api.clone(),
+                    rx_msg,
+                ));
+                // `connect` cannot report failure — it reconnects forever
+                // by design — so a bound here is the only thing standing
+                // between a silent server and a constructor that never
+                // returns. Expiry is not fatal on its own: the reconnect
+                // loop keeps trying, and the deck fetch below decides
+                // whether the server is reachable at all.
+                let connected = tokio::time::timeout(CONNECT_TIMEOUT, ws.connect())
+                    .await
+                    .is_ok();
+                (connected, try_join!(api.talk(), api.slides()))
+            })
+        });
 
         if !connected {
             warn!(
