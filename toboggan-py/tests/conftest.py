@@ -11,20 +11,23 @@ import os
 import shutil
 import socket
 import subprocess
-import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
 
 import pytest
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-WORKSPACE_ROOT = os.path.dirname(REPO_ROOT)
+# `toboggan-py/`, then the repository above it. Named the way the rest of the
+# repo uses the words: this crate is deliberately *outside* the cargo workspace,
+# so the two are not the same directory and the distinction matters.
+CRATE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO_ROOT = os.path.dirname(CRATE_ROOT)
 
-# 51 `<!-- pause -->` markers across 44 slides. `examples/riir-folder` has none
-# at all, which would make every step assertion vacuous, and
+# Chosen for its `<!-- pause -->` markers, which the step assertions need:
+# `examples/riir-folder` has none at all, which would make them vacuous, and
 # `examples/demo-terminal` spawns shell PTYs for its terminal slides.
-DECK = os.path.join(WORKSPACE_ROOT, "examples", "toboggan-guide", "slides")
+DECK = os.path.join(REPO_ROOT, "examples", "toboggan-guide", "slides")
 
 # Remote clients need this to present; a loopback client presents without it.
 # One server offering it therefore covers all three role cases.
@@ -80,28 +83,55 @@ def _server_command(port):
     if binary:
         return [binary, *common]
 
-    manifest = os.path.join(WORKSPACE_ROOT, "Cargo.toml")
+    manifest = os.path.join(REPO_ROOT, "Cargo.toml")
     return ["cargo", "run", "--manifest-path", manifest, "-p", "toboggan", "--", *common]
 
 
-def _wait_until_healthy(process, port):
-    """Poll `/health` until the server answers, as Playwright's webServer does."""
+def _wait_until_healthy(process, port, log):
+    """Poll `/health` until the server answers, as Playwright's webServer does.
+
+    Carries `log` so that a failure says *why*. A parse error in the deck, a port
+    already taken, a panic — all of it goes to the server's stderr, and an exit
+    code on its own is a dead end on a CI runner nobody can reproduce.
+    """
     url = f"http://127.0.0.1:{port}/health"
     deadline = time.monotonic() + READY_TIMEOUT
+    last_answer = "nothing yet"
 
     while time.monotonic() < deadline:
         if process.poll() is not None:
             raise RuntimeError(
-                f"the server exited with {process.returncode} before becoming ready"
+                f"the server exited with {process.returncode} before becoming "
+                f"ready.\n{_tail(log)}"
             )
         try:
             with urllib.request.urlopen(url, timeout=1) as response:
                 if response.status == 200:
                     return
-        except (urllib.error.URLError, ConnectionError, socket.timeout):
-            time.sleep(0.1)
+                last_answer = f"HTTP {response.status}"
+        except (urllib.error.URLError, ConnectionError, socket.timeout) as unready:
+            # `HTTPError` is a `URLError`, so a server answering 500 on every
+            # poll lands here too — hence recording what it said rather than
+            # reporting only that the deadline passed.
+            last_answer = f"{type(unready).__name__}: {unready}"
 
-    raise RuntimeError(f"the server was not ready within {READY_TIMEOUT:.0f}s")
+        # At the bottom of the loop, not inside the `except`: a non-200 answer
+        # used to fall straight through and spin a tight five-minute request
+        # loop against the server it was waiting for.
+        time.sleep(0.1)
+
+    raise RuntimeError(
+        f"the server was not ready within {READY_TIMEOUT:.0f}s "
+        f"(last answer: {last_answer}).\n{_tail(log)}"
+    )
+
+
+def _tail(log, limit=4000):
+    """The end of the server's output, for an error message."""
+    log.flush()
+    with open(log.name, encoding="utf-8", errors="replace") as written:
+        output = written.read()[-limit:].strip()
+    return f"--- server output ---\n{output}" if output else "(the server said nothing)"
 
 
 @pytest.fixture(scope="session")
@@ -119,22 +149,32 @@ def server():
         _skip_or_fail("neither TOBOGGAN_BIN nor cargo is available to start a server")
 
     port = int(os.environ.get("TOBOGGAN_PY_TEST_PORT") or _free_port())
-    process = subprocess.Popen(
-        _server_command(port),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        cwd=WORKSPACE_ROOT,
-    )
 
-    try:
-        _wait_until_healthy(process, port)
-        yield "localhost", port
-    finally:
-        process.terminate()
+    # Captured, not discarded. This is the one place that knows why a server
+    # failed to start, and `DEVNULL` left a bare exit code to debug from.
+    with tempfile.NamedTemporaryFile(
+        mode="w+", suffix=".log", prefix="toboggan-server-", delete=False
+    ) as log:
+        process = subprocess.Popen(
+            _server_command(port),
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            cwd=REPO_ROOT,
+        )
+
         try:
-            process.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            process.kill()
+            _wait_until_healthy(process, port, log)
+            yield "localhost", port
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                # Reaped, not just signalled: `kill` alone leaves a zombie, in
+                # the `finally` that exists to guarantee cleanup.
+                process.wait(timeout=10)
+            os.unlink(log.name)
 
 
 @pytest.fixture

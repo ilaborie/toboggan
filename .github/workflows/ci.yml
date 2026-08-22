@@ -171,15 +171,17 @@ jobs:
             printf '<!doctype html><title>ci stub</title>' > "toboggan-web/dist/$page"
           done
 
-      - name: Build the server the tests drive
-        run: cargo build -p toboggan
-
+      # Before the build: these take seconds and the build takes minutes, so a
+      # formatting slip should not cost a full compile to discover.
       - name: Format (nightly)
         working-directory: toboggan-py
         run: cargo +nightly fmt --all --check
       - name: Clippy
         working-directory: toboggan-py
         run: cargo +stable clippy --all-targets -- -D warnings
+
+      - name: Build the server the tests drive
+        run: cargo build -p toboggan
 
       # `--no-sync` on both: `uv sync` reuses a cached wheel rather than
       # rebuilding changed Rust, and a bare `uv run` re-syncs first, which would
@@ -188,6 +190,12 @@ jobs:
         working-directory: toboggan-py
         env:
           TOBOGGAN_BIN: ${{ github.workspace }}/target/debug/toboggan
+          # A runner controls its own environment, so a missing deck, a missing
+          # server or a missing LAN address is a broken job rather than a fact
+          # of life. Without this, pytest exits 0 having run nothing — and the
+          # nine role tests, the only coverage of the token-on-REST fix and the
+          # 403 mapping, are exactly the ones that skip first.
+          TOBOGGAN_PY_STRICT: "1"
         run: |
           uv sync --group dev
           uv run --no-sync maturin develop --uv

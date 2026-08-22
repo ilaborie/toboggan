@@ -5,12 +5,23 @@ set -eu
 
 echo "🐍 Testing the Python bindings..."
 
+# Not a skip. `uv` is declared in `.mise.toml`, so its absence means the toolchain
+# was never installed, not that this machine cannot run the tests — and exiting 0
+# here made `mise check` print "✅ All Python binding checks passed!" over a suite
+# that had not run. A check that cannot fail is not a check.
 if ! command -v uv >/dev/null 2>&1; then
-  echo "⚠️  uv not found, skipping Python binding tests (install with: mise install uv)"
-  exit 0
+  echo "❌ uv not found. Run: mise install"
+  exit 1
 fi
 
 cd toboggan-py
+
+# The same binary `check:rust` just built. Without it `conftest.py` falls back to
+# `cargo run`, which is why its readiness timeout is five minutes.
+BUILT_SERVER="$(git rev-parse --show-toplevel)/target/debug/toboggan"
+if [ -x "$BUILT_SERVER" ]; then
+  export TOBOGGAN_BIN="$BUILT_SERVER"
+fi
 
 echo "📦 Installing the dev dependencies..."
 uv sync --group dev
