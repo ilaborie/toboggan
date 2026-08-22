@@ -6,14 +6,14 @@ mod toboggan;
 
 pub use client_info::ClientInfo;
 use pyo3::prelude::*;
-pub use slides::{Slide, Slides};
+pub use slides::{Slide, Slides, SlidesIter};
 pub use state::State;
 pub use talk::Talk;
 pub use toboggan::Toboggan;
 
 /// Toboggan for Python
 #[pymodule]
-fn toboggan_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn toboggan_py(module: &Bound<'_, PyModule>) -> PyResult<()> {
     // The bindings and `toboggan-client` beneath them report over `tracing`,
     // which reaches `log`, which this hands to Python's own `logging`. An
     // importable extension module has no business writing to stdout: a caller
@@ -25,18 +25,21 @@ fn toboggan_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // load the module.
     let _already_initialised = pyo3_log::try_init();
 
-    m.add_class::<Talk>()?;
-    m.add_class::<Slides>()?;
-    m.add_class::<Slide>()?;
-    m.add_class::<State>()?;
-    m.add_class::<ClientInfo>()?;
-    m.add_class::<Toboggan>()?;
+    module.add_class::<Talk>()?;
+    module.add_class::<Slides>()?;
+    module.add_class::<Slide>()?;
+    // Registered but deliberately absent from `__all__`: it is what `iter()`
+    // hands back, never something a caller names or constructs.
+    module.add_class::<SlidesIter>()?;
+    module.add_class::<State>()?;
+    module.add_class::<ClientInfo>()?;
+    module.add_class::<Toboggan>()?;
 
     // Maturin's generated package wrapper does `from .toboggan_py import *`
     // and re-exports this list, so without it `from toboggan_py import *`
     // falls back to "every public name" and the `__all__` in the type stub
     // describes something the module does not have.
-    m.add(
+    module.add(
         "__all__",
         vec!["ClientInfo", "Slide", "Slides", "State", "Talk", "Toboggan"],
     )?;

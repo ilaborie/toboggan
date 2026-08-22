@@ -1,10 +1,12 @@
 """Toboggan for Python.
 
 This module provides Python bindings for the Toboggan presentation system,
-enabling real-time multi-client synchronization via WebSocket connections.
+enabling real-time multi-client synchronization: commands travel over REST and
+answer their caller, while state and deck changes are pushed over a WebSocket.
 """
 
-from typing import List, Optional, final
+from types import TracebackType
+from typing import Iterator, List, Literal, Optional, Type, final
 
 __all__ = ["ClientInfo", "Slide", "Slides", "State", "Talk", "Toboggan"]
 
@@ -55,17 +57,20 @@ class Talk:
     def step_counts(self) -> List[int]:
         """Number of reveals per slide, for showing step progress.
 
-        Either empty — meaning the server did not compute them — or exactly as
-        long as `titles`, read against it by index.
+        Always exactly as long as `titles`, read against it by index. A deck
+        whose steps the server did not compute reports 0 for every slide rather
+        than an empty list, so `zip(talk.titles, talk.step_counts)` is never
+        silently empty.
         """
         ...
 
     @property
-    def durations(self) -> List[Optional[int]]:
+    def durations(self) -> List[Optional[float]]:
         """Planned speaking time per slide, in seconds.
 
         From each slide's `duration` front matter, and None where the author
-        did not declare one. Either empty or exactly as long as `titles`.
+        did not declare one. Always exactly as long as `titles`, and in the same
+        units and type as `Slide.duration`.
         """
         ...
 
@@ -87,8 +92,8 @@ class Slide:
     """
 
     @property
-    def kind(self) -> str:
-        """`"Cover"`, `"Part"` for a section title, or `"Standard"`."""
+    def kind(self) -> Literal["cover", "part", "standard"]:
+        """`"cover"`, `"part"` for a section title, or `"standard"`."""
         ...
 
     @property
@@ -141,7 +146,10 @@ class Slides:
     """
 
     def get(self, index: int) -> Optional[Slide]:
-        """Returns the slide at `index`, or None if out of range."""
+        """Returns the slide at `index`, or None if out of range.
+
+        Negative indices count from the end, as they do for any sequence.
+        """
         ...
 
     def __len__(self) -> int:
@@ -151,9 +159,15 @@ class Slides:
     def __getitem__(self, index: int) -> Slide:
         """Returns the slide at `index`.
 
+        Negative indices count from the end, so `slides[-1]` is the last slide.
+
         Raises:
             IndexError: If `index` is out of range.
         """
+        ...
+
+    def __iter__(self) -> Iterator[Slide]:
+        """Iterates the slides in presentation order."""
         ...
 
     def __repr__(self) -> str:
@@ -208,21 +222,31 @@ class State:
         deck has started."""
         ...
 
-    def is_first_slide(self, total_slides: int) -> bool:
-        """Whether the deck is on its first slide.
+    @property
+    def kind(self) -> Literal["init", "running", "done"]:
+        """Which of the three states this is.
 
-        Args:
-            total_slides: How many slides the deck has — `len(client.slides)`.
-                An empty deck is on neither its first nor its last slide.
+        The same question as `is_init`/`is_running`/`is_done`, in a form a type
+        checker can narrow on and a `match` can dispatch over.
         """
         ...
 
-    def is_last_slide(self, total_slides: int) -> bool:
-        """Whether the deck is on its last slide.
+    @property
+    def total_slides(self) -> int:
+        """How many slides the deck had when this state was read."""
+        ...
 
-        Args:
-            total_slides: How many slides the deck has — `len(client.slides)`.
+    @property
+    def is_first_slide(self) -> bool:
+        """Whether the deck is on its first slide.
+
+        An empty deck is on neither its first nor its last slide.
         """
+        ...
+
+    @property
+    def is_last_slide(self) -> bool:
+        """Whether the deck is on its last slide."""
         ...
 
     def __repr__(self) -> str:
@@ -277,7 +301,7 @@ class Toboggan:
 
     Main client for connecting to a Toboggan presentation server.
     Manages WebSocket communication, state synchronization, and provides
-    methods for controlling the presentation (navigation, playback).
+    methods for controlling the presentation (navigation and step reveals).
 
     The client automatically maintains a persistent connection to the server
     and synchronizes state changes across all connected clients in real-time.
@@ -335,9 +359,17 @@ class Toboggan:
                 as no token.
 
         Raises:
-            ConnectionError: If connection to server fails or metadata cannot
-                be fetched. A registration the server has not yet answered is
-                not an error — `role` reports None until it arrives.
+            ConnectionError: If the server cannot be reached.
+            RuntimeError: If the server refuses, or answers something this
+                client cannot read — which usually means the two ends are
+                different versions.
+            PermissionError: If the server answers 403.
+            OSError: If the async runtime cannot be started.
+            OverflowError: If `port` is outside `0..=65535`.
+
+        A registration the server has not yet answered is not an error — `role`
+        reports None until it arrives. Nor is a socket that has not come up yet;
+        the client keeps trying in the background.
         """
         ...
 
@@ -347,6 +379,10 @@ class Toboggan:
 
         Returns information about the presentation including title, date,
         language, footer content, and all slide titles.
+       
+        Raises:
+            RuntimeError: If the deck was reloaded and could not be refetched,
+                so what is cached here is the deck as it was before.
         """
         ...
 
@@ -356,6 +392,10 @@ class Toboggan:
 
         Returns the complete collection of slides with their content,
         metadata, and ordering.
+       
+        Raises:
+            RuntimeError: If the deck was reloaded and could not be refetched,
+                so what is cached here is the deck as it was before.
         """
         ...
 
@@ -373,11 +413,15 @@ class Toboggan:
         Trustworthy immediately after a navigation call: those return only
         once the server has applied the command and this cache holds its
         answer.
+
+        Raises:
+            RuntimeError: If the deck was reloaded and could not be refetched,
+                so what is cached here is the deck as it was before.
         """
         ...
 
     @property
-    def role(self) -> Optional[str]:
+    def role(self) -> Optional[Literal["presenter", "audience"]]:
         """The role the server granted this connection.
 
         `"presenter"`, `"audience"`, or None while registration is still
@@ -424,6 +468,9 @@ class Toboggan:
     def first(self) -> None:
         """Navigates to the first slide.
 
+        Returns once the server has applied the move, so reading `state`
+        straight afterwards reports where the deck now is.
+
         Raises:
             PermissionError: If this client is watching rather than presenting.
             RuntimeError: If the server rejects the command.
@@ -433,6 +480,9 @@ class Toboggan:
 
     def last(self) -> None:
         """Navigates to the last slide.
+
+        Returns once the server has applied the move, so reading `state`
+        straight afterwards reports where the deck now is.
 
         Raises:
             PermissionError: If this client is watching rather than presenting.
@@ -447,8 +497,14 @@ class Toboggan:
         Args:
             slide: The slide number as printed on the slide, counting from 1.
 
+        Returns once the server has applied the move, so reading `state`
+        straight afterwards reports where the deck now is.
+
         Raises:
             PermissionError: If this client is watching rather than presenting.
+            ValueError: If `slide` is 0. Slide numbers count from 1, and 0 used
+                to land on slide 1 rather than say so.
+            OverflowError: If `slide` is negative.
             RuntimeError: If the deck has no such slide. A number out of range
                 is an error rather than a silent no-op.
             ConnectionError: If the server cannot be reached.
@@ -460,6 +516,9 @@ class Toboggan:
 
         This is what a presenter remote and the space bar send.
 
+        Returns once the server has applied the move, so reading `state`
+        straight afterwards reports where the deck now is.
+
         Raises:
             PermissionError: If this client is watching rather than presenting.
             RuntimeError: If the server rejects the command.
@@ -469,6 +528,9 @@ class Toboggan:
 
     def previous_step(self) -> None:
         """Goes back one step, moving to the previous slide once this one runs out.
+
+        Returns once the server has applied the move, so reading `state`
+        straight afterwards reports where the deck now is.
 
         Raises:
             PermissionError: If this client is watching rather than presenting.
@@ -499,6 +561,31 @@ class Toboggan:
             PermissionError: If this client is watching rather than presenting.
             ConnectionError: If the server cannot be reached.
         """
+        ...
+
+    def close(self) -> None:
+        """Disconnects and shuts this client's runtime down.
+
+        Idempotent. Every other call raises `RuntimeError` afterwards.
+
+        Worth calling rather than leaving to the garbage collector: dropping a
+        client shuts down a multi-threaded runtime, and the collector does that
+        while holding the GIL — so the interpreter can sit frozen in a shutdown
+        nobody asked for. Using the client as a context manager is the easy way.
+        """
+        ...
+
+    def __enter__(self) -> "Toboggan":
+        """Returns the client itself, for use in a `with` block."""
+        ...
+
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> bool:
+        """Closes the client, propagating any exception raised in the block."""
         ...
 
     def __repr__(self) -> str:

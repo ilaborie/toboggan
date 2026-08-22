@@ -8,6 +8,10 @@ Start a server first, e.g. `toboggan -p examples/riir-folder`, then:
 Host and port are arguments rather than constants on purpose: a hardcoded
 `localhost:8080` points this script at whatever deck happens to be live, which
 is rarely the one you meant to poke at.
+
+Nothing here prints diagnostics from the bindings themselves. They report over
+Python's own `logging`, so add `logging.basicConfig(level=logging.DEBUG)` to
+watch the socket, the deck reloads and clients coming and going.
 """
 
 import os
@@ -15,30 +19,29 @@ import sys
 
 from toboggan_py import Toboggan
 
-host = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("TOBOGGAN_HOST", "localhost")
-port = int(sys.argv[2] if len(sys.argv) > 2 else os.environ.get("TOBOGGAN_PORT", 8080))
 
-# A client on the server's own machine always presents. Across the network,
-# pass `presenter_token="…"` (or set TOBOGGAN_PRESENTER_TOKEN) to do more than
-# watch — see SECURITY.md in the main repository.
-tbg = Toboggan(host, port)
+def describe(tbg):
+    """Everything the client knows before it touches anything."""
+    print(f"toboggan: {tbg}")
+    print(f"role: {tbg.role} (can drive the deck: {tbg.is_presenter})")
 
-print(f"toboggan: {tbg}")
-print(f"role: {tbg.role} (can drive the deck: {tbg.is_presenter})")
+    talk = tbg.talk
+    print(f"talk: {talk.title} — {talk.date} [{talk.lang or 'en'}]")
+    print(f"slides: {len(tbg.slides)}")
 
-talk = tbg.talk
-print(f"talk: {talk.title} — {talk.date} [{talk.lang or 'en'}]")
-print(f"slides: {len(tbg.slides)}")
+    for index, slide in enumerate(tbg.slides, start=1):
+        planned = f"{slide.duration:.0f}s" if slide.duration else "—"
+        print(f"  {index:>3}. [{slide.kind}] {slide.title} ({planned})")
 
-for index, slide in enumerate(tbg.slides, start=1):
-    planned = f"{slide.duration:.0f}s" if slide.duration else "—"
-    print(f"  {index:>3}. [{slide.kind}] {slide.title} ({planned})")
+    print(f"state: {tbg.state}")
 
-print(f"state: {tbg.state}")
 
-# No sleeps below: every navigation call returns once the server has applied
-# it, so the state read on the next line is the state that call produced.
-try:
+def drive(tbg):
+    """Move the deck about.
+
+    No sleeps: every navigation call returns once the server has applied it, so
+    the state read on the next line is the state that call produced.
+    """
     tbg.previous()
     print(f"state after previous: {tbg.state}")
 
@@ -48,10 +51,34 @@ try:
     tbg.goto(3)
     state = tbg.state
     print(f"state after goto(3): {state} (slide {state.slide}, step {state.step})")
-    print(f"on the last slide: {state.is_last_slide(len(tbg.slides))}")
-except PermissionError as refused:
-    print(f"watching only: {refused}")
-    raise SystemExit(0) from None
+    print(f"on the last slide: {state.is_last_slide}")
 
-for client in tbg.clients():
-    print(f"connected: {client.name} ({client.role}) from {client.ip_addr}")
+
+def main():
+    host = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("TOBOGGAN_HOST", "localhost")
+    port = int(sys.argv[2] if len(sys.argv) > 2 else os.environ.get("TOBOGGAN_PORT", 8080))
+
+    # A client on the server's own machine always presents. Across the network,
+    # pass `presenter_token="…"` (or set TOBOGGAN_PRESENTER_TOKEN) to do more
+    # than watch — see SECURITY.md in the main repository.
+    #
+    # As a context manager: closing shuts the client's runtime down
+    # deliberately, rather than leaving the garbage collector to do it while
+    # holding the GIL.
+    with Toboggan(host, port) as tbg:
+        describe(tbg)
+
+        try:
+            drive(tbg)
+        except PermissionError as refused:
+            # Non-zero. Exiting 0 here would report success for a deck that
+            # never budged, which is precisely the habit these bindings were
+            # fixed to break.
+            raise SystemExit(f"watching only: {refused}") from None
+
+        for client in tbg.clients():
+            print(f"connected: {client.name} ({client.role}) from {client.ip_addr}")
+
+
+if __name__ == "__main__":
+    main()

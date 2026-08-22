@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
-use pyo3::exceptions::{PyConnectionError, PyPermissionError, PyRuntimeError};
+use pyo3::exceptions::{PyConnectionError, PyPermissionError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use toboggan_client::{
     CommunicationMessage, StatusCode, TobogganApi, TobogganApiError, TobogganConfig,
@@ -59,8 +59,15 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 #[pyclass]
 pub struct Toboggan {
     config: TobogganConfig,
-    rt: Runtime,
+    /// Declared *before* `rt`, because fields drop in declaration order and the
+    /// socket has to go first. `Runtime::drop` blocks until its threads are
+    /// done, and a `Toboggan` dropped by the garbage collector runs that with
+    /// the GIL held — freezing the interpreter for as long as the shutdown
+    /// takes, at the worst possible moment, with the reconnect loop still
+    /// running. [`Toboggan::close`] is the way to avoid finding out.
     _ws: WebSocketClient,
+    /// `Option` so `close` can take it and shut it down deliberately.
+    rt: Option<Runtime>,
     api: TobogganApi,
     talk: Arc<RwLock<TalkResponse>>,
     slides: Arc<RwLock<SlidesResponse>>,
@@ -81,6 +88,17 @@ pub struct Toboggan {
 }
 
 impl Toboggan {
+    /// The runtime, or the reason there no longer is one.
+    ///
+    /// Every call needs it, and after [`Toboggan::close`] none of them can
+    /// work — so say that plainly rather than panicking on an `Option` nobody
+    /// expected to be empty.
+    fn runtime(&self) -> PyResult<&Runtime> {
+        self.rt.as_ref().ok_or_else(|| {
+            PyRuntimeError::new_err("this client is closed; create a new Toboggan to reconnect")
+        })
+    }
+
     /// Refuses to answer from a cache known to disagree with the server.
     ///
     /// Set when a deck reload arrived and the refetch that should have followed
@@ -117,7 +135,7 @@ impl Toboggan {
         let api = self.api.clone();
         let state = Arc::clone(&self.state);
         let in_flight = Arc::clone(&self.in_flight);
-        let handle = self.rt.handle().clone();
+        let handle = self.runtime()?.handle().clone();
 
         // Detached: this is a network round trip, and a `block_on` that keeps
         // the GIL freezes every other Python thread for its whole duration.
@@ -130,14 +148,12 @@ impl Toboggan {
                     in_flight.fetch_add(1, Ordering::AcqRel);
                     let sent = api.command(command).await;
 
-                    if let Ok(notification) = &sent {
-                        match notification {
-                            Notification::State { state: applied }
-                            | Notification::TalkChange { state: applied } => {
-                                *state.write().await = applied.clone();
-                            }
-                            _ => {}
-                        }
+                    if let Ok(
+                        Notification::State { state: applied }
+                        | Notification::TalkChange { state: applied },
+                    ) = &sent
+                    {
+                        *state.write().await = applied.clone();
                     }
 
                     in_flight.fetch_sub(1, Ordering::AcqRel);
@@ -266,7 +282,7 @@ impl Toboggan {
         });
 
         Ok(Self {
-            rt,
+            rt: Some(rt),
             config,
             _ws: ws,
             api,
@@ -288,7 +304,7 @@ impl Toboggan {
     pub fn talk(&self) -> PyResult<Talk> {
         self.fresh()?;
         let talk = Arc::clone(&self.talk);
-        let talk = self.rt.block_on(async {
+        let talk = self.runtime()?.block_on(async {
             let guard = talk.read().await;
             TalkResponse::clone(&guard)
         });
@@ -304,7 +320,7 @@ impl Toboggan {
     pub fn slides(&self) -> PyResult<Slides> {
         self.fresh()?;
         let slides = Arc::clone(&self.slides);
-        let slides = self.rt.block_on(async {
+        let slides = self.runtime()?.block_on(async {
             let guard = slides.read().await;
             SlidesResponse::clone(&guard)
         });
@@ -323,12 +339,19 @@ impl Toboggan {
     pub fn state(&self) -> PyResult<State> {
         self.fresh()?;
         let state = Arc::clone(&self.state);
-        let state = self.rt.block_on(async {
-            let guard = state.read().await;
-            TState::clone(&guard)
+        let slides = Arc::clone(&self.slides);
+
+        // Both in one `block_on`, so `is_last_slide` is answered against the
+        // deck this state belongs to. Reading them from Python as two separate
+        // calls — which is what taking the count as an argument forced — left a
+        // deck reload free to land in between.
+        let (state, total_slides) = self.runtime()?.block_on(async {
+            let state = TState::clone(&*state.read().await);
+            let total_slides = slides.read().await.slides.len();
+            (state, total_slides)
         });
 
-        Ok(State(state))
+        Ok(State(state, total_slides))
     }
 
     /// The role the server granted this connection: `"presenter"`,
@@ -391,8 +414,17 @@ impl Toboggan {
     ///
     /// # Errors
     /// As [`Toboggan::next`]. A slide number the deck does not have is a
-    /// `RuntimeError` rather than a silent no-op.
+    /// `RuntimeError` rather than a silent no-op, and `0` is a `ValueError`.
     pub fn goto(&self, py: Python<'_>, slide: usize) -> PyResult<()> {
+        // `goto_command` does `saturating_sub(1)`, so `0` lands on slide 1
+        // instead of failing — which made the one number a caller carrying a
+        // 0-based index would actually pass the one number that moved the deck
+        // silently to the wrong place. Every *other* out-of-range value raises.
+        if slide == 0 {
+            return Err(PyValueError::new_err(
+                "slide numbers count from 1; 0 is not a slide",
+            ));
+        }
         self.drive(py, goto_command(slide))
     }
 
@@ -432,13 +464,42 @@ impl Toboggan {
     /// presenting, and `ConnectionError` if the server cannot be reached.
     pub fn clients(&self, py: Python<'_>) -> PyResult<Vec<ClientInfo>> {
         let api = self.api.clone();
-        let handle = self.rt.handle().clone();
+        let handle = self.runtime()?.handle().clone();
 
         let clients = py
             .detach(move || handle.block_on(async move { api.clients().await }))
             .map_err(|err| refused_or_unreachable(&err))?;
 
         Ok(clients.into_iter().map(ClientInfo).collect())
+    }
+
+    /// Disconnects and shuts the client's runtime down.
+    ///
+    /// Idempotent, and every other call raises `RuntimeError` afterwards.
+    ///
+    /// Worth calling rather than leaving to the garbage collector: dropping a
+    /// `Toboggan` runs `Runtime::drop`, which blocks until its worker threads
+    /// finish — and the collector runs that with the GIL held, so an
+    /// interpreter can sit frozen in a shutdown nobody asked for. Doing it here
+    /// releases the GIL first, which is the whole difference.
+    pub fn close(&mut self, py: Python<'_>) {
+        if let Some(rt) = self.rt.take() {
+            py.detach(|| drop(rt));
+        }
+    }
+
+    fn __enter__(this: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        this
+    }
+
+    /// Closes on the way out, however the block ended.
+    ///
+    /// Returns `false`, so an exception raised inside the `with` propagates —
+    /// closing the client is not a reason to swallow it.
+    #[pyo3(signature = (*_args))]
+    fn __exit__(&mut self, py: Python<'_>, _args: &Bound<'_, PyAny>) -> bool {
+        self.close(py);
+        false
     }
 
     pub fn __repr__(&self) -> String {
