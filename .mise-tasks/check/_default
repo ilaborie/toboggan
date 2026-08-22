@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Run comprehensive pre-push checks: Rust, web, and iOS"
+#MISE description="Run comprehensive pre-push checks: Rust, Python, web, and iOS"
 
 set -eu
 
@@ -8,6 +8,10 @@ echo "🚀 Running comprehensive checks for all platforms..."
 # Run Rust checks
 echo "==================== RUST CHECKS ===================="
 mise check:rust
+
+# Run Python binding checks
+echo "=================== PYTHON CHECKS ==================="
+mise check:py
 
 # Run web checks
 echo "==================== WEB CHECKS ====================="
@@ -20,6 +24,7 @@ mise check:ios
 echo ""
 echo "🎉 All platform checks completed successfully!"
 echo "✅ Rust: formatting, linting, unit tests, doctests"
+echo "✅ Python: formatting, linting, and the binding test suite"
 echo "✅ Web: Biome linting and formatting"
 echo "✅ iOS: SwiftLint analysis"
 echo ""

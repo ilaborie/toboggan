@@ -49,24 +49,51 @@ pub struct Slide(pub(crate) toboggan_core::Slide);
 
 #[pymethods]
 impl Slide {
+    /// Whether this is the `"Cover"`, a `"Part"` title, or a `"Standard"` slide.
     #[getter]
     fn kind(&self) -> String {
         format!("{:?}", self.0.kind)
     }
 
+    /// The slide's heading, as words rather than markup.
     #[getter]
-    fn title(&self) -> String {
-        self.0.title.to_string()
+    fn title(&self) -> &str {
+        self.0.title.display_text()
     }
 
+    /// Everything below the heading.
     #[getter]
-    fn body(&self) -> String {
-        self.0.body.to_string()
+    fn body(&self) -> &str {
+        self.0.body.display_text()
     }
 
+    /// Speaker notes — never shown on the projector.
     #[getter]
-    fn notes(&self) -> String {
-        self.0.notes.to_string()
+    fn notes(&self) -> &str {
+        self.0.notes.display_text()
+    }
+
+    /// Speaking time the author planned for this slide, in seconds, or None
+    /// where the front matter did not declare one.
+    #[getter]
+    fn duration(&self) -> Option<f64> {
+        self.0.duration.map(|duration| duration.as_secs_f64())
+    }
+
+    /// Render targets this slide is excluded from — `"web"`, `"pdf"`. Empty
+    /// means it is visible everywhere.
+    #[getter]
+    fn hidden_in(&self) -> Vec<String> {
+        // `RenderTarget` is `#[non_exhaustive]`, so a match would need a
+        // wildcard arm that names a target it cannot know. Lower-casing the
+        // variant is the spelling serde already uses on the wire and the one
+        // the front matter is written in, and it stays right when a target is
+        // added.
+        self.0
+            .hidden_in
+            .iter()
+            .map(|target| format!("{target:?}").to_lowercase())
+            .collect()
     }
 
     fn __repr__(&self) -> String {

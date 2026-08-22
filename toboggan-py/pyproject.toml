@@ -14,3 +14,14 @@ dynamic = ["version"]
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
+
+# Dev-only. The wheel itself has no dependencies — `requires-python` and the
+# abi3-py38 build govern what it installs into, not what building it needs.
+[dependency-groups]
+dev = ["maturin>=1.9,<2.0", "pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# `conftest.py` exports helpers the role tests import by name; without this the
+# tests directory is not on the path for them to do so.
+pythonpath = ["tests"]

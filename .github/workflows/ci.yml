@@ -1,4 +1,4 @@
-# Server-side gate for the repo's two Cargo workspaces.
+# Server-side gate for the repo's three Cargo workspaces.
 #
 # Why this exists: the repo's prek hooks are installed as *git* hooks
 # (.git/hooks/pre-commit, pre-push), but jj — the project's primary VCS — does
@@ -125,6 +125,73 @@ jobs:
       # No test step: the crate has no tests, and running any would need
       # wasm-bindgen-test-runner plus a headless browser. `--all-targets` above
       # still type-checks whatever test code gets added later.
+
+  # The Python bindings. `toboggan-py` is the repo's third Cargo workspace — it
+  # is in the root manifest's `exclude` list, so the `rust` job's `--all-targets`
+  # and `nextest run` never reach it, exactly as they do not reach the wasm
+  # crate. It went uncovered long enough for two real defects to ship: an
+  # unformatted `lib.rs`, and a `TobogganApi::clients()` that failed to
+  # deserialize on every call because the bindings are its only caller.
+  #
+  # Unlike the `wasm` job this one runs tests, because the interesting behaviour
+  # is in the round trip: a command has to have landed by the time the call
+  # returns. That needs a real server, so the job builds one.
+  python:
+    name: Python bindings (fmt + clippy + tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Same ordering rule as the `rust` job: nightly first so stable ends up
+      # the default toolchain, with every command pinning its own anyway.
+      - name: Install nightly rustfmt
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - name: Install Rust (stable + clippy)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Two roots: the crate itself, and the workspace that builds the
+          # server the tests run against.
+          workspaces: |
+            .
+            toboggan-py
+      - uses: astral-sh/setup-uv@v10.0.1
+
+      # `toboggan-server`'s build.rs needs this folder to exist. The Python
+      # tests never look at the web UI, so a stub is enough — building the real
+      # bundle would cost a wasm-pack and a pnpm install for nothing.
+      - name: Stub embedded web dist
+        run: |
+          mkdir -p toboggan-web/dist
+          for page in index.html presenter.html; do
+            printf '<!doctype html><title>ci stub</title>' > "toboggan-web/dist/$page"
+          done
+
+      - name: Build the server the tests drive
+        run: cargo build -p toboggan
+
+      - name: Format (nightly)
+        working-directory: toboggan-py
+        run: cargo +nightly fmt --all --check
+      - name: Clippy
+        working-directory: toboggan-py
+        run: cargo +stable clippy --all-targets -- -D warnings
+
+      # `--no-sync` on both: `uv sync` reuses a cached wheel rather than
+      # rebuilding changed Rust, and a bare `uv run` re-syncs first, which would
+      # put that stale wheel back over what `maturin develop` just built.
+      - name: Tests
+        working-directory: toboggan-py
+        env:
+          TOBOGGAN_BIN: ${{ github.workspace }}/target/debug/toboggan
+        run: |
+          uv sync --group dev
+          uv run --no-sync maturin develop --uv
+          uv run --no-sync pytest
 
   # Unused dependencies. `cargo machete` is a mise tool locally, but the repo's
   # prek hooks are git hooks and jj does not run them, so it never fired for the

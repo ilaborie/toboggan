@@ -36,7 +36,7 @@ comes before your first `cargo build`, and again whenever you change anything
 under `toboggan-web/`. The bundle is a gitignored build artifact; it is never
 committed.
 
-## Two Cargo workspaces
+## Three Cargo workspaces
 
 The embedded web client is a separate workspace, rooted at
 `toboggan-web/Cargo.toml` with `toboggan-wasm` as its only member. Neither
@@ -53,6 +53,22 @@ cargo clippy --all-targets --target wasm32-unknown-unknown -- -D warnings
 It is linted against `wasm32-unknown-unknown` because that is the only target it
 is ever built for; a host-target lint would be checking code the browser never
 runs. CI has a dedicated job for exactly this.
+
+`toboggan-py` is the third, and has the same blind spot for the same reason —
+it is a `cdylib` built by maturin, so it is in the root manifest's `exclude`
+list. It went uncovered long enough for two real defects to ship: a `lib.rs`
+`cargo fmt` had never seen, and a `TobogganApi::clients()` that failed to
+deserialize on *every* call, unnoticed because the bindings are its only caller.
+It now has its own mise lane and its own CI job:
+
+```bash
+mise check:py   # fmt + clippy + the test suite
+mise test:py    # just the tests
+```
+
+Its tests start a real server on a free port and drive it, so they need `uv`
+(declared in `.mise.toml`) and either a prebuilt `toboggan` in `TOBOGGAN_BIN` or
+a working `cargo run`. `mise check` runs this lane along with the others.
 
 ## Code guidelines
 

@@ -148,7 +148,10 @@ impl<H: NotificationHandler + 'static> TobogganClientCore<H> {
         state_tx: watch::Sender<Option<State>>,
         state_rx: watch::Receiver<Option<State>>,
     ) -> Self {
-        let api = TobogganApi::new(api_url);
+        // The socket and the REST half offer the same token: `/api/command`
+        // and `/api/clients` are gated the same way `/api/ws` commands are.
+        let api = TobogganApi::new(api_url)
+            .with_presenter_token(websocket_config.presenter_token.clone());
 
         Self {
             talk_tx,

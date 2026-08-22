@@ -11,6 +11,17 @@ Entries are grouped the way the commits are: this repository uses
 
 ### Added
 
+- **The Python bindings are under test, in `mise` and in CI.** `toboggan-py` is
+  the repository's third Cargo workspace, so the root `cargo` commands, `mise
+  check:rust` and every CI job all went straight past it — long enough for two
+  real defects to ship unnoticed. It now has `mise check:py` and `mise test:py`
+  (both run by the top-level `mise check` and `mise test`) and a CI job of its
+  own. The suite drives a real server on a free port: navigation must have
+  landed by the time the call returns, a refused command must raise, a network
+  call must not freeze other Python threads, and `toboggan_py.pyi` must still
+  describe the module that was actually built — which is the one check nothing
+  about a PyO3 build does for you.
+
 - **Mermaid diagrams in slides.** A ```` ```mermaid ```` fence is drawn to SVG while
   the deck builds — pure Rust, no Node and no headless browser — so the web
   client, the exported HTML, the PDF and the slide thumbnails all show the same
@@ -86,6 +97,21 @@ Entries are grouped the way the commits are: this repository uses
 
 ### Fixed
 
+- **The Python bindings' navigation is synchronous again.** `tbg.next()` pushed
+  its command onto a channel and returned, while the resulting state only
+  arrived a socket round trip later — so `tbg.next()` followed by `tbg.state`
+  read the position the deck was in *before* the call, every time. Commands now
+  travel over `POST /api/command`, which answers with the state it produced, so
+  the deck has moved by the time the call returns and `example.py` needs none of
+  the `sleep(1)` calls that were hiding this. A command the server refuses now
+  raises — `PermissionError` for an audience connection, `RuntimeError` for a
+  slide number the deck does not have — where before it did nothing at all and
+  reported success. The socket stays for the job only it can do: reporting moves
+  *other* clients made, and deck reloads.
+- **The Python bindings release the GIL across network calls.** Connecting,
+  waiting for registration and listing clients all blocked inside `block_on`
+  while holding the interpreter lock, freezing every other Python thread for the
+  duration — up to the five seconds registration is allowed to take.
 - **One backtick no longer breaks the whole PDF.** Inline code containing a
   backtick was emitted with a `CommonMark`-style longer delimiter, which Typst
   does not implement — the span ran away to the end of the document and `typst`
@@ -106,6 +132,12 @@ Entries are grouped the way the commits are: this repository uses
   exist** (`slide/too-many-words` → `content/excessive-words`).
 - **Three panics across the UniFFI boundary** — a malformed URL, a runtime
   failure and an empty deck — return errors instead of aborting the host app.
+- **The client library's REST half can reach the guarded endpoints.** Only the
+  socket carried the presenter token, so `TobogganApi`'s `/api/command` and
+  `/api/clients` were refused for every remote presenter however good their
+  token; and `clients()` asked for a bare array where the endpoint answers with
+  an object wrapping the list, so it failed to deserialize every response. The
+  Python binding is the only caller, which is why neither had been noticed.
 - **A silent RNG failure** no longer collapses reconnection jitter to zero,
   which had every client reconnecting in lockstep.
 - **The PDF download filename** no longer comes from a second, divergent
