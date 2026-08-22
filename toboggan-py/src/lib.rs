@@ -4,9 +4,8 @@ mod state;
 mod talk;
 mod toboggan;
 
-use pyo3::prelude::*;
-
 pub use client_info::ClientInfo;
+use pyo3::prelude::*;
 pub use slides::{Slide, Slides};
 pub use state::State;
 pub use talk::Talk;

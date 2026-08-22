@@ -1,17 +1,19 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use pyo3::{exceptions::PyConnectionError, prelude::*};
+use pyo3::exceptions::{PyConnectionError, PyPermissionError, PyRuntimeError};
+use pyo3::prelude::*;
+use toboggan_client::{
+    CommunicationMessage, TobogganApi, TobogganApiError, TobogganConfig, WebSocketClient,
+};
+use toboggan_core::{
+    ClientConfig, ClientRole, Command, Notification, Secret, SlidesResponse, State as TState,
+    TalkResponse, goto_command,
+};
 use tokio::runtime::Runtime;
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{self, UnboundedReceiver};
 use tokio::sync::{RwLock, watch};
 use tokio::try_join;
-
-use toboggan_client::{CommunicationMessage, TobogganApi, TobogganConfig, WebSocketClient};
-use toboggan_core::{
-    ClientConfig, ClientRole, Command, Secret, SlidesResponse, State as TState, TalkResponse,
-    goto_command,
-};
 
 use crate::client_info::role_name;
 use crate::{ClientInfo, Slides, State, Talk};
@@ -32,13 +34,17 @@ const PRESENTER_TOKEN_ENV: &str = "TOBOGGAN_PRESENTER_TOKEN";
 const REGISTRATION_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Toboggan presentation client.
+///
+/// Navigation is synchronous: when [`Toboggan::next`] and its siblings return,
+/// the server has applied the command and the [`Toboggan::state`] getter
+/// reports where the deck now is. The socket is still there, doing the job only
+/// it can do — reporting moves *other* clients made, and deck reloads.
 #[pyclass]
 pub struct Toboggan {
     config: TobogganConfig,
     rt: Runtime,
     _ws: WebSocketClient,
     api: TobogganApi,
-    tx: UnboundedSender<Command>,
     talk: Arc<RwLock<TalkResponse>>,
     slides: Arc<RwLock<SlidesResponse>>,
     state: Arc<RwLock<TState>>,
@@ -46,9 +52,42 @@ pub struct Toboggan {
 }
 
 impl Toboggan {
-    fn send(&self, command: Command) {
-        if let Err(err) = self.tx.send(command) {
-            eprintln!("🚨 Oops, fail to send: {err}");
+    /// Sends a command and returns once the server has applied it.
+    ///
+    /// `POST /api/command` answers with the state the command produced, so the
+    /// cache is right *before* this returns: the `state` getter can no longer
+    /// hand back the position the deck was in before the call. That is the
+    /// whole point — a command over the socket is a `send` with nothing to wait
+    /// on, and a Python caller had no way to know when it had landed.
+    ///
+    /// A third party moving the deck at the same moment can have its pushed
+    /// frame land either side of this write. The promise still holds — this
+    /// command *was* applied, and what is cached is the state it produced — and
+    /// the next frame settles any disagreement.
+    fn drive(&self, py: Python<'_>, command: Command) -> PyResult<()> {
+        let api = self.api.clone();
+        let state = Arc::clone(&self.state);
+        let handle = self.rt.handle().clone();
+
+        // Detached: this is a network round trip, and a `block_on` that keeps
+        // the GIL freezes every other Python thread for its whole duration.
+        let notification = py
+            .detach(move || {
+                handle.block_on(async move {
+                    let notification = api.command(command).await?;
+                    if let Notification::State { state: applied }
+                    | Notification::TalkChange { state: applied } = &notification
+                    {
+                        *state.write().await = applied.clone();
+                    }
+                    Ok::<_, TobogganApiError>(notification)
+                })
+            })
+            .map_err(|err| refused_or_unreachable(&err))?;
+
+        match notification {
+            Notification::Error { message } => Err(PyRuntimeError::new_err(message)),
+            _ => Ok(()),
         }
     }
 }
@@ -63,17 +102,22 @@ impl Toboggan {
     /// error: the deck is there, and `role` reports None until it arrives.
     #[new]
     #[pyo3(signature = (host = "localhost", port = 8080, presenter_token = None))]
-    pub fn __new__(host: &str, port: u16, presenter_token: Option<&str>) -> PyResult<Self> {
+    pub fn __new__(
+        py: Python<'_>,
+        host: &str,
+        port: u16,
+        presenter_token: Option<&str>,
+    ) -> PyResult<Self> {
         let token = resolve_token(presenter_token);
         let config = TobogganConfig::new(host, port).with_presenter_token(token.clone());
 
         // The token goes on both halves: the socket offers it in `Register`,
-        // and the REST side needs it for the guarded `/api/clients`.
+        // and the REST side needs it for `/api/command` and `/api/clients`.
         let api = TobogganApi::new(config.api_url()).with_presenter_token(token);
 
         let ws_config = config.websocket();
         let (tx, rx) = mpsc::unbounded_channel();
-        let (mut ws, rx_msg) = WebSocketClient::new(tx.clone(), rx, "Python", ws_config);
+        let (mut ws, rx_msg) = WebSocketClient::new(tx, rx, "Python", ws_config);
 
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
@@ -84,37 +128,43 @@ impl Toboggan {
         let slides = Arc::<RwLock<SlidesResponse>>::default();
         let (role_tx, mut role_rx) = watch::channel(None);
 
-        let (initial_talk, initial_slides) = rt
-            .block_on(async {
-                let _read_messages = tokio::spawn(handle_state(
-                    Arc::clone(&state),
-                    Arc::clone(&talk),
-                    Arc::clone(&slides),
-                    role_tx,
-                    api.clone(),
-                    rx_msg,
-                ));
-                ws.connect().await;
-                try_join!(api.talk(), api.slides())
+        // Detached for the same reason as `drive`: connecting and fetching the
+        // deck is network work, and the registration wait below can take
+        // seconds. Holding the GIL across either freezes the interpreter — a
+        // constructor is no better a place to do that than a method.
+        let (initial_talk, initial_slides) = py
+            .detach(|| {
+                rt.block_on(async {
+                    let _read_messages = tokio::spawn(handle_state(
+                        Arc::clone(&state),
+                        Arc::clone(&talk),
+                        Arc::clone(&slides),
+                        role_tx,
+                        api.clone(),
+                        rx_msg,
+                    ));
+                    ws.connect().await;
+                    try_join!(api.talk(), api.slides())
+                })
             })
             .map_err(|err| PyConnectionError::new_err(err.to_string()))?;
 
-        // Initialize talk and slides
-        rt.block_on(async {
-            *talk.write().await = initial_talk;
-            *slides.write().await = initial_slides;
-        });
+        py.detach(|| {
+            rt.block_on(async {
+                *talk.write().await = initial_talk;
+                *slides.write().await = initial_slides;
 
-        // A timeout here is not a failure: the deck was fetched, so the client
-        // is usable — it just does not know yet what it is allowed to do.
-        rt.block_on(async {
-            let registered = role_rx.wait_for(Option::is_some);
-            if tokio::time::timeout(REGISTRATION_TIMEOUT, registered)
-                .await
-                .is_err()
-            {
-                eprintln!("⏳ The server has not answered registration; role unknown for now");
-            }
+                // A timeout here is not a failure: the deck was fetched, so the
+                // client is usable — it just does not know yet what it is
+                // allowed to do.
+                let registered = role_rx.wait_for(Option::is_some);
+                if tokio::time::timeout(REGISTRATION_TIMEOUT, registered)
+                    .await
+                    .is_err()
+                {
+                    eprintln!("⏳ The server has not answered registration; role unknown for now");
+                }
+            });
         });
 
         Ok(Self {
@@ -122,7 +172,6 @@ impl Toboggan {
             config,
             _ws: ws,
             api,
-            tx,
             talk,
             slides,
             state,
@@ -152,7 +201,10 @@ impl Toboggan {
         Slides(slides)
     }
 
-    /// Gets the current presentation state.
+    /// Where the deck is now.
+    ///
+    /// Trustworthy immediately after a navigation call: those return only once
+    /// the server has applied the command and this cache holds its answer.
     #[getter]
     pub fn state(&self) -> State {
         let state = Arc::clone(&self.state);
@@ -176,50 +228,82 @@ impl Toboggan {
     /// Whether this client may drive the deck.
     ///
     /// False for a connection from another machine that offered no presenter
-    /// token: the navigation methods below are then refused by the server.
+    /// token: the navigation methods below then raise `PermissionError`.
     #[getter]
     pub fn is_presenter(&self) -> bool {
         (*self.role.borrow()).is_some_and(ClientRole::is_presenter)
     }
 
-    /// Navigates to the previous slide.
-    pub fn previous(&self) {
-        self.send(Command::PreviousSlide);
+    /// Navigates to the next slide, skipping any reveals left on this one.
+    ///
+    /// Returns once the server has applied the move, so reading `state`
+    /// straight afterwards reports the slide this call landed on.
+    ///
+    /// # Errors
+    /// Raises `PermissionError` if this client is watching rather than
+    /// presenting, `RuntimeError` if the server rejects the command — an
+    /// out-of-range `goto`, a deck with no slides — and `ConnectionError` if
+    /// the server cannot be reached.
+    pub fn next(&self, py: Python<'_>) -> PyResult<()> {
+        self.drive(py, Command::NextSlide)
     }
 
-    /// Navigates to the next slide.
-    pub fn next(&self) {
-        self.send(Command::NextSlide);
+    /// Navigates to the previous slide.
+    ///
+    /// # Errors
+    /// As [`Toboggan::next`].
+    pub fn previous(&self, py: Python<'_>) -> PyResult<()> {
+        self.drive(py, Command::PreviousSlide)
     }
 
     /// Navigate to the first slide.
-    pub fn first(&self) {
-        self.send(Command::First);
+    ///
+    /// # Errors
+    /// As [`Toboggan::next`].
+    pub fn first(&self, py: Python<'_>) -> PyResult<()> {
+        self.drive(py, Command::First)
     }
 
     /// Navigate to the last slide.
-    pub fn last(&self) {
-        self.send(Command::Last);
+    ///
+    /// # Errors
+    /// As [`Toboggan::next`].
+    pub fn last(&self, py: Python<'_>) -> PyResult<()> {
+        self.drive(py, Command::Last)
     }
 
     /// Navigate to a specific slide (1-indexed).
-    pub fn goto(&self, slide: usize) {
-        self.send(goto_command(slide));
+    ///
+    /// # Errors
+    /// As [`Toboggan::next`]. A slide number the deck does not have is a
+    /// `RuntimeError` rather than a silent no-op.
+    pub fn goto(&self, py: Python<'_>, slide: usize) -> PyResult<()> {
+        self.drive(py, goto_command(slide))
     }
 
     /// Move to the next step within the current slide.
-    pub fn next_step(&self) {
-        self.send(Command::NextStep);
+    ///
+    /// # Errors
+    /// As [`Toboggan::next`].
+    pub fn next_step(&self, py: Python<'_>) -> PyResult<()> {
+        self.drive(py, Command::NextStep)
     }
 
     /// Move to the previous step within the current slide.
-    pub fn previous_step(&self) {
-        self.send(Command::PreviousStep);
+    ///
+    /// # Errors
+    /// As [`Toboggan::next`].
+    pub fn previous_step(&self, py: Python<'_>) -> PyResult<()> {
+        self.drive(py, Command::PreviousStep)
     }
 
     /// Trigger a visual blink effect.
-    pub fn blink(&self) {
-        self.send(Command::Blink);
+    ///
+    /// # Errors
+    /// As [`Toboggan::next`]. A blink moves nothing, so it leaves `state`
+    /// alone.
+    pub fn blink(&self, py: Python<'_>) -> PyResult<()> {
+        self.drive(py, Command::Blink)
     }
 
     /// Get list of connected clients.
@@ -229,12 +313,16 @@ impl Toboggan {
     /// list.
     ///
     /// # Errors
-    /// Raises `ConnectionError` if the server cannot be reached, or if it
-    /// refuses the request because this client is not a presenter.
-    pub fn clients(&self) -> PyResult<Vec<ClientInfo>> {
-        let clients = self.rt.block_on(self.api.clients()).map_err(|err| {
-            PyConnectionError::new_err(format!("{err} (/api/clients is presenter-only)"))
-        })?;
+    /// Raises `PermissionError` if this client is watching rather than
+    /// presenting, and `ConnectionError` if the server cannot be reached.
+    pub fn clients(&self, py: Python<'_>) -> PyResult<Vec<ClientInfo>> {
+        let api = self.api.clone();
+        let handle = self.rt.handle().clone();
+
+        let clients = py
+            .detach(move || handle.block_on(async move { api.clients().await }))
+            .map_err(|err| refused_or_unreachable(&err))?;
+
         Ok(clients.into_iter().map(ClientInfo).collect())
     }
 
@@ -245,6 +333,23 @@ impl Toboggan {
     pub fn __str__(&self) -> String {
         format!("Toboggan({})", self.config.api_url())
     }
+}
+
+/// A failed request, as the Python exception that fits it.
+///
+/// A `403` is not a connection problem: the server understood perfectly and
+/// said no, because this client is watching rather than presenting. Reporting
+/// that as `ConnectionError` would send a reader hunting for a network fault
+/// that is not there.
+fn refused_or_unreachable(err: &TobogganApiError) -> PyErr {
+    let TobogganApiError::ReqwestError(reqwest_error) = err;
+    if reqwest_error.status().is_some_and(|status| status == 403) {
+        return PyPermissionError::new_err(
+            "This client is watching, not presenting. Connect from the machine \
+             running the server, or pass a presenter token.",
+        );
+    }
+    PyConnectionError::new_err(err.to_string())
 }
 
 /// The token to offer at registration, from the argument or the environment.
@@ -311,6 +416,9 @@ async fn handle_state(
                 }
             }
             CommunicationMessage::Error { error } => {
+                // Only ever *other* clients' errors now: this client's commands
+                // travel over `/api/command`, which answers the caller, so its
+                // own failures are raised in Python rather than printed here.
                 eprintln!("🚨 Oops: {error}");
             }
             CommunicationMessage::Registered {

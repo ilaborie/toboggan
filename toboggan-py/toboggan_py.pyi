@@ -282,12 +282,18 @@ class Toboggan:
     The client automatically maintains a persistent connection to the server
     and synchronizes state changes across all connected clients in real-time.
 
+    Navigation is synchronous: `next()` and its siblings return only once the
+    server has applied the command, so reading `state` straight afterwards
+    reports where the deck now is. No sleep, no polling. The socket stays for
+    the job only it can do — reporting moves *other* clients made, and deck
+    reloads.
+
     Roles:
         A client never claims a role — it offers a presenter token and the
         server decides. A connection from the machine running the server
         presents; a connection from anywhere else presents only if it carries
-        the token. Check `is_presenter` before relying on navigation: an
-        audience client's commands are refused by the server.
+        the token. An audience client's navigation raises `PermissionError`
+        rather than quietly doing nothing; `is_presenter` says so in advance.
 
     Example:
         ```python
@@ -300,12 +306,12 @@ class Toboggan:
         print(client.talk)
         print(client.slides)
 
-        # Navigate slides
+        # Navigate slides — each returns once the deck has moved
         client.next()
         client.previous()
         client.goto(12)
 
-        # Check current state
+        # Correct immediately: no sleep needed
         print(client.state)
         ```
     """
@@ -363,6 +369,10 @@ class Toboggan:
 
         This property reflects the state synchronized across all connected
         clients. Changes made by any client will be reflected here.
+
+        Trustworthy immediately after a navigation call: those return only
+        once the server has applied the command and this cache holds its
+        answer.
         """
         ...
 
@@ -388,25 +398,47 @@ class Toboggan:
     def previous(self) -> None:
         """Navigates to the previous slide.
 
-        Sends a command to move backward in the presentation.
-        This change will be synchronized across all connected clients.
+        Returns once the server has applied the move, so reading `state`
+        straight afterwards reports where the deck now is.
+
+        Raises:
+            PermissionError: If this client is watching rather than presenting.
+            RuntimeError: If the server rejects the command.
+            ConnectionError: If the server cannot be reached.
         """
         ...
 
     def next(self) -> None:
         """Navigates to the next slide, skipping any reveals left on this one.
 
-        Sends a command to move forward in the presentation.
-        This change will be synchronized across all connected clients.
+        Returns once the server has applied the move, so reading `state`
+        straight afterwards reports the slide this call landed on.
+
+        Raises:
+            PermissionError: If this client is watching rather than presenting.
+            RuntimeError: If the server rejects the command.
+            ConnectionError: If the server cannot be reached.
         """
         ...
 
     def first(self) -> None:
-        """Navigates to the first slide."""
+        """Navigates to the first slide.
+
+        Raises:
+            PermissionError: If this client is watching rather than presenting.
+            RuntimeError: If the server rejects the command.
+            ConnectionError: If the server cannot be reached.
+        """
         ...
 
     def last(self) -> None:
-        """Navigates to the last slide."""
+        """Navigates to the last slide.
+
+        Raises:
+            PermissionError: If this client is watching rather than presenting.
+            RuntimeError: If the server rejects the command.
+            ConnectionError: If the server cannot be reached.
+        """
         ...
 
     def goto(self, slide: int) -> None:
@@ -414,6 +446,12 @@ class Toboggan:
 
         Args:
             slide: The slide number as printed on the slide, counting from 1.
+
+        Raises:
+            PermissionError: If this client is watching rather than presenting.
+            RuntimeError: If the deck has no such slide. A number out of range
+                is an error rather than a silent no-op.
+            ConnectionError: If the server cannot be reached.
         """
         ...
 
@@ -421,15 +459,34 @@ class Toboggan:
         """Reveals the next step, moving to the next slide once this one runs out.
 
         This is what a presenter remote and the space bar send.
+
+        Raises:
+            PermissionError: If this client is watching rather than presenting.
+            RuntimeError: If the server rejects the command.
+            ConnectionError: If the server cannot be reached.
         """
         ...
 
     def previous_step(self) -> None:
-        """Goes back one step, moving to the previous slide once this one runs out."""
+        """Goes back one step, moving to the previous slide once this one runs out.
+
+        Raises:
+            PermissionError: If this client is watching rather than presenting.
+            RuntimeError: If the server rejects the command.
+            ConnectionError: If the server cannot be reached.
+        """
         ...
 
     def blink(self) -> None:
-        """Flashes every other client, to get the room's attention."""
+        """Flashes every other client, to get the room's attention.
+
+        A blink moves nothing, so it leaves `state` alone.
+
+        Raises:
+            PermissionError: If this client is watching rather than presenting.
+            RuntimeError: If the server rejects the command.
+            ConnectionError: If the server cannot be reached.
+        """
         ...
 
     def clients(self) -> List[ClientInfo]:
@@ -439,8 +496,8 @@ class Toboggan:
         addresses — so an audience client cannot enumerate the room.
 
         Raises:
-            ConnectionError: If the server cannot be reached, or if it refuses
-                the request because this client is not a presenter.
+            PermissionError: If this client is watching rather than presenting.
+            ConnectionError: If the server cannot be reached.
         """
         ...
 

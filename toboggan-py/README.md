@@ -43,7 +43,13 @@ print(f"Talk: {client.talk}, Slides: {len(client.slides)}, State: {client.state}
 client.next()      # Navigate to next slide
 client.previous()  # Navigate to previous slide
 client.goto(12)    # Jump to the slide numbered 12
+
+print(client.state)  # correct straight away — no sleep needed
 ```
+
+Navigation is synchronous: a call returns once the server has applied it, so
+the `state` you read next is the state that call produced. A command the server
+refuses raises rather than quietly doing nothing.
 
 ## Presenter and audience
 
@@ -54,8 +60,12 @@ connection from anywhere else presents only if it carries the token:
 ```python
 client = Toboggan("192.168.1.20", 8080, presenter_token="s3cret")
 if not client.is_presenter:
-    print(f"watching only ({client.role}) — the server refuses navigation")
+    print(f"watching only ({client.role}) — navigation would raise")
 ```
+
+Navigating without the right to do so raises `PermissionError`, so a script
+that assumed it was presenting stops where it went wrong rather than reporting
+success over a deck that never moved.
 
 `presenter_token` falls back to the `TOBOGGAN_PRESENTER_TOKEN` environment
 variable, which is where `toboggan tui` and `toboggan desktop` read theirs. See
@@ -79,7 +89,10 @@ iteration, and each `Slide` has `kind`, `title`, `body`, `notes`, `duration` and
 `slide` and `step`, and `is_first_slide(total)` / `is_last_slide(total)`.
 
 `clients()` is presenter-only on the server — it reports names, roles and IP
-addresses — and raises `ConnectionError` otherwise.
+addresses — and raises `PermissionError` otherwise. Every navigation method
+raises the same on an audience connection, `RuntimeError` when the server
+rejects the command (an out-of-range `goto`, a deck with no slides), and
+`ConnectionError` when the server cannot be reached.
 
 Type stubs in `toboggan_py.pyi` provide full IDE support and type checking.
 
@@ -87,16 +100,21 @@ Type stubs in `toboggan_py.pyi` provide full IDE support and type checking.
 
 ```bash
 cargo fmt && cargo clippy              # Format and lint
-maturin develop && python example.py   # Build and test
+maturin develop                        # Build and install
+python example.py localhost 8097       # Drive a scratch server
 maturin build --release                # Build release wheel
 ```
+
+This crate is excluded from the cargo workspace, so `mise check` at the
+repository root does not reach it — run `cargo clippy` from *this* directory.
 
 ## Troubleshooting
 
 - **Connection fails:** Ensure server is running. Check
   `http://localhost:8080/health`
-- **Navigation does nothing:** check `client.is_presenter`. Across the network,
-  an audience client's commands are refused by design.
+- **Navigation raises `PermissionError`:** check `client.is_presenter`. Across
+  the network, an audience client's commands are refused by design — pass a
+  presenter token.
 - **Build fails:** Verify Rust is installed: `rustc --version` (update with
   `rustup update`)
 - **Import error:** Rebuild with `maturin develop` after code changes

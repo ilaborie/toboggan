@@ -86,6 +86,21 @@ Entries are grouped the way the commits are: this repository uses
 
 ### Fixed
 
+- **The Python bindings' navigation is synchronous again.** `tbg.next()` pushed
+  its command onto a channel and returned, while the resulting state only
+  arrived a socket round trip later — so `tbg.next()` followed by `tbg.state`
+  read the position the deck was in *before* the call, every time. Commands now
+  travel over `POST /api/command`, which answers with the state it produced, so
+  the deck has moved by the time the call returns and `example.py` needs none of
+  the `sleep(1)` calls that were hiding this. A command the server refuses now
+  raises — `PermissionError` for an audience connection, `RuntimeError` for a
+  slide number the deck does not have — where before it did nothing at all and
+  reported success. The socket stays for the job only it can do: reporting moves
+  *other* clients made, and deck reloads.
+- **The Python bindings release the GIL across network calls.** Connecting,
+  waiting for registration and listing clients all blocked inside `block_on`
+  while holding the interpreter lock, freezing every other Python thread for the
+  duration — up to the five seconds registration is allowed to take.
 - **One backtick no longer breaks the whole PDF.** Inline code containing a
   backtick was emitted with a `CommonMark`-style longer delimiter, which Typst
   does not implement — the span ran away to the end of the document and `typst`
