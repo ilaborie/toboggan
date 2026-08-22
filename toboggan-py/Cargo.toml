@@ -3,7 +3,7 @@ name = "toboggan-py"
 version = "0.1.0"
 description = "Python bindings for Toboggan presentations using PyO3"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.95"
 license = "MIT OR Apache-2.0"
 authors = ["Igor Laborie <ilaborie@gmail.com>"]
 repository = "https://github.com/ilaborie/toboggan"
@@ -19,4 +19,26 @@ toboggan-core = { path = "../toboggan-core", default-features = false, features 
 toboggan-client = { path = "../toboggan-client" }
 
 pyo3 = { version = "0.29.0", features = ["abi3-py38"] }
-tokio = { version = "1.51.0", features = ["rt-multi-thread", "sync", "macros"] }
+tokio = { version = "1.53.0", features = [
+  "rt-multi-thread",
+  "sync",
+  "macros",
+  "time",
+] }
+
+# Spelled out rather than inherited: this crate is excluded from the workspace
+# (it is a cdylib built by maturin), so `workspace = true` is not available to
+# it. Kept in step with the workspace's own table by hand.
+[lints.rust]
+unsafe_code = "deny"
+elided_lifetimes_in_paths = "warn"
+trivial_numeric_casts = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+unused_qualifications = "warn"
+unreachable_pub = "warn"
+missing_docs = "allow"
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }

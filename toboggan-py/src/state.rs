@@ -46,40 +46,26 @@ impl State {
     /// The current slide number (1-indexed), or None if not started.
     #[getter]
     fn slide(&self) -> Option<usize> {
-        match &self.0 {
-            TState::Init => None,
-            TState::Running { current, .. } | TState::Done { current, .. } => {
-                Some(current.index() + 1)
-            }
-        }
+        self.0.current().map(|current| current.index() + 1)
     }
 
     /// The current step within the slide, or None if not started.
     #[getter]
     fn step(&self) -> Option<usize> {
-        match &self.0 {
-            TState::Init => None,
-            TState::Running { current_step, .. } | TState::Done { current_step, .. } => {
-                Some(*current_step)
-            }
-        }
+        self.0.current().map(|_| self.0.current_step())
     }
 
-    /// Check if currently on the first slide.
-    pub fn is_first_slide(&self) -> bool {
-        match &self.0 {
-            TState::Init => false,
-            TState::Running { current, .. } | TState::Done { current, .. } => current.index() == 0,
-        }
+    /// Whether the deck is on its first slide.
+    ///
+    /// Takes the deck's slide count, like its counterpart: an empty deck is on
+    /// neither its first nor its last slide, and that is decided once, in
+    /// `toboggan-core`, rather than again here.
+    fn is_first_slide(&self, total_slides: usize) -> bool {
+        self.0.is_first_slide(total_slides)
     }
 
-    /// Check if currently on the last slide (requires total slide count).
-    pub fn is_last_slide(&self, total_slides: usize) -> bool {
-        match &self.0 {
-            TState::Init => false,
-            TState::Running { current, .. } | TState::Done { current, .. } => {
-                current.index() + 1 >= total_slides
-            }
-        }
+    /// Whether the deck is on its last slide.
+    fn is_last_slide(&self, total_slides: usize) -> bool {
+        self.0.is_last_slide(total_slides)
     }
 }

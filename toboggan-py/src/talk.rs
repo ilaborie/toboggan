@@ -41,6 +41,12 @@ impl Talk {
         self.0.footer.as_deref()
     }
 
+    /// The deck's BCP 47 language tag, or None when it did not declare one.
+    #[getter]
+    fn lang(&self) -> Option<&str> {
+        self.0.lang.as_deref()
+    }
+
     /// The slide titles.
     #[getter]
     fn titles(&self) -> Vec<String> {
@@ -51,6 +57,17 @@ impl Talk {
     #[getter]
     fn step_counts(&self) -> Vec<usize> {
         self.0.step_counts.clone()
+    }
+
+    /// Planned speaking time per slide, in seconds, from each slide's
+    /// `duration` front matter. None where the author did not say.
+    ///
+    /// Either empty, or exactly as long as `titles` and read against it by
+    /// index — which is the whole plan a presenter view needs to work out
+    /// whether the talk is running early or late.
+    #[getter]
+    fn durations(&self) -> Vec<Option<u64>> {
+        self.0.durations.clone()
     }
 
     /// Optional HTML head content.

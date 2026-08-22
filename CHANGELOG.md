@@ -106,6 +106,12 @@ Entries are grouped the way the commits are: this repository uses
   exist** (`slide/too-many-words` → `content/excessive-words`).
 - **Three panics across the UniFFI boundary** — a malformed URL, a runtime
   failure and an empty deck — return errors instead of aborting the host app.
+- **The client library's REST half can reach the guarded endpoints.** Only the
+  socket carried the presenter token, so `TobogganApi`'s `/api/command` and
+  `/api/clients` were refused for every remote presenter however good their
+  token; and `clients()` asked for a bare array where the endpoint answers with
+  an object wrapping the list, so it failed to deserialize every response. The
+  Python binding is the only caller, which is why neither had been noticed.
 - **A silent RNG failure** no longer collapses reconnection jitter to zero,
   which had every client reconnecting in lockstep.
 - **The PDF download filename** no longer comes from a second, divergent
