@@ -14,6 +14,17 @@ pub use toboggan::Toboggan;
 /// Toboggan for Python
 #[pymodule]
 fn toboggan_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // The bindings and `toboggan-client` beneath them report over `tracing`,
+    // which reaches `log`, which this hands to Python's own `logging`. An
+    // importable extension module has no business writing to stdout: a caller
+    // piping their script into `jq` should not have to filter our chatter out
+    // of their data, and a caller who wants the chatter should be able to ask
+    // for it with `logging.basicConfig(level=...)` like anything else.
+    //
+    // Ignored on a second import: re-initialising is not a reason to fail to
+    // load the module.
+    let _already_initialised = pyo3_log::try_init();
+
     m.add_class::<Talk>()?;
     m.add_class::<Slides>()?;
     m.add_class::<Slide>()?;

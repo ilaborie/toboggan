@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
 use pyo3::exceptions::{PyConnectionError, PyPermissionError, PyRuntimeError};
@@ -15,7 +16,7 @@ use tokio::runtime::Runtime;
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 use tokio::sync::{RwLock, watch};
 use tokio::try_join;
-use tracing::warn;
+use tracing::{debug, error, info, warn};
 
 use crate::client_info::role_name;
 use crate::{ClientInfo, Slides, State, Talk};
@@ -64,10 +65,42 @@ pub struct Toboggan {
     talk: Arc<RwLock<TalkResponse>>,
     slides: Arc<RwLock<SlidesResponse>>,
     state: Arc<RwLock<TState>>,
+    /// Set when a deck reload arrived and the new deck could not be fetched.
+    ///
+    /// The caches then hold the last snapshot that agreed with itself, which is
+    /// no longer what the server is serving. Reported rather than papered over:
+    /// silently handing back a slide from a deck that has been replaced is the
+    /// kind of wrong answer nobody traces back here.
+    deck_stale: Arc<AtomicBool>,
+    /// How many commands are waiting on `/api/command` right now.
+    ///
+    /// Read by the listener to tell this client's own echo from a third party's
+    /// move. See the `StateChange` arm in [`handle_state`].
+    in_flight: Arc<AtomicUsize>,
     role: watch::Receiver<Option<ClientRole>>,
 }
 
 impl Toboggan {
+    /// Refuses to answer from a cache known to disagree with the server.
+    ///
+    /// Set when a deck reload arrived and the refetch that should have followed
+    /// it failed. What is cached is then the *previous* deck — coherent with
+    /// itself, and no longer what anyone is presenting. Handing it over would
+    /// answer questions about a deck that has been replaced, which is a wrong
+    /// answer wearing the shape of a right one.
+    ///
+    /// Clears itself: the next successful reload puts the caches back in step.
+    fn fresh(&self) -> PyResult<()> {
+        if self.deck_stale.load(Ordering::Acquire) {
+            return Err(PyRuntimeError::new_err(
+                "the deck was reloaded but could not be refetched, so what is \
+                 cached here is the deck as it was before. Retry once the \
+                 server is reachable again.",
+            ));
+        }
+        Ok(())
+    }
+
     /// Sends a command and returns once the server has applied it.
     ///
     /// `POST /api/command` answers with the state the command produced, so the
@@ -83,6 +116,7 @@ impl Toboggan {
     fn drive(&self, py: Python<'_>, command: Command) -> PyResult<()> {
         let api = self.api.clone();
         let state = Arc::clone(&self.state);
+        let in_flight = Arc::clone(&self.in_flight);
         let handle = self.rt.handle().clone();
 
         // Detached: this is a network round trip, and a `block_on` that keeps
@@ -90,13 +124,24 @@ impl Toboggan {
         let notification = py
             .detach(move || {
                 handle.block_on(async move {
-                    let notification = api.command(command).await?;
-                    if let Notification::State { state: applied }
-                    | Notification::TalkChange { state: applied } = &notification
-                    {
-                        *state.write().await = applied.clone();
+                    // Raised before the request and lowered only after the
+                    // cache is written, so the listener can recognise this
+                    // command's own echo for as long as it might arrive.
+                    in_flight.fetch_add(1, Ordering::AcqRel);
+                    let sent = api.command(command).await;
+
+                    if let Ok(notification) = &sent {
+                        match notification {
+                            Notification::State { state: applied }
+                            | Notification::TalkChange { state: applied } => {
+                                *state.write().await = applied.clone();
+                            }
+                            _ => {}
+                        }
                     }
-                    Ok::<_, TobogganApiError>(notification)
+
+                    in_flight.fetch_sub(1, Ordering::AcqRel);
+                    sent
                 })
             })
             .map_err(|err| refused_or_unreachable(&err))?;
@@ -151,6 +196,8 @@ impl Toboggan {
         let state = Arc::<RwLock<TState>>::default();
         let talk = Arc::<RwLock<TalkResponse>>::default();
         let slides = Arc::<RwLock<SlidesResponse>>::default();
+        let deck_stale = Arc::<AtomicBool>::default();
+        let in_flight = Arc::<AtomicUsize>::default();
         let (role_tx, mut role_rx) = watch::channel(None);
 
         // Detached for the same reason as `drive`: connecting and fetching the
@@ -161,9 +208,13 @@ impl Toboggan {
             .detach(|| {
                 rt.block_on(async {
                     let _read_messages = tokio::spawn(handle_state(
-                        Arc::clone(&state),
-                        Arc::clone(&talk),
-                        Arc::clone(&slides),
+                        Caches {
+                            state: Arc::clone(&state),
+                            talk: Arc::clone(&talk),
+                            slides: Arc::clone(&slides),
+                            deck_stale: Arc::clone(&deck_stale),
+                            in_flight: Arc::clone(&in_flight),
+                        },
                         role_tx,
                         api.clone(),
                         rx_msg,
@@ -206,7 +257,10 @@ impl Toboggan {
                     .await
                     .is_err()
                 {
-                    eprintln!("⏳ The server has not answered registration; role unknown for now");
+                    warn!(
+                        seconds = REGISTRATION_TIMEOUT.as_secs(),
+                        "the server has not answered registration; role unknown for now"
+                    );
                 }
             });
         });
@@ -219,45 +273,62 @@ impl Toboggan {
             talk,
             slides,
             state,
+            deck_stale,
+            in_flight,
             role: role_rx,
         })
     }
 
     /// Gets the presentation metadata.
+    ///
+    /// # Errors
+    /// Raises `RuntimeError` if the deck was reloaded and could not be
+    /// refetched; see [`Toboggan::fresh`].
     #[getter]
-    pub fn talk(&self) -> Talk {
+    pub fn talk(&self) -> PyResult<Talk> {
+        self.fresh()?;
         let talk = Arc::clone(&self.talk);
         let talk = self.rt.block_on(async {
             let guard = talk.read().await;
             TalkResponse::clone(&guard)
         });
-        Talk(talk)
+        Ok(Talk(talk))
     }
 
     /// Gets all slides in the presentation.
+    ///
+    /// # Errors
+    /// Raises `RuntimeError` if the deck was reloaded and could not be
+    /// refetched; see [`Toboggan::fresh`].
     #[getter]
-    pub fn slides(&self) -> Slides {
+    pub fn slides(&self) -> PyResult<Slides> {
+        self.fresh()?;
         let slides = Arc::clone(&self.slides);
         let slides = self.rt.block_on(async {
             let guard = slides.read().await;
             SlidesResponse::clone(&guard)
         });
-        Slides(slides)
+        Ok(Slides(slides))
     }
 
     /// Where the deck is now.
     ///
     /// Trustworthy immediately after a navigation call: those return only once
     /// the server has applied the command and this cache holds its answer.
+    ///
+    /// # Errors
+    /// Raises `RuntimeError` if the deck was reloaded and could not be
+    /// refetched; see [`Toboggan::fresh`].
     #[getter]
-    pub fn state(&self) -> State {
+    pub fn state(&self) -> PyResult<State> {
+        self.fresh()?;
         let state = Arc::clone(&self.state);
         let state = self.rt.block_on(async {
             let guard = state.read().await;
             TState::clone(&guard)
         });
 
-        State(state)
+        Ok(State(state))
     }
 
     /// The role the server granted this connection: `"presenter"`,
@@ -429,60 +500,91 @@ fn resolve_token(presenter_token: Option<&str>) -> Option<Secret> {
     }
 }
 
-async fn handle_state(
+/// Everything the background listener writes to, in one place.
+///
+/// A struct rather than seven arguments because they are one thing: the caches
+/// this client serves its getters from, and the two flags that say whether they
+/// can be trusted.
+struct Caches {
     state: Arc<RwLock<TState>>,
     talk: Arc<RwLock<TalkResponse>>,
     slides: Arc<RwLock<SlidesResponse>>,
+    deck_stale: Arc<AtomicBool>,
+    in_flight: Arc<AtomicUsize>,
+}
+
+async fn handle_state(
+    caches: Caches,
     role: watch::Sender<Option<ClientRole>>,
     api: TobogganApi,
     mut rx: UnboundedReceiver<CommunicationMessage>,
 ) {
-    println!(">>> Start listening incoming messages");
+    debug!("listening for pushed messages");
+
     while let Some(msg) = rx.recv().await {
         match msg {
             CommunicationMessage::ConnectionStatusChange { status } => {
-                println!("📡 {status}");
+                debug!(%status, "connection status changed");
             }
-            CommunicationMessage::StateChange { state: new_state } => {
-                let mut st = state.write().await;
-                *st = new_state;
-            }
-            CommunicationMessage::TalkChange { state: new_state } => {
-                println!("📝 Presentation updated - refetching talk and slides");
 
-                // Refetch talk and slides from server
+            CommunicationMessage::StateChange { state: new_state } => {
+                // The server broadcasts before it answers the caller, and does
+                // not exclude the sender — so this frame may be the echo of a
+                // command `drive` is still waiting on. Applying it then would
+                // race `drive`'s own write and could put the cache *back* to
+                // where the deck was before the call, which is precisely the
+                // staleness synchronous navigation exists to rule out.
+                //
+                // This narrows the window rather than closing it: the server
+                // sends no sequence number, so an echo delayed past a whole
+                // REST round trip can still arrive after the command that
+                // followed it. Closing it properly needs ordering the server
+                // does not currently provide.
+                if caches.in_flight.load(Ordering::Acquire) > 0 {
+                    debug!("ignoring a frame that arrived while a command was in flight");
+                    continue;
+                }
+                *caches.state.write().await = new_state;
+            }
+
+            CommunicationMessage::TalkChange { state: new_state } => {
+                info!("the deck changed; refetching it");
+
                 match try_join!(api.talk(), api.slides()) {
                     Ok((new_talk, new_slides)) => {
-                        // Update talk and slides atomically
-                        {
-                            let mut talk_guard = talk.write().await;
-                            *talk_guard = new_talk;
-                        }
-                        {
-                            let mut slides_guard = slides.write().await;
-                            *slides_guard = new_slides;
-                        }
-                        // Update state after data is refreshed
-                        {
-                            let mut st = state.write().await;
-                            *st = new_state;
-                        }
-                        println!("✅ Talk and slides updated successfully");
+                        // Three separate locks, so a getter can still catch the
+                        // new talk against the old slides. Deliberately not
+                        // called atomic — it is not.
+                        *caches.talk.write().await = new_talk;
+                        *caches.slides.write().await = new_slides;
+                        *caches.state.write().await = new_state;
+                        caches.deck_stale.store(false, Ordering::Release);
+                        info!("the deck is up to date");
                     }
                     Err(err) => {
-                        eprintln!("🚨 Failed to refetch talk and slides: {err}");
-                        // Still update state even if refetch failed
-                        let mut st = state.write().await;
-                        *st = new_state;
+                        // The new state indexes into the *new* deck, and the
+                        // new deck is what we just failed to fetch. Committing
+                        // it against the old `talk`/`slides` would leave the
+                        // caches quietly disagreeing with each other —
+                        // `state.slide` pointing into a deck that no longer
+                        // exists, which reads much later as "toboggan sometimes
+                        // reports the wrong slide title" with no thread to pull.
+                        //
+                        // So: keep the last coherent snapshot, and mark it
+                        // untrustworthy so the getters say so out loud.
+                        error!(%err, "the deck changed but could not be refetched");
+                        caches.deck_stale.store(true, Ordering::Release);
                     }
                 }
             }
+
             CommunicationMessage::Error { error } => {
-                // Only ever *other* clients' errors now: this client's commands
-                // travel over `/api/command`, which answers the caller, so its
-                // own failures are raised in Python rather than printed here.
-                eprintln!("🚨 Oops: {error}");
+                // Another client's failure: this client's commands travel over
+                // `/api/command`, which answers its caller, so its own errors
+                // are raised in Python rather than arriving here.
+                warn!(%error, "the server reported an error for another client");
             }
+
             CommunicationMessage::Registered {
                 client_id,
                 role: granted,
@@ -491,19 +593,22 @@ async fn handle_state(
                 // than recording the first one: a server restarted with a
                 // different `--presenter-token` demotes this client, and a
                 // stale `is_presenter` would say the commands still work.
-                let _ = role.send(Some(granted));
-                println!(
-                    "🆔 Registered as {} with id: {client_id:?}",
-                    role_name(granted)
-                );
+                //
+                // Fails only once every receiver is gone — that is, once the
+                // `Toboggan` has been dropped and this task is on its way out.
+                let _no_receivers_left = role.send(Some(granted));
+                debug!(role = role_name(granted), ?client_id, "registered");
             }
+
             CommunicationMessage::ClientConnected { client_id, name } => {
-                println!("👤 Client connected: {name} ({client_id:?})");
+                debug!(%name, ?client_id, "a client joined");
             }
+
             CommunicationMessage::ClientDisconnected { client_id, name } => {
-                println!("👋 Client disconnected: {name} ({client_id:?})");
+                debug!(%name, ?client_id, "a client left");
             }
         }
     }
-    println!("<<< End listening incoming messages");
+
+    debug!("the message stream ended");
 }
