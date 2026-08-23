@@ -11,6 +11,15 @@ Entries are grouped the way the commits are: this repository uses
 
 ### Added
 
+- **State broadcasts carry a sequence number.** `Notification::State` and
+  `Notification::TalkChange` now include `seq`, a counter the server advances
+  once per change to the deck. A client that learns the state over only the
+  WebSocket can ignore it — TCP already delivers those frames in order — but a
+  client that *also* asks over `POST /api/command` gets two answers on two
+  connections with nothing to say which is newer, and this is that. `seq: 0`
+  means unnumbered and is always safe to apply, so a client talking to an older
+  server behaves exactly as it did before.
+
 - **`Toboggan` closes.** `close()` and the context-manager protocol, so the
   runtime shuts down deliberately with the GIL released rather than whenever the
   garbage collector gets to it while holding it.

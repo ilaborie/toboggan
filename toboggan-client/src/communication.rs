@@ -41,9 +41,18 @@ pub enum CommunicationMessage {
     },
     StateChange {
         state: State,
+        /// Where this change falls in the server's sequence; see
+        /// [`Notification::UNNUMBERED`].
+        ///
+        /// A client whose only channel is this socket can ignore it — TCP
+        /// already delivers these in the order the server sent them. It is for
+        /// a client that *also* asks over REST, where the two answers race.
+        seq: u64,
     },
     TalkChange {
         state: State,
+        /// On the same counter as [`Self::StateChange`].
+        seq: u64,
     },
     Registered {
         client_id: ClientId,
@@ -475,12 +484,12 @@ async fn handle_ws_message(
     };
 
     match notification {
-        Notification::State { state } => {
-            let _ = tx.send(CommunicationMessage::StateChange { state });
+        Notification::State { state, seq } => {
+            let _ = tx.send(CommunicationMessage::StateChange { state, seq });
         }
-        Notification::TalkChange { state } => {
+        Notification::TalkChange { state, seq } => {
             info!("📝 Talk changed, clients should refetch Talk and Slides");
-            let _ = tx.send(CommunicationMessage::TalkChange { state });
+            let _ = tx.send(CommunicationMessage::TalkChange { state, seq });
         }
         Notification::Error { message } => {
             let _ = tx.send(CommunicationMessage::Error { error: message });
@@ -558,7 +567,7 @@ mod tests {
         let frame = serde_json::to_string(&Notification::state(state)).expect("serialize");
 
         match dispatch(&frame).await.as_slice() {
-            [CommunicationMessage::StateChange { state }] => {
+            [CommunicationMessage::StateChange { state, .. }] => {
                 assert_eq!(state.current(), Some(SlideId::new(2)));
             }
             other => panic!("expected one StateChange, got {other:?}"),

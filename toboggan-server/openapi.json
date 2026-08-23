@@ -460,6 +460,12 @@
               "type"
             ],
             "properties": {
+              "seq": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Which change this is, counting from one.\n\nSee [`Notification::UNNUMBERED`] for what a zero means.",
+                "minimum": 0
+              },
               "state": {
                 "$ref": "#/components/schemas/State",
                 "description": "Where the presentation now is."
@@ -530,6 +536,12 @@
               "type"
             ],
             "properties": {
+              "seq": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Which change this is, on the same counter as [`Self::State`].",
+                "minimum": 0
+              },
               "state": {
                 "$ref": "#/components/schemas/State",
                 "description": "Where the presentation is in the new deck."
