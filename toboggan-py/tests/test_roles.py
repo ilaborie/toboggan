@@ -19,7 +19,8 @@ def test_a_local_client_presents(presenter):
 def test_a_local_client_presents_without_a_token(server):
     """The token is for clients that are not on this machine."""
     host, port = server
-    assert Toboggan(host, port, presenter_token=None).is_presenter is True
+    with Toboggan(host, port, presenter_token=None) as client:
+        assert client.is_presenter is True
 
 
 @requires_lan

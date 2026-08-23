@@ -187,7 +187,8 @@ def presenter(server):
     from toboggan_py import Toboggan
 
     host, port = server
-    return Toboggan(host, port)
+    with Toboggan(host, port) as client:
+        yield client
 
 
 def lan_address():
@@ -241,11 +242,32 @@ def remote_client(port, **kwargs):
         _skip_or_fail("no non-loopback address available")
 
     try:
-        return Toboggan(address, port, **kwargs)
+        return _tracked(Toboggan(address, port, **kwargs))
     except ConnectionError as unreachable:
         if not _is_unroutable(unreachable):
             raise
         _skip_or_fail(f"this host cannot reach itself at {address}: {unreachable}")
+
+
+# Every client `remote_client` hands out, so `_close_clients` can close them.
+#
+# Left to the garbage collector each one runs `Runtime::drop` with the GIL held
+# — the freeze `Toboggan.close` exists to avoid, and the suite creates enough of
+# them to make an unlucky collection likely rather than theoretical.
+_OPEN_CLIENTS = []
+
+
+def _tracked(client):
+    _OPEN_CLIENTS.append(client)
+    return client
+
+
+@pytest.fixture(autouse=True)
+def _close_clients():
+    """Closes whatever `remote_client` handed out, however the test ended."""
+    yield
+    while _OPEN_CLIENTS:
+        _OPEN_CLIENTS.pop().close()
 
 
 # What the OS says when a packet has nowhere to go. A refusal is *not* here on
