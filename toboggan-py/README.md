@@ -8,8 +8,8 @@ extensions.
 
 ## Features
 
-- Real-time WebSocket-based presentation synchronization
-- Cross-client state sharing (navigation, step reveals, blink)
+- Synchronous navigation over REST: a call returns once the deck has moved
+- A socket that reports what *other* clients did, and deck reloads
 - Async architecture with Tokio runtime
 - Type-safe Python API with full type stubs
 - ABI3 wheels for forward compatibility (Python 3.8+)
@@ -102,16 +102,19 @@ variable, which is where `toboggan tui` and `toboggan desktop` read theirs. See
 | Properties | `talk`, `slides`, `state`, `role`, `is_presenter` |
 | Navigation | `next()`, `previous()`, `first()`, `last()`, `goto(n)` |
 | Steps | `next_step()`, `previous_step()` |
-| Other | `blink()`, `clients()` |
+| Other | `blink()`, `clients()`, `close()` (also usable as a context manager) |
 
 `talk` carries the deck's `title`, `date`, `lang`, `footer`, `head`, `titles`,
 `step_counts` and per-slide `durations`. `slides` supports `len()`, indexing and
 iteration, and each `Slide` has `kind`, `title`, `body`, `notes`, `duration` and
-`hidden_in`. `state` reports `is_init` / `is_running` / `is_done`, the current
-`slide` and `step`, and `is_first_slide(total)` / `is_last_slide(total)`.
+`hidden_in`. `state` reports `is_init` / `is_running` / `is_done`, `kind`, the
+current `slide` and `step`, `total_slides`, and `is_first_slide` /
+`is_last_slide`.
 
 `clients()` is presenter-only on the server — it reports names, roles and IP
-addresses — and raises `PermissionError` otherwise. Every navigation method
+addresses — and raises `PermissionError` otherwise, or `RuntimeError` if the
+server refuses for some other reason or answers something the client cannot
+read. Every navigation method
 raises the same on an audience connection, `RuntimeError` when the server
 rejects the command (an out-of-range `goto`, a deck with no slides), and
 `ConnectionError` when the server cannot be reached.
@@ -144,8 +147,8 @@ The tests start a real server and drive it, because nothing about a client can
 be tested honestly without one. They pick a free port, so they will not disturb
 a deck you already have running — or set `TOBOGGAN_PY_TEST_PORT` to pin one.
 Set `TOBOGGAN_BIN` to a prebuilt `toboggan` to skip the `cargo run` they
-otherwise fall back to; `mise test:py` does this for you when the workspace has
-already built one.
+otherwise fall back to; `mise test:py` builds one and reads its path out of
+cargo's own output, rather than guessing where it landed.
 
 Some tests need a non-loopback address, because the server grants the presenter
 role to loopback unconditionally and an audience client cannot be made over

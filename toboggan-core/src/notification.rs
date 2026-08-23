@@ -83,11 +83,15 @@ impl Notification {
     /// The number a state-carrying notification has before anything has placed
     /// it in the sequence.
     ///
-    /// A client applies an unnumbered notification unconditionally, which is
-    /// both the safe reading and the honest one: zero says "nothing here tells
-    /// you where this belongs", and that is exactly true of a frame from a
-    /// server too old to send the field, or one built outside
-    /// [`crate::Notification::numbered`].
+    /// Zero says "nothing here tells you where this belongs", which is exactly
+    /// true of a frame from a server too old to send the field, or one built
+    /// outside [`crate::Notification::numbered`].
+    ///
+    /// A server either numbers every state-carrying frame or none of them.
+    /// Against one that numbers none, every frame is zero and a client applies
+    /// them all in arrival order, exactly as it did before the field existed.
+    /// A *single* zero arriving after a real number is a different thing, and a
+    /// client ordering its channels by this counter is free to refuse it.
     pub const UNNUMBERED: u64 = 0;
 
     /// A state broadcast, not yet placed in the sequence.

@@ -24,7 +24,11 @@ impl ClientInfo {
         &self.0.name
     }
 
-    /// Where the connection came from, which is also what decided its role.
+    /// Where the connection came from.
+    ///
+    /// Not on its own what decided the role: loopback presents unconditionally,
+    /// but a connection from anywhere else presents too if it carried the
+    /// token. See [`crate::Toboggan::role`].
     #[getter]
     fn ip_addr(&self) -> String {
         self.0.ip_addr.to_string()

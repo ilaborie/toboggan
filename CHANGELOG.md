@@ -16,9 +16,10 @@ Entries are grouped the way the commits are: this repository uses
   once per change to the deck. A client that learns the state over only the
   WebSocket can ignore it — TCP already delivers those frames in order — but a
   client that *also* asks over `POST /api/command` gets two answers on two
-  connections with nothing to say which is newer, and this is that. `seq: 0`
-  means unnumbered and is always safe to apply, so a client talking to an older
-  server behaves exactly as it did before.
+  connections with nothing to say which is newer, and this is that. A server
+  numbers every such frame or none of them, so `seq: 0` throughout is what a
+  client talking to an older server sees — and it then behaves exactly as it did
+  before.
 
 - **`Toboggan` closes.** `close()` and the context-manager protocol, so the
   runtime shuts down deliberately with the GIL released rather than whenever the
@@ -136,28 +137,54 @@ Entries are grouped the way the commits are: this repository uses
   in an importable extension module went to the caller's stdout, where they
   corrupted any script whose output is data. They are `tracing` records now,
   bridged onto Python's own `logging` — silent by default, and available with
-  `logging.basicConfig(level=...)` like anything else. The crate's lint table,
-  which claimed to be in step with the workspace's and was missing seventeen
-  entries including `print_stdout`, is restored; that divergence was the only
-  reason this compiled.
+  `logging.basicConfig(level=...)` like anything else. The crate now carries the
+  workspace's lint table, spelled out because it sits outside the workspace and
+  inherits nothing; having no lint table at all — not even `print_stdout` — is
+  why those calls compiled.
 
 - **The Python type stub is checked, and the Python is linted.** `ruff`,
   `mypy` over a type-checked usage file, and `mypy.stubtest` all run in
-  `mise check:py` and in CI. Roughly 800 lines of Python had no linter, and the
+  `mise check:py` and in CI. The crate's Python had no linter at all, and the
   600-line stub had nothing verifying its annotations — `for slide in
   client.slides` was an error against it while working perfectly at runtime.
 
 ### Fixed
 
-- **A move another client made during your own command is no longer lost.** The
-  bindings learn the state over two channels — the socket, and the body of
-  `POST /api/command` — and had no way to order them, so they dropped every
-  pushed frame while one of their own commands was in flight. That did stop an
-  echo from overwriting a command's answer, but it could not tell an echo from
-  somebody else's move, so it dropped those too: a move landing inside that
-  window was gone for good, with nothing to correct it until the next change.
-  Both channels now carry the server's sequence number and the newer one wins,
-  so neither problem remains and the guard is gone.
+- **A socket that misses its connect budget still comes up.** The constructor
+  bounded the handshake by wrapping `connect()` in a timeout, which cancels it —
+  dropping the future before it has spawned anything, so nothing was left
+  retrying and the socket was dead for the life of the client. It reported
+  success anyway, and the getters went on answering from a cache that would
+  never update again. `WebSocketClient::connect_within` bounds the handshake
+  from the inside and hands expiry to the same retry loop a refused connection
+  takes.
+
+- **A deck rebuilt while the socket was down is no longer missed.** A server
+  replays the current state on a new socket but not the `TalkChange` that was
+  missed, so a client that reconnected went on serving the previous deck —
+  coherent, wrong, and with nothing to say so. Reconnecting now refetches the
+  deck, which is also what clears the staleness flag after a failed refetch;
+  before, nothing did, and the error told the caller to retry something that
+  could never succeed.
+
+- **`state` no longer invents a position.** The cache started at `Init` and the
+  constructor waited only for the role — which the server sends *before* the
+  first state — so a running deck could be reported as not started, and stayed
+  that way for good if the socket never came up. The cache now has no state
+  until the server sends one, the constructor waits for both, and the getter
+  raises rather than guessing.
+
+- **An unreachable server is no longer reported as a bad shape.** `json()` fails
+  the same way for a body that could not be read and one that could not be
+  parsed, and both were mapped to the decode case — putting a connection reset
+  mid-`/api/slides` back behind the `RuntimeError` that this release split the
+  error type up to remove.
+
+- **A collected client cannot freeze the interpreter.** Dropping a `Toboggan`
+  without `close()` ran the runtime's blocking shutdown with the GIL held, and
+  with logging bridged onto Python the worker threads reach for that same GIL on
+  their way out. `Drop` now abandons the runtime instead of waiting for it;
+  `close()` remains the way to wait deliberately, with the GIL released.
 
 - **`Toboggan(...)` can no longer hang forever.** The socket connect had no
   timeout and ran *before* the bounded registration wait, so against a server
