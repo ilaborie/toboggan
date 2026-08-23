@@ -141,7 +141,20 @@ impl TobogganApi {
             });
         }
 
-        response.json().await.map_err(TobogganApiError::Decode)
+        // `json()` reads the body *and* parses it, and those are two different
+        // failures. A connection reset or a `REQUEST_TIMEOUT` expiring while
+        // the body streams is a network fault; only a body that arrived intact
+        // and did not fit is the version skew `Decode` describes. Mapping both
+        // to `Decode` put an unreachable server back behind the same disguise
+        // this enum was split up to remove — and `/api/slides` on a large deck
+        // is the request most likely to be cut off part way.
+        response.json().await.map_err(|err| {
+            if err.is_decode() {
+                TobogganApiError::Decode(err)
+            } else {
+                TobogganApiError::Transport(err)
+            }
+        })
     }
 
     async fn get<T>(&self, path: &str) -> Result<T, TobogganApiError>
