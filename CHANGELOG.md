@@ -149,6 +149,16 @@ Entries are grouped the way the commits are: this repository uses
 
 ### Fixed
 
+- **A move another client made during your own command is no longer lost.** The
+  bindings learn the state over two channels — the socket, and the body of
+  `POST /api/command` — and had no way to order them, so they dropped every
+  pushed frame while one of their own commands was in flight. That did stop an
+  echo from overwriting a command's answer, but it could not tell an echo from
+  somebody else's move, so it dropped those too: a move landing inside that
+  window was gone for good, with nothing to correct it until the next change.
+  Both channels now carry the server's sequence number and the newer one wins,
+  so neither problem remains and the guard is gone.
+
 - **`Toboggan(...)` can no longer hang forever.** The socket connect had no
   timeout and ran *before* the bounded registration wait, so against a server
   that completes the TCP handshake and then never answers the upgrade, the

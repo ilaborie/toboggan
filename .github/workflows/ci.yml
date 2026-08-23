@@ -180,6 +180,13 @@ jobs:
         working-directory: toboggan-py
         run: cargo +stable clippy --all-targets -- -D warnings
 
+      # The ordering rule the bindings run on is Rust, and so is its test. The
+      # `rust` job's `nextest run` does not cross into this workspace, so
+      # without this the guard would sit here never running.
+      - name: Rust unit tests
+        working-directory: toboggan-py
+        run: cargo +stable test
+
       - name: Build the server the tests drive
         run: cargo build -p toboggan
 

@@ -16,6 +16,14 @@ fi
 
 cd toboggan-py
 
+# This crate is its own workspace, so the root `cargo nextest run` never reaches
+# it — the same gap that let two defects ship. The ordering rule the bindings
+# run on (`accept`, in src/toboggan.rs) is Rust, and so is its test; without
+# this line those tests exist and never run, which is the shape of check this
+# repo has been busy removing.
+echo "🦀 Running the Rust unit tests..."
+cargo test
+
 # The same binary `check:rust` just built. Without it `conftest.py` falls back to
 # `cargo run`, which is why its readiness timeout is five minutes.
 BUILT_SERVER="$(git rev-parse --show-toplevel)/target/debug/toboggan"

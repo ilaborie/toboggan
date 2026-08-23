@@ -1,12 +1,12 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use pyo3::exceptions::{PyConnectionError, PyPermissionError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use toboggan_client::{
-    CommunicationMessage, StatusCode, TobogganApi, TobogganApiError, TobogganConfig,
-    WebSocketClient,
+    CommunicationMessage, ConnectionStatus, StatusCode, TobogganApi, TobogganApiError,
+    TobogganConfig, WebSocketClient,
 };
 use toboggan_core::{
     ClientConfig, ClientRole, Command, Notification, Secret, SlidesResponse, State as TState,
@@ -71,7 +71,7 @@ pub struct Toboggan {
     api: TobogganApi,
     talk: Arc<RwLock<TalkResponse>>,
     slides: Arc<RwLock<SlidesResponse>>,
-    state: Arc<RwLock<TState>>,
+    state: Arc<RwLock<Cached>>,
     /// Set when a deck reload arrived and the new deck could not be fetched.
     ///
     /// The caches then hold the last snapshot that agreed with itself, which is
@@ -79,12 +79,52 @@ pub struct Toboggan {
     /// silently handing back a slide from a deck that has been replaced is the
     /// kind of wrong answer nobody traces back here.
     deck_stale: Arc<AtomicBool>,
-    /// How many commands are waiting on `/api/command` right now.
-    ///
-    /// Read by the listener to tell this client's own echo from a third party's
-    /// move. See the `StateChange` arm in [`handle_state`].
-    in_flight: Arc<AtomicUsize>,
     role: watch::Receiver<Option<ClientRole>>,
+}
+
+/// The last state this client believes, and the server's number for it.
+///
+/// This client is the only one in the workspace that learns the state over two
+/// channels — the socket, and the body of `POST /api/command` — which arrive on
+/// separate connections in no fixed order. The number is what orders them.
+#[derive(Default)]
+struct Cached {
+    state: TState,
+    seq: u64,
+}
+
+impl Cached {
+    /// Forgets which change this state was, keeping the state itself.
+    ///
+    /// The number counts changes on one server process, so it means nothing
+    /// across a restart — and a client still holding the old server's number
+    /// would refuse everything a new one says, silently and for good. Called
+    /// when the socket drops, because that is the moment the number stops
+    /// referring to anything.
+    const fn forget_which_change(&mut self) {
+        self.seq = Notification::UNNUMBERED;
+    }
+}
+
+/// Writes a state unless something at least as new is already cached.
+///
+/// The comparison happens under the write lock so it cannot be split from the
+/// write it guards; two callers racing here is the entire situation this exists
+/// for.
+///
+/// `>=` rather than `>` for two reasons. A re-broadcast of the same change is
+/// then idempotent, and a server that numbers nothing — every frame
+/// [`Notification::UNNUMBERED`] — degrades to applying everything, which is what
+/// every other client in the workspace does and what this one did before.
+///
+/// Returns whether the write happened, which the listener logs.
+async fn accept(cache: &RwLock<Cached>, state: TState, seq: u64) -> bool {
+    let mut cached = cache.write().await;
+    if seq < cached.seq {
+        return false;
+    }
+    *cached = Cached { state, seq };
+    true
 }
 
 impl Toboggan {
@@ -127,14 +167,14 @@ impl Toboggan {
     /// whole point — a command over the socket is a `send` with nothing to wait
     /// on, and a Python caller had no way to know when it had landed.
     ///
-    /// A third party moving the deck at the same moment can have its pushed
-    /// frame land either side of this write. The promise still holds — this
-    /// command *was* applied, and what is cached is the state it produced — and
-    /// the next frame settles any disagreement.
+    /// A third party moving the deck at the same moment does not disturb that.
+    /// Its frame and this answer both carry the server's sequence number, and
+    /// [`accept`] takes whichever is newer — so if the deck has already moved
+    /// past this command by the time the answer arrives, the cache keeps the
+    /// later position rather than being dragged back to this one.
     fn drive(&self, py: Python<'_>, command: Command) -> PyResult<()> {
         let api = self.api.clone();
-        let state = Arc::clone(&self.state);
-        let in_flight = Arc::clone(&self.in_flight);
+        let cache = Arc::clone(&self.state);
         let handle = self.runtime()?.handle().clone();
 
         // Detached: this is a network round trip, and a `block_on` that keeps
@@ -142,21 +182,16 @@ impl Toboggan {
         let notification = py
             .detach(move || {
                 handle.block_on(async move {
-                    // Raised before the request and lowered only after the
-                    // cache is written, so the listener can recognise this
-                    // command's own echo for as long as it might arrive.
-                    in_flight.fetch_add(1, Ordering::AcqRel);
                     let sent = api.command(command).await;
 
                     if let Ok(
-                        Notification::State { state: applied }
-                        | Notification::TalkChange { state: applied },
+                        Notification::State { state, seq }
+                        | Notification::TalkChange { state, seq },
                     ) = &sent
                     {
-                        *state.write().await = applied.clone();
+                        accept(&cache, state.clone(), *seq).await;
                     }
 
-                    in_flight.fetch_sub(1, Ordering::AcqRel);
                     sent
                 })
             })
@@ -209,11 +244,10 @@ impl Toboggan {
             .enable_all()
             .build()?;
 
-        let state = Arc::<RwLock<TState>>::default();
+        let state = Arc::<RwLock<Cached>>::default();
         let talk = Arc::<RwLock<TalkResponse>>::default();
         let slides = Arc::<RwLock<SlidesResponse>>::default();
         let deck_stale = Arc::<AtomicBool>::default();
-        let in_flight = Arc::<AtomicUsize>::default();
         let (role_tx, mut role_rx) = watch::channel(None);
 
         // Detached for the same reason as `drive`: connecting and fetching the
@@ -228,7 +262,6 @@ impl Toboggan {
                         talk: Arc::clone(&talk),
                         slides: Arc::clone(&slides),
                         deck_stale: Arc::clone(&deck_stale),
-                        in_flight: Arc::clone(&in_flight),
                     },
                     role_tx,
                     api.clone(),
@@ -289,7 +322,6 @@ impl Toboggan {
             slides,
             state,
             deck_stale,
-            in_flight,
             role: role_rx,
         })
     }
@@ -345,7 +377,7 @@ impl Toboggan {
         // calls — which is what taking the count as an argument forced — left a
         // deck reload free to land in between.
         let (state, total_slides) = self.runtime()?.block_on(async {
-            let state = TState::clone(&*state.read().await);
+            let state = TState::clone(&state.read().await.state);
             let total_slides = slides.read().await.slides.len();
             (state, total_slides)
         });
@@ -566,11 +598,10 @@ fn resolve_token(presenter_token: Option<&str>) -> Option<Secret> {
 /// this client serves its getters from, and the two flags that say whether they
 /// can be trusted.
 struct Caches {
-    state: Arc<RwLock<TState>>,
+    state: Arc<RwLock<Cached>>,
     talk: Arc<RwLock<TalkResponse>>,
     slides: Arc<RwLock<SlidesResponse>>,
     deck_stale: Arc<AtomicBool>,
-    in_flight: Arc<AtomicUsize>,
 }
 
 async fn handle_state(
@@ -585,29 +616,40 @@ async fn handle_state(
         match msg {
             CommunicationMessage::ConnectionStatusChange { status } => {
                 debug!(%status, "connection status changed");
-            }
 
-            CommunicationMessage::StateChange { state: new_state } => {
-                // The server broadcasts before it answers the caller, and does
-                // not exclude the sender — so this frame may be the echo of a
-                // command `drive` is still waiting on. Applying it then would
-                // race `drive`'s own write and could put the cache *back* to
-                // where the deck was before the call, which is precisely the
-                // staleness synchronous navigation exists to rule out.
+                // A restarted server counts from zero again, and a client still
+                // holding the old server's number would reject every frame the
+                // new one ever sends — silently, and for good. The number means
+                // something only for as long as the connection that issued it,
+                // so when that connection goes, so does the baseline.
                 //
-                // This narrows the window rather than closing it: the server
-                // sends no sequence number, so an echo delayed past a whole
-                // REST round trip can still arrive after the command that
-                // followed it. Closing it properly needs ordering the server
-                // does not currently provide.
-                if caches.in_flight.load(Ordering::Acquire) > 0 {
-                    debug!("ignoring a frame that arrived while a command was in flight");
-                    continue;
+                // Nothing is lost by clearing it: the server replays the
+                // current state as the first frame on the new socket, which
+                // puts a real number back.
+                if !matches!(status, ConnectionStatus::Connected) {
+                    caches.state.write().await.forget_which_change();
                 }
-                *caches.state.write().await = new_state;
             }
 
-            CommunicationMessage::TalkChange { state: new_state } => {
+            CommunicationMessage::StateChange {
+                state: new_state,
+                seq,
+            } => {
+                // The server broadcasts before it answers the caller and
+                // excludes nobody, so this frame may be the echo of a command
+                // `drive` is still waiting on — arriving either side of
+                // `drive`'s own write, on a different connection.
+                //
+                // Which is why neither of them decides: the number does.
+                if !accept(&caches.state, new_state, seq).await {
+                    debug!(seq, "ignoring a frame older than what is cached");
+                }
+            }
+
+            CommunicationMessage::TalkChange {
+                state: new_state,
+                seq,
+            } => {
                 info!("the deck changed; refetching it");
 
                 match try_join!(api.talk(), api.slides()) {
@@ -617,7 +659,7 @@ async fn handle_state(
                         // called atomic — it is not.
                         *caches.talk.write().await = new_talk;
                         *caches.slides.write().await = new_slides;
-                        *caches.state.write().await = new_state;
+                        accept(&caches.state, new_state, seq).await;
                         caches.deck_stale.store(false, Ordering::Release);
                         info!("the deck is up to date");
                     }
@@ -671,4 +713,105 @@ async fn handle_state(
     }
 
     debug!("the message stream ended");
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use toboggan_core::SlideId;
+
+    use super::*;
+
+    fn running(slide: usize) -> TState {
+        TState::Running {
+            current: SlideId::new(slide - 1),
+            current_step: 0,
+        }
+    }
+
+    async fn cached_slide(cache: &RwLock<Cached>) -> usize {
+        let cached = cache.read().await;
+        cached.state.current().expect("a running state").index() + 1
+    }
+
+    /// The echo race, which is why this rule exists.
+    ///
+    /// The server broadcasts before it answers, and excludes nobody — so the
+    /// frame for an *earlier* move can still be climbing this client's socket
+    /// while its own later command is being answered over REST. Whichever
+    /// lands second used to win; now the newer one does.
+    #[tokio::test]
+    async fn a_late_frame_does_not_undo_a_newer_answer() {
+        let cache = RwLock::new(Cached::default());
+
+        // Somebody else moved to slide 2; then this client's goto(7) was
+        // applied and answered.
+        assert!(accept(&cache, running(2), 5).await);
+        assert!(accept(&cache, running(7), 6).await);
+
+        // The broadcast of that first move finally arrives.
+        assert!(
+            !accept(&cache, running(2), 5).await,
+            "an older frame must be refused, not merely lose a race"
+        );
+        assert_eq!(
+            cached_slide(&cache).await,
+            7,
+            "an echo overwrote the answer the command produced"
+        );
+    }
+
+    /// The other half, and the one an in-flight guard used to get wrong.
+    ///
+    /// A move somebody else made *after* this client's command must reach the
+    /// cache. Dropping it leaves this client reporting a slide the deck has
+    /// left, with nothing to correct it until the next change — which may be
+    /// minutes away, or never.
+    #[tokio::test]
+    async fn a_newer_frame_wins_over_an_older_answer() {
+        let cache = RwLock::new(Cached::default());
+
+        // This client's goto(7) is answered over REST...
+        assert!(accept(&cache, running(7), 6).await);
+        // ...and a move made after it arrives on the socket.
+        assert!(accept(&cache, running(2), 7).await);
+
+        assert_eq!(
+            cached_slide(&cache).await,
+            2,
+            "a third party's move was lost"
+        );
+    }
+
+    /// A restarted server counts from zero, and must not be locked out.
+    ///
+    /// Without the reset the baseline outlives the connection that issued it,
+    /// and every frame the new server sends is numbered below it — so the
+    /// client refuses all of them, for good, while looking perfectly healthy.
+    #[tokio::test]
+    async fn a_dropped_socket_clears_the_baseline() {
+        let cache = RwLock::new(Cached::default());
+
+        assert!(accept(&cache, running(9), 12).await);
+        // Without this the assertion below fails, which is the whole point.
+        cache.write().await.forget_which_change();
+
+        assert!(
+            accept(&cache, running(3), 1).await,
+            "a restarted server's first change was refused as stale"
+        );
+        assert_eq!(cached_slide(&cache).await, 3);
+    }
+
+    /// A server that numbers nothing behaves as it did before there were
+    /// numbers: every frame applied, in arrival order.
+    #[tokio::test]
+    async fn an_unnumbered_server_still_moves_the_deck() {
+        let cache = RwLock::new(Cached::default());
+
+        for slide in [3, 1, 9, 4] {
+            assert!(accept(&cache, running(slide), Notification::UNNUMBERED).await);
+            assert_eq!(cached_slide(&cache).await, slide);
+        }
+    }
 }
