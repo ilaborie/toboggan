@@ -307,13 +307,6 @@ class ClientInfo:
 class Toboggan:
     """Toboggan presentation client.
 
-    Main client for connecting to a Toboggan presentation server.
-    Manages WebSocket communication, state synchronization, and provides
-    methods for controlling the presentation (navigation and step reveals).
-
-    The client automatically maintains a persistent connection to the server
-    and synchronizes state changes across all connected clients in real-time.
-
     Navigation is synchronous: `next()` and its siblings return only once the
     server has applied the command, so reading `state` straight afterwards
     reports where the deck now is. No sleep, no polling. The socket stays for
@@ -424,7 +417,11 @@ class Toboggan:
 
         Raises:
             RuntimeError: If the deck was reloaded and could not be refetched,
-                so what is cached here is the deck as it was before.
+                so what is cached here is the deck as it was before; or if the
+                server has not said where the deck is yet. The position arrives
+                on the socket, so a socket that has not come up leaves this
+                unanswerable — which is a different fact from a deck that has
+                not started, and is not reported as one.
         """
         ...
 
@@ -568,18 +565,23 @@ class Toboggan:
         Raises:
             PermissionError: If this client is watching rather than presenting.
             ConnectionError: If the server cannot be reached.
+            RuntimeError: If the server refuses for any other reason, or
+                answers something this client cannot read.
         """
         ...
 
     def close(self) -> None:
         """Disconnects and shuts this client's runtime down.
 
-        Idempotent. Every other call raises `RuntimeError` afterwards.
+        Idempotent. Every call that needs the server raises `RuntimeError`
+        afterwards.
 
-        Worth calling rather than leaving to the garbage collector: dropping a
-        client shuts down a multi-threaded runtime, and the collector does that
-        while holding the GIL — so the interpreter can sit frozen in a shutdown
-        nobody asked for. Using the client as a context manager is the easy way.
+        Worth calling rather than leaving to the garbage collector: this waits
+        for the runtime's threads with the GIL released, so the socket is shut
+        and the threads are gone by the time it returns. A collected client
+        cannot wait at all — it abandons the runtime instead, which is safe but
+        tells you nothing about when it finished. Using the client as a context
+        manager is the easy way.
         """
         ...
 

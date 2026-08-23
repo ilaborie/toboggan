@@ -137,20 +137,56 @@ impl WebSocketClient {
     }
 
     pub async fn connect(&mut self) {
+        self.connect_within(None).await;
+    }
+
+    /// Opens the socket, giving the handshake at most `limit`.
+    ///
+    /// [`Self::connect`] waits for as long as the handshake takes, which for a
+    /// server that completes the TCP handshake and then never answers the
+    /// upgrade is forever. A caller that cannot afford that — a constructor
+    /// with a REPL waiting on it — bounds it here rather than wrapping
+    /// [`Self::connect`] in a timeout of its own: cancelling that future drops
+    /// it before it has spawned anything, so nothing is left retrying and the
+    /// socket is dead for good.
+    ///
+    /// Expiry is handed to the same retry loop a refused connection takes.
+    /// Giving up *waiting* is not giving up.
+    ///
+    /// Returns whether the socket came up within the budget.
+    pub async fn connect_within(&mut self, limit: Option<Duration>) -> bool {
         let state = self.state.lock().await;
         if state.is_disposed {
             warn!("Illegal disposed state, cannot connect");
-            return;
+            return false;
         }
         drop(state);
 
-        self.attempt_connection().await;
+        self.attempt_connection(limit).await
     }
 
-    async fn attempt_connection(&mut self) {
+    async fn attempt_connection(&mut self, limit: Option<Duration>) -> bool {
         self.send_status_change(ConnectionStatus::Connecting);
 
-        let (ws, _) = match connect_async(&self.config.websocket_url).await {
+        let opening = connect_async(&self.config.websocket_url);
+        let opened = match limit {
+            Some(limit) => match tokio::time::timeout(limit, opening).await {
+                Ok(opened) => opened,
+                Err(_elapsed) => {
+                    let message = format!(
+                        "the WebSocket handshake did not finish within {}s",
+                        limit.as_secs()
+                    );
+                    error!(message, "Failed to open WebSocket");
+                    self.send_status_change(ConnectionStatus::Error { message });
+                    self.schedule_reconnect().await;
+                    return false;
+                }
+            },
+            None => opening.await,
+        };
+
+        let (ws, _) = match opened {
             Ok(ws) => ws,
             Err(error) => {
                 error!(?error, "Failed to open WebSocket");
@@ -158,7 +194,7 @@ impl WebSocketClient {
                     message: error.to_string(),
                 });
                 self.schedule_reconnect().await;
-                return;
+                return false;
             }
         };
 
@@ -180,6 +216,8 @@ impl WebSocketClient {
             self.tx_cmd.clone(),
             Arc::clone(&self.rx_cmd),
         ));
+
+        true
     }
 
     async fn handle_connection_open(&mut self) {

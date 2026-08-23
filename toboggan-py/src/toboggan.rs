@@ -60,18 +60,14 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 pub struct Toboggan {
     config: TobogganConfig,
     /// Declared *before* `rt`, because fields drop in declaration order and the
-    /// socket has to go first. `Runtime::drop` blocks until its threads are
-    /// done, and a `Toboggan` dropped by the garbage collector runs that with
-    /// the GIL held — freezing the interpreter for as long as the shutdown
-    /// takes, at the worst possible moment, with the reconnect loop still
-    /// running. [`Toboggan::close`] is the way to avoid finding out.
+    /// socket has to go first.
     _ws: WebSocketClient,
-    /// `Option` so `close` can take it and shut it down deliberately.
+    /// `Option` so `close` and `drop` can each take it exactly once.
     rt: Option<Runtime>,
     api: TobogganApi,
     talk: Arc<RwLock<TalkResponse>>,
     slides: Arc<RwLock<SlidesResponse>>,
-    state: Arc<RwLock<Cached>>,
+    state: Arc<watch::Sender<Cached>>,
     /// Set when a deck reload arrived and the new deck could not be fetched.
     ///
     /// The caches then hold the last snapshot that agreed with itself, which is
@@ -89,7 +85,14 @@ pub struct Toboggan {
 /// separate connections in no fixed order. The number is what orders them.
 #[derive(Default)]
 struct Cached {
-    state: TState,
+    /// `None` until the server has said where the deck is.
+    ///
+    /// Not a `State::Init` standing in for "no idea yet": those are different
+    /// answers, and only one of them is ever true. A deck sitting on slide five
+    /// behind a socket that has not come up would otherwise be reported as not
+    /// started — a wrong answer wearing the shape of a right one, and
+    /// indistinguishable from the real thing.
+    state: Option<TState>,
     seq: u64,
 }
 
@@ -118,13 +121,17 @@ impl Cached {
 /// every other client in the workspace does and what this one did before.
 ///
 /// Returns whether the write happened, which the listener logs.
-async fn accept(cache: &RwLock<Cached>, state: TState, seq: u64) -> bool {
-    let mut cached = cache.write().await;
-    if seq < cached.seq {
-        return false;
-    }
-    *cached = Cached { state, seq };
-    true
+fn accept(cache: &watch::Sender<Cached>, state: TState, seq: u64) -> bool {
+    cache.send_if_modified(|cached| {
+        if seq < cached.seq {
+            return false;
+        }
+        *cached = Cached {
+            state: Some(state),
+            seq,
+        };
+        true
+    })
 }
 
 impl Toboggan {
@@ -147,13 +154,15 @@ impl Toboggan {
     /// answer questions about a deck that has been replaced, which is a wrong
     /// answer wearing the shape of a right one.
     ///
-    /// Clears itself: the next successful reload puts the caches back in step.
+    /// Clears itself: the next successful refetch puts the caches back in
+    /// step, and the socket reconnecting is enough to trigger one.
     fn fresh(&self) -> PyResult<()> {
         if self.deck_stale.load(Ordering::Acquire) {
             return Err(PyRuntimeError::new_err(
                 "the deck was reloaded but could not be refetched, so what is \
-                 cached here is the deck as it was before. Retry once the \
-                 server is reachable again.",
+                 cached here is the deck as it was before. The client refetches \
+                 whenever the socket reconnects; retry once the server is \
+                 reachable again.",
             ));
         }
         Ok(())
@@ -189,7 +198,7 @@ impl Toboggan {
                         | Notification::TalkChange { state, seq },
                     ) = &sent
                     {
-                        accept(&cache, state.clone(), *seq).await;
+                        accept(&cache, state.clone(), *seq);
                     }
 
                     sent
@@ -244,7 +253,8 @@ impl Toboggan {
             .enable_all()
             .build()?;
 
-        let state = Arc::<RwLock<Cached>>::default();
+        let state = Arc::new(watch::Sender::new(Cached::default()));
+        let mut state_rx = state.subscribe();
         let talk = Arc::<RwLock<TalkResponse>>::default();
         let slides = Arc::<RwLock<SlidesResponse>>::default();
         let deck_stale = Arc::<AtomicBool>::default();
@@ -267,15 +277,13 @@ impl Toboggan {
                     api.clone(),
                     rx_msg,
                 ));
-                // `connect` cannot report failure — it reconnects forever
-                // by design — so a bound here is the only thing standing
-                // between a silent server and a constructor that never
-                // returns. Expiry is not fatal on its own: the reconnect
-                // loop keeps trying, and the deck fetch below decides
-                // whether the server is reachable at all.
-                let connected = tokio::time::timeout(CONNECT_TIMEOUT, ws.connect())
-                    .await
-                    .is_ok();
+                // Bounded by `connect_within` rather than by a `timeout`
+                // around `connect`: cancelling that future drops it before it
+                // has spawned the retry loop, so a socket that missed its
+                // budget would never come up at all. Expiry is not fatal on
+                // its own — the retry loop is running, and the deck fetch
+                // below decides whether the server is reachable at all.
+                let connected = ws.connect_within(Some(CONNECT_TIMEOUT)).await;
                 (connected, try_join!(api.talk(), api.slides()))
             })
         });
@@ -290,24 +298,45 @@ impl Toboggan {
             );
         }
 
-        let (initial_talk, initial_slides) = fetched.map_err(|err| refused_or_unreachable(&err))?;
+        let (initial_talk, initial_slides) = match fetched {
+            Ok(fetched) => fetched,
+            Err(err) => {
+                // Detached: dropping the runtime here is the same blocking
+                // shutdown `close` exists to keep off the GIL, and the error
+                // path is no better a place to freeze the interpreter than the
+                // happy one.
+                py.detach(|| drop(rt));
+                return Err(refused_or_unreachable(&err));
+            }
+        };
 
         py.detach(|| {
             rt.block_on(async {
                 *talk.write().await = initial_talk;
                 *slides.write().await = initial_slides;
 
-                // A timeout here is not a failure: the deck was fetched, so the
-                // client is usable — it just does not know yet what it is
-                // allowed to do.
-                let registered = role_rx.wait_for(Option::is_some);
-                if tokio::time::timeout(REGISTRATION_TIMEOUT, registered)
+                // Both, on one budget: the server sends `Registered` before it
+                // sends the first state, so waiting only for the role can wake
+                // while the client still has no idea where the deck is — and
+                // the `state` getter would then have nothing to answer with.
+                //
+                // A timeout is not a failure. The deck was fetched, so the
+                // client is usable; it just does not know yet what it is
+                // allowed to do, or where the deck is. Both say so honestly.
+                let settled = async {
+                    role_rx.wait_for(Option::is_some).await.ok();
+                    state_rx
+                        .wait_for(|cached| cached.state.is_some())
+                        .await
+                        .ok();
+                };
+                if tokio::time::timeout(REGISTRATION_TIMEOUT, settled)
                     .await
                     .is_err()
                 {
                     warn!(
                         seconds = REGISTRATION_TIMEOUT.as_secs(),
-                        "the server has not answered registration; role unknown for now"
+                        "the server has not finished answering; role or position unknown for now"
                     );
                 }
             });
@@ -365,22 +394,32 @@ impl Toboggan {
     ///
     /// # Errors
     /// Raises `RuntimeError` if the deck was reloaded and could not be
-    /// refetched; see [`Toboggan::fresh`].
+    /// refetched (see [`Toboggan::fresh`]), or if the server has not yet said
+    /// where the deck is — which is not the same answer as "it has not
+    /// started", and must not be reported as one.
     #[getter]
     pub fn state(&self) -> PyResult<State> {
         self.fresh()?;
         let state = Arc::clone(&self.state);
         let slides = Arc::clone(&self.slides);
 
-        // Both in one `block_on`, so `is_last_slide` is answered against the
-        // deck this state belongs to. Reading them from Python as two separate
-        // calls — which is what taking the count as an argument forced — left a
-        // deck reload free to land in between.
+        // The deck guard is taken first and held across the borrow, so the two
+        // halves cannot come from either side of a reload: a `TalkChange`
+        // writes the slides before it accepts the state it belongs to, and
+        // blocks here until this pair has been read.
         let (state, total_slides) = self.runtime()?.block_on(async {
-            let state = TState::clone(&state.read().await.state);
-            let total_slides = slides.read().await.slides.len();
-            (state, total_slides)
+            let deck = slides.read().await;
+            let cached = state.borrow();
+            (cached.state.clone(), deck.slides.len())
         });
+
+        let state = state.ok_or_else(|| {
+            PyRuntimeError::new_err(
+                "the server has not said where the deck is yet. The socket \
+                 carries that, and it has not come up — the client keeps \
+                 trying, so retry shortly.",
+            )
+        })?;
 
         Ok(State(state, total_slides))
     }
@@ -506,13 +545,13 @@ impl Toboggan {
 
     /// Disconnects and shuts the client's runtime down.
     ///
-    /// Idempotent, and every other call raises `RuntimeError` afterwards.
+    /// Idempotent, and every call that needs the server raises `RuntimeError`
+    /// afterwards.
     ///
-    /// Worth calling rather than leaving to the garbage collector: dropping a
-    /// `Toboggan` runs `Runtime::drop`, which blocks until its worker threads
-    /// finish — and the collector runs that with the GIL held, so an
-    /// interpreter can sit frozen in a shutdown nobody asked for. Doing it here
-    /// releases the GIL first, which is the whole difference.
+    /// Worth calling rather than leaving to the garbage collector, which cannot
+    /// wait for the worker threads at all: this releases the GIL and waits, so
+    /// the socket is closed and the threads are gone by the time it returns.
+    /// See [`Toboggan::drop`] for what the collector does instead.
     pub fn close(&mut self, py: Python<'_>) {
         if let Some(rt) = self.rt.take() {
             py.detach(|| drop(rt));
@@ -539,6 +578,26 @@ impl Toboggan {
 
     pub fn __str__(&self) -> String {
         format!("Toboggan({})", self.config.api_url())
+    }
+}
+
+impl Drop for Toboggan {
+    /// Shuts the runtime down without waiting for it.
+    ///
+    /// A `Toboggan` the garbage collector reclaims is dropped with the GIL
+    /// held, and `Runtime::drop` blocks until its worker threads finish — so
+    /// the plain drop freezes the interpreter for the length of a shutdown
+    /// nobody asked for, at a moment nobody chose. Worse now that `pyo3_log`
+    /// lets those threads reach for the GIL on their way out, which is a thread
+    /// waiting on a lock held by a thread waiting on it.
+    ///
+    /// `shutdown_background` returns immediately and lets the threads wind down
+    /// on their own. The socket closes either way; what is given up is knowing
+    /// when. [`Toboggan::close`] is how a caller asks to know.
+    fn drop(&mut self) {
+        if let Some(rt) = self.rt.take() {
+            rt.shutdown_background();
+        }
     }
 }
 
@@ -594,14 +653,37 @@ fn resolve_token(presenter_token: Option<&str>) -> Option<Secret> {
 
 /// Everything the background listener writes to, in one place.
 ///
-/// A struct rather than seven arguments because they are one thing: the caches
-/// this client serves its getters from, and the two flags that say whether they
-/// can be trusted.
+/// A struct rather than four arguments because they are one thing: the caches
+/// this client serves its getters from, and the flag that says whether they can
+/// be trusted.
 struct Caches {
-    state: Arc<RwLock<Cached>>,
+    state: Arc<watch::Sender<Cached>>,
     talk: Arc<RwLock<TalkResponse>>,
     slides: Arc<RwLock<SlidesResponse>>,
     deck_stale: Arc<AtomicBool>,
+}
+
+/// Pulls the deck into the caches, reporting whether they now agree with the
+/// server.
+///
+/// A failure leaves the previous snapshot in place. It is coherent with itself,
+/// which a half-written pair would not be — and the caller marks it
+/// untrustworthy rather than handing it back as though nothing had happened.
+async fn refetch_deck(caches: &Caches, api: &TobogganApi) -> bool {
+    match try_join!(api.talk(), api.slides()) {
+        Ok((new_talk, new_slides)) => {
+            // Two separate locks, so a getter can still catch the new talk
+            // against the old slides. Deliberately not called atomic — it is
+            // not.
+            *caches.talk.write().await = new_talk;
+            *caches.slides.write().await = new_slides;
+            true
+        }
+        Err(err) => {
+            error!(%err, "the deck could not be refetched");
+            false
+        }
+    }
 }
 
 async fn handle_state(
@@ -612,8 +694,34 @@ async fn handle_state(
 ) {
     debug!("listening for pushed messages");
 
+    // The connection the constructor waited for does not need refetching — the
+    // constructor fetched the deck itself. Every *later* one does; see below.
+    let mut seen_connection = false;
+
     while let Some(msg) = rx.recv().await {
         match msg {
+            CommunicationMessage::ConnectionStatusChange {
+                status: ConnectionStatus::Connected,
+            } => {
+                debug!("connected");
+
+                if std::mem::replace(&mut seen_connection, true) {
+                    // A reconnect, and the deck may have been rebuilt while the
+                    // socket was down. The server replays the current *state*
+                    // on a new socket but not the `TalkChange` that was missed,
+                    // so nothing else would ever tell this client — it would
+                    // answer from the old deck, coherent and wrong, with no
+                    // error and nothing to pull on.
+                    //
+                    // This is also the only thing that clears `deck_stale`
+                    // after a refetch failed, which is what `fresh` tells the
+                    // caller to wait for.
+                    info!("reconnected; refetching the deck");
+                    let agrees = refetch_deck(&caches, &api).await;
+                    caches.deck_stale.store(!agrees, Ordering::Release);
+                }
+            }
+
             CommunicationMessage::ConnectionStatusChange { status } => {
                 debug!(%status, "connection status changed");
 
@@ -626,9 +734,12 @@ async fn handle_state(
                 // Nothing is lost by clearing it: the server replays the
                 // current state as the first frame on the new socket, which
                 // puts a real number back.
-                if !matches!(status, ConnectionStatus::Connected) {
-                    caches.state.write().await.forget_which_change();
-                }
+                caches.state.send_if_modified(|cached| {
+                    cached.forget_which_change();
+                    // The state itself is unchanged, so nobody waiting on one
+                    // needs waking.
+                    false
+                });
             }
 
             CommunicationMessage::StateChange {
@@ -641,7 +752,7 @@ async fn handle_state(
                 // `drive`'s own write, on a different connection.
                 //
                 // Which is why neither of them decides: the number does.
-                if !accept(&caches.state, new_state, seq).await {
+                if !accept(&caches.state, new_state, seq) {
                     debug!(seq, "ignoring a frame older than what is cached");
                 }
             }
@@ -652,31 +763,22 @@ async fn handle_state(
             } => {
                 info!("the deck changed; refetching it");
 
-                match try_join!(api.talk(), api.slides()) {
-                    Ok((new_talk, new_slides)) => {
-                        // Three separate locks, so a getter can still catch the
-                        // new talk against the old slides. Deliberately not
-                        // called atomic — it is not.
-                        *caches.talk.write().await = new_talk;
-                        *caches.slides.write().await = new_slides;
-                        accept(&caches.state, new_state, seq).await;
-                        caches.deck_stale.store(false, Ordering::Release);
-                        info!("the deck is up to date");
-                    }
-                    Err(err) => {
-                        // The new state indexes into the *new* deck, and the
-                        // new deck is what we just failed to fetch. Committing
-                        // it against the old `talk`/`slides` would leave the
-                        // caches quietly disagreeing with each other —
-                        // `state.slide` pointing into a deck that no longer
-                        // exists, which reads much later as "toboggan sometimes
-                        // reports the wrong slide title" with no thread to pull.
-                        //
-                        // So: keep the last coherent snapshot, and mark it
-                        // untrustworthy so the getters say so out loud.
-                        error!(%err, "the deck changed but could not be refetched");
-                        caches.deck_stale.store(true, Ordering::Release);
-                    }
+                if refetch_deck(&caches, &api).await {
+                    accept(&caches.state, new_state, seq);
+                    caches.deck_stale.store(false, Ordering::Release);
+                    info!("the deck is up to date");
+                } else {
+                    // The new state indexes into the *new* deck, and the new
+                    // deck is what we just failed to fetch. Committing it
+                    // against the old `talk`/`slides` would leave the caches
+                    // quietly disagreeing with each other — `state.slide`
+                    // pointing into a deck that no longer exists, which reads
+                    // much later as "toboggan sometimes reports the wrong slide
+                    // title" with no thread to pull.
+                    //
+                    // So: keep the last coherent snapshot, and mark it
+                    // untrustworthy so the getters say so out loud.
+                    caches.deck_stale.store(true, Ordering::Release);
                 }
             }
 
@@ -729,9 +831,10 @@ mod tests {
         }
     }
 
-    async fn cached_slide(cache: &RwLock<Cached>) -> usize {
-        let cached = cache.read().await;
-        cached.state.current().expect("a running state").index() + 1
+    fn cached_slide(cache: &watch::Sender<Cached>) -> usize {
+        let cached = cache.borrow();
+        let state = cached.state.as_ref().expect("a state to have arrived");
+        state.current().expect("a running state").index() + 1
     }
 
     /// The echo race, which is why this rule exists.
@@ -740,22 +843,22 @@ mod tests {
     /// frame for an *earlier* move can still be climbing this client's socket
     /// while its own later command is being answered over REST. Whichever
     /// lands second used to win; now the newer one does.
-    #[tokio::test]
-    async fn a_late_frame_does_not_undo_a_newer_answer() {
-        let cache = RwLock::new(Cached::default());
+    #[test]
+    fn a_late_frame_does_not_undo_a_newer_answer() {
+        let cache = watch::Sender::new(Cached::default());
 
         // Somebody else moved to slide 2; then this client's goto(7) was
         // applied and answered.
-        assert!(accept(&cache, running(2), 5).await);
-        assert!(accept(&cache, running(7), 6).await);
+        assert!(accept(&cache, running(2), 5));
+        assert!(accept(&cache, running(7), 6));
 
         // The broadcast of that first move finally arrives.
         assert!(
-            !accept(&cache, running(2), 5).await,
+            !accept(&cache, running(2), 5),
             "an older frame must be refused, not merely lose a race"
         );
         assert_eq!(
-            cached_slide(&cache).await,
+            cached_slide(&cache),
             7,
             "an echo overwrote the answer the command produced"
         );
@@ -767,20 +870,16 @@ mod tests {
     /// cache. Dropping it leaves this client reporting a slide the deck has
     /// left, with nothing to correct it until the next change — which may be
     /// minutes away, or never.
-    #[tokio::test]
-    async fn a_newer_frame_wins_over_an_older_answer() {
-        let cache = RwLock::new(Cached::default());
+    #[test]
+    fn a_newer_frame_wins_over_an_older_answer() {
+        let cache = watch::Sender::new(Cached::default());
 
         // This client's goto(7) is answered over REST...
-        assert!(accept(&cache, running(7), 6).await);
+        assert!(accept(&cache, running(7), 6));
         // ...and a move made after it arrives on the socket.
-        assert!(accept(&cache, running(2), 7).await);
+        assert!(accept(&cache, running(2), 7));
 
-        assert_eq!(
-            cached_slide(&cache).await,
-            2,
-            "a third party's move was lost"
-        );
+        assert_eq!(cached_slide(&cache), 2, "a third party's move was lost");
     }
 
     /// A restarted server counts from zero, and must not be locked out.
@@ -788,30 +887,33 @@ mod tests {
     /// Without the reset the baseline outlives the connection that issued it,
     /// and every frame the new server sends is numbered below it — so the
     /// client refuses all of them, for good, while looking perfectly healthy.
-    #[tokio::test]
-    async fn a_dropped_socket_clears_the_baseline() {
-        let cache = RwLock::new(Cached::default());
+    #[test]
+    fn a_dropped_socket_clears_the_baseline() {
+        let cache = watch::Sender::new(Cached::default());
 
-        assert!(accept(&cache, running(9), 12).await);
+        assert!(accept(&cache, running(9), 12));
         // Without this the assertion below fails, which is the whole point.
-        cache.write().await.forget_which_change();
+        cache.send_if_modified(|cached| {
+            cached.forget_which_change();
+            false
+        });
 
         assert!(
-            accept(&cache, running(3), 1).await,
+            accept(&cache, running(3), 1),
             "a restarted server's first change was refused as stale"
         );
-        assert_eq!(cached_slide(&cache).await, 3);
+        assert_eq!(cached_slide(&cache), 3);
     }
 
     /// A server that numbers nothing behaves as it did before there were
     /// numbers: every frame applied, in arrival order.
-    #[tokio::test]
-    async fn an_unnumbered_server_still_moves_the_deck() {
-        let cache = RwLock::new(Cached::default());
+    #[test]
+    fn an_unnumbered_server_still_moves_the_deck() {
+        let cache = watch::Sender::new(Cached::default());
 
         for slide in [3, 1, 9, 4] {
-            assert!(accept(&cache, running(slide), Notification::UNNUMBERED).await);
-            assert_eq!(cached_slide(&cache).await, slide);
+            assert!(accept(&cache, running(slide), Notification::UNNUMBERED));
+            assert_eq!(cached_slide(&cache), slide);
         }
     }
 }
