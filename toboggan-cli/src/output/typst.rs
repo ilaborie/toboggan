@@ -182,6 +182,17 @@ pub(super) fn generate_thumbnail_typst(
     Ok(out.into_bytes())
 }
 
+/// Writes the document preamble: the imports and the touying theme.
+///
+/// `subslide-preamble: none` is what keeps every title from printing twice. The
+/// theme's default preamble is
+/// `text(1.2em, weight: "bold", utils.display-current-heading(level: 2))`, and
+/// the level-2 heading it displays is the very `== <title>` that
+/// [`write_standard_body`] emits inside `#slide[..]` — so the theme printed the
+/// title above the body and the body printed it again. It has to be passed
+/// *there*: `simple-theme` takes it as a named argument and stores it, and its
+/// own `slide` re-applies the stored value to every slide, overwriting any later
+/// `config-common`.
 fn write_header(out: &mut String) {
     let _ = writeln!(
         out,
@@ -198,7 +209,9 @@ fn write_header(out: &mut String) {
 #import "@preview/gentle-clues:1.3.1": *
 #import "@preview/mitex:0.2.7": mi, mitex
 
-#show: simple-theme.with(aspect-ratio: "16-9")
+// The slide title is emitted by the slide body itself; `subslide-preamble: none`
+// stops the theme from displaying it a second time.
+#show: simple-theme.with(aspect-ratio: "16-9", subslide-preamble: none)
 #show: codly-init.with()
 #codly(languages: codly-languages)
 "#
@@ -816,6 +829,33 @@ mod tests {
             "cover uses touying title-slide"
         );
         assert!(output.contains("codly-init"), "codly initialised");
+    }
+
+    #[test]
+    fn test_theme_preamble_does_not_repeat_the_title() {
+        // Regression: the theme's `subslide-preamble` displays the current
+        // level-2 heading, which is the `== {title}` the slide body already
+        // emits, so every content slide printed its title twice.
+        let mut talk = make_talk("Talk");
+        talk.slides.push(Slide {
+            kind: SlideKind::Standard,
+            title: Content::text("Le constat"),
+            body_source: Some("# Le constat\n\nBody text.\n".to_owned()),
+            ..Default::default()
+        });
+        let output =
+            String::from_utf8(generate_typst(&talk, &MermaidRenderer::default()).expect("render"))
+                .expect("utf8");
+
+        assert!(
+            output.contains("subslide-preamble: none"),
+            "theme preamble disabled, got: {output}"
+        );
+        assert_eq!(
+            output.matches("Le constat").count(),
+            1,
+            "title emitted exactly once, got: {output}"
+        );
     }
 
     #[test]

@@ -150,6 +150,14 @@ Entries are grouped the way the commits are: this repository uses
 
 ### Fixed
 
+- **The PDF no longer prints every slide title twice.** touying's `simple` theme
+  displays the current level-2 heading above each slide, and the body emitted
+  that same `== <title>` inside `#slide[..]` — so every content slide in the
+  export carried its title twice, once from the theme and once from the body.
+  The generated preamble now passes `subslide-preamble: none`, which is where it
+  has to go: the theme stores the value and re-applies it per slide, so a later
+  `config-common` would have been overwritten.
+
 - **A socket that misses its connect budget still comes up.** The constructor
   bounded the handshake by wrapping `connect()` in a timeout, which cancels it —
   dropping the future before it has spawned anything, so nothing was left
