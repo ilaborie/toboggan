@@ -57,7 +57,7 @@ pub(crate) fn build_pdf(
     // The overflow check reads the same `.typ`, so it has to run before the
     // scratch file goes — and only once there is a PDF worth checking.
     let spans = (status.success() && check_overflow)
-        .then(|| slide_spans(&root, &typ_path))
+        .then(|| slide_spans(&root, &typ_path, expected_spans(&typst_source)))
         .transpose();
 
     // Best-effort: the PDF is the deliverable, and leaving the scratch file
@@ -92,6 +92,27 @@ pub(crate) fn build_pdf(
 const SLIDE_PAGES_QUERY: &str = "query(<toboggan-slide>).map(m => \
      (slide: m.value.slide, at: m.value.at, page: m.location().page()))";
 
+/// The label those markers carry, as it appears in the emitted `.typ`.
+///
+/// Written out a second time here because `toboggan-cli` keeps its copy private;
+/// the two have to agree, and nothing but this comment makes them.
+const SLIDE_MARKER_LABEL: &str = "<toboggan-slide>";
+
+/// How many spans the `.typ` just written ought to yield.
+///
+/// The source is the ground truth: every page-producing block emits the label
+/// twice, so counting it says exactly what typst should find. Deriving the
+/// number from the `Talk` instead looks easier and is wrong — the cover's page
+/// comes from a separate title slide, and `hidden_in = ["pdf"]` drops slides
+/// before rendering, so `talk.slides.len()` disagrees with the document on any
+/// deck that uses either.
+fn expected_spans(typst_source: &[u8]) -> usize {
+    String::from_utf8_lossy(typst_source)
+        .matches(SLIDE_MARKER_LABEL)
+        .count()
+        / 2
+}
+
 /// One marker as typst reports it.
 #[derive(Debug, Deserialize)]
 struct SlideMarker {
@@ -110,14 +131,22 @@ struct SlideSpan {
 
 impl SlideSpan {
     const fn pages(&self) -> usize {
-        // Both ends are inclusive, and `end` cannot precede `start`: the
-        // markers come back in document order.
-        self.end.saturating_sub(self.start) + 1
+        // Both ends are inclusive, and `end >= start` is enforced by
+        // `spans_from` rather than assumed here — a `saturating_sub` would turn
+        // markers that came back out of order into "one page", which is the one
+        // answer this check must never invent.
+        self.end - self.start + 1
     }
 }
 
 /// Asks typst which pages each slide occupies.
-fn slide_spans(root: &Path, typ_path: &Path) -> anyhow::Result<Vec<SlideSpan>> {
+///
+/// `expected` is what [`expected_spans`] counted in the source. Getting fewer
+/// back is a broken check, not a clean deck: a preamble that hides `metadata`,
+/// a theme that drops the markers, a stale label — all of them answer with an
+/// empty or short list, and reporting "nothing overflowed" from that would be
+/// the silent pass this whole pass exists to prevent.
+fn slide_spans(root: &Path, typ_path: &Path, expected: usize) -> anyhow::Result<Vec<SlideSpan>> {
     let output = Command::new("typst")
         .arg("eval")
         .arg("--root")
@@ -138,7 +167,15 @@ fn slide_spans(root: &Path, typ_path: &Path) -> anyhow::Result<Vec<SlideSpan>> {
 
     let markers = serde_json::from_slice::<Vec<SlideMarker>>(&output.stdout)
         .map_err(|err| anyhow::anyhow!("could not read the page markers: {err}"))?;
-    spans_from(&markers)
+    let spans = spans_from(&markers)?;
+    if spans.len() != expected {
+        anyhow::bail!(
+            "typst located {} of the {expected} slide markers in the document, \
+             so the overflow check cannot account for every slide",
+            spans.len()
+        );
+    }
+    Ok(spans)
 }
 
 /// Pairs the markers up, one span per slide.
@@ -150,7 +187,12 @@ fn spans_from(markers: &[SlideMarker]) -> anyhow::Result<Vec<SlideSpan>> {
     markers
         .chunks(2)
         .map(|pair| match pair {
-            [start, end] if start.at == "start" && end.at == "end" && start.slide == end.slide => {
+            [start, end]
+                if start.at == "start"
+                    && end.at == "end"
+                    && start.slide == end.slide
+                    && end.page >= start.page =>
+            {
                 Ok(SlideSpan {
                     slide: start.slide.clone(),
                     start: start.page,
@@ -274,5 +316,36 @@ mod tests {
             crossed.is_err(),
             "a start and end from two slides is not a span"
         );
+    }
+
+    #[test]
+    fn markers_that_come_back_out_of_order_are_refused() {
+        // `pages()` used to `saturating_sub`, which turned this into "1 page" —
+        // "this slide fits", the one answer a check against silent page growth
+        // must never invent from broken input.
+        let backwards = spans_from(&[marker("1-one.md", "start", 6), marker("1-one.md", "end", 3)]);
+
+        assert!(backwards.is_err(), "end before start is not a span");
+    }
+
+    #[test]
+    fn the_expected_span_count_comes_from_the_emitted_source() {
+        // Two labels per page-producing block, so three blocks is three spans.
+        let source = "#title-slide[\n  #metadata((slide: \"a\", at: \"start\"))<toboggan-slide>\n  \
+             #metadata((slide: \"a\", at: \"end\"))<toboggan-slide>\n]\n\
+             #slide[\n  #metadata((slide: \"b\", at: \"start\"))<toboggan-slide>\n  \
+             #metadata((slide: \"b\", at: \"end\"))<toboggan-slide>\n]\n\
+             #slide[\n  #metadata((slide: \"c\", at: \"start\"))<toboggan-slide>\n  \
+             #metadata((slide: \"c\", at: \"end\"))<toboggan-slide>\n]\n";
+
+        assert_eq!(expected_spans(source.as_bytes()), 3);
+    }
+
+    #[test]
+    fn a_document_with_no_markers_expects_no_spans() {
+        // The counterpart of the check in `slide_spans`: a source carrying
+        // markers that typst cannot find is the mismatch worth shouting about,
+        // and this is the only case where zero is the honest answer.
+        assert_eq!(expected_spans(b"#slide[\n  no markers here\n]\n"), 0);
     }
 }

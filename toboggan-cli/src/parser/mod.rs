@@ -233,6 +233,36 @@ mod tests {
     }
 
     #[test]
+    fn a_blank_deck_preamble_leaves_the_generated_one_in_place() -> anyhow::Result<()> {
+        let temp_dir = tempdir()?;
+        let dir_path = temp_dir.path();
+
+        create_test_file(dir_path, "_cover.md", "# Test Presentation")?;
+        create_test_file(dir_path, "slide1.md", "# First Slide\n\nContent here.")?;
+        create_test_file(dir_path, "_preamble.typ", "\n   \n")?;
+
+        let parser = FolderParser::new(
+            dir_path.to_path_buf(),
+            "base16-ocean.light".to_owned(),
+            MermaidRenderer::default(),
+        )?;
+        let talk = parser.parse(Overrides::default())?.to_talk();
+
+        assert_eq!(
+            talk.typst_preamble, None,
+            "an empty `_preamble.typ` is a placeholder, not a request for a \
+             document with no imports"
+        );
+        assert_eq!(
+            talk.slides.len(),
+            2,
+            "and it is still deck chrome, not a slide"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn test_folder_parser_with_part() -> anyhow::Result<()> {
         let temp_dir = tempdir()?;
         let dir_path = temp_dir.path();

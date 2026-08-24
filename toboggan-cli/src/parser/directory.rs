@@ -348,7 +348,11 @@ pub(super) fn process_talk_metadata(
         debug!("Processing Typst preamble: {}", path.display());
         let content = fs::read_to_string(&path)
             .map_err(|err| TobogganCliError::read_file(path.clone(), err))?;
-        metadata.typst_preamble = Some(content);
+        // A blank file means "absent", not "replace the preamble with nothing":
+        // `touch _preamble.typ` is a plausible first move, and taking it at its
+        // word emits a `.typ` with no imports at all, which fails deep inside
+        // typst complaining about a `slide` variable the author never wrote.
+        metadata.typst_preamble = Some(content).filter(|content| !content.trim().is_empty());
     }
 
     Ok(metadata)

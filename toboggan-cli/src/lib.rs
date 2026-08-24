@@ -334,7 +334,11 @@ pub fn parse_presentation(input: &Path, settings: &Settings) -> Result<ParseResu
     if let Some(path) = &settings.typst_preamble {
         let content = std::fs::read_to_string(path)
             .map_err(|err| TobogganCliError::read_file(path.clone(), err))?;
-        parse_result.talk_metadata.typst_preamble = Some(content);
+        // Blank means absent, as it does for the deck's own `_preamble.typ`.
+        // Note this still overrides the deck file: pointing the flag at an empty
+        // file asks for the generated preamble, not for the deck's.
+        parse_result.talk_metadata.typst_preamble =
+            Some(content).filter(|content| !content.trim().is_empty());
     }
 
     if !settings.no_counter {
@@ -694,6 +698,27 @@ mod tests {
             talk.typst_preamble.as_deref(),
             Some("// from the flag\n"),
             "one is what the deck ships with, the other is what this run asked for"
+        );
+    }
+
+    #[test]
+    fn a_blank_preamble_file_means_absent_not_empty() {
+        // `touch _preamble.typ` used to be taken at its word: `Some("")` took
+        // the replacement branch and emitted a `.typ` with no imports at all,
+        // which typst rejects while complaining about a `slide` variable the
+        // author never wrote and pointing at a scratch file already deleted.
+        let deck = deck_with_preamble();
+        let blank = deck.path().join("blank.typ");
+        std::fs::write(&blank, "   \n\t\n").expect("write");
+
+        let settings = settings_for(deck.path(), &["--typst-preamble", &blank.to_string_lossy()]);
+        let talk = parse_presentation(deck.path(), &settings)
+            .expect("parse")
+            .to_talk();
+
+        assert_eq!(
+            talk.typst_preamble, None,
+            "a whitespace-only preamble asks for the generated one, not for none at all"
         );
     }
 
