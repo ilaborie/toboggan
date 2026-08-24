@@ -51,16 +51,16 @@ impl ConnectionHandler {
                     CommunicationMessage::ConnectionStatusChange { status } => {
                         let _ = event_tx_clone.send(AppEvent::ConnectionStatus(status));
                     }
-                    CommunicationMessage::StateChange { state } => {
+                    CommunicationMessage::StateChange { state, seq } => {
                         let _ = event_tx_clone.send(AppEvent::NotificationReceived(
-                            Notification::State { state },
+                            Notification::state(state).numbered(seq),
                         ));
                     }
-                    CommunicationMessage::TalkChange { state } => {
+                    CommunicationMessage::TalkChange { state, seq } => {
                         info!("Presentation updated");
                         // TalkChange refetch is handled in App using shared refetch_talk_and_slides
                         let _ = event_tx_clone.send(AppEvent::NotificationReceived(
-                            Notification::TalkChange { state },
+                            Notification::talk_change(state).numbered(seq),
                         ));
                     }
                     CommunicationMessage::Error { error } => {

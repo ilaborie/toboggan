@@ -59,11 +59,33 @@ impl LoadedTalk {
     }
 }
 
+/// Where the deck is, and the number of the change that put it there.
+///
+/// One lock over both halves, so nothing can pair a state with a number that
+/// belongs to a different change — which would defeat the whole purpose of
+/// having one. Every mutation of either goes through [`TalkService`].
+#[derive(Debug, Default)]
+struct Timeline {
+    state: State,
+    seq: u64,
+}
+
+impl Timeline {
+    /// Records a change and hands back its number.
+    ///
+    /// Counts from one, so the first real change stays distinguishable from
+    /// [`Notification::UNNUMBERED`].
+    const fn advance(&mut self) -> u64 {
+        self.seq += 1;
+        self.seq
+    }
+}
+
 /// Service for managing talk content and presentation state
 #[derive(Clone)]
 pub struct TalkService {
     talk: Arc<RwLock<LoadedTalk>>,
-    current_state: Arc<RwLock<State>>,
+    current_state: Arc<RwLock<Timeline>>,
 }
 
 impl TalkService {
@@ -103,8 +125,7 @@ impl TalkService {
             );
         }
 
-        let current_state = State::default();
-        let current_state = Arc::new(RwLock::new(current_state));
+        let current_state = Arc::new(RwLock::new(Timeline::default()));
 
         Ok(Self {
             talk: Arc::new(RwLock::new(loaded)),
@@ -151,28 +172,63 @@ impl TalkService {
 
     /// Returns the current presentation state
     pub async fn current_state(&self) -> State {
-        let state = self.current_state.read().await;
-        state.clone()
+        let timeline = self.current_state.read().await;
+        timeline.state.clone()
+    }
+
+    /// The current state as a notification, numbered where it stands.
+    ///
+    /// What a client is told the moment it connects. It carries the number so
+    /// that the client has a baseline to compare later frames against; without
+    /// one it would have to treat the first change as unordered.
+    pub async fn current_notification(&self) -> Notification {
+        let timeline = self.current_state.read().await;
+        Notification::state(timeline.state.clone()).numbered(timeline.seq)
     }
 
     /// Handles a command and returns the notification (without broadcasting)
     pub async fn handle_command(&self, command: &Command) -> Notification {
-        let mut state = self.current_state.write().await;
+        let mut timeline = self.current_state.write().await;
+        let state = &mut timeline.state;
 
-        match command {
+        let notification = match command {
             Command::Register { .. } | Command::Unregister { .. } => {
                 Notification::state(state.clone())
             }
-            Command::First => self.command_first(&mut state).await,
-            Command::Last => self.command_last(&mut state).await,
-            Command::GoTo { slide } => self.command_goto(&mut state, *slide).await,
-            Command::NextSlide => self.command_next(&mut state).await,
-            Command::PreviousSlide => self.command_previous(&mut state).await,
-            Command::NextStep => self.command_next_step(&mut state).await,
-            Command::PreviousStep => self.command_previous_step(&mut state).await,
+            Command::First => self.command_first(state).await,
+            Command::Last => self.command_last(state).await,
+            Command::GoTo { slide } => self.command_goto(state, *slide).await,
+            Command::NextSlide => self.command_next(state).await,
+            Command::PreviousSlide => self.command_previous(state).await,
+            Command::NextStep => self.command_next_step(state).await,
+            Command::PreviousStep => self.command_previous_step(state).await,
             Command::Blink => Self::command_blink(),
             Command::Ping => Notification::PONG,
+        };
+
+        // Numbered here rather than inside each helper: this is the one place
+        // that holds the write lock, so it is the only place that can promise
+        // the number and the state it labels came out of the same change.
+        //
+        // Only a notification that carries state gets one. A helper that
+        // refused — an out-of-range slide, an empty deck — returns an `Error`,
+        // and `Blink` and `Ping` move nothing; advancing for those would burn
+        // numbers on changes that never happened.
+        //
+        // `Register`/`Unregister` *do* advance, even though they leave the deck
+        // where it was: they answer with a `State`, and a fresh number against
+        // an unchanged value costs a client nothing — it applies what it
+        // already had — while the exception would have to be remembered here
+        // and mirrored in every client.
+        if matches!(
+            notification,
+            Notification::State { .. } | Notification::TalkChange { .. }
+        ) {
+            let seq = timeline.advance();
+            return notification.numbered(seq);
         }
+
+        notification
     }
 
     /// Reloads talk and returns `TalkChange` notification (without broadcasting)
@@ -193,8 +249,8 @@ impl TalkService {
         }
         let new_talk = &loaded.talk;
 
-        let mut state = self.current_state.write().await;
-        let current_slide_id = state.current().unwrap_or(SlideId::FIRST);
+        let mut timeline = self.current_state.write().await;
+        let current_slide_id = timeline.state.current().unwrap_or(SlideId::FIRST);
 
         let old_talk = self.talk.read().await;
         let current_slide = old_talk.talk.slides.get(current_slide_id.index());
@@ -216,7 +272,7 @@ impl TalkService {
         );
 
         // Update slide index in current state
-        state.update_slide(new_slide_id);
+        timeline.state.update_slide(new_slide_id);
         drop(old_talk);
 
         // Replace the talk
@@ -224,8 +280,11 @@ impl TalkService {
         *talk = loaded;
         drop(talk);
 
-        // Return TalkChange notification
-        Ok(Notification::talk_change(state.clone()))
+        // Return TalkChange notification, on the same counter as every other
+        // change: a reload moves the deck under the client, so a client must be
+        // able to order it against the navigation either side of it.
+        let seq = timeline.advance();
+        Ok(Notification::talk_change(timeline.state.clone()).numbered(seq))
     }
 
     // === Private helper methods ===

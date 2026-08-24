@@ -148,7 +148,10 @@ impl<H: NotificationHandler + 'static> TobogganClientCore<H> {
         state_tx: watch::Sender<Option<State>>,
         state_rx: watch::Receiver<Option<State>>,
     ) -> Self {
-        let api = TobogganApi::new(api_url);
+        // The socket and the REST half offer the same token: `/api/command`
+        // and `/api/clients` are gated the same way `/api/ws` commands are.
+        let api = TobogganApi::new(api_url)
+            .with_presenter_token(websocket_config.presenter_token.clone());
 
         Self {
             talk_tx,
@@ -285,11 +288,15 @@ impl<H: NotificationHandler + 'static> TobogganClientCore<H> {
                 CommunicationMessage::ConnectionStatusChange { status } => {
                     handler.on_connection_status_change(status);
                 }
-                CommunicationMessage::StateChange { state: new_state } => {
+                CommunicationMessage::StateChange {
+                    state: new_state, ..
+                } => {
                     let _ = state_tx.send(Some(new_state.clone()));
                     handler.on_state_change(new_state);
                 }
-                CommunicationMessage::TalkChange { state: new_state } => {
+                CommunicationMessage::TalkChange {
+                    state: new_state, ..
+                } => {
                     info!("Presentation updated - refetching talk and slides");
 
                     // Refetch talk and slides from server

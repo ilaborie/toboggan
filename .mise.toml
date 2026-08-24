@@ -17,6 +17,9 @@ cargo = { binstall = true }
 "cargo:wasm-pack" = "latest"
 "npm:vite" = "latest"
 
+# Builds and tests toboggan-py; `toboggan-py/uv.lock` is committed.
+uv = "latest"
+
 swiftlint = "latest"
 "npm:@stoplight/spectral-cli" = "latest"
 "cargo:cargo-ndk" = "latest"

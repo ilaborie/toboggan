@@ -310,10 +310,10 @@ fn process_message(message: Message, tx: &UnboundedSender<CommunicationMessage>)
     };
 
     match notification {
-        Notification::State { state } => {
+        Notification::State { state, .. } => {
             let _ = tx.unbounded_send(CommunicationMessage::StateChange { state });
         }
-        Notification::TalkChange { state } => {
+        Notification::TalkChange { state, .. } => {
             let _ = tx.unbounded_send(CommunicationMessage::TalkChange { state });
         }
         Notification::Error { message } => {

@@ -211,7 +211,7 @@ impl AppState {
 
     fn handle_notification(&mut self, notification: Notification) {
         match notification {
-            Notification::State { state } | Notification::TalkChange { state } => {
+            Notification::State { state, .. } | Notification::TalkChange { state, .. } => {
                 self.apply_state_change(state);
             }
             Notification::Blink => {

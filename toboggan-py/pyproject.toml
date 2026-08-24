@@ -14,3 +14,51 @@ dynamic = ["version"]
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
+
+# Dev-only. The wheel itself has no dependencies — `requires-python` and the
+# abi3-py38 build govern what it installs into, not what building it needs.
+[dependency-groups]
+dev = [
+  "maturin>=1.9,<2.0",
+  "pytest>=8",
+  "pytest-timeout>=2",
+  "ruff>=0.6",
+  "mypy>=1.11",
+]
+
+[tool.ruff]
+line-length = 90
+target-version = "py38"
+
+[tool.ruff.lint]
+# `N` because the stub is an API surface and its names are the contract; `RUF`
+# and `B` for the ordinary footguns. Not a large net — the point is that ~800
+# lines of Python had no linter at all while `check:py` advertised one.
+select = ["E", "F", "I", "N", "B", "UP", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# The stub is written in `List`/`Optional`/`Type` on purpose: the wheel is
+# abi3-py38, and those spellings stay readable to a checker on any version.
+# Inside a `.pyi` ruff would happily rewrite them to `X | None`, which is valid
+# there but would split the file's style for no gain.
+"*.pyi" = ["UP006", "UP007", "UP037", "UP045"]
+
+[tool.mypy]
+# No `python_version` pin: current mypy refuses anything below 3.10, while the
+# wheel is abi3-py38. The stub is written in 3.8-compatible spellings
+# (`List`, `Optional`, `Type`) so it stays readable to older checkers anyway.
+strict = true
+files = ["tests/typing"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# A binding that hangs is the failure mode these tests exist to catch, and an
+# unbounded hang in CI is a job that burns to the platform limit with no output
+# rather than a red test. Generous enough for a cold `cargo run` server start.
+timeout = 300
+markers = [
+  "slow: waits out a real timeout rather than a shortened copy of one",
+]
+# `conftest.py` exports helpers the role tests import by name; without this the
+# tests directory is not on the path for them to do so.
+pythonpath = ["tests"]

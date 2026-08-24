@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+#MISE description="Build the Python bindings and run their test suite"
+
+# `pipefail` too: the binary is located through a pipe, and without it a failed
+# `cargo build` would be masked by the exit status of the `tail` after it.
+set -euo pipefail
+
+echo "🐍 Testing the Python bindings..."
+
+# Not a skip. `uv` is declared in `.mise.toml`, so its absence means the toolchain
+# was never installed, not that this machine cannot run the tests — and exiting 0
+# here made `mise check` print "✅ All Python binding checks passed!" over a suite
+# that had not run. A check that cannot fail is not a check.
+if ! command -v uv >/dev/null 2>&1; then
+  echo "❌ uv not found. Run: mise install"
+  exit 1
+fi
+
+# Where the server binary actually is, asked of cargo rather than guessed.
+#
+# This used to be `target/debug/toboggan`, which is wrong whenever
+# `.cargo/config.toml` pins `[build] target` — cargo then writes to
+# `target/<triple>/debug/`, and the `target/debug/toboggan` left over from
+# before the pin sits there indefinitely, executable and plausible. `conftest.py`
+# takes whatever it is handed, so the whole suite drove a server that was a day
+# old and reported green: a stale binary is far worse than no binary, because
+# the fallback at least tests the right code.
+echo "🔨 Locating the server binary..."
+SERVER_BIN="$(cargo build -p toboggan --message-format=json-render-diagnostics |
+  sed -n 's/.*"executable":"\([^"]*\)".*/\1/p' | tail -n1)"
+
+if [ -n "$SERVER_BIN" ] && [ -x "$SERVER_BIN" ]; then
+  export TOBOGGAN_BIN="$SERVER_BIN"
+  echo "   $SERVER_BIN"
+else
+  # Not fatal: `conftest.py` falls back to `cargo run`, which is slower but
+  # builds what is on disk. Said out loud, because the five-minute readiness
+  # timeout that follows is otherwise a mystery.
+  echo "⚠️  Could not locate it; the tests will fall back to 'cargo run'"
+fi
+
+cd toboggan-py
+
+# This crate is its own workspace, so the root `cargo nextest run` never reaches
+# it — the same gap that let two defects ship. The ordering rule the bindings
+# run on (`accept`, in src/toboggan.rs) is Rust, and so is its test; without
+# this line those tests exist and never run, which is the shape of check this
+# repo has been busy removing.
+echo "🦀 Running the Rust unit tests..."
+cargo test
+
+echo "📦 Installing the dev dependencies..."
+uv sync --group dev
+
+# `maturin develop` is what compiles the Rust source that is on disk right now.
+# `uv sync` does not: it reuses a cached wheel and will leave a stale extension
+# in place after a Rust change. That is also why every command below passes
+# `--no-sync` — without it `uv run` re-syncs first and puts the stale wheel
+# straight back over the build we just made, so the tests exercise the wrong
+# code and pass when they should fail.
+echo "🔧 Building the extension..."
+uv run --no-sync maturin develop --uv
+
+echo "🧪 Running the tests..."
+uv run --no-sync pytest
+
+cd ..
+
+echo "✅ Python binding tests passed!"

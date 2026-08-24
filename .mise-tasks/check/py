@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+#MISE description="Run Python binding checks: formatting, linting, and tests"
+
+set -eu
+
+echo "🐍 Running Python binding checks..."
+
+# `toboggan-py` is excluded from the cargo workspace, so `mise check:rust` never
+# reaches it — `--all-targets` and `nextest` do not cross a workspace boundary.
+# These commands have to run from inside the crate, which is the whole reason
+# this task exists.
+cd toboggan-py
+
+echo "🔧 Checking formatting..."
+cargo +nightly fmt --all --check
+
+echo "🔍 Linting with clippy..."
+cargo clippy --all-targets -- -D warnings
+
+cd ..
+
+mise test:py
+
+# After `test:py`, which is what builds the extension — `stubtest` imports the
+# module and compares it against the stub, so it needs the two in step.
+cd toboggan-py
+
+echo "🐍 Formatting and linting the Python..."
+uv run --no-sync ruff format --check .
+uv run --no-sync ruff check .
+
+# The stub is a 600-line promise that nothing used to check. `test_stubs.py`
+# compares member *names*; these two cover what it cannot — the annotations
+# (via a type-checked usage file) and the signatures, defaults and
+# property-versus-method distinction.
+echo "🔍 Type-checking the documented usage..."
+uv run --no-sync mypy
+
+echo "🔍 Comparing the stub against the built module..."
+uv run --no-sync python -m mypy.stubtest toboggan_py \
+  --allowlist stubtest-allowlist.txt
+
+cd ..
+
+echo "✅ All Python binding checks passed!"

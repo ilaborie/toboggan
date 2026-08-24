@@ -313,7 +313,7 @@ impl App {
                     Task::none()
                 }
             }
-            CommunicationMessage::StateChange { state } => {
+            CommunicationMessage::StateChange { state, .. } => {
                 debug!("State change received: {:?}", state);
                 self.state.presentation_state = Some(state.clone());
                 if let Some(slide_id) = state.current() {
@@ -329,7 +329,7 @@ impl App {
                 }
                 Task::none()
             }
-            CommunicationMessage::TalkChange { state } => {
+            CommunicationMessage::TalkChange { state, .. } => {
                 info!("Presentation updated, reloading talk and slides");
 
                 // DON'T update state immediately - wait for data to be fetched

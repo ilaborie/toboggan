@@ -17,6 +17,11 @@ pub enum Notification {
     State {
         /// Where the presentation now is.
         state: State,
+        /// Which change this is, counting from one.
+        ///
+        /// See [`Notification::UNNUMBERED`] for what a zero means.
+        #[serde(default)]
+        seq: u64,
     },
     /// Something went wrong, for this client only.
     ///
@@ -36,6 +41,9 @@ pub enum Notification {
     TalkChange {
         /// Where the presentation is in the new deck.
         state: State,
+        /// Which change this is, on the same counter as [`Self::State`].
+        #[serde(default)]
+        seq: u64,
     },
     /// Sent to the registering client with their assigned ID and the role the
     /// server granted them.
@@ -72,16 +80,58 @@ impl Notification {
     /// The heartbeat answer, as a constant.
     pub const PONG: Self = Self::Pong;
 
-    /// A state broadcast.
+    /// The number a state-carrying notification has before anything has placed
+    /// it in the sequence.
+    ///
+    /// Zero says "nothing here tells you where this belongs", which is exactly
+    /// true of a frame from a server too old to send the field, or one built
+    /// outside [`crate::Notification::numbered`].
+    ///
+    /// A server either numbers every state-carrying frame or none of them.
+    /// Against one that numbers none, every frame is zero and a client applies
+    /// them all in arrival order, exactly as it did before the field existed.
+    /// A *single* zero arriving after a real number is a different thing, and a
+    /// client ordering its channels by this counter is free to refuse it.
+    pub const UNNUMBERED: u64 = 0;
+
+    /// A state broadcast, not yet placed in the sequence.
+    ///
+    /// The server numbers it on the way out; see [`Self::numbered`].
     #[must_use]
     pub fn state(state: State) -> Self {
-        Self::State { state }
+        Self::State {
+            state,
+            seq: Self::UNNUMBERED,
+        }
     }
 
     #[must_use]
-    /// A notice that the deck was rebuilt.
+    /// A notice that the deck was rebuilt, not yet placed in the sequence.
     pub fn talk_change(state: State) -> Self {
-        Self::TalkChange { state }
+        Self::TalkChange {
+            state,
+            seq: Self::UNNUMBERED,
+        }
+    }
+
+    /// Places a state-carrying notification in the sequence.
+    ///
+    /// Anything else passes through untouched: [`Self::Blink`] and
+    /// [`Self::Pong`] move nothing, so there is nothing to order them against,
+    /// and [`Self::Error`] reports that nothing happened at all.
+    ///
+    /// The number exists for a client that learns the state over *two* channels
+    /// — the socket broadcast and the body of `POST /api/command` — which arrive
+    /// on separate connections in no fixed order. A client with only the socket
+    /// does not need it: TCP already delivers those frames in the order the
+    /// server sent them.
+    #[must_use]
+    pub fn numbered(self, seq: u64) -> Self {
+        match self {
+            Self::State { state, .. } => Self::State { state, seq },
+            Self::TalkChange { state, .. } => Self::TalkChange { state, seq },
+            other => other,
+        }
     }
 
     /// An error for one client, formatted from anything printable.
@@ -117,6 +167,6 @@ impl Notification {
 
 impl From<State> for Notification {
     fn from(state: State) -> Self {
-        Self::State { state }
+        Self::state(state)
     }
 }

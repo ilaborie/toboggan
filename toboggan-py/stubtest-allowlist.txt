@@ -1,0 +1,15 @@
+# Entries stubtest cannot reconcile with how pyo3 builds an extension module.
+# Everything else it reports is a real defect and should be fixed, not added here.
+
+# pyo3 implements the constructor as `__new__` (that is what `#[new]` generates),
+# while the stub declares `__init__` — which is what a reader, an IDE and every
+# other Python stub expect to see, and what `Toboggan(...)` calls in practice.
+# `test_stubs.py` checks the argument names and order against the runtime's
+# `__text_signature__`, so the constructor's shape is covered; only this
+# structural difference is waived.
+toboggan_py.Toboggan.__init__
+toboggan_py.Toboggan.__new__
+
+# maturin's generated package wrapper re-exports from an inner module of the same
+# name. The stub describes the package, which is the surface anyone imports.
+toboggan_py.toboggan_py

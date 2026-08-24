@@ -163,10 +163,11 @@ async fn send_initial_state(
     state: &TobogganState,
     client_id: ClientId,
 ) -> Result<(), ()> {
-    let initial_notification = {
-        let current_state = TalkService::from_ref(state).current_state().await;
-        Notification::state(current_state)
-    };
+    // Numbered, not bare: this frame is the client's baseline, and a client
+    // that mixes the socket with `POST /api/command` orders every later answer
+    // against it. Handing it an unnumbered state would make the first change
+    // after connecting unorderable.
+    let initial_notification = TalkService::from_ref(state).current_notification().await;
 
     if let Ok(msg) = serde_json::to_string(&initial_notification)
         && let Err(err) = ws_sender.send(Message::Text(msg.into())).await

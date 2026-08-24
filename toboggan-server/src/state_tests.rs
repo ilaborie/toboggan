@@ -419,4 +419,81 @@ mod tests {
         assert_eq!(&*cached.bytes, b"fresh");
         assert_eq!(&*cached.slug, "test-talk");
     }
+
+    /// The number a state-carrying notification was stamped with.
+    fn seq_of(notification: &Notification) -> u64 {
+        match notification {
+            Notification::State { seq, .. } | Notification::TalkChange { seq, .. } => *seq,
+            other => panic!("expected a notification carrying state, got {other:?}"),
+        }
+    }
+
+    /// The counter is what lets a client that *also* asks over REST order two
+    /// answers that arrived on different connections — the socket broadcast and
+    /// the body of `POST /api/command` race, and nothing else on the wire says
+    /// which came first.
+    #[tokio::test]
+    async fn the_sequence_advances_once_per_change() {
+        let state = create_test_state(create_test_talk());
+
+        let first = seq_of(&state.handle_command(&Command::First).await);
+        let next = seq_of(&state.handle_command(&Command::NextSlide).await);
+        let last = seq_of(&state.handle_command(&Command::Last).await);
+
+        assert!(
+            first < next && next < last,
+            "expected a strictly increasing sequence, got {first}, {next}, {last}"
+        );
+        assert_ne!(
+            first,
+            Notification::UNNUMBERED,
+            "a real change stamped as unnumbered reads to every client as \
+             'apply this unconditionally', which is the guarantee undone"
+        );
+    }
+
+    /// A command that moved nothing must not spend a number.
+    ///
+    /// Not cosmetic: a client treats the number as "how far the deck has got",
+    /// so a counter that drifts ahead of the changes is a counter that no longer
+    /// describes them.
+    #[tokio::test]
+    async fn commands_that_change_nothing_do_not_advance_the_sequence() {
+        let state = create_test_state(create_test_talk());
+
+        let before = seq_of(&state.handle_command(&Command::First).await);
+
+        // Neither carries state: a blink is a flash, a ping is a heartbeat.
+        state.handle_command(&Command::Blink).await;
+        state.handle_command(&Command::Ping).await;
+        // Refused — the deck has three slides — so it stayed where it was.
+        state
+            .handle_command(&Command::GoTo {
+                slide: SlideId::new(99),
+            })
+            .await;
+
+        let after = seq_of(&state.handle_command(&Command::NextSlide).await);
+        assert_eq!(
+            after,
+            before + 1,
+            "three commands that changed nothing advanced the counter"
+        );
+    }
+
+    /// The frame sent on connect is a client's baseline for everything after it.
+    #[tokio::test]
+    async fn the_initial_notification_carries_the_current_number() {
+        let state = create_test_state(create_test_talk());
+
+        let latest = seq_of(&state.handle_command(&Command::Last).await);
+        let initial = TalkService::from_ref(&state).current_notification().await;
+
+        assert_eq!(
+            seq_of(&initial),
+            latest,
+            "a client connecting now is handed a state it cannot order against \
+             the change that follows it"
+        );
+    }
 }
