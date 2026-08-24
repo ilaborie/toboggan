@@ -2,7 +2,8 @@
 //! `Talk` back out as TOML, JSON, YAML, HTML, Typst, or a folder of thumbnails.
 //!
 //! A deck is a directory: `_cover.md` for the cover, `_part.md` for a section
-//! title, `_head.html` and `_footer.html` for the chrome, and numbered files and
+//! title, `_head.html` and `_footer.html` for the chrome, `_preamble.typ` to
+//! replace the generated Typst preamble, and numbered files and
 //! folders for everything else. Ordering comes from the filenames.
 //!
 //! Errors are [`miette`] diagnostics, so a bad slide is reported with the file
@@ -57,6 +58,9 @@ pub struct TalkMetadata {
     pub date: Date,
     pub footer: Option<String>,
     pub head: Option<String>,
+    /// Typst preamble replacing the generated one; see
+    /// [`toboggan_core::Talk::typst_preamble`].
+    pub typst_preamble: Option<String>,
     /// BCP 47 language tag for the deck; see [`toboggan_core::Talk::lang`].
     pub lang: Option<String>,
     /// Default working directory for the `QuakeTerminal` overlay (talk-level fallback).
@@ -72,6 +76,7 @@ impl Default for TalkMetadata {
             date: Date::today(),
             footer: None,
             head: None,
+            typst_preamble: None,
             lang: None,
             default_terminal_cwd: None,
             source_dir: None,
@@ -92,6 +97,8 @@ impl ParseResult {
         talk.date = self.talk_metadata.date;
         talk.footer.clone_from(&self.talk_metadata.footer);
         talk.head.clone_from(&self.talk_metadata.head);
+        talk.typst_preamble
+            .clone_from(&self.talk_metadata.typst_preamble);
         talk.lang.clone_from(&self.talk_metadata.lang);
         talk.default_terminal_cwd
             .clone_from(&self.talk_metadata.default_terminal_cwd);
@@ -321,6 +328,14 @@ pub fn parse_presentation(input: &Path, settings: &Settings) -> Result<ParseResu
         date: settings.date,
         lang: settings.lang.clone(),
     })?;
+
+    // The flag wins over the deck's own `_preamble.typ`: one is what the deck
+    // ships with, the other is what this run asked for.
+    if let Some(path) = &settings.typst_preamble {
+        let content = std::fs::read_to_string(path)
+            .map_err(|err| TobogganCliError::read_file(path.clone(), err))?;
+        parse_result.talk_metadata.typst_preamble = Some(content);
+    }
 
     if !settings.no_counter {
         add_counters_to_slides(&mut parse_result);
@@ -552,6 +567,7 @@ mod tests {
             date: Date::today(),
             footer: None,
             head: None,
+            typst_preamble: None,
             lang: None,
             default_terminal_cwd: None,
             source_dir: None,
@@ -611,6 +627,7 @@ mod tests {
             date: Date::today(),
             footer: None,
             head: None,
+            typst_preamble: None,
             lang: None,
             default_terminal_cwd: None,
             source_dir: None,
@@ -644,6 +661,58 @@ mod tests {
             // This should still be in part context even though the part was skipped
             assert_eq!(slide.title.to_string(), "Topic B");
         }
+    }
+
+    /// A deck folder with a cover, one slide, and its own `_preamble.typ`.
+    fn deck_with_preamble() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().expect("temp dir");
+        std::fs::write(dir.path().join("_cover.md"), "# Deck\n").expect("cover");
+        std::fs::write(dir.path().join("01-one.md"), "# One\n\nBody.\n").expect("slide");
+        std::fs::write(dir.path().join("_preamble.typ"), "// from the deck\n").expect("preamble");
+        dir
+    }
+
+    fn settings_for(deck: &Path, extra: &[&str]) -> Settings {
+        let mut args = vec!["toboggan-cli".to_owned()];
+        args.extend(extra.iter().map(|arg| (*arg).to_owned()));
+        args.push(deck.to_string_lossy().into_owned());
+        <Settings as clap::Parser>::parse_from(args)
+    }
+
+    #[test]
+    fn the_preamble_flag_wins_over_the_deck_file() {
+        let deck = deck_with_preamble();
+        let flag = deck.path().join("other.typ");
+        std::fs::write(&flag, "// from the flag\n").expect("write");
+
+        let settings = settings_for(deck.path(), &["--typst-preamble", &flag.to_string_lossy()]);
+        let talk = parse_presentation(deck.path(), &settings)
+            .expect("parse")
+            .to_talk();
+
+        assert_eq!(
+            talk.typst_preamble.as_deref(),
+            Some("// from the flag\n"),
+            "one is what the deck ships with, the other is what this run asked for"
+        );
+    }
+
+    #[test]
+    fn a_missing_preamble_file_is_an_error_naming_the_path() {
+        let deck = deck_with_preamble();
+        let missing = deck.path().join("nope.typ");
+
+        let settings = settings_for(
+            deck.path(),
+            &["--typst-preamble", &missing.to_string_lossy()],
+        );
+        let error = parse_presentation(deck.path(), &settings)
+            .expect_err("a preamble that is not there cannot be used");
+
+        assert!(
+            error.to_string().contains("nope.typ"),
+            "the error names the file, got: {error}"
+        );
     }
 
     /// `toboggan build -p slides -o public/index.html` in a deck that has a

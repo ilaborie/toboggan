@@ -106,6 +106,18 @@ pub struct Settings {
     )]
     pub mermaid_config: Option<PathBuf>,
 
+    /// Typst preamble replacing the generated one, for the `.typ` and PDF output.
+    ///
+    /// Overrides the deck's own `_preamble.typ`. The file is emitted verbatim in
+    /// place of the generated imports and touying theme, so it owns every import
+    /// the rendered body needs; see [`toboggan_core::Talk::typst_preamble`].
+    #[clap(
+        long,
+        value_hint = clap::ValueHint::FilePath,
+        help = "Typst preamble replacing the generated one (overrides _preamble.typ)"
+    )]
+    pub typst_preamble: Option<PathBuf>,
+
     /// List all available syntax highlighting themes and exit.
     #[clap(long, help = "List all available syntax highlighting themes and exit")]
     pub list_themes: bool,

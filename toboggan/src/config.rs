@@ -130,6 +130,10 @@ pub(crate) struct BuildConfig {
     ///
     /// Relative to the directory holding this config file, like `path`.
     pub(crate) mermaid_config: Option<PathBuf>,
+    /// Typst preamble replacing the generated one, for `.typ` and PDF output.
+    ///
+    /// Relative to the directory holding this config file, like `path`.
+    pub(crate) typst_preamble: Option<PathBuf>,
     pub(crate) no_counter: Option<bool>,
     pub(crate) wpm: Option<u16>,
     pub(crate) exclude_notes_from_duration: Option<bool>,
@@ -223,6 +227,7 @@ impl BuildConfig {
             base_url,
             theme,
             mermaid_config,
+            typst_preamble,
             no_counter,
             wpm,
             exclude_notes_from_duration,
@@ -335,7 +340,11 @@ fn anchor_path(config: &mut Config, file: &Path) {
     let Some(dir) = file.parent() else {
         return;
     };
-    for declared in [&mut config.path, &mut config.build.mermaid_config] {
+    for declared in [
+        &mut config.path,
+        &mut config.build.mermaid_config,
+        &mut config.build.typst_preamble,
+    ] {
         if let Some(path) = declared.as_ref()
             && path.is_relative()
         {

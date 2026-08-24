@@ -9,6 +9,9 @@ A presentation is a `slides/` folder:
   - `_part.md` — the section divider slide.
   - `NN-slide.md` — content slides (sorted by filename).
 - `_head.html` / `_footer.html` — optional custom head/footer.
+- `_preamble.typ` — optional Typst preamble, replacing the one the PDF export
+  generates (theme, aspect ratio, text size). It owns every import the slides
+  need: touying, codly, codly-languages, gentle-clues, mitex.
 - assets live in a sibling `public/` folder.
 
 ## Front matter

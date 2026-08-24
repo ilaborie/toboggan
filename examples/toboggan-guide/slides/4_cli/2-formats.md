@@ -23,3 +23,7 @@ $ toboggan build -p ./slides/ -f typst -o talk.typ
 | `json` / `yaml` | Pipelines, tooling, inspection |
 | `html` | A standalone file you can email or host |
 | `typst` | `typst compile talk.typ` → a **PDF** handout |
+
+<!-- pause -->
+
+> [!TIP] The Typst preamble — theme, aspect ratio, text size, margins — is generated, unless the deck has a `slides/_preamble.typ` (or you pass `--typst-preamble <FILE>`). Yours *replaces* it, so it owns the imports the slides need: touying, codly, codly-languages, gentle-clues, mitex.

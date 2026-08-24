@@ -18,6 +18,7 @@ my-talk/
     ├── _cover.md           # the cover slide, and the deck's own front matter
     ├── _head.html          # injected into <head> — fonts, custom CSS
     ├── _footer.html        # the footer shown on every slide
+    ├── _preamble.typ       # replaces the generated Typst preamble (PDF export)
     ├── 1_intro/
     │   ├── _part.md        # the section title slide
     │   ├── 1-why.md

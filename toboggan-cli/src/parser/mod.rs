@@ -199,6 +199,40 @@ mod tests {
     }
 
     #[test]
+    fn a_deck_preamble_is_read_and_is_not_a_slide() -> anyhow::Result<()> {
+        let temp_dir = tempdir()?;
+        let dir_path = temp_dir.path();
+
+        create_test_file(dir_path, "_cover.md", "# Test Presentation")?;
+        create_test_file(dir_path, "slide1.md", "# First Slide\n\nContent here.")?;
+        create_test_file(
+            dir_path,
+            "_preamble.typ",
+            "#import \"@preview/touying:0.7.3\": *\n",
+        )?;
+
+        let parser = FolderParser::new(
+            dir_path.to_path_buf(),
+            "base16-ocean.light".to_owned(),
+            MermaidRenderer::default(),
+        )?;
+        let talk = parser.parse(Overrides::default())?.to_talk();
+
+        assert_eq!(
+            talk.typst_preamble.as_deref(),
+            Some("#import \"@preview/touying:0.7.3\": *\n"),
+            "the deck's `_preamble.typ` reaches the talk"
+        );
+        assert_eq!(
+            talk.slides.len(),
+            2,
+            "`_preamble.typ` is deck chrome, not a slide"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn test_folder_parser_with_part() -> anyhow::Result<()> {
         let temp_dir = tempdir()?;
         let dir_path = temp_dir.path();

@@ -139,6 +139,15 @@ pub(crate) struct BuildOptions {
     #[arg(long, value_name = "FILE", value_hint = clap::ValueHint::FilePath)]
     pub(crate) mermaid_config: Option<PathBuf>,
 
+    /// Typst preamble replacing the generated one, for `.typ` and PDF output
+    ///
+    /// Overrides the deck's own `_preamble.typ`. Emitted verbatim in place of
+    /// the generated imports and touying theme, so it owns every import the
+    /// rendered body needs: touying, codly, codly-languages, gentle-clues,
+    /// mitex.
+    #[arg(long, value_name = "FILE", value_hint = clap::ValueHint::FilePath)]
+    pub(crate) typst_preamble: Option<PathBuf>,
+
     /// Disable automatic numbering of parts and slides
     #[arg(long)]
     pub(crate) no_counter: bool,
@@ -166,6 +175,7 @@ impl BuildOptions {
         self.lang = self.lang.take().or(config.lang);
         self.base_url = self.base_url.take().or(config.base_url);
         self.mermaid_config = self.mermaid_config.take().or(config.mermaid_config);
+        self.typst_preamble = self.typst_preamble.take().or(config.typst_preamble);
         self.wpm = self.wpm.or(config.wpm);
         self.no_counter |= config.no_counter.unwrap_or(false);
         self.exclude_notes_from_duration |= config.exclude_notes_from_duration.unwrap_or(false);
@@ -191,6 +201,7 @@ impl BuildOptions {
             base_url: self.base_url,
             theme: self.theme.unwrap_or_else(|| DEFAULT_THEME.to_owned()),
             mermaid_config: self.mermaid_config,
+            typst_preamble: self.typst_preamble,
             list_themes: false,
             format: None,
             no_counter: self.no_counter,

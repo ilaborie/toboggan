@@ -20,6 +20,17 @@ pub struct Talk {
     /// Markup injected into `<head>`, from `_head.html` — fonts, custom CSS.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub head: Option<String>,
+    /// Typst preamble replacing the generated one, from `_preamble.typ`.
+    ///
+    /// The `_head.html` of the PDF side, except that it *replaces* rather than
+    /// appends: the generated preamble picks the touying theme, the aspect ratio
+    /// and the base text size, and none of those can be taken back by anything
+    /// written after them. A deck that sets this owns every import the rendered
+    /// body needs — touying (`#slide`, `#title-slide`, `#new-section-slide`),
+    /// codly and codly-languages for code fences, gentle-clues for GitHub
+    /// alerts, mitex for `$…$` math.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub typst_preamble: Option<String>,
     /// BCP 47 language tag for the deck, e.g. `fr` or `pt-BR`.
     ///
     /// Becomes the `lang` attribute on every page Toboggan renders. It is what
@@ -71,6 +82,7 @@ impl Talk {
             date,
             footer,
             head,
+            typst_preamble: None,
             lang: None,
             default_terminal_cwd: None,
             source_dir: None,
@@ -246,6 +258,8 @@ impl From<Talk> for TalkResponse {
             date,
             footer,
             head,
+            // A Typst preamble is for the PDF renderer; no client has a use for it.
+            typst_preamble: _,
             lang,
             default_terminal_cwd: _,
             source_dir: _,

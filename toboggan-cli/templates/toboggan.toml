@@ -46,6 +46,14 @@
 # `mermaid:theme=dark,rankSpacing=80`.
 # mermaid-config = "mermaid.json"
 
+# Typst preamble for the `.typ` and PDF output, replacing the generated one —
+# the touying theme, the aspect ratio, the base text size and the margins are
+# all chosen there, and nothing written afterwards can take them back. The path
+# is relative to this file, and it overrides the deck's own `slides/_preamble.typ`.
+# A file that replaces the preamble owns every import the slides need: touying,
+# codly, codly-languages, gentle-clues, mitex.
+# typst-preamble = "preamble.typ"
+
 # Speaking rate used for the duration estimates in `toboggan stats`.
 # wpm = 150
 

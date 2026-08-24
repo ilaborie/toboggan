@@ -377,6 +377,7 @@ body_source = """
 my-talk/
 ├── _head.html          # injected into <head> (fonts, stylesheet)
 ├── _footer.html        # footer component (progress bar, etc.)
+├── _preamble.typ       # optional: replaces the generated Typst preamble
 ├── _cover.md           # the cover / title slide
 ├── 1_intro/
 │   ├── _part.md        # section divider slide
@@ -387,7 +388,7 @@ my-talk/
     └── 1-details.md
 ```
 
-> [!NOTE] Only these names are special (exact match): `_cover.md`, `_part.md`, `_head.html`, `_footer.html`. Everything else is a slide, sorted alphabetically — so prefix files with `1-`, `2-`, … to control order.
+> [!NOTE] Only these names are special (exact match): `_cover.md`, `_part.md`, `_head.html`, `_footer.html`, `_preamble.typ`. Everything else is a slide, sorted alphabetically — so prefix files with `1-`, `2-`, … to control order.
 > 
 """
 
@@ -409,6 +410,7 @@ raw = """
 <pre style="background-color:#eff1f5;"><code class="language-text"><span style="color:#4f5b66;">my-talk/
 </span><span style="color:#4f5b66;">├── _head.html          # injected into &lt;head&gt; (fonts, stylesheet)
 </span><span style="color:#4f5b66;">├── _footer.html        # footer component (progress bar, etc.)
+</span><span style="color:#4f5b66;">├── _preamble.typ       # optional: replaces the generated Typst preamble
 </span><span style="color:#4f5b66;">├── _cover.md           # the cover / title slide
 </span><span style="color:#4f5b66;">├── 1_intro/
 </span><span style="color:#4f5b66;">│   ├── _part.md        # section divider slide
@@ -421,7 +423,7 @@ raw = """
 
 <div class="step step-0"><!-- begin step -->
 <div class="markdown-alert markdown-alert-note">
-<p class="markdown-alert-title">Only these names are special (exact match): `_cover.md`, `_part.md`, `_head.html`, `_footer.html`. Everything else is a slide, sorted alphabetically — so prefix files with `1-`, `2-`, … to control order.</p>
+<p class="markdown-alert-title">Only these names are special (exact match): `_cover.md`, `_part.md`, `_head.html`, `_footer.html`, `_preamble.typ`. Everything else is a slide, sorted alphabetically — so prefix files with `1-`, `2-`, … to control order.</p>
 </div>
 </div><!-- end step -->
 """
@@ -434,6 +436,7 @@ alt = """
 my-talk/
 ├── _head.html          # injected into <head> (fonts, stylesheet)
 ├── _footer.html        # footer component (progress bar, etc.)
+├── _preamble.typ       # optional: replaces the generated Typst preamble
 ├── _cover.md           # the cover / title slide
 ├── 1_intro/
 │   ├── _part.md        # section divider slide
@@ -444,7 +447,7 @@ my-talk/
     └── 1-details.md
 ```
 
-> [!NOTE] Only these names are special (exact match): `_cover.md`, `_part.md`, `_head.html`, `_footer.html`. Everything else is a slide, sorted alphabetically — so prefix files with `1-`, `2-`, … to control order.
+> [!NOTE] Only these names are special (exact match): `_cover.md`, `_part.md`, `_head.html`, `_footer.html`, `_preamble.typ`. Everything else is a slide, sorted alphabetically — so prefix files with `1-`, `2-`, … to control order.
 > 
 """
 
@@ -2207,6 +2210,9 @@ $ toboggan build -p ./slides/ -f typst -o talk.typ
 | `json` / `yaml` | Pipelines, tooling, inspection |
 | `html` | A standalone file you can email or host |
 | `typst` | `typst compile talk.typ` → a **PDF** handout |
+
+> [!TIP] The Typst preamble — theme, aspect ratio, text size, margins — is generated, unless the deck has a `slides/_preamble.typ` (or you pass `--typst-preamble <FILE>`). Yours *replaces* it, so it owns the imports the slides need: touying, codly, codly-languages, gentle-clues, mitex.
+> 
 """
 
 [slides.style]
@@ -2259,6 +2265,12 @@ raw = """
 </tbody>
 </table>
 </div><!-- end step -->
+
+<div class="step step-1"><!-- begin step -->
+<div class="markdown-alert markdown-alert-tip">
+<p class="markdown-alert-title">The Typst preamble — theme, aspect ratio, text size, margins — is generated, unless the deck has a `slides/_preamble.typ` (or you pass `--typst-preamble &lt;FILE&gt;`). Yours *replaces* it, so it owns the imports the slides need: touying, codly, codly-languages, gentle-clues, mitex.</p>
+</div>
+</div><!-- end step -->
 """
 alt = """
 # Five output formats
@@ -2279,6 +2291,9 @@ $ toboggan build -p ./slides/ -f typst -o talk.typ
 | `json` / `yaml` | Pipelines, tooling, inspection |
 | `html` | A standalone file you can email or host |
 | `typst` | `typst compile talk.typ` → a **PDF** handout |
+
+> [!TIP] The Typst preamble — theme, aspect ratio, text size, margins — is generated, unless the deck has a `slides/_preamble.typ` (or you pass `--typst-preamble <FILE>`). Yours *replaces* it, so it owns the imports the slides need: touying, codly, codly-languages, gentle-clues, mitex.
+> 
 """
 
 [slides.body.style]

@@ -23,6 +23,7 @@ const FILE_HTM: &str = "htm";
 const COVER: &str = "_cover.md";
 const FOOTER: &str = "_footer.html";
 const HEAD: &str = "_head.html";
+const PREAMBLE: &str = "_preamble.typ";
 const PART: &str = "_part.md";
 
 #[derive(Debug, Clone)]
@@ -66,6 +67,10 @@ impl TobogganDir {
         self.find_file(HEAD)
     }
 
+    pub(super) fn get_typst_preamble(&self) -> Result<Option<DirEntry>> {
+        self.find_file(PREAMBLE)
+    }
+
     pub(super) fn get_part(&self) -> Result<Option<DirEntry>> {
         self.find_file(PART)
     }
@@ -106,6 +111,7 @@ impl TobogganDir {
             || filename == COVER
             || filename == FOOTER
             || filename == HEAD
+            || filename == PREAMBLE
             || filename == PART
     }
 }
@@ -335,6 +341,14 @@ pub(super) fn process_talk_metadata(
         let content = fs::read_to_string(&path)
             .map_err(|err| TobogganCliError::read_file(path.clone(), err))?;
         metadata.head = Some(content);
+    }
+
+    if let Some(preamble) = toboggan_dir.get_typst_preamble()? {
+        let path = preamble.path();
+        debug!("Processing Typst preamble: {}", path.display());
+        let content = fs::read_to_string(&path)
+            .map_err(|err| TobogganCliError::read_file(path.clone(), err))?;
+        metadata.typst_preamble = Some(content);
     }
 
     Ok(metadata)
