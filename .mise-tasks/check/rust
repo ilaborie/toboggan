@@ -21,4 +21,12 @@ cargo nextest run
 echo "📚 Running Rust doctests..."
 cargo test --doc
 
+# Build the docs the way CI does. Crate READMEs are included into their crate
+# docs, so a broken intra-doc link or an example that stopped compiling fails
+# here rather than on docs.rs. Without this the local gate was a step short of
+# the CI job it mirrors: making an item `pub` whose doc links to a private one
+# passes fmt, clippy, nextest and doctests, and fails the push.
+echo "📖 Building Rust docs..."
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace
+
 echo "✅ All Rust checks passed!"
