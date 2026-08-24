@@ -11,16 +11,15 @@ classes = ["no_title", "wide"]
 my-talk/
 ├── _head.html          # injected into <head> (fonts, stylesheet)
 ├── _footer.html        # footer component (progress bar, etc.)
+├── _preamble.typ       # optional: replaces the generated Typst preamble
 ├── _cover.md           # the cover / title slide
 ├── 1_intro/
 │   ├── _part.md        # section divider slide
 │   ├── 1-hello.md
 │   └── 2-agenda.md
-└── 2_deep-dive/
-    ├── _part.md
-    └── 1-details.md
+└── 2_deep-dive/        # same shape as 1_intro
 ```
 
 <!-- pause -->
 
-> [!NOTE] Only these names are special (exact match): `_cover.md`, `_part.md`, `_head.html`, `_footer.html`. Everything else is a slide, sorted alphabetically — so prefix files with `1-`, `2-`, … to control order.
+> [!NOTE] Only `_cover.md`, `_part.md`, `_head.html`, `_footer.html` and `_preamble.typ` are special (exact match). Everything else is a slide, sorted by filename.

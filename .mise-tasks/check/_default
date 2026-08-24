@@ -23,7 +23,7 @@ mise check:ios
 
 echo ""
 echo "🎉 All platform checks completed successfully!"
-echo "✅ Rust: formatting, linting, unit tests, doctests"
+echo "✅ Rust: formatting, linting, unit tests, doctests, docs"
 echo "✅ Python: formatting, linting, and the binding test suite"
 echo "✅ Web: Biome linting and formatting"
 echo "✅ iOS: SwiftLint analysis"

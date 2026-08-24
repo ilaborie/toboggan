@@ -667,7 +667,8 @@ impl Workspace {
 }
 
 /// Lists a directory's entries that carry a leading `NN-` number, sorted by that
-/// number. Non-numbered helpers (`_cover.md`, `_part.md`, `_head.html`, …) and
+/// number. Non-numbered helpers (`_cover.md`, `_part.md`, `_head.html`,
+/// `_preamble.typ`, …) and
 /// hidden temp files are excluded.
 fn numbered_entries(dir: &Path) -> anyhow::Result<Vec<String>> {
     let mut entries = Vec::new();

@@ -121,8 +121,15 @@ fn run_default(args: DefaultArgs) -> miette::Result<()> {
             args.into_lint_args().resolve(config),
         )),
         DefaultCommand::Pdf => {
-            let (input, settings) = args.into_pdf_args().resolve(config);
-            to_miette(commands::pdf::build_pdf(&input, settings, None))
+            let args = args.into_pdf_args();
+            let check_overflow = !args.no_overflow_check;
+            let (input, settings) = args.resolve(config);
+            to_miette(commands::pdf::build_pdf(
+                &input,
+                settings,
+                None,
+                check_overflow,
+            ))
         }
         DefaultCommand::Thumbnails => {
             let (input, settings) = args.into_thumbnails_args().resolve(config);
@@ -154,8 +161,14 @@ fn lint_default(args: cli::LintArgs) -> miette::Result<()> {
 fn pdf_default(args: cli::PdfArgs) -> miette::Result<()> {
     let config = load_config(&args.path.search_root())?;
     let output = args.output.clone();
+    let check_overflow = !args.no_overflow_check;
     let (input, settings) = args.resolve(config);
-    to_miette(commands::pdf::build_pdf(&input, settings, output))
+    to_miette(commands::pdf::build_pdf(
+        &input,
+        settings,
+        output,
+        check_overflow,
+    ))
 }
 
 fn thumbnails_default(args: cli::ThumbnailsArgs) -> miette::Result<()> {

@@ -11,6 +11,24 @@ Entries are grouped the way the commits are: this repository uses
 
 ### Added
 
+- **A deck can bring its own Typst preamble.** The generated one picks the
+  touying theme and the aspect ratio, and neither can be taken back by anything
+  written after them — so a deck could not choose another theme, or give itself
+  more room. A `slides/_preamble.typ` now replaces it verbatim, as does
+  `--typst-preamble <FILE>` (or `typst-preamble` under `[build]`, which wins
+  over the deck file). This is the `_head.html` of the PDF side, except that it
+  replaces rather than appends: a deck that sets it owns everything the
+  generated preamble set up — the imports (touying, codly, codly-languages,
+  gentle-clues, mitex), a theme show-rule that suppresses the theme's own
+  heading display, without which every slide title prints twice
+  (`subslide-preamble: none` for `themes.simple`, `header: none` for
+  `themes.metropolis`), and `#show: codly-init.with()` with
+  `#codly(languages: codly-languages)` for code fences. It travels on the
+  `Talk`, so
+  `toboggan pdf`, `toboggan build -o out.typ`, the server's `/download.pdf` and
+  a prebuilt `talk.toml` all honour it. Thumbnails keep their own fixed-size,
+  theme-less preamble, which is what makes a single slide render on one page.
+
 - **State broadcasts carry a sequence number.** `Notification::State` and
   `Notification::TalkChange` now include `seq`, a counter the server advances
   once per change to the deck. A client that learns the state over only the
@@ -149,6 +167,30 @@ Entries are grouped the way the commits are: this repository uses
   client.slides` was an error against it while working perfectly at runtime.
 
 ### Fixed
+
+- **A slide that does not fit no longer overflows in silence.** `#slide[..]` has
+  no overflow handling: content that does not fit simply flows onto a second
+  page, so a 23-slide deck could become 38 pages with nothing in the output
+  saying so. Every emitted slide now carries invisible `#metadata` page markers,
+  and `toboggan pdf` asks typst where they landed: it prints the deck's real
+  page count and names each slide that spilled, with the pages it took. It stays
+  a warning and exits 0 — a deck that does not fit is still a PDF — and
+  `--no-overflow-check` skips the extra typst pass.
+
+- **The PDF cover is the deck's cover again.** Rendering a Cover slide did
+  nothing at all, on the grounds that its title and date were already emitted by
+  the title slide — true of the title and date, and of nothing else. A cover
+  whose point is a full-bleed illustration exported as a blank page with a date
+  on it, with no warning. `_cover.md`'s body is now rendered under the title and
+  date, its leading `# Title` stripped so it is not said twice.
+
+- **The PDF no longer prints every slide title twice.** touying's `simple` theme
+  displays the current level-2 heading above each slide, and the body emitted
+  that same `== <title>` inside `#slide[..]` — so every content slide in the
+  export carried its title twice, once from the theme and once from the body.
+  The generated preamble now passes `subslide-preamble: none`, which is where it
+  has to go: the theme stores the value and re-applies it per slide, so a later
+  `config-common` would have been overwritten.
 
 - **A socket that misses its connect budget still comes up.** The constructor
   bounded the handshake by wrapping `connect()` in a timeout, which cancels it —

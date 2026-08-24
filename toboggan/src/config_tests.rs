@@ -175,6 +175,32 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_relative_typst_preamble_is_anchored_to_the_config_that_declared_it() {
+        let root = TempDir::new().expect("temp dir");
+        let deck = root.path().join("decks").join("my-talk");
+        write(
+            root.path(),
+            "toboggan.toml",
+            "[build]\ntypst-preamble = \"house-style.typ\"\n",
+        );
+        std::fs::create_dir_all(&deck).expect("create deck dir");
+
+        let config = load_layers(&deck, None).expect("load");
+
+        let expected = root
+            .path()
+            .canonicalize()
+            .expect("canonicalize")
+            .join("house-style.typ");
+        assert_eq!(
+            config.build.typst_preamble.as_deref(),
+            Some(expected.as_path()),
+            "a house preamble must resolve against the config that named it, \
+             not against wherever toboggan was run from"
+        );
+    }
+
     /// The `toboggan.toml` that `toboggan new` writes, with every key commented
     /// out. It is the primary documentation of the config surface.
     const TEMPLATE: &str = include_str!("../../toboggan-cli/templates/toboggan.toml");

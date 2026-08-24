@@ -377,17 +377,16 @@ body_source = """
 my-talk/
 ├── _head.html          # injected into <head> (fonts, stylesheet)
 ├── _footer.html        # footer component (progress bar, etc.)
+├── _preamble.typ       # optional: replaces the generated Typst preamble
 ├── _cover.md           # the cover / title slide
 ├── 1_intro/
 │   ├── _part.md        # section divider slide
 │   ├── 1-hello.md
 │   └── 2-agenda.md
-└── 2_deep-dive/
-    ├── _part.md
-    └── 1-details.md
+└── 2_deep-dive/        # same shape as 1_intro
 ```
 
-> [!NOTE] Only these names are special (exact match): `_cover.md`, `_part.md`, `_head.html`, `_footer.html`. Everything else is a slide, sorted alphabetically — so prefix files with `1-`, `2-`, … to control order.
+> [!NOTE] Only `_cover.md`, `_part.md`, `_head.html`, `_footer.html` and `_preamble.typ` are special (exact match). Everything else is a slide, sorted by filename.
 > 
 """
 
@@ -409,19 +408,18 @@ raw = """
 <pre style="background-color:#eff1f5;"><code class="language-text"><span style="color:#4f5b66;">my-talk/
 </span><span style="color:#4f5b66;">├── _head.html          # injected into &lt;head&gt; (fonts, stylesheet)
 </span><span style="color:#4f5b66;">├── _footer.html        # footer component (progress bar, etc.)
+</span><span style="color:#4f5b66;">├── _preamble.typ       # optional: replaces the generated Typst preamble
 </span><span style="color:#4f5b66;">├── _cover.md           # the cover / title slide
 </span><span style="color:#4f5b66;">├── 1_intro/
 </span><span style="color:#4f5b66;">│   ├── _part.md        # section divider slide
 </span><span style="color:#4f5b66;">│   ├── 1-hello.md
 </span><span style="color:#4f5b66;">│   └── 2-agenda.md
-</span><span style="color:#4f5b66;">└── 2_deep-dive/
-</span><span style="color:#4f5b66;">    ├── _part.md
-</span><span style="color:#4f5b66;">    └── 1-details.md
+</span><span style="color:#4f5b66;">└── 2_deep-dive/        # same shape as 1_intro
 </span></code></pre>
 
 <div class="step step-0"><!-- begin step -->
 <div class="markdown-alert markdown-alert-note">
-<p class="markdown-alert-title">Only these names are special (exact match): `_cover.md`, `_part.md`, `_head.html`, `_footer.html`. Everything else is a slide, sorted alphabetically — so prefix files with `1-`, `2-`, … to control order.</p>
+<p class="markdown-alert-title">Only `_cover.md`, `_part.md`, `_head.html`, `_footer.html` and `_preamble.typ` are special (exact match). Everything else is a slide, sorted by filename.</p>
 </div>
 </div><!-- end step -->
 """
@@ -434,17 +432,16 @@ alt = """
 my-talk/
 ├── _head.html          # injected into <head> (fonts, stylesheet)
 ├── _footer.html        # footer component (progress bar, etc.)
+├── _preamble.typ       # optional: replaces the generated Typst preamble
 ├── _cover.md           # the cover / title slide
 ├── 1_intro/
 │   ├── _part.md        # section divider slide
 │   ├── 1-hello.md
 │   └── 2-agenda.md
-└── 2_deep-dive/
-    ├── _part.md
-    └── 1-details.md
+└── 2_deep-dive/        # same shape as 1_intro
 ```
 
-> [!NOTE] Only these names are special (exact match): `_cover.md`, `_part.md`, `_head.html`, `_footer.html`. Everything else is a slide, sorted alphabetically — so prefix files with `1-`, `2-`, … to control order.
+> [!NOTE] Only `_cover.md`, `_part.md`, `_head.html`, `_footer.html` and `_preamble.typ` are special (exact match). Everything else is a slide, sorted by filename.
 > 
 """
 
@@ -2207,6 +2204,9 @@ $ toboggan build -p ./slides/ -f typst -o talk.typ
 | `json` / `yaml` | Pipelines, tooling, inspection |
 | `html` | A standalone file you can email or host |
 | `typst` | `typst compile talk.typ` → a **PDF** handout |
+
+> [!TIP] `toboggan pdf` names every slide that spilled onto a second page. The Typst preamble is generated, unless the deck ships a `slides/_preamble.typ` — which *replaces* it, and then owns everything it set up.
+> 
 """
 
 [slides.style]
@@ -2259,6 +2259,12 @@ raw = """
 </tbody>
 </table>
 </div><!-- end step -->
+
+<div class="step step-1"><!-- begin step -->
+<div class="markdown-alert markdown-alert-tip">
+<p class="markdown-alert-title">`toboggan pdf` names every slide that spilled onto a second page. The Typst preamble is generated, unless the deck ships a `slides/_preamble.typ` — which *replaces* it, and then owns everything it set up.</p>
+</div>
+</div><!-- end step -->
 """
 alt = """
 # Five output formats
@@ -2279,6 +2285,9 @@ $ toboggan build -p ./slides/ -f typst -o talk.typ
 | `json` / `yaml` | Pipelines, tooling, inspection |
 | `html` | A standalone file you can email or host |
 | `typst` | `typst compile talk.typ` → a **PDF** handout |
+
+> [!TIP] `toboggan pdf` names every slide that spilled onto a second page. The Typst preamble is generated, unless the deck ships a `slides/_preamble.typ` — which *replaces* it, and then owns everything it set up.
+> 
 """
 
 [slides.body.style]

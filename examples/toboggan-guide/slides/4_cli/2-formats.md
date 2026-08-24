@@ -23,3 +23,7 @@ $ toboggan build -p ./slides/ -f typst -o talk.typ
 | `json` / `yaml` | Pipelines, tooling, inspection |
 | `html` | A standalone file you can email or host |
 | `typst` | `typst compile talk.typ` → a **PDF** handout |
+
+<!-- pause -->
+
+> [!TIP] `toboggan pdf` names every slide that spilled onto a second page. The Typst preamble is generated, unless the deck ships a `slides/_preamble.typ` — which *replaces* it, and then owns everything it set up.

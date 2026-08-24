@@ -139,6 +139,19 @@ pub(crate) struct BuildOptions {
     #[arg(long, value_name = "FILE", value_hint = clap::ValueHint::FilePath)]
     pub(crate) mermaid_config: Option<PathBuf>,
 
+    /// Typst preamble replacing the generated one, for `.typ` and PDF output
+    ///
+    /// Overrides the deck's own `_preamble.typ`. Emitted verbatim in place of
+    /// the generated preamble, so it owns everything that one set up: the
+    /// imports (touying, codly, codly-languages, gentle-clues, mitex), a theme
+    /// show-rule that suppresses the theme's own heading display — the body
+    /// emits `== <title>` itself, so without it every title prints twice
+    /// (`subslide-preamble: none` for themes.simple, `header: none` for
+    /// themes.metropolis) — and `#show: codly-init.with()` together with
+    /// `#codly(languages: codly-languages)` for code fences.
+    #[arg(long, value_name = "FILE", value_hint = clap::ValueHint::FilePath)]
+    pub(crate) typst_preamble: Option<PathBuf>,
+
     /// Disable automatic numbering of parts and slides
     #[arg(long)]
     pub(crate) no_counter: bool,
@@ -166,6 +179,7 @@ impl BuildOptions {
         self.lang = self.lang.take().or(config.lang);
         self.base_url = self.base_url.take().or(config.base_url);
         self.mermaid_config = self.mermaid_config.take().or(config.mermaid_config);
+        self.typst_preamble = self.typst_preamble.take().or(config.typst_preamble);
         self.wpm = self.wpm.or(config.wpm);
         self.no_counter |= config.no_counter.unwrap_or(false);
         self.exclude_notes_from_duration |= config.exclude_notes_from_duration.unwrap_or(false);
@@ -191,6 +205,7 @@ impl BuildOptions {
             base_url: self.base_url,
             theme: self.theme.unwrap_or_else(|| DEFAULT_THEME.to_owned()),
             mermaid_config: self.mermaid_config,
+            typst_preamble: self.typst_preamble,
             list_themes: false,
             format: None,
             no_counter: self.no_counter,
@@ -385,6 +400,9 @@ impl DefaultArgs {
         PdfArgs {
             path: self.path,
             output: None,
+            // A bare `toboggan` told to render a PDF gets the check; there is no
+            // flag on the default action to turn it off with.
+            no_overflow_check: false,
             build: self.build,
         }
     }
@@ -609,6 +627,13 @@ pub(crate) struct PdfArgs {
     /// Output PDF path (default: `<deck-name>.pdf` in the current directory)
     #[arg(short, long, value_hint = ValueHint::FilePath)]
     pub(crate) output: Option<PathBuf>,
+
+    /// Skip the check that reports slides spilling onto a second page
+    ///
+    /// The check costs one more `typst` pass over the deck, which is the only
+    /// reason to turn it off.
+    #[arg(long)]
+    pub(crate) no_overflow_check: bool,
 
     #[command(flatten)]
     pub(crate) build: BuildOptions,

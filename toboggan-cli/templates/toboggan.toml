@@ -46,6 +46,18 @@
 # `mermaid:theme=dark,rankSpacing=80`.
 # mermaid-config = "mermaid.json"
 
+# Typst preamble for the `.typ` and PDF output, replacing the generated one —
+# the touying theme and the aspect ratio are chosen there, and neither can be
+# taken back by anything written afterwards. The path is relative to this file,
+# and it overrides the deck's own `slides/_preamble.typ`.
+# A replacement owns everything the generated preamble set up: the imports
+# (touying, codly, codly-languages, gentle-clues, mitex), a theme show-rule that
+# suppresses the theme's own heading display — the slide body emits its own
+# `== <title>`, so without it every title prints twice (`subslide-preamble: none`
+# for themes.simple, `header: none` for themes.metropolis) — and
+# `#show: codly-init.with()` with `#codly(languages: codly-languages)`.
+# typst-preamble = "preamble.typ"
+
 # Speaking rate used for the duration estimates in `toboggan stats`.
 # wpm = 150
 

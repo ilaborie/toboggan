@@ -27,6 +27,7 @@ slides/
     _part.md             # section divider slide
     01-welcome.md        # content slide (sorted by filename)
   _head.html             # optional custom <head>
+  _preamble.typ          # optional Typst preamble, replacing the generated one
 public/                  # assets (sibling of slides/)
 ```
 

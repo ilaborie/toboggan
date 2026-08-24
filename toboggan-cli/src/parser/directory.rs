@@ -23,6 +23,7 @@ const FILE_HTM: &str = "htm";
 const COVER: &str = "_cover.md";
 const FOOTER: &str = "_footer.html";
 const HEAD: &str = "_head.html";
+const PREAMBLE: &str = "_preamble.typ";
 const PART: &str = "_part.md";
 
 #[derive(Debug, Clone)]
@@ -66,6 +67,10 @@ impl TobogganDir {
         self.find_file(HEAD)
     }
 
+    pub(super) fn get_typst_preamble(&self) -> Result<Option<DirEntry>> {
+        self.find_file(PREAMBLE)
+    }
+
     pub(super) fn get_part(&self) -> Result<Option<DirEntry>> {
         self.find_file(PART)
     }
@@ -106,6 +111,7 @@ impl TobogganDir {
             || filename == COVER
             || filename == FOOTER
             || filename == HEAD
+            || filename == PREAMBLE
             || filename == PART
     }
 }
@@ -335,6 +341,18 @@ pub(super) fn process_talk_metadata(
         let content = fs::read_to_string(&path)
             .map_err(|err| TobogganCliError::read_file(path.clone(), err))?;
         metadata.head = Some(content);
+    }
+
+    if let Some(preamble) = toboggan_dir.get_typst_preamble()? {
+        let path = preamble.path();
+        debug!("Processing Typst preamble: {}", path.display());
+        let content = fs::read_to_string(&path)
+            .map_err(|err| TobogganCliError::read_file(path.clone(), err))?;
+        // A blank file means "absent", not "replace the preamble with nothing":
+        // `touch _preamble.typ` is a plausible first move, and taking it at its
+        // word emits a `.typ` with no imports at all, which fails deep inside
+        // typst complaining about a `slide` variable the author never wrote.
+        metadata.typst_preamble = Some(content).filter(|content| !content.trim().is_empty());
     }
 
     Ok(metadata)

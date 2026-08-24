@@ -370,6 +370,7 @@ fn default_settings(root: &Path) -> toboggan_cli::Settings {
         base_url: None,
         theme: "base16-ocean.light".to_owned(),
         mermaid_config: None,
+        typst_preamble: None,
         list_themes: false,
         format: None,
         no_counter: false,
