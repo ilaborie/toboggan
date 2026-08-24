@@ -29,6 +29,7 @@ use std::fmt::Write as _;
 
 use comrak::nodes::{AlertType, AstNode, ListType, NodeValue};
 use comrak::{Arena, parse_document};
+use serde::{Deserialize, Serialize};
 use toboggan_core::{Content, Slide, SlideBody, SlideKind, Talk};
 
 use crate::error::{Result, TobogganCliError};
@@ -107,7 +108,12 @@ fn slide_name(slide: &Slide) -> String {
 }
 
 /// The label `toboggan pdf` queries to find where each slide starts and ends.
-const SLIDE_MARKER_LABEL: &str = "toboggan-slide";
+///
+/// Public because the query that reads these markers lives in another crate.
+/// The label, the field names and the `start`/`end` values are one wire format
+/// with a producer here and a consumer there; sharing the pieces is what makes a
+/// rename fail to compile instead of failing to find anything.
+pub const SLIDE_MARKER_LABEL: &str = "toboggan-slide";
 
 /// An invisible marker saying which slide a page belongs to.
 ///
@@ -122,9 +128,14 @@ fn slide_marker(name: &str, at: MarkerAt) -> String {
     format!("  #metadata((slide: \"{name}\", at: \"{at}\"))<{SLIDE_MARKER_LABEL}>")
 }
 
-/// Which end of a slide a [`slide_marker`] marks.
-#[derive(Debug, Clone, Copy)]
-enum MarkerAt {
+/// Which end of a slide a marker labelled [`SLIDE_MARKER_LABEL`] marks.
+///
+/// `Deserialize` so the reader of these markers gets the closed set back rather
+/// than comparing strings: an `at` typst never emits fails to parse here instead
+/// of falling through to "these markers do not pair up" three fields away.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MarkerAt {
     Start,
     End,
 }

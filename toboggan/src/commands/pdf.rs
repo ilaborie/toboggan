@@ -3,6 +3,7 @@ use std::process::Command;
 
 use serde::Deserialize;
 use toboggan_cli::OutputFormat;
+use toboggan_cli::output::{MarkerAt, SLIDE_MARKER_LABEL};
 
 /// Builds a PDF from a folder by rendering Typst, then shelling out to `typst`.
 ///
@@ -89,14 +90,16 @@ pub(crate) fn build_pdf(
 /// The markers `toboggan-cli` emits are `#metadata`, so they render nothing and
 /// shift nothing; asking typst where they landed is the only way to learn that a
 /// slide spilled onto a second page.
-const SLIDE_PAGES_QUERY: &str = "query(<toboggan-slide>).map(m => \
-     (slide: m.value.slide, at: m.value.at, page: m.location().page()))";
-
-/// The label those markers carry, as it appears in the emitted `.typ`.
 ///
-/// Written out a second time here because `toboggan-cli` keeps its copy private;
-/// the two have to agree, and nothing but this comment makes them.
-const SLIDE_MARKER_LABEL: &str = "<toboggan-slide>";
+/// Built from [`SLIDE_MARKER_LABEL`] rather than spelling the label out again:
+/// producer and consumer sit in different crates, and this way renaming it is a
+/// compile error instead of a query that finds nothing.
+fn slide_pages_query() -> String {
+    format!(
+        "query(<{SLIDE_MARKER_LABEL}>).map(m => \
+         (slide: m.value.slide, at: m.value.at, page: m.location().page()))"
+    )
+}
 
 /// How many spans the `.typ` just written ought to yield.
 ///
@@ -108,16 +111,20 @@ const SLIDE_MARKER_LABEL: &str = "<toboggan-slide>";
 /// deck that uses either.
 fn expected_spans(typst_source: &[u8]) -> usize {
     String::from_utf8_lossy(typst_source)
-        .matches(SLIDE_MARKER_LABEL)
+        .matches(&format!("<{SLIDE_MARKER_LABEL}>"))
         .count()
         / 2
 }
 
 /// One marker as typst reports it.
+///
+/// `at` is the shared [`MarkerAt`], not a `String`: a value typst never emits is
+/// now rejected at the parse boundary, so the "markers do not pair up" error
+/// below means only that, and not "or one of them was misspelled".
 #[derive(Debug, Deserialize)]
 struct SlideMarker {
     slide: String,
-    at: String,
+    at: MarkerAt,
     page: usize,
 }
 
@@ -153,7 +160,7 @@ fn slide_spans(root: &Path, typ_path: &Path, expected: usize) -> anyhow::Result<
         .arg(root)
         .arg("--in")
         .arg(typ_path)
-        .arg(SLIDE_PAGES_QUERY)
+        .arg(slide_pages_query())
         .output()
         .map_err(|err| anyhow::anyhow!("could not run `typst eval`: {err}"))?;
 
@@ -188,8 +195,8 @@ fn spans_from(markers: &[SlideMarker]) -> anyhow::Result<Vec<SlideSpan>> {
         .chunks(2)
         .map(|pair| match pair {
             [start, end]
-                if start.at == "start"
-                    && end.at == "end"
+                if start.at == MarkerAt::Start
+                    && end.at == MarkerAt::End
                     && start.slide == end.slide
                     && end.page >= start.page =>
             {
@@ -259,18 +266,21 @@ fn default_pdf_path(input: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
-    fn marker(slide: &str, at: &str, page: usize) -> SlideMarker {
+    fn marker(slide: &str, at: MarkerAt, page: usize) -> SlideMarker {
         SlideMarker {
             slide: slide.to_owned(),
-            at: at.to_owned(),
+            at,
             page,
         }
     }
 
     #[test]
     fn a_slide_that_fits_spans_one_page() {
-        let spans = spans_from(&[marker("1-one.md", "start", 2), marker("1-one.md", "end", 2)])
-            .expect("paired");
+        let spans = spans_from(&[
+            marker("1-one.md", MarkerAt::Start, 2),
+            marker("1-one.md", MarkerAt::End, 2),
+        ])
+        .expect("paired");
 
         assert_eq!(spans.len(), 1);
         assert_eq!(
@@ -285,10 +295,10 @@ mod tests {
         // The 23-slide deck that quietly became 38 pages: this is the number
         // that used to be nowhere in the output.
         let spans = spans_from(&[
-            marker("1-one.md", "start", 2),
-            marker("1-one.md", "end", 2),
-            marker("2-two.md", "start", 3),
-            marker("2-two.md", "end", 6),
+            marker("1-one.md", MarkerAt::Start, 2),
+            marker("1-one.md", MarkerAt::End, 2),
+            marker("2-two.md", MarkerAt::Start, 3),
+            marker("2-two.md", MarkerAt::End, 6),
         ])
         .expect("paired");
 
@@ -308,10 +318,13 @@ mod tests {
     fn markers_that_do_not_pair_up_are_refused() {
         // Rather than pairing one slide's start with the next slide's end and
         // blaming the wrong file.
-        let orphan = spans_from(&[marker("1-one.md", "start", 2)]);
+        let orphan = spans_from(&[marker("1-one.md", MarkerAt::Start, 2)]);
         assert!(orphan.is_err(), "an unclosed slide is not a span");
 
-        let crossed = spans_from(&[marker("1-one.md", "start", 2), marker("2-two.md", "end", 3)]);
+        let crossed = spans_from(&[
+            marker("1-one.md", MarkerAt::Start, 2),
+            marker("2-two.md", MarkerAt::End, 3),
+        ]);
         assert!(
             crossed.is_err(),
             "a start and end from two slides is not a span"
@@ -323,7 +336,10 @@ mod tests {
         // `pages()` used to `saturating_sub`, which turned this into "1 page" —
         // "this slide fits", the one answer a check against silent page growth
         // must never invent from broken input.
-        let backwards = spans_from(&[marker("1-one.md", "start", 6), marker("1-one.md", "end", 3)]);
+        let backwards = spans_from(&[
+            marker("1-one.md", MarkerAt::Start, 6),
+            marker("1-one.md", MarkerAt::End, 3),
+        ]);
 
         assert!(backwards.is_err(), "end before start is not a span");
     }

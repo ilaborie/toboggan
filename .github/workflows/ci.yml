@@ -63,6 +63,13 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: nextest
+      # `toboggan/tests/overflow_check.rs` drives the real binary against a real
+      # `typst`: it is the only thing covering the query string, the `eval`
+      # invocation and the marker label the two crates have to agree on. It
+      # skips when typst is absent, and asserts it is present when `CI` is set —
+      # so dropping this step fails the test rather than quietly retiring it.
+      - name: Install Typst
+        uses: typst-community/setup-typst@v5
 
       - name: Format (nightly)
         run: cargo +nightly fmt --all --check

@@ -13,7 +13,7 @@ use std::borrow::Cow;
 
 use toboggan_core::{RenderTarget, Talk};
 
-pub use self::typst::deck_root;
+pub use self::typst::{MarkerAt, SLIDE_MARKER_LABEL, deck_root};
 use crate::error::Result;
 use crate::mermaid::MermaidRenderer;
 use crate::settings::OutputFormat;
