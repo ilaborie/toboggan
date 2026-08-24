@@ -150,6 +150,13 @@ Entries are grouped the way the commits are: this repository uses
 
 ### Fixed
 
+- **The PDF cover is the deck's cover again.** Rendering a Cover slide did
+  nothing at all, on the grounds that its title and date were already emitted by
+  the title slide — true of the title and date, and of nothing else. A cover
+  whose point is a full-bleed illustration exported as a blank page with a date
+  on it, with no warning. `_cover.md`'s body is now rendered under the title and
+  date, its leading `# Title` stripped so it is not said twice.
+
 - **The PDF no longer prints every slide title twice.** touying's `simple` theme
   displays the current level-2 heading above each slide, and the body emitted
   that same `== <title>` inside `#slide[..]` — so every content slide in the

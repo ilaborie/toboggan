@@ -118,7 +118,14 @@ pub(super) fn generate_typst(talk: &Talk, mermaid: &MermaidRenderer) -> Result<V
     let errors = RefCell::new(Vec::new());
     let mut out = String::new();
     write_header(&mut out);
-    write_title_slide(&mut out, &talk.title, &talk.date.to_string());
+    // The cover is not written by the loop below — its title and date are the
+    // title slide's — so its body has to be rendered here or it is lost.
+    let cover_body = talk
+        .slides
+        .iter()
+        .find(|slide| matches!(slide.kind, SlideKind::Cover))
+        .map_or_else(String::new, |cover| slide_body(cover, mermaid, &errors));
+    write_title_slide(&mut out, &talk.title, &talk.date.to_string(), &cover_body);
     for slide in &talk.slides {
         write_slide(&mut out, slide, mermaid, &errors);
     }
@@ -165,15 +172,7 @@ pub(super) fn generate_thumbnail_typst(
         let _ = writeln!(out, "#text(weight: \"bold\", size: 1.5em)[{title}]\n");
     }
 
-    let body = match slide.body_view() {
-        SlideBody::Empty => String::new(),
-        SlideBody::Rendered(content) => content_to_typst(content),
-        SlideBody::FromMarkdown { source, .. } => strip_leading_heading(&md_to_typst(
-            source,
-            RenderCtx::new(mermaid, &slide_name(slide), &errors),
-        )),
-    };
-    out.push_str(&body);
+    out.push_str(&slide_body(slide, mermaid, &errors));
 
     let failures = errors.into_inner();
     if !failures.is_empty() {
@@ -218,14 +217,26 @@ fn write_header(out: &mut String) {
     );
 }
 
-fn write_title_slide(out: &mut String, title: &str, date: &str) {
+/// Writes the cover page: the deck's title and date, then whatever else
+/// `_cover.md` holds.
+///
+/// `cover_body` used to be dropped on the floor — the arm for a Cover slide did
+/// nothing, on the grounds that the title and date were already emitted here.
+/// True of the title and date, and of nothing else: a cover whose point is a
+/// full-bleed illustration exported as a blank page with a date on it.
+fn write_title_slide(out: &mut String, title: &str, date: &str, cover_body: &str) {
     let title = escape_typst(title);
+    let body_block = if cover_body.trim().is_empty() {
+        String::new()
+    } else {
+        format!("\n\n  {}", cover_body.trim_end())
+    };
     let _ = writeln!(
         out,
         r#"#title-slide[
   #text(size: 2em, weight: "bold")[{title}]
   #v(1em)
-  #text(size: 0.8em, fill: gray)[{date}]
+  #text(size: 0.8em, fill: gray)[{date}]{body_block}
 ]"#
     );
 }
@@ -237,8 +248,8 @@ fn write_slide(
     errors: &RefCell<Vec<TobogganCliError>>,
 ) {
     match slide.kind {
-        // The cover's title and date are emitted by `write_header` /
-        // `write_title_slide`; there is nothing more to render here.
+        // The whole cover — title, date and body — is emitted by
+        // `write_title_slide`, so there is nothing left to render here.
         SlideKind::Cover => {}
         SlideKind::Part => write_section(out, slide, mermaid, errors),
         SlideKind::Standard => write_standard(out, slide, mermaid, errors),
@@ -252,7 +263,7 @@ fn write_section(
     errors: &RefCell<Vec<TobogganCliError>>,
 ) {
     let title = content_to_typst(&slide.title);
-    let body = section_body(slide, mermaid, errors);
+    let body = slide_body(slide, mermaid, errors);
     let body_block = if body.trim().is_empty() {
         String::new()
     } else {
@@ -264,24 +275,6 @@ fn write_section(
   #text(size: 1.5em, weight: \"bold\")[{title}]{body_block}
 ]"
     );
-}
-
-/// Render the body of a Part slide.
-///
-/// Routes on the `SlideBody` view so the three meaningful states are explicit.
-fn section_body(
-    slide: &Slide,
-    mermaid: &MermaidRenderer,
-    errors: &RefCell<Vec<TobogganCliError>>,
-) -> String {
-    match slide.body_view() {
-        SlideBody::Empty => String::new(),
-        SlideBody::Rendered(content) => content_to_typst(content),
-        SlideBody::FromMarkdown { source, .. } => strip_leading_heading(&md_to_typst(
-            source,
-            RenderCtx::new(mermaid, &slide_name(slide), errors),
-        )),
-    }
 }
 
 /// Drop the leading `= heading` produced by `md_to_typst` for `_part.md` files
@@ -340,7 +333,7 @@ fn write_standard_body(
     errors: &RefCell<Vec<TobogganCliError>>,
 ) {
     let title = content_to_typst(&slide.title);
-    let body = standard_body(slide, mermaid, errors);
+    let body = slide_body(slide, mermaid, errors);
     let title_block = if title.trim().is_empty() {
         String::new()
     } else {
@@ -361,12 +354,13 @@ fn write_standard_body(
     let _ = writeln!(out, "#slide[\n{title_block}{body_block}\n]");
 }
 
-/// Render the body of a Standard slide.
+/// Render a slide's body, whatever kind of slide it is.
 ///
-/// Routes on the `SlideBody` view. The leading H1 from a markdown source is
-/// stripped because the slide title is emitted separately via `==` inside
-/// `#slide[..]`.
-fn standard_body(
+/// Routes on the `SlideBody` view so the three meaningful states are explicit.
+/// The leading H1 from a markdown source is stripped in every case because each
+/// caller emits the title itself — `== <title>` inside `#slide[..]`, the outer
+/// `#text(..)` of a section slide, or the title slide's own heading.
+fn slide_body(
     slide: &Slide,
     mermaid: &MermaidRenderer,
     errors: &RefCell<Vec<TobogganCliError>>,
@@ -829,6 +823,70 @@ mod tests {
             "cover uses touying title-slide"
         );
         assert!(output.contains("codly-init"), "codly initialised");
+    }
+
+    fn cover_slide(source: &str) -> Slide {
+        Slide {
+            kind: SlideKind::Cover,
+            title: Content::text("My Presentation"),
+            body_source: Some(source.to_owned()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_cover_body_is_rendered_not_dropped() {
+        // Regression: the Cover arm of `write_slide` did nothing, on the grounds
+        // that the title and date were emitted by the title slide. Everything
+        // else in `_cover.md` — an illustration, a subtitle, a byline — went
+        // with them, silently.
+        let mut talk = make_talk("My Presentation");
+        talk.slides.push(cover_slide(
+            "# My Presentation\n\n![The cover](/public/img/cover.png)\n\nBy someone\n",
+        ));
+        let output =
+            String::from_utf8(generate_typst(&talk, &MermaidRenderer::default()).expect("render"))
+                .expect("utf8");
+
+        let title_slide = output
+            .split_once("#title-slide[")
+            .expect("title slide emitted")
+            .1
+            .split_once("\n]")
+            .expect("title slide closed")
+            .0;
+
+        assert!(
+            title_slide.contains(r#"#image("/public/img/cover.png")"#),
+            "cover illustration rendered inside the title slide, got: {output}"
+        );
+        assert!(
+            title_slide.contains("By someone"),
+            "cover prose rendered inside the title slide, got: {output}"
+        );
+        assert!(
+            !title_slide.is_empty() && !title_slide.contains("#slide["),
+            "cover stays one page, got: {output}"
+        );
+        assert_eq!(
+            output.matches("My Presentation").count(),
+            1,
+            "the cover's own H1 is not repeated under the title, got: {output}"
+        );
+    }
+
+    #[test]
+    fn test_empty_cover_leaves_the_title_slide_alone() {
+        let mut talk = make_talk("My Presentation");
+        talk.slides.push(cover_slide("# My Presentation\n"));
+        let output =
+            String::from_utf8(generate_typst(&talk, &MermaidRenderer::default()).expect("render"))
+                .expect("utf8");
+
+        assert!(
+            output.contains("#text(size: 0.8em, fill: gray)[2024-01-15]\n]"),
+            "date is the last thing on a bodyless cover, got: {output}"
+        );
     }
 
     #[test]
