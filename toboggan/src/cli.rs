@@ -142,9 +142,13 @@ pub(crate) struct BuildOptions {
     /// Typst preamble replacing the generated one, for `.typ` and PDF output
     ///
     /// Overrides the deck's own `_preamble.typ`. Emitted verbatim in place of
-    /// the generated imports and touying theme, so it owns every import the
-    /// rendered body needs: touying, codly, codly-languages, gentle-clues,
-    /// mitex.
+    /// the generated preamble, so it owns everything that one set up: the
+    /// imports (touying, codly, codly-languages, gentle-clues, mitex), a theme
+    /// show-rule that suppresses the theme's own heading display — the body
+    /// emits `== <title>` itself, so without it every title prints twice
+    /// (`subslide-preamble: none` for themes.simple, `header: none` for
+    /// themes.metropolis) — and `#show: codly-init.with()` together with
+    /// `#codly(languages: codly-languages)` for code fences.
     #[arg(long, value_name = "FILE", value_hint = clap::ValueHint::FilePath)]
     pub(crate) typst_preamble: Option<PathBuf>,
 

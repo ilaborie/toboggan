@@ -109,8 +109,10 @@ pub struct Settings {
     /// Typst preamble replacing the generated one, for the `.typ` and PDF output.
     ///
     /// Overrides the deck's own `_preamble.typ`. The file is emitted verbatim in
-    /// place of the generated imports and touying theme, so it owns every import
-    /// the rendered body needs; see [`toboggan_core::Talk::typst_preamble`].
+    /// place of the generated preamble, so it owns not just the imports but the
+    /// theme show-rule — which has to suppress the theme's own heading display,
+    /// or every title prints twice — and the codly setup; see
+    /// [`toboggan_core::Talk::typst_preamble`].
     #[clap(
         long,
         value_hint = clap::ValueHint::FilePath,

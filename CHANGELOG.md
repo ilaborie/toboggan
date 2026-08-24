@@ -12,14 +12,19 @@ Entries are grouped the way the commits are: this repository uses
 ### Added
 
 - **A deck can bring its own Typst preamble.** The generated one picks the
-  touying theme, the aspect ratio, the base text size and the margins, and none
-  of those can be taken back by anything written after them — so a deck could
-  not choose another theme, or fit more than about eleven lines on a slide. A
-  `slides/_preamble.typ` now replaces it verbatim, as does `--typst-preamble
-  <FILE>` (or `typst-preamble` under `[build]`, which wins over the deck file).
-  This is the `_head.html` of the PDF side, except that it replaces rather than
-  appends: a deck that sets it owns every import the slides need — touying,
-  codly and codly-languages, gentle-clues, mitex. It travels on the `Talk`, so
+  touying theme and the aspect ratio, and neither can be taken back by anything
+  written after them — so a deck could not choose another theme, or give itself
+  more room. A `slides/_preamble.typ` now replaces it verbatim, as does
+  `--typst-preamble <FILE>` (or `typst-preamble` under `[build]`, which wins
+  over the deck file). This is the `_head.html` of the PDF side, except that it
+  replaces rather than appends: a deck that sets it owns everything the
+  generated preamble set up — the imports (touying, codly, codly-languages,
+  gentle-clues, mitex), a theme show-rule that suppresses the theme's own
+  heading display, without which every slide title prints twice
+  (`subslide-preamble: none` for `themes.simple`, `header: none` for
+  `themes.metropolis`), and `#show: codly-init.with()` with
+  `#codly(languages: codly-languages)` for code fences. It travels on the
+  `Talk`, so
   `toboggan pdf`, `toboggan build -o out.typ`, the server's `/download.pdf` and
   a prebuilt `talk.toml` all honour it. Thumbnails keep their own fixed-size,
   theme-less preamble, which is what makes a single slide render on one page.

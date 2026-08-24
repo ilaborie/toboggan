@@ -10,8 +10,13 @@ A presentation is a `slides/` folder:
   - `NN-slide.md` — content slides (sorted by filename).
 - `_head.html` / `_footer.html` — optional custom head/footer.
 - `_preamble.typ` — optional Typst preamble, replacing the one the PDF export
-  generates (theme, aspect ratio, text size). It owns every import the slides
-  need: touying, codly, codly-languages, gentle-clues, mitex.
+  generates (theme, aspect ratio). It owns everything that one set up: the
+  imports (touying, codly, codly-languages, gentle-clues, mitex), a theme
+  show-rule that suppresses the theme's own heading display — the slide body
+  emits its own `== <title>`, so without it every title prints twice
+  (`subslide-preamble: none` for themes.simple, `header: none` for
+  themes.metropolis) — and `#show: codly-init.with()` with
+  `#codly(languages: codly-languages)`.
 - assets live in a sibling `public/` folder.
 
 ## Front matter

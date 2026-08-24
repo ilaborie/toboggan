@@ -23,12 +23,23 @@ pub struct Talk {
     /// Typst preamble replacing the generated one, from `_preamble.typ`.
     ///
     /// The `_head.html` of the PDF side, except that it *replaces* rather than
-    /// appends: the generated preamble picks the touying theme, the aspect ratio
-    /// and the base text size, and none of those can be taken back by anything
-    /// written after them. A deck that sets this owns every import the rendered
-    /// body needs — touying (`#slide`, `#title-slide`, `#new-section-slide`),
-    /// codly and codly-languages for code fences, gentle-clues for GitHub
-    /// alerts, mitex for `$…$` math.
+    /// appends: the generated preamble picks the touying theme and the aspect
+    /// ratio, and neither can be taken back by anything written after them.
+    ///
+    /// A deck that sets this owns every import the rendered body needs — touying
+    /// (`#slide`, `#title-slide`, `#new-section-slide`), codly and
+    /// codly-languages for code fences, gentle-clues for GitHub alerts, mitex
+    /// for `$…$` math — *and* the setup that goes with them, which is the half
+    /// that is easy to miss:
+    ///
+    /// - it must stop its theme from displaying the slide's level-2 heading,
+    ///   because the body already emits `== <title>` inside `#slide[..]` and the
+    ///   two together print every title twice. The argument is the theme's own:
+    ///   `subslide-preamble: none` for `themes.simple`, `header: none` for
+    ///   `themes.metropolis`.
+    /// - it must run `#show: codly-init.with()` and
+    ///   `#codly(languages: codly-languages)`, or code fences lose their line
+    ///   numbers and language labels.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub typst_preamble: Option<String>,
     /// BCP 47 language tag for the deck, e.g. `fr` or `pt-BR`.
