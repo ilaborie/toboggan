@@ -163,6 +163,15 @@ Entries are grouped the way the commits are: this repository uses
 
 ### Fixed
 
+- **A slide that does not fit no longer overflows in silence.** `#slide[..]` has
+  no overflow handling: content that does not fit simply flows onto a second
+  page, so a 23-slide deck could become 38 pages with nothing in the output
+  saying so. Every emitted slide now carries invisible `#metadata` page markers,
+  and `toboggan pdf` asks typst where they landed: it prints the deck's real
+  page count and names each slide that spilled, with the pages it took. It stays
+  a warning and exits 0 — a deck that does not fit is still a PDF — and
+  `--no-overflow-check` skips the extra typst pass.
+
 - **The PDF cover is the deck's cover again.** Rendering a Cover slide did
   nothing at all, on the grounds that its title and date were already emitted by
   the title slide — true of the title and date, and of nothing else. A cover

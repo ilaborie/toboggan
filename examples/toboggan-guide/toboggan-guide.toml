@@ -2211,6 +2211,9 @@ $ toboggan build -p ./slides/ -f typst -o talk.typ
 | `html` | A standalone file you can email or host |
 | `typst` | `typst compile talk.typ` → a **PDF** handout |
 
+> [!NOTE] `toboggan pdf` names every slide that spilled onto a second page — `--no-overflow-check` skips that pass.
+> 
+
 > [!TIP] The Typst preamble — theme, aspect ratio, text size, margins — is generated, unless the deck has a `slides/_preamble.typ` (or you pass `--typst-preamble <FILE>`). Yours *replaces* it, so it owns the imports the slides need: touying, codly, codly-languages, gentle-clues, mitex.
 > 
 """
@@ -2267,6 +2270,9 @@ raw = """
 </div><!-- end step -->
 
 <div class="step step-1"><!-- begin step -->
+<div class="markdown-alert markdown-alert-note">
+<p class="markdown-alert-title">`toboggan pdf` names every slide that spilled onto a second page — `--no-overflow-check` skips that pass.</p>
+</div>
 <div class="markdown-alert markdown-alert-tip">
 <p class="markdown-alert-title">The Typst preamble — theme, aspect ratio, text size, margins — is generated, unless the deck has a `slides/_preamble.typ` (or you pass `--typst-preamble &lt;FILE&gt;`). Yours *replaces* it, so it owns the imports the slides need: touying, codly, codly-languages, gentle-clues, mitex.</p>
 </div>
@@ -2291,6 +2297,9 @@ $ toboggan build -p ./slides/ -f typst -o talk.typ
 | `json` / `yaml` | Pipelines, tooling, inspection |
 | `html` | A standalone file you can email or host |
 | `typst` | `typst compile talk.typ` → a **PDF** handout |
+
+> [!NOTE] `toboggan pdf` names every slide that spilled onto a second page — `--no-overflow-check` skips that pass.
+> 
 
 > [!TIP] The Typst preamble — theme, aspect ratio, text size, margins — is generated, unless the deck has a `slides/_preamble.typ` (or you pass `--typst-preamble <FILE>`). Yours *replaces* it, so it owns the imports the slides need: touying, codly, codly-languages, gentle-clues, mitex.
 > 

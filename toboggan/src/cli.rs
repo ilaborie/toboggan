@@ -396,6 +396,9 @@ impl DefaultArgs {
         PdfArgs {
             path: self.path,
             output: None,
+            // A bare `toboggan` told to render a PDF gets the check; there is no
+            // flag on the default action to turn it off with.
+            no_overflow_check: false,
             build: self.build,
         }
     }
@@ -620,6 +623,13 @@ pub(crate) struct PdfArgs {
     /// Output PDF path (default: `<deck-name>.pdf` in the current directory)
     #[arg(short, long, value_hint = ValueHint::FilePath)]
     pub(crate) output: Option<PathBuf>,
+
+    /// Skip the check that reports slides spilling onto a second page
+    ///
+    /// The check costs one more `typst` pass over the deck, which is the only
+    /// reason to turn it off.
+    #[arg(long)]
+    pub(crate) no_overflow_check: bool,
 
     #[command(flatten)]
     pub(crate) build: BuildOptions,
