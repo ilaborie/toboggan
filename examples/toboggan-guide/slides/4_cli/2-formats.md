@@ -26,6 +26,4 @@ $ toboggan build -p ./slides/ -f typst -o talk.typ
 
 <!-- pause -->
 
-> [!NOTE] `toboggan pdf` names every slide that spilled onto a second page — `--no-overflow-check` skips that pass.
-
-> [!TIP] The Typst preamble — theme, aspect ratio, text size, margins — is generated, unless the deck has a `slides/_preamble.typ` (or you pass `--typst-preamble <FILE>`). Yours *replaces* it, so it owns the imports the slides need: touying, codly, codly-languages, gentle-clues, mitex.
+> [!TIP] `toboggan pdf` names every slide that spilled onto a second page. The Typst preamble is generated, unless the deck ships a `slides/_preamble.typ` — which *replaces* it, and then owns everything it set up.
