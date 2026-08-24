@@ -8,8 +8,10 @@ use toboggan_cli::OutputFormat;
 ///
 /// # Errors
 /// Returns an error if parsing fails, the `.typ` cannot be written, the `typst`
-/// binary is missing, or compilation fails.
-#[allow(clippy::print_stdout)]
+/// binary is missing, or compilation fails. A failing *overflow check* is not
+/// one of them: the PDF is already written by then, so it is reported on stderr
+/// and the command still succeeds.
+#[allow(clippy::print_stdout, clippy::print_stderr)]
 pub(crate) fn build_pdf(
     input: &Path,
     mut settings: toboggan_cli::Settings,
@@ -73,7 +75,11 @@ pub(crate) fn build_pdf(
         // A slide that does not fit is still a PDF: say so and exit 0.
         Ok(Some(spans)) => report_overflow(&spans),
         Ok(None) => {}
-        Err(err) => tracing::warn!("could not check the deck for slide overflow: {err:#}"),
+        // Printed for the same reason `report_overflow` prints: the default
+        // filter drops warnings, so a `tracing::warn!` here left an unqualified
+        // ✅ as the last word and told nobody the check had not run. A check
+        // that fails silently is the thing this whole pass exists to prevent.
+        Err(err) => eprintln!("⚠️  could not check the deck for slide overflow: {err:#}"),
     }
     Ok(())
 }
