@@ -99,7 +99,7 @@ comments.
 `github-pages/pages.yml` shows the composite action in use:
 
 ```yaml
-- uses: ilaborie/toboggan@v0.1.0
+- uses: ilaborie/toboggan@v0.2.0
   with:
     folder: ./slides
     outputs: html,pdf,thumbnails

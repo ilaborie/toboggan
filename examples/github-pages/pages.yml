@@ -27,7 +27,7 @@ jobs:
 
       - name: Build the presentation
         id: build
-        uses: ilaborie/toboggan@v0.1.0
+        uses: ilaborie/toboggan@v0.2.0
         with:
           folder: ./slides
           outputs: html,pdf,thumbnails

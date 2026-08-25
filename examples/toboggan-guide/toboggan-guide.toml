@@ -1002,7 +1002,7 @@ classes = [
 ]
 
 [[slides.terminals]]
-cwd = "examples/toboggan-guide/slides/2_directives"
+cwd = "./slides/2_directives"
 
 [[slides]]
 kind = "Standard"
@@ -3348,7 +3348,7 @@ classes = [
 ]
 
 [[slides.terminals]]
-cwd = "examples/toboggan-guide/slides/5_server"
+cwd = "./slides/5_server"
 
 [[slides]]
 kind = "Standard"
@@ -4231,7 +4231,7 @@ A composite **GitHub Action** builds your deck into single-file HTML, a PDF
 handout, and the searchable thumbnail overview — ready for GitHub Pages:
 
 ```yaml
-- uses: ilaborie/toboggan@v0.1.0
+- uses: ilaborie/toboggan@v0.2.0
   with:
     folder: ./slides
     outputs: html,pdf,thumbnails
@@ -4262,7 +4262,7 @@ raw = """
 <h1>Publish to the web</h1>
 <p>A composite <strong>GitHub Action</strong> builds your deck into single-file HTML, a PDF
 handout, and the searchable thumbnail overview — ready for GitHub Pages:</p>
-<pre style="background-color:#eff1f5;"><code class="language-yaml"><span style="color:#4f5b66;">- </span><span style="color:#bf616a;">uses</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">ilaborie/toboggan@v0.1.0
+<pre style="background-color:#eff1f5;"><code class="language-yaml"><span style="color:#4f5b66;">- </span><span style="color:#bf616a;">uses</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">ilaborie/toboggan@v0.2.0
 </span><span style="color:#4f5b66;">  </span><span style="color:#bf616a;">with</span><span style="color:#4f5b66;">:
 </span><span style="color:#4f5b66;">    </span><span style="color:#bf616a;">folder</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">./slides
 </span><span style="color:#4f5b66;">    </span><span style="color:#bf616a;">outputs</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">html,pdf,thumbnails
@@ -4286,7 +4286,7 @@ A composite **GitHub Action** builds your deck into single-file HTML, a PDF
 handout, and the searchable thumbnail overview — ready for GitHub Pages:
 
 ```yaml
-- uses: ilaborie/toboggan@v0.1.0
+- uses: ilaborie/toboggan@v0.2.0
   with:
     folder: ./slides
     outputs: html,pdf,thumbnails

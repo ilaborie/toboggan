@@ -221,13 +221,13 @@ This repository publishes a composite action that builds a deck into artifacts
 you can deploy:
 
 ```yaml
-- uses: ilaborie/toboggan@v0.1.0
+- uses: ilaborie/toboggan@v0.2.0
   with:
     folder: ./slides          # default ./slides
     outputs: html,pdf,thumbnails
     out-dir: dist             # default dist
     base-url: ""              # only for absolute asset URLs
-    version: v0.1.0           # release of toboggan to install
+    version: v0.2.0           # release of toboggan to install
 ```
 
 A complete Pages workflow lives in

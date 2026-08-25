@@ -27,7 +27,7 @@ inputs:
     default: ""
   version:
     description: >-
-      Release tag of ilaborie/toboggan to install, e.g. v0.1.0. Pinned by
+      Release tag of ilaborie/toboggan to install, e.g. v0.2.0. Pinned by
       default so that a CLI change cannot alter what an already-published ref of
       this action runs. "latest" is accepted but re-opens exactly that hole.
     required: false

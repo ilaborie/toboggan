@@ -9,7 +9,7 @@ A composite **GitHub Action** builds your deck into single-file HTML, a PDF
 handout, and the searchable thumbnail overview — ready for GitHub Pages:
 
 ```yaml
-- uses: ilaborie/toboggan@v0.1.0
+- uses: ilaborie/toboggan@v0.2.0
   with:
     folder: ./slides
     outputs: html,pdf,thumbnails
