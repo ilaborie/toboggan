@@ -31,7 +31,7 @@ inputs:
       default so that a CLI change cannot alter what an already-published ref of
       this action runs. "latest" is accepted but re-opens exactly that hole.
     required: false
-    default: v0.1.0
+    default: v0.1.1
 
 outputs:
   out-dir:
