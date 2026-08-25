@@ -90,6 +90,10 @@ fn dispatch(cli: Cli) -> miette::Result<()> {
             }
         }
         Some(Commands::Skills(args)) => to_miette(commands::skills::install(args)),
+        Some(Commands::Ci(args)) => {
+            let config = load_config(&args.path.search_root())?;
+            to_miette(commands::ci::generate(args, &config))
+        }
         Some(Commands::Completion(args)) => {
             generate_completion(&args);
             Ok(())
@@ -133,7 +137,9 @@ fn run_default(args: DefaultArgs) -> miette::Result<()> {
         }
         DefaultCommand::Thumbnails => {
             let (input, settings) = args.into_thumbnails_args().resolve(config);
-            to_miette(commands::thumbnails::generate(&input, settings, None, true))
+            to_miette(commands::thumbnails::generate(
+                &input, settings, None, true, false,
+            ))
         }
     }
 }
@@ -175,9 +181,14 @@ fn thumbnails_default(args: cli::ThumbnailsArgs) -> miette::Result<()> {
     let config = load_config(&args.path.search_root())?;
     let output = args.output.clone();
     let search = !args.no_search;
+    let static_links = args.static_links;
     let (input, settings) = args.resolve(config);
     to_miette(commands::thumbnails::generate(
-        &input, settings, output, search,
+        &input,
+        settings,
+        output,
+        search,
+        static_links,
     ))
 }
 

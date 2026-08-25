@@ -5,22 +5,30 @@ classes = ["no_title", "wide"]
 
 # Publish to the web
 
-A composite **GitHub Action** builds your deck into single-file HTML, a PDF
-handout, and the searchable thumbnail overview — ready for GitHub Pages:
+`toboggan ci` writes the whole GitHub Pages workflow — single-file HTML, a PDF
+handout, and the searchable thumbnail overview:
+
+```bash
+toboggan ci                    # -> .github/workflows/pages.yml
+toboggan new -p my-talk --ci   # or scaffold with it in place
+```
+
+<!-- pause -->
+
+At its centre is a composite action that downloads the prebuilt binary for a
+pinned release, plus `typst`, then runs the commands you use locally:
 
 ```yaml
 - uses: ilaborie/toboggan@v0.2.0
   with:
     folder: ./slides
     outputs: html,pdf,thumbnails
-    out-dir: dist
+    lint: true
 ```
 
-<!-- pause -->
+<!-- notes -->
+The pin matches the binary that generated the file: `toboggan ci` reads its own
+`CARGO_PKG_VERSION`, and a test fails the build if any doc falls behind it.
 
-It downloads the prebuilt `toboggan` binary for a pinned release, plus `typst`,
-then runs the same commands you use locally — so what you preview is what your
-audience gets.
-
-> [!NOTE]
-> A ready-to-copy consumer workflow lives in `examples/github-pages/pages.yml`.
+`lint: true` keeps a deck with an error in it from ever reaching the site — the
+diagnostics come back as inline annotations on the pull request's changed lines.

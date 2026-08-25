@@ -9,6 +9,28 @@ Entries are grouped the way the commits are: this repository uses
 
 ## [Unreleased]
 
+### Added
+
+- **`toboggan ci` writes the GitHub Pages workflow.** Everything needed to
+  publish a deck already existed — the composite action, and an example workflow
+  to copy — but copying was the author's job, and the copy is where the pinned
+  action version went stale. The command generates the file instead: the pin
+  comes from the binary that wrote it, and the `folder:` input is the deck's path
+  relative to the repository root, so a deck in a subdirectory gets a workflow
+  that actually points at it. `--stdout` prints instead of writing, and an
+  existing workflow is left alone unless `--force` says otherwise, the way
+  `toboggan skills` treats an edited `SKILL.md`. `toboggan new --ci` does it at
+  scaffold time; it is opt-in, unlike `--no-mcp`/`--no-skill`, because a Pages
+  workflow runs on every push and shows a failure until Pages is enabled for the
+  repository. `examples/github-pages/pages.yml` is now generator output held to
+  it by a test, along with every doc that names a version of the action.
+
+- **The action can lint before it builds.** `lint: true` (with `lint-deny`)
+  runs `toboggan lint --format github` ahead of the build, so a deck with an
+  error in it never reaches the published site and, on a pull request, the
+  diagnostics arrive as inline annotations on the changed lines. The generated
+  workflow turns it on and builds pull requests without publishing them.
+
 ### Fixed
 
 - **A step advance no longer kills what is running in the quake terminal.** The
@@ -32,6 +54,16 @@ Entries are grouped the way the commits are: this repository uses
   is now skipped when the incoming slide is the one already on screen; an edited
   slide arriving on a live reload is not equal to the old one, so reloading still
   rebuilds.
+- **The slide overview was unusable on a published site.** Its cards linked to
+  `/run?slide=N`, a route that only exists while `toboggan` is serving the deck,
+  so on GitHub Pages every thumbnail was a link to a 404 — including this
+  project's own guide. `toboggan thumbnails --static-links` points them at the
+  HTML export beside the overview instead, and the action passes it whenever it
+  builds both. The numbering is not the thumbnail index: thumbnails cover the
+  whole deck so that thumbnail N is slide N, while the HTML export drops
+  `hidden_in = ["web"]` slides before numbering its anchors, so one hidden slide
+  shifted every link after it. A hidden slide's card is now not a link at all,
+  since there is nothing in the export to point at.
 
 ## [0.2.0] - 2026-08-25
 

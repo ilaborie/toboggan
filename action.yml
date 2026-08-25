@@ -25,6 +25,19 @@ inputs:
       under a sub-path as well as on a user page at the root.
     required: false
     default: ""
+  lint:
+    description: >-
+      Lint the deck before building. Diagnostics are emitted as GitHub workflow
+      commands, so on a pull request they appear as inline annotations on the
+      changed lines, and an error fails the job before anything is published.
+    required: false
+    default: "false"
+  lint-deny:
+    description: >-
+      Severity at or above which linting fails the job: info, warning or error.
+      Only consulted when `lint` is true.
+    required: false
+    default: error
   version:
     description: >-
       Release tag of ilaborie/toboggan to install, e.g. v0.2.0. Pinned by
@@ -88,6 +101,20 @@ runs:
       if: contains(inputs.outputs, 'pdf') || contains(inputs.outputs, 'thumbnails')
       uses: typst-community/setup-typst@v5
 
+    # Before the build, not after: the point is to stop a deck with an error in
+    # it from reaching the published site, and `toboggan build` is happy to
+    # render one. `--format github` is what turns the diagnostics into
+    # annotations rather than lines nobody scrolls the log to find.
+    - name: Lint the deck
+      if: inputs.lint == 'true'
+      shell: bash
+      env:
+        FOLDER: ${{ inputs.folder }}
+        DENY: ${{ inputs.lint-deny }}
+      run: |
+        set -euo pipefail
+        toboggan lint --path "$FOLDER" --format github --deny "$DENY"
+
     - name: Build artifacts
       shell: bash
       # Inputs go through the environment rather than `${{ }}` interpolation, so
@@ -109,12 +136,25 @@ runs:
         if [ -n "$BASE_URL" ]; then
           base_url_args=(--base-url "$BASE_URL")
         fi
+
+        # The overview's cards default to `/run?slide=N`, which only exists while
+        # `toboggan` is serving the deck — on a published site every card was a
+        # link to a 404. `--static-links` points them at the HTML export instead,
+        # so it is only correct when that export is actually being written next
+        # to the overview, as `$OUT_DIR/index.html` beside `$OUT_DIR/overview/`.
+        # Spaces stripped, because `html, pdf` is a spelling the loop below
+        # accepts (it trims each kind) and a literal match would miss it.
+        thumbnail_args=()
+        if [[ ",${OUTPUTS// /}," == *,html,* ]]; then
+          thumbnail_args=(--static-links)
+        fi
+
         IFS=',' read -ra kinds <<< "$OUTPUTS"
         for kind in "${kinds[@]}"; do
           case "$(echo "$kind" | xargs)" in
             html)       toboggan build --path "$FOLDER" --output "$OUT_DIR/index.html" "${base_url_args[@]}" ;;
             pdf)        toboggan pdf --path "$FOLDER" --output "$OUT_DIR/presentation.pdf" ;;
-            thumbnails) toboggan thumbnails --path "$FOLDER" --output "$OUT_DIR/overview" ;;
+            thumbnails) toboggan thumbnails --path "$FOLDER" --output "$OUT_DIR/overview" "${thumbnail_args[@]}" ;;
             "")         ;;
             # Without this arm a typo (`thumbnail`) produced nothing at all and
             # still exited 0, so the workflow "succeeded" with no artifacts.

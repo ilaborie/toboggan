@@ -14,6 +14,7 @@ pub(crate) fn generate(
     mut settings: toboggan_cli::Settings,
     output: Option<PathBuf>,
     search: bool,
+    static_links: bool,
 ) -> anyhow::Result<()> {
     super::ensure_typst()?;
 
@@ -24,6 +25,7 @@ pub(crate) fn generate(
     let out_dir = output.unwrap_or_else(|| PathBuf::from("overview"));
     let options = ThumbnailOptions {
         search,
+        static_links,
         ..ThumbnailOptions::new(toboggan_cli::mermaid_renderer(&settings)?)
     };
     generate_thumbnails(&talk, &out_dir, &options).map_err(|err| anyhow::anyhow!("{err}"))?;
