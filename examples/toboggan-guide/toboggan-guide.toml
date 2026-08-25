@@ -1002,7 +1002,7 @@ classes = [
 ]
 
 [[slides.terminals]]
-cwd = "./slides/2_directives"
+cwd = "examples/toboggan-guide/slides/2_directives"
 
 [[slides]]
 kind = "Standard"
@@ -3298,7 +3298,10 @@ kind = "Standard"
 body_source = """
 # Live demo — web
 
-This slide is **web-only** (`hidden_in = ["pdf"]`). Type a command:
+This slide is **web-only** (`hidden_in = ["pdf"]`).
+
+Type a command — and keep typing: stepping through a slide does not restart the
+shell.
 """
 hidden_in = ["pdf"]
 
@@ -3316,12 +3319,20 @@ text = "5.4 Live demo (web)"
 type = "Html"
 raw = """
 <h1>Live demo — web</h1>
-<p>This slide is <strong>web-only</strong> (<code>hidden_in = [&quot;pdf&quot;]</code>). Type a command:</p>
+<p>This slide is <strong>web-only</strong> (<code>hidden_in = [&quot;pdf&quot;]</code>).</p>
+
+<div class="step step-0"><!-- begin step -->
+<p>Type a command — and keep typing: stepping through a slide does not restart the
+shell.</p>
+</div><!-- end step -->
 """
 alt = """
 # Live demo — web
 
-This slide is **web-only** (`hidden_in = ["pdf"]`). Type a command:
+This slide is **web-only** (`hidden_in = ["pdf"]`).
+
+Type a command — and keep typing: stepping through a slide does not restart the
+shell.
 """
 
 [slides.body.style]
@@ -3348,7 +3359,7 @@ classes = [
 ]
 
 [[slides.terminals]]
-cwd = "./slides/5_server"
+cwd = "examples/toboggan-guide/slides/5_server"
 
 [[slides]]
 kind = "Standard"
@@ -3555,6 +3566,7 @@ body_source = """
 > A clicker sends `PageUp`/`PageDown`, bound to **steps** rather than slides on
 > purpose — so the remote walks the whole deck instead of skipping every build.
 """
+quake_terminal_cwd = "examples/toboggan-guide/slides/."
 
 [slides.style]
 classes = [
@@ -3664,6 +3676,10 @@ looking at you instead of at the slide. They are handled in the tab, not on the
 server, so blanking your screen does not blank anyone else's.</p>
 <p>The <code>F1</code> dialog is generated from the keymap itself, so it cannot fall out of
 date with what the keys actually do.</p>
+<p>The quake terminal opens in <code>quake_cwd</code> — set per slide, as this one does, or
+once for the whole deck in the cover's front matter. It stays open and keeps its
+shell as you walk the deck; only a slide that names a <em>different</em> directory
+restarts the session, so a build running in it survives the talk.</p>
 """
 alt = """
 `.` and `w` are for the moment someone asks a question and you want the room
@@ -3672,6 +3688,11 @@ server, so blanking your screen does not blank anyone else's.
 
 The `F1` dialog is generated from the keymap itself, so it cannot fall out of
 date with what the keys actually do.
+
+The quake terminal opens in `quake_cwd` — set per slide, as this one does, or
+once for the whole deck in the cover's front matter. It stays open and keeps its
+shell as you walk the deck; only a slide that names a *different* directory
+restarts the session, so a build running in it survives the talk.
 """
 
 [slides.notes.style]

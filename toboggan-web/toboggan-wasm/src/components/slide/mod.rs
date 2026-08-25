@@ -36,6 +36,21 @@ impl TobogganSlideElement {
     }
 
     pub(crate) fn set_slide(&mut self, slide: Option<Slide>, current_step: usize) {
+        // The deck re-sends its state on every step, not just on every slide, so
+        // most calls here hand back the slide already on screen. Rebuilding it
+        // would clear the container and stop every terminal on it — a
+        // `<!-- pause -->` next to a `<!-- term: -->` restarted the shell each
+        // time the presenter pressed space. Only the step markers move.
+        //
+        // Equality rather than an id: an edited slide arriving on a `TalkChange`
+        // is not equal to the old one, so live reload still rebuilds. The
+        // `is_some` guard keeps `set_slide(None, _)` clearing the container,
+        // which is what it is called for.
+        if slide.is_some() && self.slide == slide {
+            self.set_current_step(current_step);
+            return;
+        }
+
         // Stop any existing terminal sessions
         for terminal in &self.terminals {
             terminal.stop_terminal();

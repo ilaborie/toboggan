@@ -28,7 +28,13 @@ const FALLBACK_CWD: &str = ".";
 ///
 /// When the resolved cwd changes between slides, the existing session is shut
 /// down — its WebSocket closed, and with it the server-side PTY — and a new one
-/// is opened in the new directory.
+/// is opened in the new directory. *Only* then: the deck re-sends its state on
+/// every step, not just on every slide, so a comparison that answers "changed"
+/// too eagerly kills whatever the presenter is demoing each time they press
+/// space. Both cwds are therefore held already resolved, and compared as such
+/// — the raw `Option` the loader hands over is `None` for the many decks that
+/// configure no cwd at all, which never equals the `"."` a session actually
+/// runs in.
 #[derive(Default)]
 pub(crate) struct TobogganQuakeTerminalElement {
     state: Option<Rc<RefCell<QuakeState>>>,
@@ -38,16 +44,20 @@ struct QuakeState {
     overlay: HtmlElement,
     inner: TobogganTerminalElement,
     api_base_url: String,
-    /// The cwd currently driving the running PTY session, or `None` when no
-    /// session has been started yet.
+    /// The resolved cwd currently driving the running PTY session, or `None`
+    /// when no session has been started yet.
     ///
     /// Distinct from [`Self::is_open`]: closing the overlay hides it but leaves
     /// the session running, so a reopen is instant. `is_open == true` therefore
     /// always implies `active_cwd.is_some()` — `toggle` starts a session before
     /// it sets the flag — but the converse does not hold.
     active_cwd: Option<String>,
-    /// The cwd that should be used the next time the overlay is opened.
-    pending_cwd: Option<String>,
+    /// The resolved cwd the next session will run in.
+    ///
+    /// Resolved on the way in rather than on the way out, so that it is
+    /// comparable with [`Self::active_cwd`] without either side having to
+    /// remember to apply [`FALLBACK_CWD`] first.
+    pending_cwd: String,
     /// Whether the overlay is currently visible.
     is_open: bool,
 }
@@ -68,9 +78,16 @@ impl TobogganQuakeTerminalElement {
         };
 
         let needs_restart = {
+            let pending = cwd.unwrap_or_else(|| FALLBACK_CWD.to_owned());
             let mut state = state_rc.borrow_mut();
-            let changed = state.is_open && state.active_cwd != cwd;
-            state.pending_cwd = cwd;
+            // `is_some_and`, not `!=`: with no session yet there is nothing to
+            // restart, and `active_cwd` is `None` in exactly that case.
+            let changed = state.is_open
+                && state
+                    .active_cwd
+                    .as_deref()
+                    .is_some_and(|active| active != pending);
+            state.pending_cwd = pending;
             changed
         };
 
@@ -108,7 +125,7 @@ impl WasmElement for TobogganQuakeTerminalElement {
             inner,
             api_base_url: String::new(),
             active_cwd: None,
-            pending_cwd: None,
+            pending_cwd: FALLBACK_CWD.to_owned(),
             is_open: false,
         }));
 
@@ -233,8 +250,10 @@ fn toggle(state_rc: &Rc<RefCell<QuakeState>>) {
     let (will_open, needs_start) = {
         let state = state_rc.borrow();
         let will_open = !state.is_open;
+        // Covers the no-session-yet case too: `active_cwd` is `None` then, which
+        // no `Some` pending cwd ever equals.
         let needs_start =
-            will_open && (state.active_cwd.is_none() || state.active_cwd != state.pending_cwd);
+            will_open && state.active_cwd.as_deref() != Some(state.pending_cwd.as_str());
         (will_open, needs_start)
     };
 
@@ -272,10 +291,7 @@ fn restart_session(state_rc: &Rc<RefCell<QuakeState>>) {
     // re-populates it with a fresh window/canvas.
     state.inner.stop_terminal();
 
-    let cwd = state
-        .pending_cwd
-        .clone()
-        .unwrap_or_else(|| FALLBACK_CWD.to_owned());
+    let cwd = state.pending_cwd.clone();
     let config = TerminalConfig::new(cwd.clone());
     let api_base = state.api_base_url.clone();
 
