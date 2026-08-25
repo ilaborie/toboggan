@@ -9,7 +9,7 @@ Entries are grouped the way the commits are: this repository uses
 
 ## [Unreleased]
 
-## [0.1.1] - 2026-08-25
+## [0.2.0] - 2026-08-25
 
 ### Added
 
@@ -343,9 +343,9 @@ First release. The unified `toboggan` command, a `toboggan.toml` configuration
 layer, a rioterm-based embedded terminal, and binaries for
 `x86_64-unknown-linux-gnu` and `aarch64-apple-darwin`.
 
-[0.1.1]: https://github.com/ilaborie/toboggan/releases/tag/v0.1.1
+[0.2.0]: https://github.com/ilaborie/toboggan/releases/tag/v0.2.0
 [0.1.0]: https://github.com/ilaborie/toboggan/releases/tag/v0.1.0
 [conventional commits]: https://www.conventionalcommits.org/en/v1.0.0/
 [keep a changelog]: https://keepachangelog.com/en/1.1.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
-[unreleased]: https://github.com/ilaborie/toboggan/compare/v0.1.1...HEAD
+[unreleased]: https://github.com/ilaborie/toboggan/compare/v0.2.0...HEAD
