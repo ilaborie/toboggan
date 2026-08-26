@@ -9,3 +9,7 @@
 *.typ
 /thumbnails/
 /overview/
+# What the GitHub Pages workflow builds into. `*.html`/`*.pdf` above already
+# cover `dist/index.html` and `dist/presentation.pdf`, but `/overview/` is
+# anchored at the root and misses `dist/overview/`.
+/dist/

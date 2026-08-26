@@ -4,7 +4,7 @@ use std::process::Command;
 use toboggan_core::Date;
 use tracing::{info, warn};
 
-use crate::cli::{McpClient, NewArgs, SkillsArgs, Vcs};
+use crate::cli::{CiArgs, CiProvider, McpClient, NewArgs, PathArg, SkillsArgs, Vcs};
 
 /// Scaffolds a new presentation folder and initializes version control.
 ///
@@ -49,6 +49,31 @@ pub(crate) fn scaffold(args: NewArgs) -> anyhow::Result<()> {
         };
         if let Err(err) = crate::commands::skills::install(skill_args) {
             warn!("could not install authoring skill ({err}); skipping");
+        }
+    }
+    // Opt-in, and after `init_vcs`, so the repository this deck belongs to
+    // already exists and the workflow lands at its root — which is the deck
+    // itself for a standalone talk, and the enclosing checkout for a deck
+    // scaffolded inside one.
+    if args.ci {
+        let ci_args = CiArgs {
+            provider: CiProvider::GithubPages,
+            path: PathArg {
+                path: Some(dir.clone()),
+            },
+            output: None,
+            stdout: false,
+            // A freshly scaffolded directory has no workflow to protect; an
+            // enclosing repository may, and `generate` leaves that one alone.
+            force: false,
+        };
+        // The deck's own freshly written `toboggan.toml`, so a `[build]
+        // base-url` set by a `--base-url` in the scaffold would reach the
+        // workflow. An unreadable config is not worth failing the scaffold
+        // over; the defaults are what a new deck has anyway.
+        let config = crate::config::load(dir).unwrap_or_default();
+        if let Err(err) = crate::commands::ci::generate(ci_args, &config) {
+            warn!("could not write the CI workflow ({err}); skipping");
         }
     }
 
@@ -99,19 +124,7 @@ fn already_in_repo(dir: &Path, vcs: Vcs) -> bool {
         Vcs::Git => ".git",
         Vcs::None => return false,
     };
-    // Canonicalize first: `Path::parent` on a relative `"mytalk"` yields `""` and
-    // then `None`, so the walk stopped at the deck itself and never saw an
-    // enclosing repo. `toboggan new mytalk` from inside a checkout would then
-    // initialize a nested repository, while the same command with an absolute
-    // path correctly skipped.
-    let canonical = dir.canonicalize();
-    let start = canonical.as_deref().unwrap_or(dir);
-    let mut current = Some(start);
-    while let Some(path) = current {
-        if path.join(marker).exists() {
-            return true;
-        }
-        current = path.parent();
-    }
-    false
+    // One marker, not both: `--vcs git` inside a Jujutsu checkout should still
+    // get its `git init`, and vice versa.
+    super::repo_root(dir, &[marker]).is_some()
 }

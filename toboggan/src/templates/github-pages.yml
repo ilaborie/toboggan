@@ -37,15 +37,15 @@ jobs:
 
       - name: Lint and build the deck
         id: build
-        uses: ilaborie/toboggan@v0.2.0
+        uses: ilaborie/toboggan@{{version}}
         with:
-          folder: ./slides
+          folder: {{folder}}
           # Lint runs before the build and fails the job on an error, so a
           # broken deck is never published. On a pull request the diagnostics
           # come back as inline annotations on the changed lines.
           lint: true
           outputs: html,pdf,thumbnails
-          out-dir: dist
+          out-dir: dist{{base_url}}
 
       - name: Upload the Pages artifact
         if: github.event_name != 'pull_request'

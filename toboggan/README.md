@@ -28,6 +28,7 @@ toboggan -p my-talk     # build the folder in memory and serve it, reloading on 
 | `toboggan openapi` | Print the bundled OpenAPI document |
 | `toboggan mcp [serve\|init]` | MCP authoring server, or install it |
 | `toboggan skills` | Install the authoring skill for Claude Code |
+| `toboggan ci` | Generate the GitHub Pages workflow that publishes the deck |
 | `toboggan completion <shell>` | Print a shell completion script |
 
 ## Configuration

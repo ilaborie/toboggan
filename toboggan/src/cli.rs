@@ -67,6 +67,8 @@ pub(crate) enum Commands {
     Mcp(McpArgs),
     /// Install the authoring skill for an LLM client
     Skills(SkillsArgs),
+    /// Generate the CI workflow that builds and publishes this deck
+    Ci(CiArgs),
     /// Generate a shell completion script (write it to your shell's completions dir)
     Completion(CompletionArgs),
 }
@@ -412,6 +414,9 @@ impl DefaultArgs {
             path: self.path,
             output: None,
             no_search: false,
+            // The default action serves the deck, so its overview is the
+            // server's, not a static site's.
+            static_links: false,
             build: self.build,
         }
     }
@@ -557,6 +562,14 @@ pub(crate) struct NewArgs {
     /// Skip installing the Claude Code authoring skill
     #[arg(long)]
     pub(crate) no_skill: bool,
+
+    /// Also write the GitHub Pages workflow that publishes the deck
+    ///
+    /// Opt-in, unlike `--no-mcp`/`--no-skill`: those write local files nobody
+    /// but you sees, while a Pages workflow runs on every push and shows a
+    /// failure in the repository until Pages is enabled for it.
+    #[arg(long)]
+    pub(crate) ci: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -774,6 +787,14 @@ pub(crate) struct ThumbnailsArgs {
     #[arg(long)]
     pub(crate) no_search: bool,
 
+    /// Link the overview's cards to a sibling `index.html` export
+    ///
+    /// For a published static site, where the deck is `dist/index.html` and this
+    /// overview is `dist/overview/`. Without it the cards point at `/run`, which
+    /// only exists while `toboggan` is serving the deck.
+    #[arg(long)]
+    pub(crate) static_links: bool,
+
     #[command(flatten)]
     pub(crate) build: BuildOptions,
 }
@@ -829,6 +850,34 @@ pub(crate) struct SkillsArgs {
     /// Overwrite an existing SKILL.md
     #[arg(long)]
     pub(crate) force: bool,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct CiArgs {
+    /// CI provider to generate a workflow for
+    #[arg(value_enum, default_value_t = CiProvider::GithubPages)]
+    pub(crate) provider: CiProvider,
+
+    #[command(flatten)]
+    pub(crate) path: PathArg,
+
+    /// Where to write the workflow [default: `.github/workflows/pages.yml` at the repository root]
+    #[arg(short, long, value_hint = ValueHint::FilePath)]
+    pub(crate) output: Option<PathBuf>,
+
+    /// Print the workflow instead of writing it
+    #[arg(long, conflicts_with = "output")]
+    pub(crate) stdout: bool,
+
+    /// Overwrite an existing workflow
+    #[arg(long)]
+    pub(crate) force: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub(crate) enum CiProvider {
+    /// GitHub Actions, publishing to GitHub Pages
+    GithubPages,
 }
 
 #[derive(Debug, Args)]

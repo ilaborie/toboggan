@@ -120,6 +120,7 @@ The guide's source lives in [`examples/toboggan-guide/`](examples/toboggan-guide
 | `toboggan openapi` | Emit the bundled OpenAPI document |
 | `toboggan mcp [serve\|init]` | MCP authoring server, or install it for Claude Code |
 | `toboggan skills` | Install the authoring skill for Claude Code |
+| `toboggan ci` | Generate the GitHub Pages workflow that publishes the deck |
 | `toboggan completion <shell>` | Print a completion script (bash/zsh/fish/…) |
 
 ```bash
@@ -217,8 +218,21 @@ Every client speaks the same WebSocket protocol and stays in sync with the rest.
 
 ## Use in CI
 
-This repository publishes a composite action that builds a deck into artifacts
-you can deploy:
+`toboggan ci` writes the whole workflow for you:
+
+```bash
+toboggan ci                 # -> .github/workflows/pages.yml, at the repo root
+toboggan ci --stdout        # print it instead
+toboggan new -p my-talk --ci   # scaffold a deck with it already in place
+```
+
+It pins the action to the release matching your `toboggan` binary and works out
+the deck's path relative to the repository root, so a deck in a subdirectory gets
+a workflow that points at it. Then enable **Settings → Pages → Source: GitHub
+Actions**. The file is yours to edit afterwards; re-running leaves it alone
+unless you pass `--force`.
+
+Underneath is a composite action you can also use directly:
 
 ```yaml
 - uses: ilaborie/toboggan@v0.2.0
@@ -226,15 +240,17 @@ you can deploy:
     folder: ./slides          # default ./slides
     outputs: html,pdf,thumbnails
     out-dir: dist             # default dist
+    lint: true                # lint first; errors annotate the PR diff
+    lint-deny: error          # info | warning | error
     base-url: ""              # only for absolute asset URLs
     version: v0.2.0           # release of toboggan to install
 ```
 
-A complete Pages workflow lives in
-[`examples/github-pages/pages.yml`](examples/github-pages/pages.yml). This repo
-uses the action on itself — see
-[`.github/workflows/pages.yml`](.github/workflows/pages.yml), which publishes
-the guide deck.
+The generated file is the same one committed at
+[`examples/github-pages/pages.yml`](examples/github-pages/pages.yml) — a test
+keeps that copy identical to what the command emits. This repo uses the action
+on itself; see [`.github/workflows/pages.yml`](.github/workflows/pages.yml),
+which publishes the guide deck.
 
 ## Architecture
 

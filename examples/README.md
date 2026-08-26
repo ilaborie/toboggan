@@ -96,7 +96,16 @@ comments.
 
 ## Publish to the web
 
-`github-pages/pages.yml` shows the composite action in use:
+`github-pages/pages.yml` is what `toboggan ci` writes into a presentation repo,
+committed here so you can read it without running anything. A test keeps the two
+identical, so edit the template in `toboggan/src/templates/`, not this copy.
+
+```bash
+toboggan ci            # -> .github/workflows/pages.yml, at the repository root
+toboggan ci --stdout   # print it instead
+```
+
+At its centre is the composite action:
 
 ```yaml
 - uses: ilaborie/toboggan@v0.2.0
@@ -104,8 +113,10 @@ comments.
     folder: ./slides
     outputs: html,pdf,thumbnails
     out-dir: dist
+    lint: true
 ```
 
-The action only *builds* — `folder`, `outputs`, `out-dir` and `version` are its
-whole input set. Publishing is a separate step; `github-pages/pages.yml` hands
-`out-dir` to `actions/upload-pages-artifact`.
+The action *lints and builds* — publishing is a separate step, and
+`github-pages/pages.yml` hands `out-dir` to `actions/upload-pages-artifact`.
+With `lint: true` the diagnostics come back as inline annotations on a pull
+request's changed lines, and an error stops the deck reaching the site.

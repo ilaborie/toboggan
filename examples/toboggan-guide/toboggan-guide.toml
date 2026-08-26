@@ -4248,23 +4248,24 @@ kind = "Standard"
 body_source = """
 # Publish to the web
 
-A composite **GitHub Action** builds your deck into single-file HTML, a PDF
-handout, and the searchable thumbnail overview — ready for GitHub Pages:
+`toboggan ci` writes the whole GitHub Pages workflow — single-file HTML, a PDF
+handout, and the searchable thumbnail overview:
+
+```bash
+toboggan ci                    # -> .github/workflows/pages.yml
+toboggan new -p my-talk --ci   # or scaffold with it in place
+```
+
+At its centre is a composite action that downloads the prebuilt binary for a
+pinned release, plus `typst`, then runs the commands you use locally:
 
 ```yaml
 - uses: ilaborie/toboggan@v0.2.0
   with:
     folder: ./slides
     outputs: html,pdf,thumbnails
-    out-dir: dist
+    lint: true
 ```
-
-It downloads the prebuilt `toboggan` binary for a pinned release, plus `typst`,
-then runs the same commands you use locally — so what you preview is what your
-audience gets.
-
-> [!NOTE]
-> A ready-to-copy consumer workflow lives in `examples/github-pages/pages.yml`.
 """
 
 [slides.style]
@@ -4281,48 +4282,69 @@ text = "6.4 Publish to the web"
 type = "Html"
 raw = """
 <h1>Publish to the web</h1>
-<p>A composite <strong>GitHub Action</strong> builds your deck into single-file HTML, a PDF
-handout, and the searchable thumbnail overview — ready for GitHub Pages:</p>
+<p><code>toboggan ci</code> writes the whole GitHub Pages workflow — single-file HTML, a PDF
+handout, and the searchable thumbnail overview:</p>
+<pre style="background-color:#eff1f5;"><code class="language-bash"><span style="color:#8fa1b3;">toboggan</span><span style="color:#4f5b66;"> ci                    </span><span style="color:#a7adba;"># -&gt; .github/workflows/pages.yml
+</span><span style="color:#8fa1b3;">toboggan</span><span style="color:#4f5b66;"> new</span><span style="color:#bf616a;"> -p</span><span style="color:#4f5b66;"> my-talk</span><span style="color:#bf616a;"> --ci   </span><span style="color:#a7adba;"># or scaffold with it in place
+</span></code></pre>
+
+<div class="step step-0"><!-- begin step -->
+<p>At its centre is a composite action that downloads the prebuilt binary for a
+pinned release, plus <code>typst</code>, then runs the commands you use locally:</p>
 <pre style="background-color:#eff1f5;"><code class="language-yaml"><span style="color:#4f5b66;">- </span><span style="color:#bf616a;">uses</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">ilaborie/toboggan@v0.2.0
 </span><span style="color:#4f5b66;">  </span><span style="color:#bf616a;">with</span><span style="color:#4f5b66;">:
 </span><span style="color:#4f5b66;">    </span><span style="color:#bf616a;">folder</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">./slides
 </span><span style="color:#4f5b66;">    </span><span style="color:#bf616a;">outputs</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">html,pdf,thumbnails
-</span><span style="color:#4f5b66;">    </span><span style="color:#bf616a;">out-dir</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">dist
+</span><span style="color:#4f5b66;">    </span><span style="color:#bf616a;">lint</span><span style="color:#4f5b66;">: </span><span style="color:#d08770;">true
 </span></code></pre>
-
-<div class="step step-0"><!-- begin step -->
-<p>It downloads the prebuilt <code>toboggan</code> binary for a pinned release, plus <code>typst</code>,
-then runs the same commands you use locally — so what you preview is what your
-audience gets.</p>
-<div class="markdown-alert markdown-alert-note">
-<p class="markdown-alert-title">Note</p>
-<p>A ready-to-copy consumer workflow lives in <code>examples/github-pages/pages.yml</code>.</p>
-</div>
 </div><!-- end step -->
 """
 alt = """
 # Publish to the web
 
-A composite **GitHub Action** builds your deck into single-file HTML, a PDF
-handout, and the searchable thumbnail overview — ready for GitHub Pages:
+`toboggan ci` writes the whole GitHub Pages workflow — single-file HTML, a PDF
+handout, and the searchable thumbnail overview:
+
+```bash
+toboggan ci                    # -> .github/workflows/pages.yml
+toboggan new -p my-talk --ci   # or scaffold with it in place
+```
+
+At its centre is a composite action that downloads the prebuilt binary for a
+pinned release, plus `typst`, then runs the commands you use locally:
 
 ```yaml
 - uses: ilaborie/toboggan@v0.2.0
   with:
     folder: ./slides
     outputs: html,pdf,thumbnails
-    out-dir: dist
+    lint: true
 ```
-
-It downloads the prebuilt `toboggan` binary for a pinned release, plus `typst`,
-then runs the same commands you use locally — so what you preview is what your
-audience gets.
-
-> [!NOTE]
-> A ready-to-copy consumer workflow lives in `examples/github-pages/pages.yml`.
 """
 
 [slides.body.style]
+classes = [
+    "no_title",
+    "wide",
+]
+
+[slides.notes]
+type = "Html"
+raw = """
+<p>The pin matches the binary that generated the file: <code>toboggan ci</code> reads its own
+<code>CARGO_PKG_VERSION</code>, and a test fails the build if any doc falls behind it.</p>
+<p><code>lint: true</code> keeps a deck with an error in it from ever reaching the site — the
+diagnostics come back as inline annotations on the pull request's changed lines.</p>
+"""
+alt = """
+The pin matches the binary that generated the file: `toboggan ci` reads its own
+`CARGO_PKG_VERSION`, and a test fails the build if any doc falls behind it.
+
+`lint: true` keeps a deck with an error in it from ever reaching the site — the
+diagnostics come back as inline annotations on the pull request's changed lines.
+"""
+
+[slides.notes.style]
 classes = [
     "no_title",
     "wide",

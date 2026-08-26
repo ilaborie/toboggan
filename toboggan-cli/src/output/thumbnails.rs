@@ -21,6 +21,13 @@ pub struct ThumbnailOptions {
     /// Deck-level Mermaid settings, so a thumbnail draws its diagrams the same
     /// way the web client does.
     pub mermaid: MermaidRenderer,
+    /// Point the overview's cards at a sibling `index.html` export rather than
+    /// at a running server's `/run`.
+    ///
+    /// The default suits the server, which serves the overview at `/overview/`
+    /// alongside the live deck. A published static site has no `/run` at all, so
+    /// every card there was a link to a 404.
+    pub static_links: bool,
 }
 
 impl Default for ThumbnailOptions {
@@ -28,6 +35,7 @@ impl Default for ThumbnailOptions {
         Self {
             search: true,
             mermaid: MermaidRenderer::default(),
+            static_links: false,
         }
     }
 }
@@ -52,6 +60,15 @@ struct SlideEntry {
     part: Option<String>,
     text: String,
     hidden_in_web: bool,
+    /// This slide's 1-based position in the HTML export, if it appears there.
+    ///
+    /// Not `index + 1`. Thumbnails are rendered over the full slide list so that
+    /// thumbnail N is slide N, but the HTML exporter filters the deck for
+    /// [`RenderTarget::Web`] first and numbers its `id="slide-N"` anchors over
+    /// what survives — so one `hidden_in = ["web"]` slide shifts every anchor
+    /// after it. `None` for a slide the export drops, which therefore has no
+    /// anchor to link to.
+    web_number: Option<usize>,
 }
 
 /// Renders one PNG per slide plus `overview.html` (and `search-index.json`) into
@@ -84,7 +101,7 @@ pub fn generate_thumbnails(talk: &Talk, out_dir: &Path, options: &ThumbnailOptio
             .map_err(|source| TobogganCliError::write_file(index_path, source))?;
     }
 
-    let overview = render_overview(talk, &entries, options.search);
+    let overview = render_overview(talk, &entries, options.search, options.static_links);
     let overview_path = out_dir.join("overview.html");
     std::fs::write(&overview_path, overview)
         .map_err(|source| TobogganCliError::write_file(overview_path, source))?;
@@ -157,11 +174,21 @@ fn compile_first_page_png(
 fn build_entries(talk: &Talk) -> Vec<SlideEntry> {
     let mut current_part: Option<String> = None;
     let mut entries = Vec::with_capacity(talk.slides.len());
+    // Counts only what the HTML export keeps, mirroring the `enumerate` in
+    // `html::generate_html` over the already-web-filtered slide list.
+    let mut web_position = 0_usize;
 
     for (index, slide) in talk.slides.iter().enumerate() {
         if slide.kind == SlideKind::Part {
             current_part = content_text(&slide.title);
         }
+        let hidden_in_web = slide.hidden_in.contains(&RenderTarget::Web);
+        let web_number = if hidden_in_web {
+            None
+        } else {
+            web_position += 1;
+            Some(web_position)
+        };
         entries.push(SlideEntry {
             index,
             display_number: SlideId::new(index).display_number(),
@@ -172,7 +199,8 @@ fn build_entries(talk: &Talk) -> Vec<SlideEntry> {
                 current_part.clone()
             },
             text: slide_text(slide),
-            hidden_in_web: slide.hidden_in.contains(&RenderTarget::Web),
+            hidden_in_web,
+            web_number,
         });
     }
     entries
@@ -195,7 +223,12 @@ fn content_text(content: &Content) -> Option<String> {
     }
 }
 
-fn render_overview(talk: &Talk, entries: &[SlideEntry], search: bool) -> String {
+fn render_overview(
+    talk: &Talk,
+    entries: &[SlideEntry],
+    search: bool,
+    static_links: bool,
+) -> String {
     let title = escape(&talk.title);
     let lang = escape(talk.lang());
 
@@ -210,7 +243,7 @@ fn render_overview(talk: &Talk, entries: &[SlideEntry], search: bool) -> String 
             }
             last_part = part;
         }
-        blocks.push(render_card(entry));
+        blocks.push(render_card(entry, static_links));
     }
     let cards = blocks.join("\n");
 
@@ -243,10 +276,10 @@ fn render_overview(talk: &Talk, entries: &[SlideEntry], search: bool) -> String 
     // address bar keeps it per-visitor, and a visitor without one is unaffected.
     let token_script = r"<script>
   const token = new URLSearchParams(location.search).get('token');
-  if (token) for (const card of document.querySelectorAll('.card')) {
+  if (token) for (const card of document.querySelectorAll('a.card')) {
     const url = new URL(card.href, location.href);
     url.searchParams.set('token', token);
-    card.href = url.pathname + url.search;
+    card.href = url.pathname + url.search + url.hash;
   }
 </script>";
 
@@ -268,6 +301,8 @@ fn render_overview(talk: &Talk, entries: &[SlideEntry], search: bool) -> String 
   .part {{ grid-column: 1 / -1; margin: 1rem 0 .25rem; color: var(--accent); font-weight: 600; border-bottom: 1px solid #21262d; padding-bottom: .25rem; }}
   .card {{ background: var(--card); border: 1px solid #21262d; border-radius: 10px; overflow: hidden; text-decoration: none; color: inherit; transition: .15s; position: relative; }}
   .card:hover {{ border-color: var(--accent); transform: translateY(-2px); }}
+  .card.unlinked {{ opacity: .55; }}
+  .card.unlinked:hover {{ border-color: #21262d; transform: none; }}
   .card img {{ width: 100%; aspect-ratio: 16/9; object-fit: contain; background: #fff; display: block; }}
   .card .meta {{ padding: .5rem .7rem; }}
   .card .num {{ color: var(--muted); font-size: .8rem; }}
@@ -289,7 +324,7 @@ fn render_overview(talk: &Talk, entries: &[SlideEntry], search: bool) -> String 
     )
 }
 
-fn render_card(entry: &SlideEntry) -> String {
+fn render_card(entry: &SlideEntry, static_links: bool) -> String {
     let badge = if entry.hidden_in_web {
         r#"<span class="badge">hidden on web</span>"#
     } else {
@@ -303,17 +338,51 @@ fn render_card(entry: &SlideEntry) -> String {
     ))
     .to_lowercase();
 
-    format!(
-        r#"    <a class="card" href="/run?slide={index}" data-search="{haystack}" title="{tooltip}">
-      {badge}
+    let inner = format!(
+        r#"      {badge}
       <img src="thumb-{index:04}.png" loading="lazy" alt="slide {num}">
-      <div class="meta"><div class="num">{num}</div><div class="ttl">{title}</div></div>
-    </a>"#,
+      <div class="meta"><div class="num">{num}</div><div class="ttl">{title}</div></div>"#,
         index = entry.index,
         num = entry.display_number,
         title = escape(&entry.title),
+    );
+    let attrs = format!(
+        r#"data-search="{haystack}" title="{tooltip}""#,
         tooltip = escape(&truncate(&entry.text, 200)),
-    )
+    );
+
+    match href(entry, static_links) {
+        Some(href) => format!(
+            r#"    <a class="card" href="{href}" {attrs}>
+{inner}
+    </a>"#
+        ),
+        // A web-hidden slide has no anchor in the export to point at, so the
+        // card is not a link at all. `unlinked` drops the hover affordance that
+        // would otherwise promise a click that does nothing; the badge above
+        // already says why.
+        None => format!(
+            r#"    <div class="card unlinked" {attrs}>
+{inner}
+    </div>"#
+        ),
+    }
+}
+
+/// Where a card points.
+///
+/// `../index.html#slide-N` for a static site, because the action writes the deck
+/// to `dist/index.html` and the overview to `dist/overview/`, so the export is
+/// the overview's parent. The exporter emits those ids and its inlined navigator
+/// honours the fragment, with or without scripting.
+fn href(entry: &SlideEntry, static_links: bool) -> Option<String> {
+    if static_links {
+        entry
+            .web_number
+            .map(|number| format!("../index.html#slide-{number}"))
+    } else {
+        Some(format!("/run?slide={}", entry.index))
+    }
 }
 
 fn truncate(text: &str, max: usize) -> String {
@@ -331,4 +400,95 @@ fn escape(text: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use toboggan_core::SlideKind;
+
+    use super::*;
+
+    /// Three slides, the middle one dropped from the web export.
+    fn talk() -> Talk {
+        let mut talk = Talk::new("Overview Test");
+        talk.slides.push(Slide::new("Opening"));
+        talk.slides.push(Slide {
+            kind: SlideKind::Standard,
+            title: Content::text("Handout only"),
+            hidden_in: BTreeSet::from([RenderTarget::Web]),
+            ..Default::default()
+        });
+        talk.slides.push(Slide::new("Closing"));
+        talk
+    }
+
+    /// The numbering that made the static links worth having: a web-hidden
+    /// slide takes no number, and everything after it moves up one — so the
+    /// last slide is `#slide-2`, not `#slide-3`.
+    #[test]
+    fn a_web_hidden_slide_shifts_the_numbers_after_it() {
+        let entries = build_entries(&talk());
+        let numbers = entries
+            .iter()
+            .map(|entry| entry.web_number)
+            .collect::<Vec<_>>();
+        assert_eq!(numbers, vec![Some(1), None, Some(2)]);
+    }
+
+    /// The guard that actually matters: `web_number` is only useful if it names
+    /// an anchor the exporter really emits, and the two are computed in
+    /// different modules over differently filtered slide lists.
+    #[test]
+    fn every_web_number_names_an_anchor_the_html_export_emits() {
+        let talk = talk();
+        let filtered = super::super::filter_for(&talk, RenderTarget::Web);
+        let html = super::super::html::generate_html(&filtered, None, "").expect("render html");
+        let html = String::from_utf8(html).expect("utf-8");
+
+        for entry in build_entries(&talk) {
+            match entry.web_number {
+                Some(number) => assert!(
+                    html.contains(&format!(r#"id="slide-{number}""#)),
+                    "slide {} claims #slide-{number}, which the export does not have",
+                    entry.index
+                ),
+                // Nothing to point at, which is the whole reason for the `None`.
+                None => assert!(!html.contains(&escape(&entry.title))),
+            }
+        }
+        assert_eq!(html.matches(r#"class="toboggan-slide""#).count(), 2);
+    }
+
+    /// A published site has no `/run`, so the cards address the export beside it.
+    #[test]
+    fn static_links_point_at_the_sibling_export() {
+        let entries = build_entries(&talk());
+        let overview = render_overview(&talk(), &entries, false, true);
+
+        assert!(overview.contains(r#"href="../index.html#slide-1""#));
+        assert!(overview.contains(r#"href="../index.html#slide-2""#));
+        assert!(!overview.contains("/run?slide="));
+        // The web-hidden slide is a card, but not a link.
+        assert!(overview.contains(r#"<div class="card unlinked""#));
+        assert!(!overview.contains("#slide-3"));
+    }
+
+    /// The server keeps what it had: the overview at `/overview/` sits beside a
+    /// live `/run`, and its links are 0-based over the unfiltered deck.
+    #[test]
+    fn the_default_still_links_to_the_running_server() {
+        let entries = build_entries(&talk());
+        let overview = render_overview(&talk(), &entries, false, false);
+
+        for index in 0..3 {
+            assert!(overview.contains(&format!(r#"href="/run?slide={index}""#)));
+        }
+        assert!(!overview.contains("index.html#"));
+        // The stylesheet always carries the `.card.unlinked` rules; what must
+        // not appear is a card wearing the class.
+        assert!(!overview.contains(r#"class="card unlinked""#));
+    }
 }

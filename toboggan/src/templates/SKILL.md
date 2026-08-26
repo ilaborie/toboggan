@@ -74,6 +74,7 @@ config named by `[build] mermaid-config` in `toboggan.toml`.
 - `toboggan build -p ./slides -o talk.toml` — build to toml/json/yaml/html/typst.
 - `toboggan lint -p ./slides` — lint the deck.
 - `toboggan pdf -p ./slides` / `toboggan thumbnails -p ./slides` — PDF / overview.
+- `toboggan ci` — write the GitHub Pages workflow that publishes the deck.
 - `--path`/`-p` defaults to the current directory, so from the deck root the
   bare command is enough (`toboggan lint`).
 
