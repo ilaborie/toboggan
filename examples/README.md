@@ -63,7 +63,9 @@ toboggan pdf --path examples/riir-folder
 toboggan thumbnails --path examples/riir-folder
 ```
 
-Serve a prebuilt `.toml` (e.g. the guide artifact) with assets:
+Serve a prebuilt `.toml` (e.g. the guide artifact) with assets, from the
+repository root — the terminal working directories baked into a built deck are
+relative to wherever it was built from:
 
 ```bash
 toboggan serve --public-dir examples/toboggan-guide/public -p examples/toboggan-guide/toboggan-guide.toml
@@ -72,13 +74,24 @@ toboggan serve --public-dir examples/toboggan-guide/public -p examples/toboggan-
 ## The user guide deck
 
 `toboggan-guide/` is a complete deck that documents Toboggan *using* Toboggan.
-Edit `toboggan-guide/slides/`, then rebuild the served artifact:
+Edit `toboggan-guide/slides/`, then rebuild the served artifact — it is
+committed, and CI rebuilds it and fails on any diff:
 
 ```bash
 cd examples/toboggan-guide
-mise run build      # toboggan build -p ./slides/ -o toboggan-guide.toml
+mise run build      # toboggan build -p examples/toboggan-guide/slides -o …  (from the repo root, as CI does)
 mise run dev        # toboggan -p ./slides/  (build + serve, live reload)
+mise run run        # serve the built artifact; also from the repo root
 ```
+
+`build` and `run` deliberately step up to the repository root, because
+`toboggan build` bakes each live terminal's **resolved** working directory into
+the artifact, joining the `<!-- term: … -->` value with the directory of the
+slide file it appears in. Building from `examples/toboggan-guide` with
+`-p ./slides/` produces a file that differs only in those paths — and CI rejects
+it. `bacon` (the `toml` job) builds the same artifact and steps up to the root
+for the same reason; `dev`, `html` and `pdf` stay local, because their output is
+either never written to disk or gitignored and free of baked paths.
 
 The server also bundles this guide at `/guide` on any running deck.
 
