@@ -9,6 +9,30 @@ Entries are grouped the way the commits are: this repository uses
 
 ## [Unreleased]
 
+### Fixed
+
+- **A step advance no longer kills what is running in the quake terminal.** The
+  overlay is hidden by a transform rather than by teardown, so it looked like it
+  survived a `NextStep` — but underneath, the session was torn down and a new
+  shell spawned, and anything being demoed in it died. The deck re-sends its
+  state on every step, and the overlay's restart test compared the resolved cwd
+  its session was running in against the raw `quake_terminal_cwd` the slide
+  carries. For a deck that configures no cwd — which is every example in this
+  repository — that is `Some(".")` against `None`, so "unchanged" read as
+  "changed" on every step, every slide, every live reload and every reconnect.
+  Both sides are now resolved before they are compared, which also makes good on
+  the promise that closing and reopening the overlay is instant: reopening
+  restarted the session for the same reason. A slide that really does name a
+  different `quake_cwd` still restarts it, as documented.
+- **A step advance no longer restarts a terminal embedded in the slide.**
+  Separate cause, same symptom: the slide element rebuilt itself on every state
+  change, and rebuilding stops every terminal on the slide and starts a fresh
+  one. A slide pairing `<!-- pause -->` with `<!-- term: . | cargo watch -->`
+  restarted the command each time the presenter stepped through it. The rebuild
+  is now skipped when the incoming slide is the one already on screen; an edited
+  slide arriving on a live reload is not equal to the old one, so reloading still
+  rebuilds.
+
 ## [0.2.0] - 2026-08-25
 
 ### Added

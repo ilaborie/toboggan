@@ -6,7 +6,12 @@ hidden_in = ["pdf"]
 
 # Live demo — web
 
-This slide is **web-only** (`hidden_in = ["pdf"]`). Type a command:
+This slide is **web-only** (`hidden_in = ["pdf"]`).
+
+<!-- pause -->
+
+Type a command — and keep typing: stepping through a slide does not restart the
+shell.
 
 <!-- term: . -->
 

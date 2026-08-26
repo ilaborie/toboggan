@@ -1,4 +1,10 @@
-import { expect, type Locator, type Page, test } from "@playwright/test";
+import {
+	type APIRequestContext,
+	expect,
+	type Locator,
+	type Page,
+	test,
+} from "@playwright/test";
 
 /**
  * Who owns the keyboard, and what maximizing does to the window.
@@ -30,6 +36,102 @@ const quakeWindow = (page: Page) =>
 /** How many terminals are wearing the ring. The claim is a single slot. */
 async function ringCount(page: Page): Promise<number> {
 	return page.locator(".terminal-window.terminal-has-keys").count();
+}
+
+/**
+ * The attribute a test stamps on a canvas to tell a survivor from a fresh one.
+ *
+ * A restarted session builds a whole new canvas, so the tag going missing *is*
+ * the restart. Reading it back as `null` therefore means "torn down", and `yes`
+ * means "the very element we started with".
+ */
+const SURVIVOR_ATTR = "data-before-restart";
+
+/** Stamps {@link SURVIVOR_ATTR} on a canvas so a later teardown becomes visible. */
+async function tagCanvas(canvas: Locator) {
+	await expect(canvas).toBeVisible({ timeout: 20_000 });
+	await canvas.evaluate(
+		(el, attr) => el.setAttribute(attr, "yes"),
+		SURVIVOR_ATTR,
+	);
+}
+
+/**
+ * The index of the first slide whose title matches, as `GoTo` numbers them.
+ *
+ * `/api/talk` describes the deck the server *presents* — `hidden_in = ["web"]`
+ * slides are already dropped from it — so this is the same numbering `GoTo`
+ * takes, and no test has to hard-code a position the guide can renumber.
+ */
+async function slideIndex(
+	request: APIRequestContext,
+	pattern: RegExp,
+): Promise<number> {
+	const talk = await (await request.get("/api/talk")).json();
+	const index = (talk.titles as (string | null)[]).findIndex((title) =>
+		pattern.test(title ?? ""),
+	);
+	expect(index, `the deck under test has no ${pattern} slide`).toBeGreaterThan(
+		-1,
+	);
+	return index;
+}
+
+/**
+ * Which slide the client believes it is on, 1-based.
+ *
+ * The app writes it to `--current-slide` on its `<main>` host on every state
+ * change, which makes it the one place a test can read the client's own idea of
+ * where the deck is — as opposed to the server's, which is ahead of it.
+ */
+async function currentSlideNumber(page: Page): Promise<number> {
+	return page.evaluate(() => {
+		const host = document.querySelector("main");
+		const raw = host?.style.getPropertyValue("--current-slide") ?? "";
+		return Number.parseInt(raw, 10);
+	});
+}
+
+/**
+ * Moves the deck to the first slide whose title matches and waits for it to land.
+ *
+ * Waiting is not politeness: `POST /api/command` returns as soon as the server
+ * has the command, and the client applies the broadcast state a round trip
+ * later. A test that opened the quake overlay in between opened it against the
+ * *old* slide's cwd, and the state then arriving restarted the session — which
+ * is exactly the behaviour under test here, so the race read as a real failure.
+ */
+async function goToSlide(
+	page: Page,
+	request: APIRequestContext,
+	pattern: RegExp,
+): Promise<number> {
+	const index = await slideIndex(request, pattern);
+	await request.post("/api/command", {
+		data: { command: "GoTo", slide: index },
+	});
+	await expect
+		.poll(() => currentSlideNumber(page), {
+			message: `the deck never reached slide ${index + 1}`,
+		})
+		.toBe(index + 1);
+	return index;
+}
+
+/**
+ * How many step markers the current slide has revealed.
+ *
+ * The proof that a `NextStep` actually landed. Polling on this rather than
+ * sleeping is what keeps "the session survived" from passing simply because the
+ * command had not arrived yet.
+ */
+async function revealedSteps(page: Page): Promise<number> {
+	return page.evaluate(() => {
+		const host = [...document.querySelectorAll("*")].find((element) =>
+			element.shadowRoot?.querySelector("section"),
+		);
+		return host?.shadowRoot?.querySelectorAll(".step-current").length ?? 0;
+	});
 }
 
 /**
@@ -80,19 +182,12 @@ async function expectDeckMoved(page: Page, before: string) {
 }
 
 test.beforeEach(async ({ page, request }) => {
-	const talk = await (await request.get("/api/talk")).json();
-	const index = (talk.titles as (string | null)[]).findIndex((title) =>
-		/terminal/i.test(title ?? ""),
-	);
-	expect(index, "the deck under test has no terminal slide").toBeGreaterThan(
-		-1,
-	);
-
 	await page.goto("/run");
 	await page.waitForSelector("section", { timeout: 20_000 });
-	await request.post("/api/command", {
-		data: { command: "GoTo", slide: index },
-	});
+	// A terminal slide with no steps of its own: every test below that presses
+	// `space` expecting the *deck* to move needs the press to reach a slide
+	// change rather than be swallowed by a `<!-- pause -->`.
+	await goToSlide(page, request, /terminal/i);
 
 	// The canvas only exists once rioterm has loaded its own wasm and mounted.
 	await expect(page.locator(".terminal-canvas")).toBeVisible({
@@ -292,13 +387,109 @@ test("leaving a terminal slide gives the deck its keys back", async ({
 	await expectDeckMoved(page, before);
 });
 
-test("the quake overlay keeps its keys across a slide change", async ({
+test("a step advance leaves a slide's own terminal alone", async ({
 	page,
 	request,
 }) => {
-	// A slide change re-resolves the overlay's cwd and restarts its session, and
+	// The same defect, reached by a different route: `set_slide` rebuilt the
+	// slide on every state change, and rebuilding stops every terminal on it. A
+	// deck that pairs `<!-- pause -->` with `<!-- term: . | cargo watch -->`
+	// restarted the command each time the presenter stepped through the slide.
+	await goToSlide(page, request, /live demo/i);
+	const canvas = page.locator(".toboggan-terminal .terminal-canvas");
+	await tagCanvas(canvas);
+	expect(
+		await revealedSteps(page),
+		"this slide needs an unrevealed step for the advance to land on",
+	).toBe(0);
+
+	await request.post("/api/command", { data: { command: "NextStep" } });
+	await expect
+		.poll(() => revealedSteps(page), {
+			message: "the step never landed, so this proves nothing",
+		})
+		.toBeGreaterThan(0);
+
+	expect(
+		await canvas.getAttribute(SURVIVOR_ATTR),
+		"the step advance restarted the slide's terminal",
+	).toBe("yes");
+});
+
+test("a step advance leaves the quake session alone", async ({
+	page,
+	request,
+}) => {
+	// The whole point of the overlay: a build, a `tail -f`, a REPL — started once
+	// and still running three slides later. The deck re-sends its state on every
+	// step, and a restart on each one killed whatever was being demoed while the
+	// overlay sat there looking untouched, because it is hidden by a transform
+	// rather than by teardown.
+	//
+	// Driven from the API: while the overlay is down it owns the keyboard, so a
+	// keypress would go to the shell instead of the deck.
+	//
+	// Deliberately a slide with *no* `quake_cwd` of its own — the overwhelmingly
+	// common case, and the only one the defect showed up in: the overlay compared
+	// the resolved cwd it was running in against the raw `Option` the slide
+	// carries, and `Some(".")` never equals `None`. On a slide that does set one,
+	// the two agreed by accident and nothing restarted.
+	await goToSlide(page, request, /presenter view/i);
+	await page.keyboard.press("Backquote");
+	const overlay = page.locator(".toboggan-quake-terminal");
+	await expect(overlay).toHaveClass(/open/);
+
+	const canvas = page.locator(".toboggan-quake-inner .terminal-canvas");
+	await tagCanvas(canvas);
+	expect(
+		await revealedSteps(page),
+		"this slide needs an unrevealed step for the advance to land on",
+	).toBe(0);
+
+	await request.post("/api/command", { data: { command: "NextStep" } });
+	await expect
+		.poll(() => revealedSteps(page), {
+			message: "the step never landed, so this proves nothing",
+		})
+		.toBeGreaterThan(0);
+
+	expect(
+		await canvas.getAttribute(SURVIVOR_ATTR),
+		"the step advance restarted the shell",
+	).toBe("yes");
+	await expect(overlay).toHaveClass(/open/);
+	await expect(quakeWindow(page)).toHaveClass(/terminal-has-keys/);
+});
+
+test("a slide change to the same cwd leaves the quake session alone", async ({
+	page,
+	request,
+}) => {
+	// Same invariant one step out: the overlay's cwd is re-resolved on every
+	// slide, and almost every deck resolves every slide to the same directory.
+	// The comparison used to be between a resolved cwd and a raw `Option`, so
+	// "unchanged" read as "changed" for all of them.
+	await page.keyboard.press("Backquote");
+	await expect(page.locator(".toboggan-quake-terminal")).toHaveClass(/open/);
+	const canvas = page.locator(".toboggan-quake-inner .terminal-canvas");
+	await tagCanvas(canvas);
+
+	await goToSlide(page, request, /presenter view/i);
+
+	expect(
+		await canvas.getAttribute(SURVIVOR_ATTR),
+		"a slide that changed nothing restarted the shell",
+	).toBe("yes");
+	await expect(quakeWindow(page)).toHaveClass(/terminal-has-keys/);
+});
+
+test("the quake overlay keeps its keys across a session restart", async ({
+	page,
+	request,
+}) => {
+	// A slide that names a *different* `quake_cwd` does restart the session — and
 	// tearing a session down releases its claim. If nothing re-claims, the deck
-	// arms itself under an overlay that is still down — and the next `space`
+	// arms itself under an overlay that is still down, and the next `space`
 	// restarts the very session being demoed.
 	await page.keyboard.press("Backquote");
 	const overlay = page.locator(".toboggan-quake-terminal");
@@ -306,20 +497,17 @@ test("the quake overlay keeps its keys across a slide change", async ({
 	await expect(quakeWindow(page)).toHaveClass(/terminal-has-keys/);
 
 	// Tag the canvas so we can tell a real restart from a no-op.
-	await page
-		.locator(".toboggan-quake-inner .terminal-canvas")
-		.evaluate((el) => el.setAttribute("data-before-restart", "yes"));
+	const canvas = page.locator(".toboggan-quake-inner .terminal-canvas");
+	await tagCanvas(canvas);
 
-	await request.post("/api/command", { data: { command: "GoTo", slide: 0 } });
+	// The one slide in the guide with a `quake_cwd` of its own, which is what
+	// makes this a genuine change of directory rather than a no-op.
+	await goToSlide(page, request, /keyboard/i);
 	await expect(overlay).toHaveClass(/open/);
 	await expect
-		.poll(
-			() =>
-				page
-					.locator(".toboggan-quake-inner .terminal-canvas")
-					.getAttribute("data-before-restart"),
-			{ message: "the session never restarted, so this proves nothing" },
-		)
+		.poll(() => canvas.getAttribute(SURVIVOR_ATTR), {
+			message: "the session never restarted, so this proves nothing",
+		})
 		.toBe(null);
 
 	// The overlay is still down, so its keys are still its own.
@@ -340,14 +528,19 @@ test("the quake overlay survives a restart and a reopen", async ({
 	//
 	// Its own terminal cannot be maximized: the overlay hides the title bar with
 	// `--terminal-titlebar-display: none`, so there are no traffic lights to
-	// click. The reachable way to destroy the host is the restart.
+	// click. The reachable way to destroy the host is a real change of cwd.
 	await page.keyboard.press("Backquote");
 	const overlay = page.locator(".toboggan-quake-terminal");
 	await expect(overlay).toHaveClass(/open/);
 	const canvas = page.locator(".toboggan-quake-inner .terminal-canvas");
-	await expect(canvas).toBeVisible();
+	await tagCanvas(canvas);
 
-	await request.post("/api/command", { data: { command: "GoTo", slide: 0 } });
+	await goToSlide(page, request, /keyboard/i);
+	await expect
+		.poll(() => canvas.getAttribute(SURVIVOR_ATTR), {
+			message: "the session never restarted, so this proves nothing",
+		})
+		.toBe(null);
 	await page.keyboard.press("Backquote");
 	await expect(overlay).not.toHaveClass(/open/);
 	await page.keyboard.press("Backquote");

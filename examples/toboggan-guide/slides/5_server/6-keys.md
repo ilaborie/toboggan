@@ -1,6 +1,7 @@
 +++
 title = "Keyboard"
 classes = ["no_title", "wide"]
+quake_cwd = "."
 +++
 
 # Driving the deck
@@ -31,3 +32,8 @@ server, so blanking your screen does not blank anyone else's.
 
 The `F1` dialog is generated from the keymap itself, so it cannot fall out of
 date with what the keys actually do.
+
+The quake terminal opens in `quake_cwd` — set per slide, as this one does, or
+once for the whole deck in the cover's front matter. It stays open and keeps its
+shell as you walk the deck; only a slide that names a *different* directory
+restarts the session, so a build running in it survives the talk.
