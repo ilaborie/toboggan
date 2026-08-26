@@ -4,22 +4,34 @@
 # memory and reloads the browser on save, with no file to regenerate. Reach for
 # bacon only when you want toboggan-guide.toml on disk kept current — it is
 # committed, and toboggan-server embeds it with include_str! to serve /guide.
+#
+# Run bacon from this directory. `[jobs.toml]` writes the committed artifact, so
+# it must build from the repository root with the paths CI uses, exactly as
+# `mise run build` does — see the comment in mise.toml for why the paths are
+# load-bearing. `workdir` is relative to the directory bacon is launched from,
+# and bacon *silently* falls back to this folder if it does not exist (logging
+# "Ignoring configured non existing workdir"), which would quietly reintroduce
+# the `./slides/…` paths CI rejects. `watch` is unaffected: watched paths always
+# resolve against this directory, not `workdir`.
 default_job = "toml"
 
 [jobs.toml]
+workdir = "../.."
 command = [
   "toboggan",
   "build",
   "-p",
-  "./slides/",
+  "examples/toboggan-guide/slides",
   "--output",
-  "toboggan-guide.toml",
+  "examples/toboggan-guide/toboggan-guide.toml",
 ]
 need_stdout = true
 allow_warnings = true
 default_watch = false
 watch = ["slides"]
 
+# Gitignored output, and the HTML export drops live terminals — no baked paths,
+# so this one stays local.
 [jobs.html]
 command = [
   "toboggan",
