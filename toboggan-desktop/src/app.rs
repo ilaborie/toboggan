@@ -12,7 +12,7 @@ use tracing::{debug, error, info};
 use crate::actions::AppAction;
 use crate::message::Message;
 use crate::state::{AppState, parse_slides_markdown};
-use crate::views;
+use crate::{slide_list, views};
 
 // Global channel for forwarding WebSocket messages to Iced
 static MESSAGE_CHANNEL: OnceLock<broadcast::Sender<CommunicationMessage>> = OnceLock::new();
@@ -20,7 +20,11 @@ static MESSAGE_CHANNEL: OnceLock<broadcast::Sender<CommunicationMessage>> = Once
 pub struct App {
     config: TobogganConfig,
     state: AppState,
-    websocket_client: Option<WebSocketClient>,
+    /// The channel into the live socket, and so also the answer to "is one
+    /// live". There is no handle to the socket itself: `WebSocketClient` is
+    /// moved into the task that drives it. A field held one and was never
+    /// assigned, which made the leak `handle_connect` now guards against look
+    /// as though something were keeping track.
     cmd_sender: Option<mpsc::UnboundedSender<TobogganCommand>>,
     api: TobogganApi,
 }
@@ -43,7 +47,6 @@ impl App {
         let app = Self {
             config,
             state: AppState::default(),
-            websocket_client: None,
             cmd_sender: None,
             api: api_client.clone(),
         };
@@ -65,6 +68,10 @@ impl App {
                     },
                 ),
                 Task::perform(async {}, |()| Message::Connect),
+                // The first reading. `theme_changes` only reports a *change*,
+                // so without this the app follows the desktop from the first
+                // time it flips and shows the wrong one until then.
+                iced::system::theme().map(Message::SystemThemeChanged),
             ]),
         )
     }
@@ -110,11 +117,45 @@ impl App {
             Message::KeyPressed(key, modifiers) => self.handle_keyboard(&key, modifiers),
 
             Message::LinkClicked(url) => {
-                info!(?url, "Link clicked");
-                // Could open URL in browser if needed
+                // `open::that` shells out to the platform launcher and blocks
+                // until it returns, which on macOS is long enough to drop
+                // frames — so it goes to a blocking thread, the way the server
+                // runs the very same call behind `--open`
+                // (`toboggan-server/src/bootstrap.rs:120`).
+                info!(?url, "Opening a link in the default browser");
+                Task::future(async move {
+                    match tokio::task::spawn_blocking(move || open::that(&*url)).await {
+                        Ok(Ok(())) => (),
+                        Ok(Err(err)) => error!("Could not open the link: {err}"),
+                        Err(err) => error!("The task that opens links panicked: {err}"),
+                    }
+                })
+                .discard()
+            }
+
+            Message::ToggleTimer => {
+                self.state.elapsed.toggle(self.state.now());
                 Task::none()
             }
 
+            Message::ResetTimer => {
+                self.state.elapsed.restart(self.state.now());
+                Task::none()
+            }
+
+            Message::ThemeChosen(choice) => {
+                self.state.theme_choice = choice;
+                Task::none()
+            }
+
+            Message::SystemThemeChanged(mode) => {
+                self.state.system_mode = mode;
+                Task::none()
+            }
+
+            // Nothing to update: the tick exists to bring `view` round again so
+            // the clock and the elapsed timer redraw. It is the one thing here
+            // that moves without the deck moving.
             Message::WindowResized(_, _) | Message::Tick => Task::none(),
         }
     }
@@ -126,7 +167,7 @@ impl App {
 
     #[must_use]
     pub fn theme(&self) -> Theme {
-        Theme::Dark
+        self.state.theme()
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
@@ -144,16 +185,34 @@ impl App {
 
         let websocket_subscription = websocket_message_subscription();
 
+        // The desktop can change its mind about light and dark while the app is
+        // open — at sunset, on most machines — and a presenter view that keeps
+        // the old one until it is restarted is a presenter view that is wrong
+        // exactly when the room's lights change.
+        let system_theme_subscription =
+            iced::system::theme_changes().map(Message::SystemThemeChanged);
+
         Subscription::batch(vec![
             keyboard_subscription,
             tick_subscription,
             websocket_subscription,
+            system_theme_subscription,
         ])
     }
 }
 
 impl App {
     fn handle_connect(&mut self) -> Task<Message> {
+        // Every call spawns a socket and a forwarding task and never stops the
+        // one before it, and both would pump into the single global broadcast —
+        // so a second `Connect` while one is live used to double every
+        // notification. `cmd_sender` is `Some` exactly while a socket is up,
+        // which makes it the guard.
+        if self.cmd_sender.is_some() {
+            info!("Already connected; ignoring the request to connect again");
+            return Task::none();
+        }
+
         info!("Connecting to server...");
         let (tx_cmd, rx_cmd) = mpsc::unbounded_channel();
         let (mut ws_client, mut rx_msg) =
@@ -182,17 +241,19 @@ impl App {
         Task::none()
     }
 
+    /// Drops the connection and stays dropped.
+    ///
+    /// This used to queue a `Connect` 100 ms later, which made the only control
+    /// for it a button that could not do what its label said: "Reconnect" sent
+    /// `Disconnect` and was reconnected *for* it, so there was no way to stand
+    /// down a client that should not be driving the deck. The footer already
+    /// offers a `Connect` button whenever the status is `Closed`, so the way
+    /// back is right there.
     fn handle_disconnect(&mut self) -> Task<Message> {
         info!("Disconnecting from server...");
-        self.websocket_client = None;
         self.cmd_sender = None;
         self.state.connection_status = ConnectionStatus::Closed;
-
-        // Auto-reconnect after disconnect
-        Task::perform(
-            async { tokio::time::sleep(tokio::time::Duration::from_millis(100)).await },
-            |()| Message::Connect,
-        )
+        Task::none()
     }
 
     fn handle_talk_loaded(&mut self, talk_response: &TalkResponse) -> Task<Message> {
@@ -214,6 +275,7 @@ impl App {
         self.state
             .step_counts
             .clone_from(&talk_response.step_counts);
+        self.state.durations.clone_from(&talk_response.durations);
         Task::none()
     }
 
@@ -248,6 +310,7 @@ impl App {
         self.state
             .step_counts
             .clone_from(&talk_response.step_counts);
+        self.state.durations.clone_from(&talk_response.durations);
 
         // Parse and cache markdown for all slides
         self.state.cached_markdown = parse_slides_markdown(&slides_response.slides);
@@ -286,6 +349,7 @@ impl App {
         self.state
             .step_counts
             .clone_from(&talk_response.step_counts);
+        self.state.durations.clone_from(&talk_response.durations);
 
         // Parse and cache markdown for all slides
         self.state.cached_markdown = parse_slides_markdown(&slides_response.slides);
@@ -320,6 +384,11 @@ impl App {
                 debug!("State change received: {:?}", state);
                 self.state.presentation_state = Some(state.clone());
                 if let Some(slide_id) = state.current() {
+                    // The deck is running, so the talk has begun. Idempotent —
+                    // this arrives again on every reveal, and the clock must not
+                    // restart on every space bar.
+                    self.state.elapsed.start_if_idle(self.state.now());
+                    let moved = self.state.current_slide != Some(slide_id);
                     self.state.current_slide = Some(slide_id);
 
                     // Ensure slides are loaded from talk data
@@ -328,6 +397,14 @@ impl App {
                         && !talk.slides.is_empty()
                     {
                         self.state.slides = talk.slides.clone();
+                    }
+
+                    // Only when the deck actually changed slide: a reveal keeps
+                    // the highlight where it is, and snapping on every space bar
+                    // would fight a presenter who had scrolled the list to look
+                    // ahead.
+                    if moved {
+                        return self.snap_to_current_slide();
                     }
                 }
                 Task::none()
@@ -395,6 +472,28 @@ impl App {
         window::latest().and_then(move |id| window::set_mode(id, mode))
     }
 
+    /// Brings the slide list back to the row the deck is on.
+    ///
+    /// The list is 42 entries on an ordinary deck and the viewport holds about
+    /// twenty, so without this the highlight simply left the screen as soon as
+    /// the talk got past the first section — and the sidebar became a thing you
+    /// scrolled to find out where you were.
+    fn snap_to_current_slide(&self) -> Task<Message> {
+        let rows = slide_list::rows(&self.state.slides, self.state.current_slide);
+        let Some(y) = slide_list::current_row_fraction(&rows) else {
+            return Task::none();
+        };
+        iced::widget::operation::snap_to(
+            views::sidebar::SLIDE_LIST_ID,
+            // Only the vertical axis: the list does not scroll sideways, and
+            // saying so leaves any horizontal offset alone.
+            iced::widget::scrollable::RelativeOffset {
+                x: None,
+                y: Some(y),
+            },
+        )
+    }
+
     fn handle_keyboard(
         &mut self,
         key: &keyboard::Key,
@@ -412,6 +511,8 @@ impl App {
         }
 
         match action {
+            AppAction::ToggleTimer => self.state.elapsed.toggle(self.state.now()),
+            AppAction::ResetTimer => self.state.elapsed.restart(self.state.now()),
             AppAction::ToggleHelp => {
                 self.state.show_help = !self.state.show_help;
             }

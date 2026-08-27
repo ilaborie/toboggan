@@ -32,6 +32,9 @@ tokio = { workspace = true, features = ["full"] }
 async-stream = { workspace = true }
 
 anyhow = { workspace = true }
+# Opening a link from a slide. The same crate the server uses for `--open`, so
+# the desktop and the CLI hand a URL to the platform the same way.
+open = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 

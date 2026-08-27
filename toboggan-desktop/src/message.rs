@@ -3,6 +3,8 @@ use iced::widget::markdown;
 use toboggan_client::CommunicationMessage;
 use toboggan_core::{Command as TobogganCommand, SlidesResponse, State, TalkResponse};
 
+use crate::state::ThemeChoice;
+
 // All WebSocket commands are now unified under SendCommand variant
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -29,6 +31,15 @@ pub enum Message {
     KeyPressed(Key, Modifiers),
     WindowResized(f32, f32),
     LinkClicked(markdown::Uri),
+
+    /// Pause or resume the elapsed timer.
+    ToggleTimer,
+    /// Put the elapsed timer back to zero.
+    ResetTimer,
+    /// The presenter picked a theme, or asked to follow the desktop's.
+    ThemeChosen(ThemeChoice),
+    /// The desktop's colour scheme changed, or was read at startup.
+    SystemThemeChanged(iced::theme::Mode),
 
     // Tick for periodic updates
     Tick,

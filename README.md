@@ -196,16 +196,23 @@ Every client speaks the same WebSocket protocol and stays in sync with the rest.
 
 | | Web `/run` | Web `/presenter` | TUI | Desktop | iOS / Android |
 | --- | :-: | :-: | :-: | :-: | :-: |
-| Slides and step reveals | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Slides | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Step reveals | ✅ | ✅ | ✅ | — | ✅ |
 | Speaker notes | — | ✅ | ✅ | ✅ | — |
-| Next-slide preview | — | ✅ | ✅ | — | — |
-| Elapsed timer and pacing | — | ✅ | — | — | — |
+| Next-slide preview | — | ✅ | ✅ | ✅ | — |
+| Elapsed timer and pacing | — | ✅ | — | ✅ | — |
 | Embedded terminals | ✅ | — | — | — | — |
 | Presenter remote (PageUp/PageDown) | ✅ | ✅ | ✅ | ✅ | — |
 | Go to slide by number | ✅ | ✅ | ✅ | — | — |
 | Fullscreen | ✅ `f` | — | n/a | ✅ `F11` | — |
 | Blank the screen | ✅ `.` `w` | — | — | — | — |
 | Help overlay | ✅ `F1` | — | ✅ `h` | ✅ `h` | — |
+
+The desktop client renders a slide's Markdown natively rather than mirroring the
+deck, and the source it is given has every reveal already in it — so it shows the
+whole slide whatever step the room is on. That is deliberate: it is a reading
+surface for the speaker, not a second projector. `/presenter` is the view that
+shows the room's own rendering, frame for frame.
 
 - **Web** (`toboggan-web`) — TypeScript + WebAssembly, embedded in the binary.
   `/run` is the deck; `/presenter` is the same application with notes, the next

@@ -20,6 +20,9 @@ pub(crate) enum AppAction {
     NextStep,
     // Presentation control
     Blink,
+    // The talk's own clock
+    ToggleTimer,
+    ResetTimer,
     // UI actions
     ToggleHelp,
     ToggleSidebar,
@@ -44,6 +47,7 @@ pub(crate) const HELP_GROUPS: &[(&str, &[AppAction])] = &[
         ],
     ),
     ("Presentation", &[AppAction::Blink]),
+    ("Timer", &[AppAction::ToggleTimer, AppAction::ResetTimer]),
     (
         "View",
         &[
@@ -76,6 +80,8 @@ impl AppAction {
                 "h" | "H" | "?" => Self::ToggleHelp,
                 "s" | "S" => Self::ToggleSidebar,
                 "b" | "B" => Self::Blink,
+                "t" => Self::ToggleTimer,
+                "T" => Self::ResetTimer,
                 _ => return None,
             },
             _ => return None,
@@ -89,7 +95,7 @@ impl AppAction {
     /// until it appears there, and the assertion in `all_lists_every_action`
     /// then fails until it appears here too.
     #[cfg(test)]
-    pub(crate) const ALL: [Self; 12] = [
+    pub(crate) const ALL: [Self; 14] = [
         Self::First,
         Self::Previous,
         Self::Next,
@@ -97,6 +103,8 @@ impl AppAction {
         Self::PreviousStep,
         Self::NextStep,
         Self::Blink,
+        Self::ToggleTimer,
+        Self::ResetTimer,
         Self::ToggleHelp,
         Self::ToggleSidebar,
         Self::ToggleFullscreen,
@@ -118,11 +126,13 @@ impl AppAction {
             Self::PreviousStep => 4,
             Self::NextStep => 5,
             Self::Blink => 6,
-            Self::ToggleHelp => 7,
-            Self::ToggleSidebar => 8,
-            Self::ToggleFullscreen => 9,
-            Self::CloseOverlay => 10,
-            Self::Quit => 11,
+            Self::ToggleTimer => 7,
+            Self::ResetTimer => 8,
+            Self::ToggleHelp => 9,
+            Self::ToggleSidebar => 10,
+            Self::ToggleFullscreen => 11,
+            Self::CloseOverlay => 12,
+            Self::Quit => 13,
         }
     }
 
@@ -136,7 +146,11 @@ impl AppAction {
             Self::PreviousStep => Command::PreviousStep,
             Self::NextStep => Command::NextStep,
             Self::Blink => Command::Blink,
-            Self::ToggleHelp
+            // The timer is this client's own; it never reaches the server, so
+            // pausing it here does not pause it on anybody else's screen.
+            Self::ToggleTimer
+            | Self::ResetTimer
+            | Self::ToggleHelp
             | Self::ToggleSidebar
             | Self::ToggleFullscreen
             | Self::CloseOverlay
@@ -168,6 +182,8 @@ impl AppAction {
             }
             Self::NextStep => ActionDetails::new(&["↓", "Space", "PageDown"], "Next step"),
             Self::Blink => ActionDetails::new(&["b"], "Bell or blink"),
+            Self::ToggleTimer => ActionDetails::new(&["t"], "Pause or resume the timer"),
+            Self::ResetTimer => ActionDetails::new(&["T"], "Reset the timer to zero"),
             Self::ToggleHelp => ActionDetails::new(&["h", "?"], "Toggle this help"),
             Self::ToggleSidebar => ActionDetails::new(&["s"], "Toggle sidebar"),
             Self::ToggleFullscreen => ActionDetails::new(&["F11"], "Toggle fullscreen"),
@@ -245,7 +261,11 @@ mod tests {
             (AppAction::PreviousStep, Some(Command::PreviousStep)),
             (AppAction::NextStep, Some(Command::NextStep)),
             (AppAction::Blink, Some(Command::Blink)),
-            // The local ones are the window's business, not the server's.
+            // The local ones are the window's business, not the server's — the
+            // timer most of all: it is this client's own, so pausing it here
+            // must not pause the room's.
+            (AppAction::ToggleTimer, None),
+            (AppAction::ResetTimer, None),
             (AppAction::ToggleHelp, None),
             (AppAction::ToggleSidebar, None),
             (AppAction::ToggleFullscreen, None),

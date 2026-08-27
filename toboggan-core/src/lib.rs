@@ -43,3 +43,7 @@ pub use self::secret::*;
 
 mod goto;
 pub use self::goto::*;
+
+// Named rather than glob-re-exported: `Elapsed` is too general a name to sit at
+// the crate root beside `Slide` and `Command`. The module documents itself.
+pub mod pacing;

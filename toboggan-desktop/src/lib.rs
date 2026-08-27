@@ -21,6 +21,7 @@ pub use app::App;
 mod constants;
 mod icons;
 mod message;
+mod slide_list;
 mod state;
 mod styles;
 mod views;

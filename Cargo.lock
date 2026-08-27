@@ -6998,6 +6998,7 @@ dependencies = [
  "iced",
  "lucide-icons",
  "naga 30.0.0",
+ "open",
  "toboggan-client",
  "toboggan-core",
  "tokio",
