@@ -1,0 +1,25 @@
+/* The presenter page's own ground.
+ *
+ * This page deliberately does not load `main.css`: everything in it belongs to
+ * the deck — the terminal `@font-face`, the slide custom properties, the
+ * viewport-derived `html { font-size }`, `main { background: var(--bg) }` — and
+ * the deck now renders in iframes that load it themselves. What is left is
+ * `reset.css`, which paints `body { background: white }`, so the dark chrome
+ * needs the ground stated here rather than inherited from a stylesheet it no
+ * longer has.
+ */
+html,
+body {
+	block-size: 100%;
+	margin: 0;
+	padding: 0;
+	background: #0d1117;
+	color-scheme: dark;
+	overflow: hidden;
+}
+
+/* The shadow host the presenter view attaches to. */
+main {
+	display: block;
+	block-size: 100%;
+}

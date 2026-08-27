@@ -3,6 +3,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::HtmlElement;
 
 mod services;
+pub(crate) use self::services::mirror::MirrorPane;
 pub(crate) use self::services::{
     CommunicationMessage, CommunicationService, ConnectionStatus, KeyboardMapping, KeyboardService,
     TobogganApi,
@@ -13,7 +14,7 @@ use crate::app::App;
 
 mod components;
 pub(crate) use crate::components::{
-    ToastType, TobogganFooterElement, TobogganHelpElement, TobogganPresenterElement,
+    MirrorApp, ToastType, TobogganFooterElement, TobogganHelpElement, TobogganPresenterElement,
     TobogganQuakeTerminalElement, TobogganSlideElement, TobogganToastElement, WasmElement,
 };
 
@@ -47,5 +48,28 @@ pub fn start_presenter_app(config: AppConfig, elt: &HtmlElement) {
     debug!("🎛️ Configuration\n", format!("{config:#?}"));
 
     let mut app = App::new(config).into_presenter_view();
+    app.render(elt);
+}
+
+/// Mounts a mirror of the deck — `/run`, in an iframe, painted by the page that
+/// framed it.
+///
+/// Takes no [`AppConfig`] because it needs none: a mirror opens no socket and
+/// fetches nothing. Everything it draws arrives by `postMessage` from the
+/// presenter view, which already holds all of it.
+///
+/// `pane` is the raw `?mirror=` value. An unknown one mounts nothing rather
+/// than guessing, because the two panes differ in what they show.
+#[wasm_bindgen]
+pub fn start_mirror_app(elt: &HtmlElement, pane: &str) {
+    console_error_panic_hook::set_once();
+
+    let Some(pane) = MirrorPane::from_str(pane) else {
+        gloo::console::error!("Not a mirror pane:", pane);
+        return;
+    };
+    info!("🪞 Starting a Toboggan deck mirror:", pane.as_str());
+
+    let mut app = MirrorApp::new(pane);
     app.render(elt);
 }
