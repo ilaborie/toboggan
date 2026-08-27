@@ -77,6 +77,9 @@ pub(crate) struct AppState {
     pub timer_origin: Instant,
     pub elapsed: Elapsed,
 
+    /// The slide number being typed, digit by digit. See `toboggan_core::goto`.
+    pub goto_target: Option<usize>,
+
     /// What the presenter asked for.
     pub theme_choice: ThemeChoice,
     /// The last colour scheme the desktop reported.
@@ -119,6 +122,7 @@ impl Default for AppState {
             fullscreen: false,
             role: None,
             error_message: None,
+            goto_target: None,
             timer_origin: Instant::now(),
             elapsed: Elapsed::default(),
             theme_choice: ThemeChoice::default(),

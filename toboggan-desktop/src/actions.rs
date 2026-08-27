@@ -18,6 +18,10 @@ pub(crate) enum AppAction {
     // Step navigation
     PreviousStep,
     NextStep,
+    /// One digit of a slide number being typed; see [`Self::GotoTyped`].
+    Digit(u8),
+    /// `Enter`: go to the slide number typed so far.
+    GotoTyped,
     // Presentation control
     Blink,
     // The talk's own clock
@@ -44,6 +48,7 @@ pub(crate) const HELP_GROUPS: &[(&str, &[AppAction])] = &[
             AppAction::Previous,
             AppAction::First,
             AppAction::Last,
+            AppAction::Digit(0),
         ],
     ),
     ("Presentation", &[AppAction::Blink]),
@@ -71,6 +76,9 @@ impl AppAction {
             Key::Named(Named::ArrowUp | Named::PageUp | Named::Backspace) => Self::PreviousStep,
             Key::Named(Named::ArrowRight) => Self::Next,
             Key::Named(Named::ArrowLeft) => Self::Previous,
+            // Digits accumulate and Enter jumps, so reaching slide 31 of 42 is
+            // three keystrokes rather than a scroll.
+            Key::Named(Named::Enter) => Self::GotoTyped,
             Key::Named(Named::Home) => Self::First,
             Key::Named(Named::End) => Self::Last,
             Key::Named(Named::F11) => Self::ToggleFullscreen,
@@ -80,6 +88,13 @@ impl AppAction {
                 "h" | "H" | "?" => Self::ToggleHelp,
                 "s" | "S" => Self::ToggleSidebar,
                 "b" | "B" => Self::Blink,
+                digit if digit.len() == 1 && digit.starts_with(|ch: char| ch.is_ascii_digit()) => {
+                    let value = digit
+                        .bytes()
+                        .next()
+                        .map_or(0, |byte| byte.wrapping_sub(b'0'));
+                    Self::Digit(value)
+                }
                 "t" => Self::ToggleTimer,
                 "T" => Self::ResetTimer,
                 _ => return None,
@@ -95,13 +110,17 @@ impl AppAction {
     /// until it appears there, and the assertion in `all_lists_every_action`
     /// then fails until it appears here too.
     #[cfg(test)]
-    pub(crate) const ALL: [Self; 14] = [
+    /// `Digit` stands for all ten, which `every_digit_carries_its_own_value`
+    /// covers one by one.
+    pub(crate) const ALL: [Self; 16] = [
         Self::First,
         Self::Previous,
         Self::Next,
         Self::Last,
         Self::PreviousStep,
         Self::NextStep,
+        Self::Digit(0),
+        Self::GotoTyped,
         Self::Blink,
         Self::ToggleTimer,
         Self::ResetTimer,
@@ -125,14 +144,16 @@ impl AppAction {
             Self::Last => 3,
             Self::PreviousStep => 4,
             Self::NextStep => 5,
-            Self::Blink => 6,
-            Self::ToggleTimer => 7,
-            Self::ResetTimer => 8,
-            Self::ToggleHelp => 9,
-            Self::ToggleSidebar => 10,
-            Self::ToggleFullscreen => 11,
-            Self::CloseOverlay => 12,
-            Self::Quit => 13,
+            Self::Digit(_) => 6,
+            Self::GotoTyped => 7,
+            Self::Blink => 8,
+            Self::ToggleTimer => 9,
+            Self::ResetTimer => 10,
+            Self::ToggleHelp => 11,
+            Self::ToggleSidebar => 12,
+            Self::ToggleFullscreen => 13,
+            Self::CloseOverlay => 14,
+            Self::Quit => 15,
         }
     }
 
@@ -148,7 +169,11 @@ impl AppAction {
             Self::Blink => Command::Blink,
             // The timer is this client's own; it never reaches the server, so
             // pausing it here does not pause it on anybody else's screen.
-            Self::ToggleTimer
+            // The jump needs the number typed so far, which lives in the app's
+            // state — so `app` builds this one with `goto_command`.
+            Self::Digit(_)
+            | Self::GotoTyped
+            | Self::ToggleTimer
             | Self::ResetTimer
             | Self::ToggleHelp
             | Self::ToggleSidebar
@@ -182,6 +207,11 @@ impl AppAction {
             }
             Self::NextStep => ActionDetails::new(&["↓", "Space", "PageDown"], "Next step"),
             Self::Blink => ActionDetails::new(&["b"], "Bell or blink"),
+            // One entry for both: they are two halves of the same gesture, and
+            // listing `Enter` on its own would read as a command of its own.
+            Self::Digit(_) | Self::GotoTyped => {
+                ActionDetails::new(&["0-9", "Enter"], "Go to slide n")
+            }
             Self::ToggleTimer => ActionDetails::new(&["t"], "Pause or resume the timer"),
             Self::ResetTimer => ActionDetails::new(&["T"], "Reset the timer to zero"),
             Self::ToggleHelp => ActionDetails::new(&["h", "?"], "Toggle this help"),
@@ -205,7 +235,10 @@ impl ActionDetails {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
+    use toboggan_core::{SlideId, accumulate_goto, goto_command};
+
     use super::*;
 
     fn action_for(key: &Key) -> Option<AppAction> {
@@ -232,15 +265,39 @@ mod tests {
                         "Backspace" => Key::Named(Named::Backspace),
                         "Esc" => Key::Named(Named::Escape),
                         "F11" => Key::Named(Named::F11),
+                        "Enter" => Key::Named(Named::Enter),
+                        // A range label stands for ten keys, so it is expanded
+                        // rather than skipped: each digit must reach `Digit`
+                        // carrying its own value, or a typed `31` would jump
+                        // somewhere else entirely.
+                        "0-9" => {
+                            for digit in 0..=9_u8 {
+                                let key = Key::Character(digit.to_string().into());
+                                assert_eq!(
+                                    action_for(&key),
+                                    Some(AppAction::Digit(digit)),
+                                    "{group}: {digit} should map to Digit({digit})"
+                                );
+                            }
+                            continue;
+                        }
                         // Modified and multi-key shortcuts carry their modifier
                         // in the label; they are checked on their own below.
                         label if label.contains('+') => continue,
                         character => Key::Character(character.into()),
                     };
-                    assert_eq!(
-                        action_for(&pressed),
-                        Some(*action),
-                        "{group}: {key} should map to {action:?}"
+                    let bound = action_for(&pressed);
+                    // `Digit` and `GotoTyped` are two halves of one gesture and
+                    // share a help entry, so `Enter` is listed under both.
+                    let expected = match action {
+                        AppAction::Digit(_) | AppAction::GotoTyped => {
+                            bound == Some(AppAction::GotoTyped)
+                        }
+                        other => bound == Some(*other),
+                    };
+                    assert!(
+                        expected,
+                        "{group}: {key} should map to {action:?}, got {bound:?}"
                     );
                 }
             }
@@ -261,6 +318,9 @@ mod tests {
             (AppAction::PreviousStep, Some(Command::PreviousStep)),
             (AppAction::NextStep, Some(Command::NextStep)),
             (AppAction::Blink, Some(Command::Blink)),
+            // The jump is built from state, not from the action alone.
+            (AppAction::Digit(4), None),
+            (AppAction::GotoTyped, None),
             // The local ones are the window's business, not the server's — the
             // timer most of all: it is this client's own, so pausing it here
             // must not pause the room's.
@@ -294,11 +354,43 @@ mod tests {
             .collect();
 
         for action in AppAction::ALL {
+            // `Digit` and `GotoTyped` are two halves of one gesture with one
+            // help line — `0-9 / Enter — Go to slide n` — so the line that
+            // documents either documents both. Listing them separately would
+            // print that line twice.
+            let looked_up = match action {
+                AppAction::GotoTyped => AppAction::Digit(0),
+                other => other,
+            };
             assert!(
-                documented.contains(&action),
+                documented.contains(&looked_up),
                 "{action:?} is bound but absent from the help panel"
             );
         }
+    }
+
+    /// The value matters as much as the mapping: a `Digit` that lost which
+    /// digit it was would send every jump to the same slide.
+    #[test]
+    fn every_digit_carries_its_own_value() {
+        for digit in 0..=9_u8 {
+            let key = Key::Character(digit.to_string().into());
+            assert_eq!(action_for(&key), Some(AppAction::Digit(digit)), "{digit}");
+        }
+    }
+
+    /// The arithmetic is core's; this pins the desktop to it rather than to a
+    /// copy that could drift.
+    #[test]
+    fn a_typed_number_becomes_a_one_based_goto() {
+        let typed = [3_u8, 1].into_iter().fold(None, accumulate_goto);
+        assert_eq!(typed, Some(31));
+        assert_eq!(
+            goto_command(typed.expect("a number")),
+            Command::GoTo {
+                slide: SlideId::new(30)
+            }
+        );
     }
 
     #[test]

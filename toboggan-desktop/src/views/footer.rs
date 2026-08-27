@@ -217,11 +217,18 @@ pub(super) fn view(state: &AppState) -> Element<'_, Message> {
     let presentation_controls = presentation_controls_view(state);
     let step_indicators = step_indicators_view(state);
 
-    let slide_counter = if let Some((current, total)) = state.slide_index() {
-        let counter_text = format!("Slide {current} / {total}");
-        text(counter_text).size(12.0)
-    } else {
-        text("No slides").size(12.0)
+    // A number being typed replaces the counter rather than sitting beside it:
+    // the digits go nowhere visible otherwise, and a presenter who types `3`
+    // and sees nothing happen has no way to tell whether the deck is listening
+    // or whether they have already jumped.
+    let slide_counter = match (state.goto_target, state.slide_index()) {
+        (Some(target), _) => text(format!("→ {target}"))
+            .size(FONT_SIZE_MEDIUM)
+            .style(text::primary),
+        (None, Some((current, total))) => {
+            text(format!("Slide {current} / {total}")).size(FONT_SIZE_SMALL)
+        }
+        (None, None) => text("No slides".to_owned()).size(FONT_SIZE_SMALL),
     };
 
     let theme_picker = pick_list(

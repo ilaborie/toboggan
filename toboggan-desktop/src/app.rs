@@ -1,11 +1,14 @@
 use std::sync::OnceLock;
 
-use iced::{Element, Subscription, Task, Theme, event, keyboard, window};
+use iced::{Element, Subscription, Task, Theme, keyboard, window};
 use toboggan_client::{
     CommunicationMessage, ConnectionStatus, TobogganApi, TobogganApiError, TobogganConfig,
     WebSocketClient, refetch_talk_and_slides,
 };
-use toboggan_core::{ClientConfig, Command as TobogganCommand, SlidesResponse, Talk, TalkResponse};
+use toboggan_core::{
+    ClientConfig, Command as TobogganCommand, SlidesResponse, Talk, TalkResponse, accumulate_goto,
+    goto_command,
+};
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error, info};
 
@@ -171,14 +174,23 @@ impl App {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        let keyboard_subscription = event::listen_with(|event, _status, _window| {
-            if let iced::Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = event
-            {
-                Some(Message::KeyPressed(key, modifiers))
-            } else {
-                None
-            }
-        });
+        // `keyboard::listen`, not `event::listen_with`. The latter is handed the
+        // capture status and this closure threw it away, so every keystroke
+        // reached the keymap even when a widget had already consumed it —
+        // typing a space into a text field advanced the deck. `listen` yields
+        // only `event::Status::Ignored`, so a focused input swallows its own
+        // keys and nothing here has to arbitrate.
+        let keyboard_subscription =
+            keyboard::listen()
+                .with(())
+                .filter_map(|((), event)| match event {
+                    keyboard::Event::KeyPressed { key, modifiers, .. } => {
+                        Some(Message::KeyPressed(key, modifiers))
+                    }
+                    keyboard::Event::KeyReleased { .. } | keyboard::Event::ModifiersChanged(_) => {
+                        None
+                    }
+                });
 
         let tick_subscription =
             iced::time::every(std::time::Duration::from_secs(1)).map(|_| Message::Tick);
@@ -506,6 +518,25 @@ impl App {
             return Task::none();
         }
 
+        // Digits accumulate into a slide number and `Enter` jumps to it; the
+        // arithmetic is `toboggan_core::goto`'s, shared with the TUI and both
+        // web clients rather than copied a fourth time. Anything else abandons
+        // a half-typed number rather than leaving it to land on some later
+        // `Enter` — the same rule the TUI applies.
+        match action {
+            AppAction::Digit(digit) => {
+                self.state.goto_target = accumulate_goto(self.state.goto_target, digit);
+                return Task::none();
+            }
+            AppAction::GotoTyped => {
+                let Some(number) = self.state.goto_target.take() else {
+                    return Task::none();
+                };
+                return self.send_command(goto_command(number));
+            }
+            _ => self.state.goto_target = None,
+        }
+
         if let Some(command) = action.command() {
             return self.send_command(command);
         }
@@ -529,8 +560,11 @@ impl App {
                 }
             }
             AppAction::Quit => return iced::exit(),
-            // Handled above, by `command()`.
-            AppAction::First
+            // Both handled above: the goto pair before `command()`, the rest by
+            // it.
+            AppAction::Digit(_)
+            | AppAction::GotoTyped
+            | AppAction::First
             | AppAction::Previous
             | AppAction::Next
             | AppAction::Last
