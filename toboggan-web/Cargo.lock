@@ -585,6 +585,7 @@ dependencies = [
  "js-sys",
  "serde",
  "serde-wasm-bindgen",
+ "serde_json",
  "toboggan-core",
  "wasm-bindgen",
  "wasm-bindgen-futures",

@@ -5,12 +5,13 @@ use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use gloo::console::{debug, error, info};
 use gloo::utils::document;
-use toboggan_core::{ClientId, ClientRole, Command, Slide, SlideId, State};
+use toboggan_core::{ClientId, ClientRole, Command, Slide, SlideId, State, TalkResponse};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlElement;
 
+use crate::components::deck::{apply_deck_state, mount_deck};
 use crate::{
     AppConfig, CommunicationMessage, CommunicationService, ConnectionStatus, KeyboardService,
     StateClassMapper, ToastType, TobogganApi, TobogganFooterElement, TobogganHelpElement,
@@ -98,6 +99,11 @@ pub(crate) struct App {
     elements: Rc<RefCell<TobogganElements>>,
     rx_msg: Option<UnboundedReceiver<CommunicationMessage>>,
     rx_action: Option<UnboundedReceiver<Command>>,
+    /// The same channel the keyboard writes to, kept so the presenter view's
+    /// on-screen buttons can write to it too. Going through `handle_actions` is
+    /// the point: that is the one place a refusal can be *shown*, and a second
+    /// path would be a second copy of the rule that can disagree with it.
+    tx_action: UnboundedSender<Command>,
     tx_cmd: Option<UnboundedSender<Command>>,
     root_element: Option<Rc<HtmlElement>>,
     presenter_view: bool,
@@ -119,7 +125,7 @@ impl App {
         let keymap = keymap.unwrap_or_default();
         let mut elements = TobogganElements::default();
         elements.help.set_mapping(keymap.clone());
-        let kbd = KeyboardService::new(tx_action, keymap);
+        let kbd = KeyboardService::new(tx_action.clone(), keymap);
         let com =
             CommunicationService::new("Web Client", websocket, tx_msg, tx_cmd.clone(), rx_cmd);
         let com = Rc::new(RefCell::new(com));
@@ -131,6 +137,7 @@ impl App {
             elements: Rc::new(RefCell::new(elements)),
             rx_msg: Some(rx_msg),
             rx_action: Some(rx_action),
+            tx_action,
             tx_cmd: Some(tx_cmd),
             root_element: None,
             presenter_view: false,
@@ -176,32 +183,23 @@ impl WasmElement for App {
 
         {
             let mut elements = self.elements.borrow_mut();
-            elements.slide.set_api_base_url(self.api.base_url());
-
+            // Reborrowed so `mount_deck` can take two of its fields at once:
+            // through the `RefMut` alone they are the same borrow.
+            let elements = &mut *elements;
             if self.presenter_view {
-                // The presenter view owns the layout and hands back the pane the
-                // current slide belongs in — the same slide component the deck
-                // renders, so there is one renderer and two places to look at it.
+                // Nothing here renders a slide: the presenter's two panes are
+                // iframes of the deck itself, each painting the real thing in a
+                // document of its own. `elements.slide` and `elements.quake`
+                // stay unrendered on this page, which is safe — every one of
+                // their setters returns early without a container — and
+                // `update_slide_display` does not reach for them here anyway.
                 let mut presenter = TobogganPresenterElement::default();
+                presenter.set_commands(self.tx_action.clone());
                 presenter.render(host);
-                match presenter.current_slide_host() {
-                    Some(pane) => elements.slide.render(&pane),
-                    None => error!("Presenter layout has no pane for the current slide"),
-                }
-                // Terminals belong to the deck the room is watching; a second
-                // set here would be a second set of shells.
-                elements.slide.set_preview(true);
                 elements.presenter = Some(presenter);
             } else {
-                let el = create_html_element("div");
-                el.set_class_name("toboggan-slide");
-                elements.slide.render(&el);
-                host.append_child(&el).unwrap_throw();
-
-                let el = create_html_element("footer");
-                el.set_class_name("toboggan-footer");
-                elements.footer.render(&el);
-                host.append_child(&el).unwrap_throw();
+                elements.slide.set_api_base_url(self.api.base_url());
+                mount_deck(host, &mut elements.slide, &mut elements.footer);
 
                 // The quake terminal mounts itself directly under <body>; the
                 // host element passed here is unused. render() must run before
@@ -314,6 +312,15 @@ async fn handle_messages(mut rx: UnboundedReceiver<CommunicationMessage>, sessio
             } => {
                 session.client_id.set(Some(id));
                 session.role.set(role);
+                // The presenter view's buttons say the same thing the toast
+                // does, in the place the speaker is looking: a control that does
+                // nothing is worse than no control. They start visible, matching
+                // `Session.role`'s default and for its reason — on an ordinary
+                // local deck the handshake confirms rather than corrects, and
+                // starting hidden would flash them away and back.
+                if let Some(presenter) = &session.elements.borrow().presenter {
+                    presenter.set_can_drive(role.is_presenter());
+                }
                 if !role.is_presenter() {
                     session.toast(
                         ToastType::Info,
@@ -380,28 +387,46 @@ fn handle_connection_status(status: &ConnectionStatus, session: &Rc<Session>) {
     }
 }
 
+/// Hands freshly fetched talk metadata to whichever view is mounted.
+///
+/// The two callers — the first fetch and a live reload — used to carry a copy of
+/// this each, and both needed the same correction, which is a good enough
+/// argument on its own.
+fn apply_talk(talk: &TalkResponse, session: &Session) {
+    session.meta.borrow_mut().total_slides = talk.titles.len();
+
+    let mut elem = session.elements.borrow_mut();
+    // Reborrowed so the two arms can touch different fields: through the
+    // `RefMut` alone, `&elements.presenter` and `&mut elements.footer` are the
+    // same borrow.
+    let elements = &mut *elem;
+    // The deck's `_head.html` and footer belong to the deck, and on this page
+    // the mirrors *are* the deck — each renders them in a document of its own.
+    // The head used to be injected here as well, which is how the packaged
+    // guide's `main { background: … }` came to paint the speaker's chrome with
+    // the projector's backdrop: `<main>` is the presenter shell's shadow host,
+    // and a rule in the outer document outranks `:host` whatever its
+    // specificity.
+    let mirrored = if let Some(presenter) = &elements.presenter {
+        presenter.set_talk(talk);
+        true
+    } else {
+        elements.footer.set_content(talk.footer.clone());
+        false
+    };
+    drop(elem);
+
+    if !mirrored {
+        inject_head_html(talk.head.as_deref());
+    }
+    // Both views: the presenter's notes are in the deck's language too.
+    set_document_lang(talk.lang.as_deref());
+}
+
 /// Fills in the deck's metadata: footer, slide count, presenter plan, custom head.
 async fn fetch_talk_metadata(session: Rc<Session>) {
     match session.api.get_talk().await {
-        Ok(talk) => {
-            // Update presentation metadata with total slides count
-            session.meta.borrow_mut().total_slides = talk.titles.len();
-
-            let mut elem = session.elements.borrow_mut();
-            elem.footer.set_content(talk.footer.clone());
-            if let Some(presenter) = &elem.presenter {
-                presenter.set_plan(
-                    talk.titles.len(),
-                    talk.durations.clone(),
-                    talk.step_counts.clone(),
-                );
-            }
-            drop(elem);
-
-            // Inject custom head HTML if provided
-            inject_head_html(talk.head.as_deref());
-            set_document_lang(talk.lang.as_deref());
-        }
+        Ok(talk) => apply_talk(&talk, &session),
         // Report what actually failed, and what the presenter will see: the
         // slide counter stays at 0 and the deck's `_head.html` (fonts, custom
         // CSS) is never injected, so the deck renders unstyled.
@@ -467,25 +492,7 @@ async fn handle_talk_change(state: State, session: &Session) {
 
     // Re-fetch talk metadata
     match session.api.get_talk().await {
-        Ok(talk) => {
-            // Update presentation metadata with total slides count
-            session.meta.borrow_mut().total_slides = talk.titles.len();
-
-            let mut elem = session.elements.borrow_mut();
-            elem.footer.set_content(talk.footer.clone());
-            if let Some(presenter) = &elem.presenter {
-                presenter.set_plan(
-                    talk.titles.len(),
-                    talk.durations.clone(),
-                    talk.step_counts.clone(),
-                );
-            }
-            drop(elem);
-
-            // Inject custom head HTML if provided
-            inject_head_html(talk.head.as_deref());
-            set_document_lang(talk.lang.as_deref());
-        }
+        Ok(talk) => apply_talk(&talk, session),
         Err(err) => {
             error!("Failed to refetch talk after TalkChange:", err.to_string());
             session.toast(ToastType::Error, "Failed to reload presentation metadata");
@@ -574,31 +581,12 @@ fn try_restore_slide_position(state: &State, session: &Session) -> bool {
 
 /// Updates root element CSS class to reflect current state
 fn update_root_state_class(state: &State, session: &Session) {
-    let root_element = session.root_element.as_ref();
-    let state_class = state.to_css_class();
-    let current_classes = root_element.class_name();
-
-    // Remove old state classes and add new one
-    let classes: Vec<&str> = current_classes
-        .split_whitespace()
-        .filter(|class| !matches!(*class, "init" | "running" | "done"))
-        .collect();
-
-    let new_classes = if classes.is_empty() {
-        state_class.to_owned()
-    } else {
-        format!("{} {state_class}", classes.join(" "))
-    };
-
-    root_element.set_class_name(&new_classes);
-
-    // Update CSS custom properties for slide tracking
-    let current_slide = state.current().map_or(0, SlideId::display_number);
-    let total_slides = session.meta.borrow().total_slides;
-
-    let style = root_element.style();
-    let _ = style.set_property("--current-slide", &current_slide.to_string());
-    let _ = style.set_property("--total-slides", &total_slides.to_string());
+    apply_deck_state(
+        session.root_element.as_ref(),
+        state.to_css_class(),
+        state.current().map_or(0, SlideId::display_number),
+        session.meta.borrow().total_slides,
+    );
 }
 
 /// Fetches and displays the slide corresponding to current state
@@ -606,10 +594,12 @@ async fn update_slide_display(state: &State, session: &Session) {
     let Some(slide_id) = state.current() else {
         debug!("No current slide, clearing slide component");
         let mut elements = session.elements.borrow_mut();
-        elements.slide.set_slide(None, 0);
-        if let Some(presenter) = &mut elements.presenter {
+        let elements = &mut *elements;
+        if let Some(presenter) = &elements.presenter {
             presenter.set_next(None);
             presenter.set_state(state, None);
+        } else {
+            elements.slide.set_slide(None, 0);
         }
         return;
     };
@@ -630,14 +620,16 @@ async fn update_slide_display(state: &State, session: &Session) {
         return;
     };
 
-    let quake_cwd = slide.quake_terminal_cwd.clone();
-    let notes = slide.notes.clone();
     {
         let mut elems = session.elements.borrow_mut();
-        elems.slide.set_slide(Some(slide), current_step);
-        elems.quake.set_slide_cwd(quake_cwd);
+        let elems = &mut *elems;
+        // The slide goes by value: on the presenter page the slide component is
+        // never rendered, so there is no second owner to clone for.
         if let Some(presenter) = &elems.presenter {
-            presenter.set_state(state, Some(&notes));
+            presenter.set_state(state, Some(slide));
+        } else {
+            elems.quake.set_slide_cwd(slide.quake_terminal_cwd.clone());
+            elems.slide.set_slide(Some(slide), current_step);
         }
     }
 
@@ -646,7 +638,7 @@ async fn update_slide_display(state: &State, session: &Session) {
     // fetch is awaited.
     if session.elements.borrow().presenter.is_some() {
         let next = next_slide(session, slide_id).await;
-        if let Some(presenter) = &mut session.elements.borrow_mut().presenter {
+        if let Some(presenter) = &session.elements.borrow().presenter {
             presenter.set_next(next);
         }
     }

@@ -1,5 +1,8 @@
 use web_sys::HtmlElement;
 
+/// The DOM the room looks at, shared by `/run` and the presenter's mirrors.
+pub(crate) mod deck;
+
 mod footer;
 pub(crate) use self::footer::*;
 
@@ -11,6 +14,9 @@ pub(crate) use self::terminal::*;
 
 mod quake_terminal;
 pub(crate) use self::quake_terminal::*;
+
+mod mirror;
+pub(crate) use self::mirror::*;
 
 mod presenter;
 pub(crate) use self::presenter::*;

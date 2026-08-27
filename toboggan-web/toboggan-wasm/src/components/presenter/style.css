@@ -1,3 +1,9 @@
+/* The speaker's chrome. It owns this document now: the deck's `_head.html` goes
+   into the mirrors' documents instead, so nothing a deck author writes can
+   reach these rules. It used to be injected here as well, and the packaged
+   guide's `main { background: … }` then painted this whole view with the
+   projector's backdrop — `<main>` is this shell's shadow host, and a rule in
+   the outer document outranks `:host` whatever its specificity. */
 :host {
 	--presenter-bg: #0d1117;
 	--presenter-panel: #161b22;
@@ -10,15 +16,25 @@
 
 	display: block;
 	block-size: 100dvb;
+	color-scheme: dark;
 	color: var(--presenter-fg);
 	background: var(--presenter-bg);
+	/* Safe to state now. This used to be inherited by the slide rendered into
+	   this tree, where every type size is a percentage — so the preview drew at
+	   half the deck's base size before its `zoom` was even applied. A mirror is
+	   a document of its own and inherits nothing from here. */
 	font: 16px/1.5 system-ui, sans-serif;
 }
 
 .layout {
 	block-size: 100%;
 	display: grid;
-	grid-template-columns: 2fr 1fr;
+	/* The slide takes the width, because a 16:9 stage in a column narrower
+	   than 16:9 is letterboxed by whatever is left over — every pixel the
+	   aside does not need is one the speaker's own copy of the slide gets.
+	   The aside's floor is what the notes need to stay a column of prose
+	   rather than a ladder of two-word lines. */
+	grid-template-columns: minmax(0, 2.4fr) minmax(320px, 1fr);
 	grid-template-rows: minmax(0, 1fr) auto;
 	grid-template-areas:
 		"now aside"
@@ -49,30 +65,69 @@
 	min-block-size: 0;
 }
 
+/* `container-type: size` is what lets `.screen` below fit both axes at once.
+   It also makes these panes size-contained, so nothing inside them may
+   contribute to their height — which is exactly the property being bought, but
+   it does mean the stage must never be the thing establishing a pane's size. */
 .now {
 	grid-area: now;
+	container-type: size;
 	display: grid;
 	place-items: center;
 	min-block-size: 0;
 }
 
-/* Both previews are shaped like the thing they are previewing. Without this the
-   slide is laid out into whatever rectangle the pane happened to be, so the
-   presenter's copy wrapped and broke differently from the projector's — which
-   is the one thing a preview must not do. */
-.screen {
-	aspect-ratio: 16 / 9;
-	inline-size: 100%;
-	max-inline-size: 100%;
-	max-block-size: 100%;
+.next {
+	container-type: size;
+	block-size: clamp(120px, 22dvb, 260px);
 	display: grid;
+	place-items: center;
+}
+
+/* The projector's shape, fitted to whichever axis runs out first.
+   `inline-size: 100%` sized width-first, which left dead bands above and below
+   the slide whenever the column was taller than 16:9 — about a third of the
+   column on a laptop screen. Container query units make the fit exact with no
+   script: `cqi` and `cqb` are the pane's own inline and block size, and
+   100 / (16/9) is 177.7778. */
+.screen {
+	position: relative;
+	aspect-ratio: 16 / 9;
+	inline-size: min(100cqi, 177.7778cqb);
+	background: #000;
+}
+
+/* A whole deck, in a document of its own, laid out against a fixed 1280x720
+   viewport and painted at whatever the pane can spare.
+
+   Fixed rather than letting the iframe be its own size, because a deck sizes
+   itself against its viewport — `main.css` derives the root font size from
+   `min(1.667vw, 2.963vh)`, clamped at a 12px floor. Sized to its pane, the
+   next-slide thumbnail would hit that floor and render its type twice too
+   large; and a deck may retune the rule anyway. `transform` rather than `zoom`
+   for the same reason: `zoom` changes the box the slide lays out into, so the
+   preview would wrap at pane-width/scale, which is not the projector's width
+   either. A transform changes only the paint.
+
+   `pointer-events: none` keeps the keyboard on this document. A click that
+   focused a pane would send the speaker's keys into a deck wired to nothing. */
+.mirror {
+	position: absolute;
+	inset-block-start: 0;
+	inset-inline-start: 0;
+	inline-size: 1280px;
+	block-size: 720px;
+	border: 0;
+	transform: scale(var(--stage-scale, 1));
+	transform-origin: top left;
+	pointer-events: none;
 }
 
 .aside {
 	grid-area: aside;
 	display: grid;
-	grid-template-rows: auto auto minmax(0, 1fr);
-	gap: 12px;
+	grid-template-rows: auto auto auto auto minmax(0, 1fr);
+	gap: 8px;
 	min-block-size: 0;
 }
 
@@ -85,50 +140,54 @@
 	color: var(--presenter-muted);
 }
 
-.next {
-	display: grid;
-	place-items: center;
-	max-block-size: clamp(128px, 26dvb, 300px);
+/* The next slide's title in plain text beside its miniature. The miniature is
+   the size of a stamp; nobody reads a title off it mid-sentence. */
+.next-meta {
+	margin: 0;
+	display: flex;
+	gap: 8px;
+	align-items: baseline;
+	min-inline-size: 0;
 }
 
-/* The slide renders *into* this element — the slide component attaches its own
-   shadow root to the host it is handed, so the host must be an element the
-   presenter chrome does not otherwise use. Styling `.screen > *` instead would
-   match nothing at all, because the slide's `<section>` is behind that shadow
-   boundary rather than beside it. */
-.fit {
-	min-block-size: 0;
+.next-number {
+	color: var(--presenter-muted);
+	font-variant-numeric: tabular-nums;
+	flex: 0 0 auto;
+}
+
+.next-number:not(:empty)::before {
+	content: "→ ";
+}
+
+.next-title {
+	font-weight: 600;
 	overflow: hidden;
-	/* A slide sizes itself against the viewport, because normally it *is* the
-	   viewport. Here it is a pane, so it is told to fill that instead. Custom
-	   properties inherit across the shadow boundary the deck's own selectors
-	   cannot cross, which is why these work and a descendant rule would not. */
-	--slide-width: 100%;
-	--slide-width-wide: 100%;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
-/* The next-slide pane is a thumbnail, and a deck's type is sized for a room.
-   `zoom` rather than `transform: scale()` because zoom changes the box the
-   slide is laid out *into*: at 0.3 the slide lays itself out against a
-   pane-width/0.3 rectangle and is painted at pane width, so long lines wrap
-   where they would on a small screen instead of running off the side.
-   Applied to `.fit` and not to `.screen`, which would shrink the frame and the
-   16:9 ratio along with the slide. */
-.next .fit {
-	zoom: 0.3;
+.notes-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
 }
 
-/* Roughly the ratio between this pane and a projector, so the presenter's copy
-   breaks its lines where the room's does. */
-.now .fit {
-	zoom: 0.55;
+.notes-size {
+	display: flex;
+	gap: 4px;
 }
 
+/* The notes are what a speaker actually reads mid-sentence, so they get a size
+   of their own — set on the host by `install_notes_size` and remembered per
+   browser, because how big they need to be is a fact about the room and the
+   speaker's eyes rather than about the deck. */
 .notes {
 	overflow-y: auto;
 	padding: 12px 16px;
 	line-height: 1.6;
-	font-size: 17px;
+	font-size: var(--notes-size, 20px);
 }
 
 .notes:empty::after {
@@ -165,20 +224,46 @@
 	color: var(--presenter-muted);
 }
 
+.timer,
+.nav {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex: 0 0 auto;
+}
+
 .elapsed {
 	font-size: 22px;
 	font-weight: 600;
-	/* Clickable: it is the only control in the view, so it says so. */
-	cursor: pointer;
-	background: none;
-	border: 0;
-	color: inherit;
-	font-family: inherit;
-	padding: 0;
 }
 
-.elapsed:hover {
+button {
+	cursor: pointer;
+	background: none;
+	border: 1px solid var(--presenter-line);
+	border-radius: 6px;
+	color: inherit;
+	font: inherit;
+	line-height: 1;
+	padding: 4px 8px;
+}
+
+button:hover {
 	color: var(--presenter-accent);
+	border-color: var(--presenter-accent);
+}
+
+.nav button {
+	font-size: 20px;
+	padding: 2px 12px;
+}
+
+/* A control that cannot do anything is worse than no control: this is the
+   visible half of the "Following along — this client cannot drive the deck"
+   toast. The timer and the notes stay — they are this view's own, and an
+   audience client watching from the back of the room still wants them. */
+.layout[data-role="audience"] .nav {
+	display: none;
 }
 
 .progress {

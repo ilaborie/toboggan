@@ -12,6 +12,9 @@ pub(crate) use self::communication::CommunicationService;
 mod keyboard;
 pub(crate) use self::keyboard::*;
 
+/// The presenter view talking to the decks rendered inside its panes.
+pub(crate) mod mirror;
+
 #[derive(Debug, Clone)]
 pub(crate) enum ConnectionStatus {
     Connecting,

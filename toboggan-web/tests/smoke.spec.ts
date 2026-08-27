@@ -38,7 +38,7 @@ test("the presenter view shows its status strip", async ({ page }) => {
 	await expect(page.locator(".status .counter")).toBeVisible({
 		timeout: 15_000,
 	});
-	await expect(page.locator(".now .fit")).toBeVisible();
+	await expect(page.locator(".now .mirror")).toBeVisible();
 });
 
 test("the guide is served with any deck", async ({ page }) => {
