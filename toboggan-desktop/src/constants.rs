@@ -38,6 +38,18 @@ pub(crate) const BORDER_WIDTH: f32 = 1.0;
 pub(crate) const ICON_SIZE_SMALL: f32 = 14.0;
 pub(crate) const ICON_SIZE_MEDIUM: f32 = 16.0;
 
-// Component dimensions
-pub(crate) const SLIDE_NOTES_HEIGHT: f32 = 150.0;
-pub(crate) const SLIDE_NOTES_SCROLL_HEIGHT: f32 = 130.0;
+// Layout shares rather than pixel heights. The notes box was 150px tall on a
+// 720p window and on a 4K one, which meant three lines of notes on the display a
+// presenter actually uses.
+pub(crate) const PORTION_BODY: u16 = 3;
+pub(crate) const PORTION_NOTES: u16 = 2;
+
+/// Base size for the rendered slide body.
+///
+/// This pane is a reading surface for the presenter, not a mock-up of the
+/// projector — it cannot be one, because the client is handed every reveal at
+/// once — so it is sized to be read at a laptop's distance rather than a room's.
+pub(crate) const FONT_SIZE_BODY: f32 = 18.0;
+
+/// Base size for the speaker notes: what the speaker actually reads mid-sentence.
+pub(crate) const FONT_SIZE_NOTES: f32 = 16.0;

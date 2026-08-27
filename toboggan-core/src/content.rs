@@ -36,8 +36,33 @@ pub enum Content {
 }
 
 impl Content {
+    /// Whether this is the [`Self::Empty`] variant.
+    ///
+    /// The structural question, asked by serde: `Slide` skips serializing an
+    /// absent title or absent notes with it. Callers deciding whether to *draw*
+    /// something want [`Self::is_blank`] instead — this one is `false` for a
+    /// `Text` holding `""`, which says nothing while being something.
     pub(crate) fn is_empty(&self) -> bool {
         matches!(self, Self::Empty)
+    }
+
+    /// Whether this content would show a reader nothing at all.
+    ///
+    /// Broader than the crate-private `is_empty`, and the question every client is
+    /// actually asking when it decides whether to draw a heading, a notes box or
+    /// a list entry: an `Html` fragment whose alt text is empty and a `Text`
+    /// holding `""` both say nothing.
+    ///
+    /// It exists because the desktop client asked it as
+    /// `matches!(.., Content::Text { text } if text.is_empty())`, in five
+    /// places — which is `false` for `Content::Empty`, the variant the server
+    /// actually sends for an absent title or absent notes, precisely because
+    /// `is_empty` told it to skip them. Every slide without notes was
+    /// therefore drawn with an empty notes box, and every untitled slide with a
+    /// blank heading.
+    #[must_use]
+    pub fn is_blank(&self) -> bool {
+        self.display_text().is_empty()
     }
 
     /// Plain text content.
@@ -142,5 +167,32 @@ mod tests {
     fn empty_content_has_no_placeholder_text() {
         assert_eq!(Content::Empty.display_text(), "");
         assert_eq!(Content::Empty.raw_html(), "");
+    }
+
+    /// The desktop client asked this as `matches!(.., Content::Text { text } if
+    /// text.is_empty())`, which is `false` for the one variant the server
+    /// actually sends for absent content.
+    #[test]
+    fn every_variant_that_says_nothing_is_blank() {
+        assert!(Content::Empty.is_blank());
+        assert!(Content::text("").is_blank());
+        assert!(Content::html("").is_blank());
+        assert!(Content::html_with_alt("<p></p>", "").is_blank());
+    }
+
+    #[test]
+    fn content_with_words_is_not_blank() {
+        assert!(!Content::text("Hi").is_blank());
+        assert!(!Content::html("<p>Hi</p>").is_blank());
+        assert!(!Content::html_with_alt("<p>Hi</p>", "Hi").is_blank());
+    }
+
+    /// The two questions differ on exactly one case, and that case is why
+    /// `is_blank` exists rather than `is_empty` being made public.
+    #[test]
+    fn empty_text_is_blank_without_being_empty() {
+        let content = Content::text("");
+        assert!(content.is_blank());
+        assert!(!content.is_empty());
     }
 }
