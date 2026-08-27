@@ -1,243 +1,80 @@
-# TobogganApp
+# Toboggan for iOS
 
-Native iOS client for Toboggan presentations built with SwiftUI, providing a professional presentation experience on iOS devices.
+A presenter's remote for a running [Toboggan](../README.md) talk: the current
+slide, its speaker notes, what comes next, and the controls to drive the deck —
+on the device you are already holding.
 
-## Features
+SwiftUI, iOS 26, talking to the Rust core through [UniFFI](../toboggan-mobile).
 
-### Presentation Experience
+## What it does
 
-- **Native SwiftUI Interface**: Modern iOS design with system integration
-- **Presenter View**: Dedicated view showing current slide, notes, and next slide preview
-- **Real-time Synchronization**: WebSocket-based multi-client synchronization
-- **Gesture Controls**: Swipe navigation and tap-to-advance
-- **External Display Support**: AirPlay and wired external display compatibility
+- Follows the talk live over the WebSocket protocol every other client speaks.
+- Shows **speaker notes** for the current slide, rendered from the deck's own
+  markup.
+- Shows the next slide's title, the position in the deck, and — when the deck
+  plans timings — elapsed time and whether you are ahead of or behind the plan.
+- Drives the deck: previous/next step, previous/next slide, blink, and
+  tap-to-jump from the slide overview.
+- Says plainly when the server has granted it **audience** rather than
+  presenter, and disables the controls, instead of offering buttons that
+  silently do nothing.
 
-### Content Support
+## Connecting
 
-- **Rich Content Rendering**: Full HTML and Markdown slide rendering
-- **Responsive Layout**: Adapts to different device orientations and sizes
-- **Accessibility**: VoiceOver support for all interface elements
-- **Dark Mode**: Full support for system dark mode preferences
-
-## Architecture
-
-TobogganApp follows modern iOS architecture patterns for maintainability and performance:
-
-### Design Patterns
-
-- **MVVM (Model-View-ViewModel)**: Clear separation between UI and business logic
-- **SwiftUI**: Declarative UI with reactive data binding
-- **Combine Framework**: Reactive programming for state management
-- **Coordinator Pattern**: Navigation flow management
-
-### Core Components
-
-- **SwiftUI Views**: Native iOS UI components with system styling
-- **ViewModels**: Business logic and state management
-- **Services**: Network communication and data persistence
-- **Mock Types**: Development-time mocks for rapid UI iteration
-
-### Development Modes
-
-1. **Mock Mode** (Current): Swift-only implementation with mock data
-
-   - Fast compilation and iteration
-   - SwiftUI previews without external dependencies
-   - Ideal for UI development and testing
-
-2. **Production Mode** (Future): Integration with Rust core via UniFFI
-
-   - Real WebSocket connectivity to Toboggan server
-   - Shared business logic with other Toboggan clients
-   - Full presentation synchronization
-
-## Getting Started
-
-### Prerequisites
-
-- **Xcode 15.0+** - Latest stable version recommended
-- **iOS 16.0+** - Minimum deployment target
-- **macOS 13.0+** - For Xcode and development tools
-
-### Building the App
-
-#### Option 1: Using Mise (Recommended)
+The app needs the address of the machine running `toboggan`, and — because a
+phone is never that machine — a presenter token if it is to drive the deck.
+Both come from one scan: open the talk's home page on the presenting machine and
+point the app at the QR code it shows.
 
 ```bash
-# From the workspace root
-mise build:ios
+# on the presenting machine
+toboggan -p ./my-talk --host 0.0.0.0 --presenter-token "$(uuidgen)"
 ```
 
-#### Option 2: Manual Build
+Open `http://<that machine>:8080/?token=…` in a browser there; the page renders a
+QR code carrying exactly that URL. Scan it from the app's Connection sheet.
+
+Without a token the app still connects and follows along — it just watches. The
+address and token can also be typed in by hand, and the token is kept in the
+keychain rather than in preferences.
+
+Everything the app logs is readable on the device from **Connection → Show log**,
+which is the only way to see what went wrong when the phone is not plugged into
+anything.
+
+## Building
+
+The Xcode project has a run-script phase that builds the Rust staticlib for the
+current architecture and regenerates the Swift bindings from it, so an ordinary
+build in Xcode is enough. Both artifacts are gitignored, so a fresh clone has
+neither until that phase has run once.
 
 ```bash
-# Navigate to iOS Rust library directory
-cd toboggan-mobile
-
-# Build the iOS framework (when needed for production mode)
-./build.sh
-
-# Return to workspace root
-cd ..
+mise build:ios     # the Rust side for device + both simulator architectures
+mise test:ios      # xcodebuild test against a simulator
+mise lint:ios      # SwiftLint
 ```
 
-#### Option 3: iOS-Only Development
+CI runs SwiftLint, a build, and the unit tests on every push.
 
-```bash
-# For UI-only development, no Rust build required
-open TobogganApp/TobogganApp.xcodeproj
-```
+## Layout
 
-### Running the App
+| Path | What lives there |
+| --- | --- |
+| `TobogganApp/App/` | `ContentView` — the scrolling deck view and its toolbar |
+| `TobogganApp/Model/` | `PresentationModel` (the talk as this device sees it) and `TobogganSession` (the FFI handle) |
+| `TobogganApp/Views/` | The content cards, the floating `RemoteBar`, the overview and log sheets |
+| `TobogganApp/Connection/` | Settings, the keychain, the connection sheet, the QR scanner |
+| `TobogganApp/Support/` | `AppLog` |
+| `TobogganApp/toboggan.swift` | Generated UniFFI bindings — **do not edit** |
 
-1. Open `TobogganApp/TobogganApp.xcodeproj` in Xcode
-2. Select your target device or simulator
-3. Press `Cmd+R` to build and run
+## Notes on the design
 
-## Development Workflow
+The deck is *content* and the controls are *chrome*. The slide title and notes
+scroll underneath a floating glass bar and the system toolbar, which is what
+gives Liquid Glass something to refract; the cards themselves are opaque, because
+glass over glass reads as neither.
 
-### Rapid UI Development
-
-The app uses mock types for fast development cycles:
-
-```swift
-// Mock types enable SwiftUI previews
-struct MockSlide: SlideProtocol {
-    let id = UUID()
-    let title = "Sample Slide"
-    let content = "Mock content for development"
-}
-```
-
-**Benefits:**
-
-- Fast build times (no Rust compilation)
-- SwiftUI previews work instantly
-- Easy UI iteration and testing
-- No external server dependencies
-
-### Project Structure
-
-```
-TobogganApp/
-├── TobogganApp.xcodeproj/           # Xcode project
-├── TobogganApp/
-│   ├── TobogganApp.swift           # App entry point
-│   ├── Views/                      # SwiftUI views
-│   │   ├── ContentView.swift       # Main container view
-│   │   ├── SlideView.swift         # Individual slide display
-│   │   └── PresenterView.swift     # Presenter mode interface
-│   ├── ViewModels/                 # Business logic layer
-│   │   ├── PresentationViewModel.swift
-│   │   └── SlideViewModel.swift
-│   ├── Models/                     # Data types and protocols
-│   │   ├── SlideProtocol.swift
-│   │   └── PresentationProtocol.swift
-│   ├── Services/                   # External integrations
-│   │   └── WebSocketService.swift
-│   ├── Utils/                      # Utilities and helpers
-│   │   ├── MockTypes.swift         # Development mocks
-│   │   └── Extensions.swift        # Swift extensions
-│   └── Resources/                  # Assets and localizations
-├── Tests/                          # Unit and UI tests
-└── README.md                       # This file
-```
-
-## Testing
-
-### Unit Tests
-
-```bash
-# Run unit tests in Xcode
-Cmd+U
-
-# Or from command line
-xcodebuild test -scheme TobogganApp -destination 'platform=iOS Simulator,name=iPhone 15'
-```
-
-### UI Tests
-
-The app includes UI tests for critical presentation flows:
-
-- Slide navigation
-- Presenter view transitions
-- External display handling
-
-## Future Integration with Rust Core
-
-When ready to integrate with the real Toboggan server:
-
-### Prerequisites for Production Mode
-
-- Rust toolchain with iOS targets installed
-- UniFFI-generated Swift bindings
-- Built `toboggan-mobile` framework
-
-### Integration Steps
-
-1. **Build Rust Framework**: Run `mise build:ios` to generate iOS bindings
-2. **Replace Mock Types**: Swap `MockTypes.swift` with real UniFFI-generated types
-3. **Update Services**: Connect `WebSocketService` to real Toboggan server
-4. **Test Integration**: Verify real-time synchronization works
-5. **Update UI**: Adapt views to handle real data and error states
-
-### Benefits of Rust Integration
-
-- Shared business logic with other Toboggan clients
-- Real WebSocket connectivity and synchronization
-- Consistent presentation behavior across platforms
-- Type-safe communication with server
-
-## Contributing to iOS Development
-
-### Code Style Guidelines
-
-- Follow Swift API Design Guidelines
-- Use SwiftLint for code consistency
-- Maintain SwiftUI best practices
-- Document complex business logic
-
-### Common Development Tasks
-
-- **Adding new views**: Create in `Views/` directory with associated ViewModel
-- **Updating mock data**: Modify `MockTypes.swift` for development
-- **Testing UI changes**: Use SwiftUI previews for rapid iteration
-- **Adding features**: Follow MVVM pattern with proper separation
-
-### Performance Considerations
-
-- Use `@StateObject` and `@ObservedObject` appropriately
-- Minimize view re-rendering with proper state management
-- Optimize image and content loading for smooth scrolling
-- Test on physical devices for real performance
-
-## Troubleshooting
-
-### Common Issues
-
-**Build Errors:**
-
-- Ensure Xcode is up to date (15.0+)
-- Clean build folder: Product → Clean Build Folder
-- Reset simulators if needed
-
-**Preview Issues:**
-
-- Restart Xcode if SwiftUI previews stop working
-- Check that mock types conform to required protocols
-- Verify preview data is properly initialized
-
-**Runtime Issues:**
-
-- Check console logs in Xcode for error messages
-- Verify mock data matches expected formats
-- Test on different device sizes and orientations
-
-## License
-
-Part of the Toboggan project. Licensed under either of:
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](../LICENSE-APACHE))
-- MIT license ([LICENSE-MIT](../LICENSE-MIT))
-
-at your option.
+The server is authoritative for all navigation state. Nothing is updated
+optimistically — a command this client is not allowed to send would otherwise
+move the phone and not the projector.

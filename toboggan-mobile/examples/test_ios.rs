@@ -4,7 +4,10 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use toboggan::{ClientConfig, ClientNotificationHandler, ConnectionStatus, State, TobogganClient};
+use toboggan::{
+    ClientConfig, ClientNotificationHandler, ClientRole, ConnectionStatus, PresentationState,
+    TobogganClient,
+};
 
 fn main() {
     let config = ClientConfig {
@@ -42,11 +45,11 @@ fn main() {
 struct NotificationHandler;
 
 impl ClientNotificationHandler for NotificationHandler {
-    fn on_state_change(&self, state: State) {
+    fn on_state_change(&self, state: PresentationState) {
         println!("🗿 {state:?}");
     }
 
-    fn on_talk_change(&self, state: State) {
+    fn on_talk_change(&self, state: PresentationState) {
         println!("📝 Talk changed: {state:?}");
     }
 
@@ -54,8 +57,8 @@ impl ClientNotificationHandler for NotificationHandler {
         println!("🛜 {status:?}");
     }
 
-    fn on_registered(&self, client_id: String) {
-        println!("✅ Registered: {client_id}");
+    fn on_registered(&self, client_id: String, role: ClientRole) {
+        println!("✅ Registered: {client_id} as {role:?}");
     }
 
     fn on_client_connected(&self, client_id: String, name: String) {

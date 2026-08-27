@@ -1,4 +1,4 @@
-use toboggan_core::{ClientId, State};
+use toboggan_core::{ClientId, ClientRole, State};
 
 use crate::ConnectionStatus;
 
@@ -20,8 +20,16 @@ pub trait NotificationHandler: Send + Sync {
     /// Called when an error occurs
     fn on_error(&self, error: String);
 
-    /// Called when this client is registered with the server
-    fn on_registered(&self, client_id: ClientId);
+    /// Called when this client is registered with the server, with the role the
+    /// server granted it.
+    ///
+    /// The role is told rather than asked for, and it is told *here* because a
+    /// client that cannot present has to say so before the user presses
+    /// something. The native clients read it off
+    /// [`crate::CommunicationMessage::Registered`] instead, which they already
+    /// receive; a foreign client behind the `UniFFI` boundary does not, so this is
+    /// its only path to the same fact.
+    fn on_registered(&self, client_id: ClientId, role: ClientRole);
 
     /// Called when another client connects to the server
     fn on_client_connected(&self, client_id: ClientId, name: String);

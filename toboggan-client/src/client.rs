@@ -320,15 +320,16 @@ impl<H: NotificationHandler + 'static> TobogganClientCore<H> {
                     handler.on_error(error);
                 }
                 CommunicationMessage::Registered { client_id, role } => {
-                    // Not handed to the handler: `NotificationHandler` is
-                    // mirrored into generated UniFFI bindings, and widening it
-                    // would mean regenerating the iOS surface for something no
-                    // foreign caller reads. The native clients read the role off
-                    // `CommunicationMessage::Registered`, which they already
-                    // receive. Logged at `info!` rather than `debug!`, which is
-                    // off by default and hid the grant entirely.
+                    // Handed to the handler, role included. The native clients
+                    // read the role off `CommunicationMessage::Registered`,
+                    // which they already receive; a client behind the UniFFI
+                    // boundary only sees this trait, and a phone is never on
+                    // loopback — so without the role it registers as audience
+                    // and offers buttons that silently do nothing. Logged at
+                    // `info!` rather than `debug!`, which is off by default and
+                    // hid the grant entirely.
                     info!(?client_id, ?role, "Registered");
-                    handler.on_registered(client_id);
+                    handler.on_registered(client_id, role);
                 }
                 CommunicationMessage::ClientConnected { client_id, name } => {
                     handler.on_client_connected(client_id, name);

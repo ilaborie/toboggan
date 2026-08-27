@@ -53,7 +53,6 @@ LIB_NAME="toboggan"
 # Build Rust library for all architectures first, then generate Swift bindings
 # This ensures the bindings are generated after all compilation is complete
 
-UDL_FILE="${SRC_ROOT}/src/toboggan.udl"
 BINDINGS_DIR="${SRCROOT}/TobogganApp"
 
 # Ensure the bindings directory exists
@@ -102,15 +101,24 @@ for arch in $ARCHS; do
         # Also copy to project directory for linker search path
         cp "$RUST_LIB_PATH" "${SRCROOT}/TobogganApp/"
 
-        # Generate Swift bindings using the EXACT same library we just compiled
-        RUST_UDL_PATH="${SRC_ROOT}/toboggan-mobile/src/toboggan.udl"
-        echo "🍎 Generate for sim: $RUST_UDL_PATH (using compiled library metadata)"
-        $HOME/.cargo/bin/cargo run $RELFLAG -p "${FFI_TARGET}" --bin uniffi-bindgen -- generate --library --language swift --out-dir "${SRCROOT}/TobogganApp/" "$RUST_LIB_PATH"
       fi
   esac
 done
 
 echo "All architectures built successfully! $ARCHS - $IS_SIMULATOR"
-# Swift bindings are now handled by Xcode UDL Build Rule
 
-echo "Build script completed - Rust library built and ready for UDL Build Rule to generate Swift bindings"
+# Generate the Swift bindings from the library that was just compiled.
+#
+# This used to sit inside the arm64-simulator branch of the loop above, so a
+# device build kept whatever bindings the last simulator build happened to leave
+# behind. UniFFI's checksum guard turns that mismatch into a `fatalError` at
+# launch, on the device, which is the worst place to find out.
+if [ -z "${RUST_LIB_PATH:-}" ]; then
+  echo "No library was built for ${ARCHS}; cannot generate bindings." >&2
+  exit 2
+fi
+echo "🍎 Generating Swift bindings from ${RUST_LIB_PATH}"
+$HOME/.cargo/bin/cargo run $RELFLAG -p "${FFI_TARGET}" --bin uniffi-bindgen -- \
+  generate --library --language swift --out-dir "${SRCROOT}/TobogganApp/" "$RUST_LIB_PATH"
+
+echo "Build script completed - Rust library built and Swift bindings generated"

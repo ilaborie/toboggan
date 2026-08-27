@@ -37,6 +37,7 @@ mime_guess = { workspace = true }
 notify = { workspace = true }
 portable-pty = { workspace = true }
 open = { workspace = true }
+qrcode = { workspace = true }
 tempfile = { workspace = true }
 chromiumoxide = { workspace = true }
 

@@ -62,13 +62,19 @@ app already displays, rather than aborting in the constructor.
 ## Building
 
 ```bash
-mise build:ios         # aarch64-apple-ios + simulator, xcframework, Swift bindings
-mise build:android     # via cargo-ndk
+mise build:ios         # aarch64-apple-ios + simulator + the uniffi-bindgen binary
+mise build:android     # via cargo-ndk, bindings included
 ```
 
-`TobogganApp/TobogganApp/toboggan.swift` is **generated and checked in**. If you
-change anything exported across the boundary, regenerate it — an edit to this
-crate that does not is a mismatch that only shows up at link time.
+`TobogganApp/TobogganApp/toboggan.swift`, `tobogganFFI.h` and `libtoboggan.a` are
+**generated and git-ignored** — a fresh clone has none of them, so the Rust build
+has to run before the Xcode project will open cleanly. Note that `mise build:ios`
+builds the bindgen binary but does not *run* it; the Swift is produced by the
+Xcode run-script phase (`TobogganApp/xc-universal-binary.sh`).
+
+If you change anything exported across the boundary, regenerate — an edit to this
+crate that does not is a mismatch, and `UniFFI`'s checksum guard turns it into a
+`fatalError` at startup rather than a link error.
 
 ## License
 

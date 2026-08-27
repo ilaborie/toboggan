@@ -37,9 +37,5 @@ tokio = { workspace = true, features = [
 
 [dev-dependencies]
 
-[build-dependencies]
-uniffi = { workspace = true, features = ["build"] }
-
-
 [lints]
 workspace = true

@@ -14,12 +14,14 @@ import uniffi.toboggan.ClientNotificationHandler
 import uniffi.toboggan.Command
 import uniffi.toboggan.ConnectionStatus
 import uniffi.toboggan.Slide
-import uniffi.toboggan.State
+import uniffi.toboggan.ClientRole
+import uniffi.toboggan.PresentationState
 import uniffi.toboggan.TobogganClient
 
 data class PresentationUiState(
     val presentationTitle: String = "Presentation title - Date",
-    val connectionStatus: ConnectionStatus = ConnectionStatus.CLOSED,
+    val connectionStatus: ConnectionStatus = ConnectionStatus.Closed,
+    val role: ClientRole? = null,
     val currentSlideIndex: Int? = null,
     val totalSlides: Int = 0,
     val currentSlide: Slide? = null,
@@ -46,9 +48,9 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
     val uiState: StateFlow<PresentationUiState> = _uiState.asStateFlow()
 
     private var tobogganClient: TobogganClient? = null
-    private var currentState: State? = null
+    private var currentState: PresentationState? = null
     private var talkLoaded = false
-    private var pendingStateUpdate: State? = null
+    private var pendingStateUpdate: PresentationState? = null
 
     init {
         connectToServer()
@@ -63,7 +65,7 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
                 retryDelay = Duration.ofSeconds(1)
             )
 
-            _uiState.update { it.copy(connectionStatus = ConnectionStatus.CONNECTING) }
+            _uiState.update { it.copy(connectionStatus = ConnectionStatus.Connecting) }
 
             tobogganClient = TobogganClient(config, "Android Remote", this@PresentationViewModel)
             tobogganClient?.connect()
@@ -98,13 +100,13 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
 
     // MARK: - ClientNotificationHandler implementation
 
-    override fun onStateChange(state: State) {
+    override fun onStateChange(state: PresentationState) {
         viewModelScope.launch(Dispatchers.Main) {
             handleStateChange(state)
         }
     }
 
-    override fun onTalkChange(state: State) {
+    override fun onTalkChange(state: PresentationState) {
         viewModelScope.launch(Dispatchers.IO) {
             fetchTalkInfo()
         }
@@ -125,8 +127,11 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
         }
     }
 
-    override fun onRegistered(clientId: String) {
-        // Client registration notification - no UI action needed
+    override fun onRegistered(clientId: String, role: ClientRole) {
+        // Said plainly, because the alternative is discovering it by pressing a
+        // button and having the server refuse: a client that is not on the
+        // presenting machine and carries no token is audience.
+        _uiState.update { it.copy(role = role) }
     }
 
     override fun onClientConnected(clientId: String, name: String) {
@@ -139,15 +144,15 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
 
     // MARK: - State handling
 
-    private fun handleStateChange(state: State) {
+    private fun handleStateChange(state: PresentationState) {
         currentState = state
 
         when (state) {
-            is State.Init -> {
+            is PresentationState.Init -> {
                 _uiState.update { it.copy(totalSlides = state.totalSlides.toInt()) }
                 updatePresentationState(currentSlideIndex = null)
             }
-            is State.Running -> {
+            is PresentationState.Running -> {
                 updatePresentationState(
                     currentSlideIndex = state.current.toInt(),
                     previousSlideIndex = state.previous?.toInt(),
@@ -156,7 +161,7 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
                     stepCount = state.stepCount.toInt()
                 )
             }
-            is State.Done -> {
+            is PresentationState.Done -> {
                 updatePresentationState(
                     currentSlideIndex = state.current.toInt(),
                     previousSlideIndex = state.previous?.toInt(),
@@ -209,7 +214,7 @@ class PresentationViewModel : ViewModel(), ClientNotificationHandler {
     private fun handleError(error: String) {
         _uiState.update { state ->
             state.copy(
-                connectionStatus = ConnectionStatus.ERROR,
+                connectionStatus = ConnectionStatus.Error(error),
                 errorMessage = error
             )
         }

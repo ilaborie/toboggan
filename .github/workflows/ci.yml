@@ -352,3 +352,50 @@ jobs:
           name: playwright-report
           path: toboggan-web/playwright-report/
           retention-days: 7
+
+  # The iOS client. Nothing built this before, which is how the app drifted
+  # eight months behind the FFI it sits on: the Rust gate compiles
+  # `toboggan-mobile` for the host, so the crate stayed green while the Swift
+  # that consumes it stopped matching. SwiftLint only ever ran from a local
+  # pre-commit hook, and `.swiftlint.yml` has been configured with
+  # `reporter: github-actions-logging` for a job that did not exist.
+  ios:
+    name: iOS client (SwiftLint + build + test)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios-sim
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+
+      # The Xcode run-script phase builds the staticlib and generates the Swift
+      # bindings from it. Both are gitignored, so a fresh clone has neither and
+      # the project cannot compile until this has run.
+      - name: Build the Rust staticlib and Swift bindings
+        run: |
+          cargo build -p toboggan-mobile --lib --target aarch64-apple-ios-sim
+          cargo run -p toboggan-mobile --bin uniffi-bindgen -- \
+            generate --library --language swift \
+            --out-dir TobogganApp/TobogganApp/ \
+            target/aarch64-apple-ios-sim/debug/libtoboggan.dylib
+          cp target/aarch64-apple-ios-sim/debug/libtoboggan.a TobogganApp/TobogganApp/
+
+      - name: SwiftLint
+        run: |
+          brew install swiftlint
+          swiftlint lint --strict --config .swiftlint.yml
+
+      - name: Build and test
+        working-directory: TobogganApp
+        run: |
+          xcodebuild test \
+            -project TobogganApp.xcodeproj \
+            -scheme TobogganApp \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+            -only-testing:TobogganAppTests \
+            CODE_SIGNING_ALLOWED=NO

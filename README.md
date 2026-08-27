@@ -194,19 +194,20 @@ on the projector.
 
 Every client speaks the same WebSocket protocol and stays in sync with the rest.
 
-| | Web `/run` | Web `/presenter` | TUI | Desktop | iOS / Android |
-| --- | :-: | :-: | :-: | :-: | :-: |
-| Slides | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Step reveals | ✅ | ✅ | ✅ | — | ✅ |
-| Speaker notes | — | ✅ | ✅ | ✅ | — |
-| Next-slide preview | — | ✅ | ✅ | ✅ | — |
-| Elapsed timer and pacing | — | ✅ | — | ✅ | — |
-| Embedded terminals | ✅ | — | — | — | — |
-| Presenter remote (PageUp/PageDown) | ✅ | ✅ | ✅ | ✅ | — |
-| Go to slide by number | ✅ | ✅ | ✅ | — | — |
-| Fullscreen | ✅ `f` | — | n/a | ✅ `F11` | — |
-| Blank the screen | ✅ `.` `w` | — | — | — | — |
-| Help overlay | ✅ `F1` | — | ✅ `h` | ✅ `h` | — |
+| | Web `/run` | Web `/presenter` | TUI | Desktop | iOS | Android |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: |
+| Slides | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Step reveals | ✅ | ✅ | ✅ | — | ✅ | ✅ |
+| Speaker notes | — | ✅ | ✅ | ✅ | ✅ | — |
+| Next-slide preview | — | ✅ | ✅ | ✅ | ✅ | — |
+| Elapsed timer and pacing | — | ✅ | — | ✅ | ✅ | — |
+| Embedded terminals | ✅ | — | — | — | — | — |
+| Presenter remote (PageUp/PageDown) | ✅ | ✅ | ✅ | ✅ | n/a | n/a |
+| Go to slide by number | ✅ | ✅ | ✅ | — | ✅ | — |
+| Shows the role it was granted | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+| Fullscreen | ✅ `f` | — | n/a | ✅ `F11` | — | — |
+| Blank the screen | ✅ `.` `w` | — | — | — | — | — |
+| Help overlay | ✅ `F1` | — | ✅ `h` | ✅ `h` | — | — |
 
 The desktop client renders a slide's Markdown natively rather than mirroring the
 deck, and the source it is given has every reveal already in it — so it shows the

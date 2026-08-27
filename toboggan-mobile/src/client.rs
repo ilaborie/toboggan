@@ -3,6 +3,7 @@
 #![allow(clippy::missing_panics_doc)]
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use toboggan_client::{TobogganClientCore, TobogganWebsocketConfig};
@@ -11,7 +12,7 @@ use tokio::runtime::Runtime;
 use tokio::sync::{Mutex, watch};
 
 use crate::handler::{ClientNotificationHandler, NotificationAdapter};
-use crate::types::{Command, Slide, State, Talk};
+use crate::types::{Command, PresentationState, Slide, Talk};
 
 /// Client configuration for connecting to a Toboggan server.
 #[derive(Debug, Clone, uniffi::Record)]
@@ -69,6 +70,9 @@ pub struct TobogganClient {
 
     // Tokio runtime for async/sync bridging
     runtime: Runtime,
+
+    // Set by the notification adapter, which is where connection status arrives.
+    connected: Arc<AtomicBool>,
 }
 
 #[uniffi::export]
@@ -124,7 +128,13 @@ impl TobogganClient {
         let (talk_tx, talk_rx) = watch::channel::<Option<TalkResponse>>(None);
 
         // Create notification adapter with slides and talk receivers
-        let adapter = NotificationAdapter::new(handler, slides_rx.clone(), talk_rx.clone());
+        let connected = Arc::new(AtomicBool::new(false));
+        let adapter = NotificationAdapter::new(
+            handler,
+            slides_rx.clone(),
+            talk_rx.clone(),
+            Arc::clone(&connected),
+        );
 
         // Create API URL (trim trailing slash)
         let api_url = url.trim_end_matches('/');
@@ -158,6 +168,7 @@ impl TobogganClient {
             talk_rx,
             core: Mutex::new(core),
             runtime,
+            connected,
         }
     }
 
@@ -172,14 +183,16 @@ impl TobogganClient {
         });
     }
 
-    /// Check if the client is connected.
+    /// Whether the WebSocket is currently connected.
     ///
-    /// Note: This checks if we have a command channel, not the actual connection state.
+    /// This used to return `true` unconditionally, which made it worse than
+    /// useless: the app could not tell a live socket from one that never opened,
+    /// and the iOS test that asserted a fresh client is *not* connected could
+    /// never pass. The flag is written by the notification adapter, which is
+    /// where connection status actually arrives.
     #[must_use]
     pub fn is_connected(&self) -> bool {
-        // We consider connected if the core has been connected
-        // A more accurate check would be to track connection status
-        true
+        self.connected.load(Ordering::Relaxed)
     }
 
     /// Send a command to the server.
@@ -192,7 +205,7 @@ impl TobogganClient {
 
     /// Get the current presentation state.
     #[must_use]
-    pub fn get_state(&self) -> Option<State> {
+    pub fn get_state(&self) -> Option<PresentationState> {
         self.runtime.block_on(async {
             let core = self.core.lock().await;
             let state = core.get_state()?;
@@ -215,7 +228,7 @@ impl TobogganClient {
             if slides.is_empty() {
                 return None;
             }
-            Some(State::new(&slides, &state))
+            Some(PresentationState::new(&slides, &state))
         })
     }
 

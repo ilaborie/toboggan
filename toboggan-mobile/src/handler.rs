@@ -1,12 +1,15 @@
 //! UniFFI-compatible notification handler trait and adapter.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use toboggan_client::NotificationHandler as CoreNotificationHandler;
-use toboggan_core::{ClientId, Slide as CoreSlide, State as CoreState, TalkResponse};
+use toboggan_core::{
+    ClientId, ClientRole as CoreClientRole, Slide as CoreSlide, State as CoreState, TalkResponse,
+};
 use tokio::sync::watch;
 
-use crate::types::{ConnectionStatus, Slide, State};
+use crate::types::{ClientRole, ConnectionStatus, PresentationState, Slide};
 
 /// Notification handler trait for Swift/Kotlin implementations.
 ///
@@ -14,10 +17,15 @@ use crate::types::{ConnectionStatus, Slide, State};
 /// when server events occur.
 #[uniffi::export(with_foreign)]
 pub trait ClientNotificationHandler: Send + Sync {
-    fn on_state_change(&self, state: State);
-    fn on_talk_change(&self, state: State);
+    fn on_state_change(&self, state: PresentationState);
+    fn on_talk_change(&self, state: PresentationState);
     fn on_connection_status_change(&self, status: ConnectionStatus);
-    fn on_registered(&self, client_id: String);
+    /// Called once the server has settled this client's role.
+    ///
+    /// `role` is what the app needs before it offers a control: an audience
+    /// client must say it is watching rather than let the user find out by
+    /// pressing something and being refused.
+    fn on_registered(&self, client_id: String, role: ClientRole);
     fn on_client_connected(&self, client_id: String, name: String);
     fn on_client_disconnected(&self, client_id: String, name: String);
     fn on_error(&self, error: String);
@@ -31,6 +39,9 @@ pub struct NotificationAdapter {
     inner: Arc<dyn ClientNotificationHandler>,
     slides_rx: watch::Receiver<Arc<[CoreSlide]>>,
     talk_rx: watch::Receiver<Option<TalkResponse>>,
+    /// Shared with [`crate::TobogganClient`], which has no other way to answer
+    /// `is_connected`: the status only ever arrives here, as a notification.
+    connected: Arc<AtomicBool>,
 }
 
 impl NotificationAdapter {
@@ -39,11 +50,13 @@ impl NotificationAdapter {
         handler: Arc<dyn ClientNotificationHandler>,
         slides_rx: watch::Receiver<Arc<[CoreSlide]>>,
         talk_rx: watch::Receiver<Option<TalkResponse>>,
+        connected: Arc<AtomicBool>,
     ) -> Self {
         Self {
             inner: handler,
             slides_rx,
             talk_rx,
+            connected,
         }
     }
 
@@ -69,13 +82,17 @@ impl NotificationAdapter {
 
 impl CoreNotificationHandler for NotificationAdapter {
     fn on_connection_status_change(&self, status: toboggan_client::ConnectionStatus) {
+        self.connected.store(
+            matches!(status, toboggan_client::ConnectionStatus::Connected),
+            Ordering::Relaxed,
+        );
         self.inner.on_connection_status_change(status.into());
     }
 
     fn on_state_change(&self, state: CoreState) {
         let slides = self.get_slides();
         if !slides.is_empty() {
-            let state_uniffi = State::new(&slides, &state);
+            let state_uniffi = PresentationState::new(&slides, &state);
             self.inner.on_state_change(state_uniffi);
         }
     }
@@ -83,7 +100,7 @@ impl CoreNotificationHandler for NotificationAdapter {
     fn on_talk_change(&self, state: CoreState) {
         let slides = self.get_slides();
         if !slides.is_empty() {
-            let state_uniffi = State::new(&slides, &state);
+            let state_uniffi = PresentationState::new(&slides, &state);
             self.inner.on_talk_change(state_uniffi);
         }
     }
@@ -92,8 +109,9 @@ impl CoreNotificationHandler for NotificationAdapter {
         self.inner.on_error(error);
     }
 
-    fn on_registered(&self, client_id: ClientId) {
-        self.inner.on_registered(format!("{client_id:?}"));
+    fn on_registered(&self, client_id: ClientId, role: CoreClientRole) {
+        self.inner
+            .on_registered(format!("{client_id:?}"), role.into());
     }
 
     fn on_client_connected(&self, client_id: ClientId, name: String) {

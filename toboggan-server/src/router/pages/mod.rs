@@ -8,8 +8,10 @@ pub(super) mod pdf;
 use std::sync::OnceLock;
 
 use axum::extract::{Path, State};
-use axum::http::{StatusCode, Uri};
+use axum::http::{HeaderMap, StatusCode, Uri};
 use axum::response::{Html, IntoResponse, Response};
+use qrcode::QrCode;
+use qrcode::render::svg;
 use toboggan_cli::OutputFormat;
 use toboggan_core::{SlideKind, Talk};
 use tracing::error;
@@ -22,9 +24,48 @@ use crate::services::TalkService;
 /// it was opened with. Without that, a remote presenter who opened `/?token=…`
 /// was demoted to audience by clicking "Run the presentation" — and, before the
 /// presenter view could show a toast, told nothing about it.
-pub(super) async fn homepage(State(talk_service): State<TalkService>, uri: Uri) -> Html<String> {
+pub(super) async fn homepage(
+    State(talk_service): State<TalkService>,
+    headers: HeaderMap,
+    uri: Uri,
+) -> Html<String> {
     let talk = talk_service.talk().await;
-    Html(render_homepage(&talk, &carried_query(&uri)))
+    let query = carried_query(&uri);
+    let phone_link = phone_link(&headers, &query);
+    Html(render_homepage(&talk, &query, phone_link.as_deref()))
+}
+
+/// The URL a phone should be pointed at, as a QR code's payload.
+///
+/// Built from the `Host` header rather than from the bind address on purpose.
+/// A wildcard bind (`--host 0.0.0.0`) has no single address to name — which is
+/// why the startup log prints `<this-machine>` and leaves it to the operator —
+/// but the browser reading this page necessarily reached the server *somehow*,
+/// and that authority is reachable by construction. The token rides along in
+/// `query`, so a presenter who opened this page with one hands the phone the
+/// whole configuration in a single scan.
+fn phone_link(headers: &HeaderMap, query: &str) -> Option<String> {
+    let host = headers.get(axum::http::header::HOST)?.to_str().ok()?;
+    if host.is_empty() {
+        return None;
+    }
+    // The client wants the origin; it appends `/api/…` itself.
+    Some(format!("http://{host}/{query}"))
+}
+
+/// Renders `link` as an inline SVG QR code.
+///
+/// Inline because the alternative is another route to serve it from, and this
+/// page is already server-rendered.
+fn qr_svg(link: &str) -> Option<String> {
+    let code = QrCode::new(link.as_bytes()).ok()?;
+    Some(
+        code.render()
+            .min_dimensions(180, 180)
+            .dark_color(svg::Color("#1b1b1f"))
+            .light_color(svg::Color("#ffffff"))
+            .build(),
+    )
 }
 
 /// The part of this request's query string worth passing to the next page.
@@ -113,7 +154,7 @@ fn render_guide() -> anyhow::Result<String> {
     Ok(String::from_utf8(bytes)?)
 }
 
-fn render_homepage(talk: &Talk, query: &str) -> String {
+fn render_homepage(talk: &Talk, query: &str, phone_link: Option<&str>) -> String {
     let title = escape(&talk.title);
     let lang = escape_attribute(talk.lang());
     let date = talk.date.to_string();
@@ -128,6 +169,22 @@ fn render_homepage(talk: &Talk, query: &str) -> String {
         .iter()
         .filter(|slide| slide.kind != SlideKind::Part)
         .count();
+
+    // Rendered only when the request carried a `Host` and the payload encodes:
+    // a page with no QR is better than one showing a code that goes nowhere.
+    let phone_section = phone_link
+        .and_then(|link| Some((link, qr_svg(link)?)))
+        .map(|(link, svg)| {
+            format!(
+                r#"<section class="phone">
+      <div class="qr">{svg}</div>
+      <p>Scan with the Toboggan app to drive the deck from your phone.<br>
+      <code>{link}</code></p>
+    </section>"#,
+                link = escape(link),
+            )
+        })
+        .unwrap_or_default();
 
     format!(
         r#"<!doctype html>
@@ -153,6 +210,15 @@ fn render_homepage(talk: &Talk, query: &str) -> String {
   .stats {{ display: flex; gap: 1.5rem; margin-bottom: 1.5rem; color: var(--muted); font-size: .9rem; }}
   .stats b {{ color: var(--fg); font-size: 1.4rem; display: block; }}
   .links {{ display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }}
+  .phone {{ display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;
+            padding: 1rem; border-radius: .75rem; background: rgba(127,127,127,.08); }}
+  /* The code has to stay a fixed, generous size: a QR scaled down by a flex
+     row is a QR a phone cannot read. */
+  .phone .qr {{ flex: 0 0 auto; width: 132px; height: 132px; background: #fff;
+                padding: .4rem; border-radius: .5rem; }}
+  .phone .qr svg {{ display: block; width: 100%; height: 100%; }}
+  .phone p {{ margin: 0; color: var(--muted); font-size: .85rem; line-height: 1.5; }}
+  .phone code {{ font-size: .8rem; word-break: break-all; }}
   a.btn {{ display: block; padding: .8rem 1rem; border-radius: 10px; text-decoration: none;
     background: #21262d; color: var(--fg); border: 1px solid #30363d; transition: .15s; }}
   a.btn:hover {{ border-color: var(--accent); transform: translateY(-1px); }}
@@ -169,6 +235,7 @@ fn render_homepage(talk: &Talk, query: &str) -> String {
       <div><b>{content_slides}</b> content</div>
       <div><b>{parts}</b> parts</div>
     </div>
+    {phone_section}
     <nav class="links">
       <a class="btn primary" href="/run{query}">▶ Run the presentation</a>
       <a class="btn" href="/presenter{query}">🎙 Presenter view</a>
