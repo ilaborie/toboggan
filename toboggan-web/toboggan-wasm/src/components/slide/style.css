@@ -46,10 +46,16 @@ h6 {
 	font-size: var(--slide-h6-size, 105%);
 }
 
+/* `list-style: none` alone left the UA's `padding-inline-start: 40px` in place —
+   a fixed pixel length in a tree where every other size is relative, so a deck
+   scaled to the projector's resolution saw its lists drift right as the screen
+   got smaller. The light DOM never had it (`reset.css` zeroes padding on
+   everything), so the exported HTML and the PDF already rendered lists flush. */
 ul,
 ol,
 dl {
 	margin: 0.1em;
+	padding: 0;
 	list-style: none;
 }
 

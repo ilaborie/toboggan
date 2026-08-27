@@ -33,6 +33,15 @@ Entries are grouped the way the commits are: this repository uses
 
 ### Fixed
 
+- **Slide lists no longer carry the browser's fixed 40px indent.** The slide
+  stylesheet reset `list-style` but not the padding the user agent puts on
+  `ul`/`ol`, so every list in the shadow tree kept a `padding-inline-start` of
+  exactly 40px. In a tree where every other length is relative that pixel value
+  does not follow the deck, so a presentation whose root font scales with the
+  projector resolution saw its lists sit further and further from the margin as
+  the screen got smaller — and rendered differently from the exported HTML and
+  the PDF, whose light-DOM reset had zeroed it all along.
+
 - **A step advance no longer kills what is running in the quake terminal.** The
   overlay is hidden by a transform rather than by teardown, so it looked like it
   survived a `NextStep` — but underneath, the session was torn down and a new
