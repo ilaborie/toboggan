@@ -35,6 +35,9 @@ use crate::{
     render_content,
 };
 
+mod filmstrip;
+use self::filmstrip::Filmstrip;
+
 const CSS: &str = include_str!("style.css");
 
 /// How often the clock and the elapsed timer redraw.
@@ -181,6 +184,9 @@ struct Inner {
     next_title: Option<Element>,
     next_number: Option<Element>,
     status: Option<StatusBar>,
+    /// The whole deck at a glance. Shared rather than owned, because its retry
+    /// timer and its click handlers outlive any one call and have to reach it.
+    filmstrip: Option<Rc<RefCell<Filmstrip>>>,
 
     // Everything from `GET /api/talk`. The markup rides on every frame, which is
     // what makes a `TalkChange` that edits only `_head.html` reach both mirrors.
@@ -253,6 +259,13 @@ impl TobogganPresenterElement {
         };
         let mut inner = inner.borrow_mut();
         inner.total_slides = talk.titles.len();
+        // Every reload lands here, including the ones that only edited a slide:
+        // the deck may be a different length, and every thumbnail is potentially
+        // a different picture at the same URL.
+        if let Some(strip) = &inner.filmstrip {
+            let handle = Rc::clone(strip);
+            strip.borrow_mut().invalidate(&handle, talk.titles.len());
+        }
         inner.plan.clone_from(&talk.durations);
         inner.step_counts.clone_from(&talk.step_counts);
         inner.head.clone_from(&talk.head);
@@ -309,6 +322,10 @@ impl TobogganPresenterElement {
         inner.current_slide = slide;
         if let Some(element) = &inner.notes {
             element.set_inner_html(notes.as_deref().unwrap_or_default());
+        }
+
+        if let Some(strip) = &inner.filmstrip {
+            strip.borrow_mut().set_current(inner.current_index);
         }
 
         inner.refresh_steps(state);
@@ -563,9 +580,18 @@ fn layout_html() -> String {
   <span class="steps"></span>
   <span class="pacing"></span>
   <nav class="nav">
+    <button type="button" class="strip-toggle" title="All slides (g)" aria-label="All slides" aria-expanded="false">▦</button>
     <button type="button" class="go-prev" title="Previous step" aria-label="Previous step">‹</button>
     <button type="button" class="go-next" title="Next step" aria-label="Next step">›</button>
   </nav>
+</div>
+<div class="filmstrip" hidden>
+  <div class="strip-head">
+    <span class="label">All slides</span>
+    <span class="strip-status"></span>
+    <button type="button" class="strip-close" title="Close (Esc)" aria-label="Close the slide grid">✕</button>
+  </div>
+  <div class="strip-grid"></div>
 </div>"#,
         now = mirror_src(MirrorPane::Current),
         next = mirror_src(MirrorPane::Next),
@@ -653,6 +679,21 @@ impl WasmElement for TobogganPresenterElement {
 
         let status = find_status(&find);
 
+        // `None` when the panel is missing from the markup, which costs the view
+        // its slide grid and nothing else — every call below is an `if let`.
+        let filmstrip = match (
+            find(".filmstrip"),
+            find(".strip-grid"),
+            find(".strip-status"),
+        ) {
+            (Some(panel), Some(grid), Some(status)) => {
+                let mut strip = Filmstrip::new(panel, grid, status);
+                strip.set_toggle(find(".strip-toggle"));
+                Some(Rc::new(RefCell::new(strip)))
+            }
+            _ => None,
+        };
+
         let inner = Rc::new(RefCell::new(Inner {
             layout: layout.clone(),
             now: Stage {
@@ -669,6 +710,7 @@ impl WasmElement for TobogganPresenterElement {
             next_title: find(".next-title"),
             next_number: find(".next-number"),
             status,
+            filmstrip: filmstrip.clone(),
             head: None,
             footer: None,
             lang: None,
@@ -685,6 +727,7 @@ impl WasmElement for TobogganPresenterElement {
 
         self.install_inbox(&inner);
         self.install_buttons(&inner, &find);
+        self.install_filmstrip(filmstrip.as_ref(), &find);
         self.install_notes_size(host, &find);
         self.install_stage_scale(&layout);
 
@@ -764,6 +807,67 @@ impl TobogganPresenterElement {
                     inner.refresh_status();
                 }));
         }
+    }
+
+    /// Wires the slide grid: its two buttons, `Escape`, and the `g` key.
+    ///
+    /// `g` is caught here rather than added to [`crate::KeyboardMapping`],
+    /// because the grid is a surface only this page has: a binding in the shared
+    /// keymap would appear in the deck's own help dialog naming something the
+    /// deck cannot do.
+    fn install_filmstrip(
+        &mut self,
+        filmstrip: Option<&Rc<RefCell<Filmstrip>>>,
+        find: &impl Fn(&str) -> Option<Element>,
+    ) {
+        let Some(strip) = filmstrip else {
+            return;
+        };
+
+        for (selector, opens) in [(".strip-toggle", true), (".strip-close", false)] {
+            let Some(button) = find(selector) else {
+                continue;
+            };
+            let strip = Rc::clone(strip);
+            self.listeners
+                .push(EventListener::new(&button, "click", move |_| {
+                    let handle = Rc::clone(&strip);
+                    let mut strip = strip.borrow_mut();
+                    if opens {
+                        strip.toggle(&handle);
+                    } else {
+                        strip.close();
+                    }
+                }));
+        }
+
+        if let Some(commands) = self.commands.clone() {
+            self.listeners
+                .push(filmstrip::install_jump(strip, commands));
+        }
+        self.listeners.push(filmstrip::install_escape(strip));
+
+        // Bare `g`, and only when nothing is being typed into — the same two
+        // guards the deck's own keymap applies, for the same reason: a `g` at
+        // the quake terminal's prompt is a letter, not a command.
+        let strip = Rc::clone(strip);
+        self.listeners
+            .push(EventListener::new(&window(), "keydown", move |event| {
+                let Some(event) = event.dyn_ref::<web_sys::KeyboardEvent>() else {
+                    return;
+                };
+                if event.key() != "g"
+                    || event.ctrl_key()
+                    || event.meta_key()
+                    || event.alt_key()
+                    || crate::deck_keys_captured()
+                    || crate::typing_into_editable(event)
+                {
+                    return;
+                }
+                let handle = Rc::clone(&strip);
+                strip.borrow_mut().toggle(&handle);
+            }));
     }
 
     /// Wires `A−`/`A+`, and restores whatever size was last chosen.

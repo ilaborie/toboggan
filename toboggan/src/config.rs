@@ -116,6 +116,9 @@ pub(crate) struct Config {
 
     #[serde(default)]
     pub(crate) lint: LintConfig,
+
+    #[serde(default)]
+    pub(crate) overview: OverviewConfig,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -157,6 +160,14 @@ pub(crate) struct ServeConfig {
     /// Only consulted when the server is reachable from the network — a client
     /// on this machine always presents.
     pub(crate) presenter_token: Option<Secret>,
+}
+
+/// The config file's `[overview]` table: how the slide overview is drawn.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub(crate) struct OverviewConfig {
+    pub(crate) thumbnail_renderer: Option<toboggan_server::ThumbnailRenderer>,
+    pub(crate) browser: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -203,6 +214,7 @@ impl Config {
         fill!(self, weaker, path, default_command);
         self.build.fill_from(weaker.build);
         self.serve.fill_from(weaker.serve);
+        self.overview.fill_from(weaker.overview);
         self.lint.fill_from(weaker.lint);
     }
 
@@ -251,6 +263,12 @@ impl ServeConfig {
             open_presenter,
             presenter_token,
         );
+    }
+}
+
+impl OverviewConfig {
+    fn fill_from(&mut self, weaker: Self) {
+        fill!(self, weaker, thumbnail_renderer, browser);
     }
 }
 

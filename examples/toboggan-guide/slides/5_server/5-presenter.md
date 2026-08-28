@@ -14,6 +14,7 @@ stays on your screen.
 - The **speaker notes** for where you are — everything after `<!-- notes -->`
 - A **clock**, an **elapsed timer** you can pause and reset, the slide and
   reveal counters, and how far ahead or behind your `duration` front matter you are
+- `g` opens **every slide at once** — click one to jump, `Esc` to go back
 
 <!-- pause -->
 
@@ -38,3 +39,8 @@ different output.
 
 The pacing readout only appears when the deck declares durations — without a
 plan there is nothing to be late for.
+
+The slide grid behind `g` is the one place the overview thumbnails are better
+than another live pane: forty small stills is forty pictures, where forty
+iframes would be forty copies of the deck. They are photographs of `/run`, made
+on first use, so the grid says "rendering…" for a few seconds on a cold server.

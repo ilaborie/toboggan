@@ -31,7 +31,67 @@ Entries are grouped the way the commits are: this repository uses
   diagnostics arrive as inline annotations on the changed lines. The generated
   workflow turns it on and builds pull requests without publishing them.
 
+- **The presenter view has a slide grid.** `g` (or the `▦` button) opens every
+  slide at once, as thumbnails; click one to jump, `Esc` closes it. This is the
+  one thing the overview's pictures are genuinely better at than another live
+  pane — forty small stills is forty pictures, where forty iframes would be
+  forty copies of the deck. The cells are numbered over the presented deck, the
+  way `Command::GoTo` is, while the thumbnails on disk are named over the deck as
+  authored; `GET /overview/slide/{index}` crosses between the two so a
+  `hidden_in = ["web"]` slide cannot silently shift the grid. They are generated
+  on first use, so the strip says "Rendering slide previews…" for a few seconds
+  on a cold server, and says so once — rather than for ever — when the machine
+  has neither a browser nor `typst`.
+
+### Changed
+
+- **Slide-overview thumbnails are photographs of the deck, not a redrawing of
+  it.** `/slides` used to be illustrated by a second rendering: the same
+  Markdown put through a Typst document instead of a browser. It could only ever
+  approximate. Typst has no HTML, so `<style>` blocks, raw markup and terminals
+  were dropped on the floor — a deck that fixes its own layout slide by slide
+  had thumbnails that did not match the projector, and never said so. A headless
+  Chrome now opens `/run?shot=N` and photographs it, so the overview and the
+  room are the same rendering by construction. The page paints itself from the
+  REST API with every reveal shown at once, opens no socket and registers no
+  client, so shooting a deck cannot move the talk or appear in `/api/clients`;
+  it is taken against a private server of its own rather than the live one.
+  `--thumbnail-renderer` chooses (`auto`, the default, photographs when a
+  browser can be found and falls back to Typst when it cannot; `browser` fails
+  instead of falling back, which is what CI and the composite action now use),
+  and `--browser` names the binary. Detection asks each candidate for its
+  `--version` before believing it, because a stale Homebrew cask leaves an
+  executable wrapper on the `PATH` pointing at an application that is gone.
+  Each run gets a browser profile of its own, rather than the one fixed path
+  `chromiumoxide` shares between every process on the machine — two decks open
+  at once, or a `toboggan thumbnails` beside a running server, made Chrome
+  refuse to start.
+
 ### Fixed
+
+- **`toboggan` on a deck could lose its slide overview entirely**, with
+  `unclosed raw text` or `input file not found` for a `.toboggan-thumb.typ`
+  nobody wrote. A feedback loop: the thumbnail renderer wrote its scratch file
+  *into the watched slides folder*, once per slide; the watcher reloaded the talk
+  on each one; every reload invalidated the overview and freed its slot while the
+  generation was still running; and the "generating…" page's own two-second
+  refresh took that slot immediately. Two generations then took turns writing and
+  deleting one path, and `typst` read a half-written document or none at all.
+  Three fixes, each of which breaks the loop on its own: the watcher ignores
+  dotfiles (which the parser skips anyway, and which is also every editor's
+  atomic-save leftovers), `invalidate` leaves an in-flight generation alone
+  rather than publishing a free slot beside it, and the scratch file is uniquely
+  named and removed on every path out, including a panic.
+
+- **A `hidden_in = ["web"]` slide no longer shifts every thumbnail after it.**
+  The overview is an authoring view — `thumb-NNNN.png` is slide N of the deck as
+  authored, and a web-hidden slide gets a card of its own with a badge — but the
+  server the shots are taken against drops those slides and renumbers what is
+  left, so every index past the hidden one photographed the *next* slide and
+  filed it under the right name. This repository's own guide, with one hidden
+  slide among 44, ran off the end and failed loudly; a deck whose hidden slide
+  sat nearer the middle would have published a silently shifted overview. The
+  private server is now handed the deck with nothing hidden.
 
 - **Slide lists no longer carry the browser's fixed 40px indent.** The slide
   stylesheet reset `list-style` but not the padding the user agent puts on

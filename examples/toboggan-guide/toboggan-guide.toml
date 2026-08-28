@@ -2998,10 +2998,10 @@ body_source = """
 
 | Flag | Env var | What it does |
 | --- | --- | --- |
-| `--host` | `TOBOGGAN_HOST` | Bind address (default `127.0.0.1`) |
-| `--port` | `TOBOGGAN_PORT` | Port (default `8080`) |
+| `--host` / `--port` | `TOBOGGAN_HOST` / `_PORT` | Where to bind (default `127.0.0.1:8080`) |
 | `--public-dir` | `TOBOGGAN_PUBLIC_DIR` | Serve assets at `/public/` |
 | `--thumbnails-dir` | `TOBOGGAN_THUMBNAILS_DIR` | Serve an overview at `/overview/` |
+| `--thumbnail-renderer` | `TOBOGGAN_THUMBNAIL_RENDERER` | `auto`, `browser` or `typst` |
 | `--shell` | `TOBOGGAN_SHELL` | Shell for embedded terminals |
 | `--allowed-origins` | `TOBOGGAN_CORS_ORIGINS` | Comma-separated CORS origins |
 | `--max-clients` | `TOBOGGAN_MAX_CLIENTS` | Concurrent client cap |
@@ -3038,14 +3038,9 @@ raw = """
 </thead>
 <tbody>
 <tr>
-<td><code>--host</code></td>
-<td><code>TOBOGGAN_HOST</code></td>
-<td>Bind address (default <code>127.0.0.1</code>)</td>
-</tr>
-<tr>
-<td><code>--port</code></td>
-<td><code>TOBOGGAN_PORT</code></td>
-<td>Port (default <code>8080</code>)</td>
+<td><code>--host</code> / <code>--port</code></td>
+<td><code>TOBOGGAN_HOST</code> / <code>_PORT</code></td>
+<td>Where to bind (default <code>127.0.0.1:8080</code>)</td>
 </tr>
 <tr>
 <td><code>--public-dir</code></td>
@@ -3056,6 +3051,11 @@ raw = """
 <td><code>--thumbnails-dir</code></td>
 <td><code>TOBOGGAN_THUMBNAILS_DIR</code></td>
 <td>Serve an overview at <code>/overview/</code></td>
+</tr>
+<tr>
+<td><code>--thumbnail-renderer</code></td>
+<td><code>TOBOGGAN_THUMBNAIL_RENDERER</code></td>
+<td><code>auto</code>, <code>browser</code> or <code>typst</code></td>
 </tr>
 <tr>
 <td><code>--shell</code></td>
@@ -3103,10 +3103,10 @@ alt = """
 
 | Flag | Env var | What it does |
 | --- | --- | --- |
-| `--host` | `TOBOGGAN_HOST` | Bind address (default `127.0.0.1`) |
-| `--port` | `TOBOGGAN_PORT` | Port (default `8080`) |
+| `--host` / `--port` | `TOBOGGAN_HOST` / `_PORT` | Where to bind (default `127.0.0.1:8080`) |
 | `--public-dir` | `TOBOGGAN_PUBLIC_DIR` | Serve assets at `/public/` |
 | `--thumbnails-dir` | `TOBOGGAN_THUMBNAILS_DIR` | Serve an overview at `/overview/` |
+| `--thumbnail-renderer` | `TOBOGGAN_THUMBNAIL_RENDERER` | `auto`, `browser` or `typst` |
 | `--shell` | `TOBOGGAN_SHELL` | Shell for embedded terminals |
 | `--allowed-origins` | `TOBOGGAN_CORS_ORIGINS` | Comma-separated CORS origins |
 | `--max-clients` | `TOBOGGAN_MAX_CLIENTS` | Concurrent client cap |
@@ -3131,6 +3131,10 @@ raw = """
 <p>Any of these can live in <code>toboggan.toml</code> under <code>[serve]</code> instead of being typed
 every time. <code>--watch</code> is the one flag with no env var — watching a built file is
 a dev-loop choice, not deployment configuration.</p>
+<p><code>--thumbnail-renderer</code> decides how <code>/slides</code> draws its pictures: <code>auto</code>
+photographs the real deck in a headless browser when it can find one — pass
+<code>--browser</code> to name a particular binary — and falls back to Typst when it
+cannot. <code>browser</code> refuses to fall back, which is what CI wants.</p>
 <p><code>--shell</code> picks which shell the live terminals spawn: point it at <code>fish</code> to show
 off your real prompt, or <code>sh</code> for a clean, portable demo. The token exists
 because <code>--shell</code> is real — the embedded terminals spawn a shell on <em>this</em>
@@ -3140,6 +3144,11 @@ alt = """
 Any of these can live in `toboggan.toml` under `[serve]` instead of being typed
 every time. `--watch` is the one flag with no env var — watching a built file is
 a dev-loop choice, not deployment configuration.
+
+`--thumbnail-renderer` decides how `/slides` draws its pictures: `auto`
+photographs the real deck in a headless browser when it can find one — pass
+`--browser` to name a particular binary — and falls back to Typst when it
+cannot. `browser` refuses to fall back, which is what CI wants.
 
 `--shell` picks which shell the live terminals spawn: point it at `fish` to show
 off your real prompt, or `sh` for a clean, portable demo. The token exists
@@ -3448,6 +3457,7 @@ stays on your screen.
 - The **speaker notes** for where you are — everything after `<!-- notes -->`
 - A **clock**, an **elapsed timer** you can pause and reset, the slide and
   reveal counters, and how far ahead or behind your `duration` front matter you are
+- `g` opens **every slide at once** — click one to jump, `Esc` to go back
 
 ```console
 $ toboggan -p ./slides/ --open-presenter
@@ -3482,6 +3492,7 @@ stays on your screen.</p>
 <li>The <strong>speaker notes</strong> for where you are — everything after <code>&lt;!-- notes --&gt;</code></li>
 <li>A <strong>clock</strong>, an <strong>elapsed timer</strong> you can pause and reset, the slide and
 reveal counters, and how far ahead or behind your <code>duration</code> front matter you are</li>
+<li><code>g</code> opens <strong>every slide at once</strong> — click one to jump, <code>Esc</code> to go back</li>
 </ul>
 </div><!-- end step -->
 
@@ -3506,6 +3517,7 @@ stays on your screen.
 - The **speaker notes** for where you are — everything after `<!-- notes -->`
 - A **clock**, an **elapsed timer** you can pause and reset, the slide and
   reveal counters, and how far ahead or behind your `duration` front matter you are
+- `g` opens **every slide at once** — click one to jump, `Esc` to go back
 
 ```console
 $ toboggan -p ./slides/ --open-presenter
@@ -3535,6 +3547,10 @@ room is watching; a second one here would be a different session showing
 different output.</p>
 <p>The pacing readout only appears when the deck declares durations — without a
 plan there is nothing to be late for.</p>
+<p>The slide grid behind <code>g</code> is the one place the overview thumbnails are better
+than another live pane: forty small stills is forty pictures, where forty
+iframes would be forty copies of the deck. They are photographs of <code>/run</code>, made
+on first use, so the grid says &quot;rendering…&quot; for a few seconds on a cold server.</p>
 """
 alt = """
 The panes are iframes of the deck, laid out against a fixed 1280x720 viewport
@@ -3548,6 +3564,11 @@ different output.
 
 The pacing readout only appears when the deck declares durations — without a
 plan there is nothing to be late for.
+
+The slide grid behind `g` is the one place the overview thumbnails are better
+than another live pane: forty small stills is forty pictures, where forty
+iframes would be forty copies of the deck. They are photographs of `/run`, made
+on first use, so the grid says "rendering…" for a few seconds on a cold server.
 """
 
 [slides.notes.style]

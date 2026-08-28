@@ -38,6 +38,7 @@ notify = { workspace = true }
 portable-pty = { workspace = true }
 open = { workspace = true }
 tempfile = { workspace = true }
+chromiumoxide = { workspace = true }
 
 [dev-dependencies]
 toboggan-core = { path = "../toboggan-core", features = [

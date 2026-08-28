@@ -75,8 +75,14 @@ jobs:
         run: cargo +nightly fmt --all --check
       - name: Clippy
         run: cargo +stable clippy --all-targets --all-features -- -D warnings
+      # `slide_shots` is the one binary that needs the dist's *contents*: it
+      # photographs `/run?shot=N` and waits for the wasm client to say it has
+      # painted, which the stub above can never do. It runs in the `deck` job,
+      # the only one that builds the real bundle. Excluded here at the workflow
+      # level rather than skipped from inside the test, so it cannot quietly
+      # stop running in both places at once.
       - name: Unit tests
-        run: cargo +stable nextest run
+        run: cargo +stable nextest run -E 'not binary(slide_shots)'
       - name: Doctests
         run: cargo +stable test --doc
       # Crate READMEs are included into their crate docs, so a broken intra-doc
@@ -271,6 +277,15 @@ jobs:
           cache-dependency-path: toboggan-web/pnpm-lock.yaml
       - name: Install Typst
         uses: typst-community/setup-typst@v5
+      # `slide_shots` photographs a deck with a real browser, and asserts one is
+      # present whenever `CI` is set — so a workflow that stops installing a
+      # browser fails rather than quietly skipping the test. Playwright's own
+      # chromium does not count: `find_browser` looks at `CHROME`, the `PATH`
+      # and the usual install locations, never `~/.cache/ms-playwright`.
+      - name: Install a browser
+        uses: browser-actions/setup-chrome@v2
+        with:
+          install-dependencies: true
 
       # Mirrors `mise build:web`. Must happen before the Rust build: the server
       # embeds this folder and its build.rs fails without it.
@@ -283,6 +298,12 @@ jobs:
 
       - name: Build toboggan
         run: cargo build -p toboggan
+
+      # The shot page is compiled Rust behind a shadow root, served out of the
+      # bundle built two steps up — so this is the only job where it can boot
+      # at all, and the `rust` job excludes this binary for that reason.
+      - name: Photograph a deck
+        run: cargo test -p toboggan --test slide_shots
 
       # A parser or rule regression shows up here as a failure on a real deck
       # rather than as a surprise during someone's talk.

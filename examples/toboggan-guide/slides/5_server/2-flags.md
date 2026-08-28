@@ -7,10 +7,10 @@ classes = ["no_title", "wide"]
 
 | Flag | Env var | What it does |
 |---|---|---|
-| `--host` | `TOBOGGAN_HOST` | Bind address (default `127.0.0.1`) |
-| `--port` | `TOBOGGAN_PORT` | Port (default `8080`) |
+| `--host` / `--port` | `TOBOGGAN_HOST` / `_PORT` | Where to bind (default `127.0.0.1:8080`) |
 | `--public-dir` | `TOBOGGAN_PUBLIC_DIR` | Serve assets at `/public/` |
 | `--thumbnails-dir` | `TOBOGGAN_THUMBNAILS_DIR` | Serve an overview at `/overview/` |
+| `--thumbnail-renderer` | `TOBOGGAN_THUMBNAIL_RENDERER` | `auto`, `browser` or `typst` |
 | `--shell` | `TOBOGGAN_SHELL` | Shell for embedded terminals |
 | `--allowed-origins` | `TOBOGGAN_CORS_ORIGINS` | Comma-separated CORS origins |
 | `--max-clients` | `TOBOGGAN_MAX_CLIENTS` | Concurrent client cap |
@@ -28,6 +28,11 @@ classes = ["no_title", "wide"]
 Any of these can live in `toboggan.toml` under `[serve]` instead of being typed
 every time. `--watch` is the one flag with no env var — watching a built file is
 a dev-loop choice, not deployment configuration.
+
+`--thumbnail-renderer` decides how `/slides` draws its pictures: `auto`
+photographs the real deck in a headless browser when it can find one — pass
+`--browser` to name a particular binary — and falls back to Typst when it
+cannot. `browser` refuses to fall back, which is what CI wants.
 
 `--shell` picks which shell the live terminals spawn: point it at `fish` to show
 off your real prompt, or `sh` for a clean, portable demo. The token exists

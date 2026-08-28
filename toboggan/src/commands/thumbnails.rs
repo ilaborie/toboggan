@@ -1,39 +1,87 @@
 use std::path::{Path, PathBuf};
 
-use toboggan_cli::output::{ThumbnailOptions, generate_thumbnails};
+use toboggan_server::{OverviewOptions, ThumbnailRenderer, find_browser, generate_overview};
+
+/// What the caller asked for, beyond the deck itself.
+pub(crate) struct Options {
+    pub(crate) output: Option<PathBuf>,
+    pub(crate) search: bool,
+    pub(crate) static_links: bool,
+    pub(crate) renderer: Option<ThumbnailRenderer>,
+    pub(crate) browser: Option<PathBuf>,
+}
 
 /// Generates per-slide thumbnails, a search index, and a self-contained overview
 /// page for a presentation folder.
 ///
+/// The thumbnails are photographs of the real deck, taken by a headless browser
+/// against a private server started for the purpose — so the overview and the
+/// projector show the same rendering. Where no browser can be found, `auto`
+/// falls back to redrawing the deck with `typst`, which cannot render a deck's
+/// HTML, CSS or terminals.
+///
 /// # Errors
-/// Returns an error if the folder cannot be parsed or thumbnail rendering fails
-/// (e.g. the `typst` binary is missing).
-#[allow(clippy::print_stdout)]
-pub(crate) fn generate(
+/// Returns an error if the folder cannot be parsed, or the thumbnails cannot be
+/// rendered (no browser *and* no `typst`, or either of them failing).
+#[allow(clippy::print_stdout, clippy::print_stderr)]
+pub(crate) async fn generate(
     input: &Path,
     mut settings: toboggan_cli::Settings,
-    output: Option<PathBuf>,
-    search: bool,
-    static_links: bool,
+    options: Options,
 ) -> anyhow::Result<()> {
-    super::ensure_typst()?;
+    let renderer = options.renderer.unwrap_or_default();
+    // Checked before the deck is parsed, so "install typst" is not preceded by
+    // ten seconds of work that is about to be thrown away. Only the Typst path
+    // needs it; the browser path is checked when the browser is launched.
+    if uses_typst(renderer, options.browser.as_deref()) {
+        super::ensure_typst()?;
+    }
 
-    let slides = super::deck::resolve_deck(input).slides;
+    let deck = super::deck::resolve_deck(input);
+    let slides = deck.slides;
     settings.input = Some(slides.clone());
     let talk = super::deck::build_talk(&slides, &settings)?;
+    let mermaid = toboggan_cli::mermaid_renderer(&settings)?;
 
-    let out_dir = output.unwrap_or_else(|| PathBuf::from("overview"));
-    let options = ThumbnailOptions {
-        search,
-        static_links,
-        ..ThumbnailOptions::new(toboggan_cli::mermaid_renderer(&settings)?)
+    let out_dir = options.output.unwrap_or_else(|| PathBuf::from("overview"));
+    let overview = OverviewOptions {
+        renderer,
+        browser: options.browser,
+        // The deck's own pictures: without this the private server has no
+        // `/public/`, and every `<img>` is photographed as a broken image.
+        public_dir: deck.public,
+        search: options.search,
+        static_links: options.static_links,
     };
-    generate_thumbnails(&talk, &out_dir, &options).map_err(|err| anyhow::anyhow!("{err}"))?;
+    let drawn = generate_overview(&talk, &mermaid, &out_dir, &overview).await?;
+
+    // Printed, not logged. `warn!` goes to an env filter that defaults to
+    // `ERROR`, so this said nothing at all unless the user had thought to set
+    // `RUST_LOG` — and the line below reads the same either way, which left a
+    // deck that lost every `<style>`, raw HTML block and terminal announcing
+    // itself as a clean success.
+    if let Some(warning) = drawn.warning() {
+        eprintln!("⚠️  {warning}");
+    }
 
     println!(
-        "✅ Wrote {} thumbnails + overview.html to {}",
+        "✅ Wrote {} thumbnails + overview.html to {} ({})",
         talk.slides.len(),
-        out_dir.display()
+        out_dir.display(),
+        drawn.describe(),
     );
     Ok(())
+}
+
+/// Whether this run will shell out to `typst`.
+///
+/// `auto` only will if no browser turns up, which is the same question
+/// [`generate_overview`] asks itself later — asked here too so the failure
+/// arrives before the deck is parsed rather than after.
+fn uses_typst(renderer: ThumbnailRenderer, browser: Option<&Path>) -> bool {
+    match renderer {
+        ThumbnailRenderer::Typst => true,
+        ThumbnailRenderer::Browser => false,
+        ThumbnailRenderer::Auto => find_browser(browser).is_none(),
+    }
 }

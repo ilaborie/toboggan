@@ -168,5 +168,85 @@ fn should_reload(event: &Event) -> bool {
     matches!(
         event.kind,
         EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
-    )
+    ) && event.paths.iter().any(|path| is_deck_content(path))
+}
+
+/// Whether a changed path is something the deck is actually built from.
+///
+/// The parser skips every dotfile (`TobogganDir::should_skip_entry`), so a
+/// change to one cannot change the [`Talk`] — and reloading on it is not merely
+/// wasted work, it is a feedback loop. The thumbnail renderer writes its Typst
+/// scratch file *into the watched slides folder*, once per slide; each write
+/// reloaded the talk, each reload invalidated the thumbnail cache, and the
+/// "generating…" page's own refresh then started a second generation racing the
+/// first over the same scratch file. The deck stopped having an overview at all.
+///
+/// Editors are the other reason: atomic saves leave `.file.md.swp`, `4913`, and
+/// `.#file.md` behind, and every one of them used to re-parse the deck.
+///
+/// Only the file *name* is examined, not the whole path — the deck itself may
+/// well sit under a dotted directory (`~/.talks/kubecon/slides`), and refusing
+/// to reload there would be worse than reloading too often.
+fn is_deck_content(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_none_or(|name| !name.starts_with('.'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn modify(paths: &[&str]) -> Event {
+        Event {
+            kind: EventKind::Modify(notify::event::ModifyKind::Data(
+                notify::event::DataChange::Content,
+            )),
+            paths: paths.iter().map(PathBuf::from).collect(),
+            attrs: notify::event::EventAttributes::default(),
+        }
+    }
+
+    #[test]
+    fn a_slide_edit_reloads() {
+        assert!(should_reload(&modify(&["slides/1_intro/hello.md"])));
+    }
+
+    /// The loop this filter exists to break: the thumbnail renderer's scratch
+    /// file is written into the watched slides folder, once per slide.
+    #[test]
+    fn the_thumbnail_scratch_file_does_not_reload() {
+        assert!(!should_reload(&modify(&["slides/.toboggan-thumb.typ"])));
+    }
+
+    #[test]
+    fn editor_leftovers_do_not_reload() {
+        assert!(!should_reload(&modify(&["slides/.hello.md.swp"])));
+        assert!(!should_reload(&modify(&["slides/.DS_Store"])));
+    }
+
+    /// A deck under a dotted directory is still a deck.
+    #[test]
+    fn a_dotted_parent_directory_is_not_a_dotfile() {
+        assert!(should_reload(&modify(&["/home/me/.talks/deck/hello.md"])));
+    }
+
+    /// `notify` coalesces; one real edge in the batch is enough.
+    #[test]
+    fn a_batch_reloads_if_any_path_is_deck_content() {
+        assert!(should_reload(&modify(&[
+            "slides/.toboggan-thumb.typ",
+            "slides/hello.md"
+        ])));
+    }
+
+    #[test]
+    fn an_access_event_never_reloads() {
+        let event = Event {
+            kind: EventKind::Access(notify::event::AccessKind::Read),
+            paths: vec![PathBuf::from("slides/hello.md")],
+            attrs: notify::event::EventAttributes::default(),
+        };
+        assert!(!should_reload(&event));
+    }
 }

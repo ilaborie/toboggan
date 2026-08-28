@@ -267,13 +267,55 @@ pub(crate) struct ServeOptions {
     /// machine always presents. Remote clients pass it as `?token=…`.
     #[arg(long, env = "TOBOGGAN_PRESENTER_TOKEN")]
     pub(crate) presenter_token: Option<Secret>,
+
+    #[command(flatten)]
+    pub(crate) overview: OverviewOptions,
+}
+
+/// How `/slides` and `toboggan thumbnails` draw their pictures.
+///
+/// Shared by the serving commands and `thumbnails`, because the overview a deck
+/// publishes and the overview its author browses while writing it should not be
+/// two different renderings.
+#[derive(Debug, Clone, Args)]
+pub(crate) struct OverviewOptions {
+    /// How to draw the slide overview's thumbnails
+    ///
+    /// `auto` photographs the real deck in a headless browser when one can be
+    /// found, and falls back to Typst when it cannot. `browser` fails instead of
+    /// falling back — the right choice for CI, where a silent switch to the
+    /// approximate renderer changes how a published site looks.
+    #[arg(long, value_enum, env = "TOBOGGAN_THUMBNAIL_RENDERER")]
+    pub(crate) thumbnail_renderer: Option<toboggan_server::ThumbnailRenderer>,
+
+    /// Browser binary used to photograph slides (Chrome, Chromium or Edge)
+    ///
+    /// Detected from `CHROME`, the `PATH` and the usual install locations when
+    /// not given.
+    #[arg(long, env = "TOBOGGAN_BROWSER", value_hint = ValueHint::FilePath)]
+    pub(crate) browser: Option<PathBuf>,
+}
+
+impl OverviewOptions {
+    /// Fills unset options from the config file's `[overview]` table.
+    pub(crate) fn merge(&mut self, config: config::OverviewConfig) {
+        self.thumbnail_renderer = self.thumbnail_renderer.or(config.thumbnail_renderer);
+        self.browser = self.browser.take().or(config.browser);
+    }
 }
 
 impl ServeOptions {
-    /// Fills unset options from the config file's `[serve]` table.
+    /// Fills unset options from the config file's `[serve]` and `[overview]`
+    /// tables.
+    ///
+    /// `[overview]` is a table of its own rather than part of `[serve]`, because
+    /// `toboggan thumbnails` reads it too — but the flags it carries are
+    /// flattened into this struct, so taking both here is what stops a serving
+    /// command from merging one half and silently ignoring the other.
     ///
     /// See [`BuildOptions::merge`] for why `open` merges with `||`.
-    pub(crate) fn merge(&mut self, config: config::ServeConfig) {
+    pub(crate) fn merge(&mut self, config: config::ServeConfig, overview: config::OverviewConfig) {
+        self.overview.merge(overview);
         self.host = self.host.or(config.host);
         self.port = self.port.or(config.port);
         self.max_clients = self.max_clients.or(config.max_clients);
@@ -301,6 +343,8 @@ impl ServeOptions {
             open: self.open,
             open_presenter: self.open_presenter,
             presenter_token: self.presenter_token,
+            thumbnail_renderer: self.overview.thumbnail_renderer.unwrap_or_default(),
+            browser: self.overview.browser,
         }
     }
 }
@@ -346,7 +390,7 @@ impl DefaultArgs {
             anyhow::bail!("input is not a directory: {}", input.display());
         }
         self.build.merge(config.build);
-        self.serve.merge(config.serve);
+        self.serve.merge(config.serve, config.overview);
         let watch = !self.no_watch;
         let cli = self.build.into_cli_settings(input.clone(), true);
         // `ServerSettings`, not `Settings`: this path already has the talk in
@@ -417,6 +461,7 @@ impl DefaultArgs {
             // The default action serves the deck, so its overview is the
             // server's, not a static site's.
             static_links: false,
+            overview: self.serve.overview,
             build: self.build,
         }
     }
@@ -521,7 +566,7 @@ pub(crate) struct ServeArgs {
 
 impl ServeArgs {
     pub(crate) fn resolve(mut self, config: config::Config) -> toboggan_server::Settings {
-        self.serve.merge(config.serve);
+        self.serve.merge(config.serve, config.overview);
         toboggan_server::Settings {
             server: self.serve.into_server_settings(),
             talk: self.path,
@@ -796,6 +841,9 @@ pub(crate) struct ThumbnailsArgs {
     pub(crate) static_links: bool,
 
     #[command(flatten)]
+    pub(crate) overview: OverviewOptions,
+
+    #[command(flatten)]
     pub(crate) build: BuildOptions,
 }
 
@@ -926,5 +974,84 @@ mod tests {
             panic!("expected the mcp subcommand, got {:?}", cli.command);
         };
         assert_eq!(mcp.path.as_deref(), Some(Path::new("/tmp/deck")));
+    }
+
+    /// A config file that pins the renderer, as the scaffolded `toboggan.toml`
+    /// does.
+    fn pinned_to_browser() -> config::Config {
+        config::Config {
+            overview: config::OverviewConfig {
+                thumbnail_renderer: Some(toboggan_server::ThumbnailRenderer::Browser),
+                browser: Some(PathBuf::from("/opt/chrome")),
+            },
+            ..config::Config::default()
+        }
+    }
+
+    /// `[overview]` is a table of its own, because `toboggan thumbnails` reads
+    /// it too — so a serving command has to reach past `[serve]` for it. It did
+    /// not: every `thumbnail-renderer` in every `toboggan.toml` was honoured by
+    /// `toboggan thumbnails` and silently dropped by `toboggan`, `watch` and
+    /// `serve`. That is exactly the "two different renderings" the shared
+    /// [`OverviewOptions`] exists to prevent, so it is worth a test per command.
+    #[test]
+    fn serve_reads_the_overview_table() {
+        let cli = Cli::try_parse_from(["toboggan", "serve", "-p", "talk.toml"]).expect("parse");
+        let Some(Commands::Serve(args)) = cli.command else {
+            panic!("expected the serve subcommand, got {:?}", cli.command);
+        };
+
+        let settings = args.resolve(pinned_to_browser());
+
+        assert_eq!(
+            settings.server.thumbnail_renderer,
+            toboggan_server::ThumbnailRenderer::Browser
+        );
+        assert_eq!(
+            settings.server.browser.as_deref(),
+            Some(Path::new("/opt/chrome"))
+        );
+    }
+
+    /// The default action is the one most authors run, and it resolves through
+    /// [`DefaultArgs`] rather than [`ServeArgs`] — a separate call site, and so
+    /// a separate way to forget.
+    #[test]
+    fn the_default_action_reads_the_overview_table() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let cli =
+            Cli::try_parse_from(["toboggan", "-p", &dir.path().to_string_lossy()]).expect("parse");
+        assert!(cli.command.is_none(), "expected the default action");
+
+        let resolved = cli.default.resolve(pinned_to_browser()).expect("resolve");
+
+        assert_eq!(
+            resolved.server.thumbnail_renderer,
+            toboggan_server::ThumbnailRenderer::Browser
+        );
+    }
+
+    /// The precedence the README promises: a flag beats the config file.
+    #[test]
+    fn a_renderer_flag_beats_the_config_file() {
+        let cli = Cli::try_parse_from([
+            "toboggan",
+            "serve",
+            "-p",
+            "talk.toml",
+            "--thumbnail-renderer",
+            "typst",
+        ])
+        .expect("parse");
+        let Some(Commands::Serve(args)) = cli.command else {
+            panic!("expected the serve subcommand, got {:?}", cli.command);
+        };
+
+        let settings = args.resolve(pinned_to_browser());
+
+        assert_eq!(
+            settings.server.thumbnail_renderer,
+            toboggan_server::ThumbnailRenderer::Typst
+        );
     }
 }

@@ -98,8 +98,20 @@ runs:
         "$dir/toboggan" --version
 
     - name: Install Typst
-      if: contains(inputs.outputs, 'pdf') || contains(inputs.outputs, 'thumbnails')
+      if: contains(inputs.outputs, 'pdf')
       uses: typst-community/setup-typst@v5
+
+    # The slide overview is photographed from the real deck in a headless
+    # browser, so the thumbnails match the projector rather than approximating
+    # it in Typst. Installed explicitly rather than relying on the runner image:
+    # `ubuntu-latest` ships Chrome today and the macOS images have dropped it
+    # before, and a missing browser would not fail the build — it would quietly
+    # publish the *other*, approximate overview.
+    - name: Install a browser for the slide overview
+      if: contains(inputs.outputs, 'thumbnails')
+      uses: browser-actions/setup-chrome@v2
+      with:
+        install-dependencies: true
 
     # Before the build, not after: the point is to stop a deck with an error in
     # it from reaching the published site, and `toboggan build` is happy to
@@ -154,7 +166,11 @@ runs:
           case "$(echo "$kind" | xargs)" in
             html)       toboggan build --path "$FOLDER" --output "$OUT_DIR/index.html" "${base_url_args[@]}" ;;
             pdf)        toboggan pdf --path "$FOLDER" --output "$OUT_DIR/presentation.pdf" ;;
-            thumbnails) toboggan thumbnails --path "$FOLDER" --output "$OUT_DIR/overview" "${thumbnail_args[@]}" ;;
+            # `--thumbnail-renderer browser` rather than the `auto` default:
+            # `auto` falls back to Typst when no browser turns up, and a
+            # published site that silently changed how it looks is worse than a
+            # build that stopped and said why.
+            thumbnails) toboggan thumbnails --path "$FOLDER" --output "$OUT_DIR/overview" --thumbnail-renderer browser "${thumbnail_args[@]}" ;;
             "")         ;;
             # Without this arm a typo (`thumbnail`) produced nothing at all and
             # still exited 0, so the workflow "succeeded" with no artifacts.

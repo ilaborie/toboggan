@@ -2,11 +2,12 @@
 //!
 //! Thumbnails are generated lazily on the first `/slides` hit (see
 //! [`crate::services::ThumbnailService`]). While generation is in flight the page
-//! auto-refreshes; if `typst` is unavailable it shows a clean explanation instead
-//! of a server error.
+//! auto-refreshes; when neither renderer can draw them — no browser *and* no
+//! `typst`, or one of them failing — it shows a clean explanation instead of a
+//! server error.
 
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::http::{StatusCode, header};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 
 use crate::TobogganState;
@@ -20,6 +21,47 @@ pub(crate) async fn slides_page(State(state): State<TobogganState>) -> Response 
         ThumbStatus::Ready => Redirect::to("/overview/overview.html").into_response(),
         ThumbStatus::Pending => Html(GENERATING_PAGE).into_response(),
         ThumbStatus::Unavailable(reason) => Html(unavailable_page(&reason)).into_response(),
+    }
+}
+
+/// Serves one presented slide's thumbnail, for the presenter view's filmstrip.
+///
+/// Addressed by *presented* index — the same number `Command::GoTo` and
+/// `/api/slides/{index}` take — while the thumbnails on disk are named over the
+/// deck as authored. [`TobogganState::presented_thumbnail`] crosses between the
+/// two, so the client never has to know the deck hides anything.
+///
+/// Answers `503` while the thumbnails are still being made, rather than the
+/// `303` the asset route sends: the caller here is an `<img>`, and a redirect
+/// to `/slides` hands it an HTML page, which renders as a broken image that
+/// never recovers. A `503` with `Retry-After` says "ask again" in the one way
+/// both a browser and a script can act on.
+pub(crate) async fn presented_thumbnail(
+    State(state): State<TobogganState>,
+    Path(index): Path<usize>,
+) -> Response {
+    match state.presented_thumbnail(index).await {
+        AssetLookup::Found(bytes) => (
+            [
+                (header::CONTENT_TYPE, "image/png"),
+                // The deck reloads under the speaker, and the thumbnail of slide
+                // 4 is a different picture afterwards at the same URL.
+                (header::CACHE_CONTROL, "no-cache"),
+            ],
+            bytes,
+        )
+            .into_response(),
+        AssetLookup::NotReady => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            [(header::RETRY_AFTER, "1")],
+            "slide thumbnails are still being generated",
+        )
+            .into_response(),
+        AssetLookup::Missing => (
+            StatusCode::NOT_FOUND,
+            format!("no thumbnail for slide {index}"),
+        )
+            .into_response(),
     }
 }
 
@@ -93,9 +135,13 @@ fn unavailable_page(reason: &str) -> String {
     <div style="font-size:3rem">🛝</div>
     <h1>Slide overview unavailable</h1>
     <p class="muted">{reason}</p>
-    <p>Install the <a href="https://typst.app/">typst</a> binary, then reload. The
-       presentation itself is unaffected — <a href="/run">run it</a> or return to the
-       <a href="/">homepage</a>.</p>
+    <p>Thumbnails are photographed in a headless browser, and redrawn with
+       <a href="https://typst.app/">typst</a> where none can be found. Install
+       Chrome, Chromium or Edge — or <code>typst</code> — then restart
+       <code>toboggan</code>, or save a slide if it is watching the folder.
+       Reloading this page alone will not retry.</p>
+    <p>The presentation itself is unaffected — <a href="/run">run it</a> or return
+       to the <a href="/">homepage</a>.</p>
   </div>
 </body>
 </html>"#,

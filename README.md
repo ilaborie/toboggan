@@ -115,7 +115,7 @@ The guide's source lives in [`examples/toboggan-guide/`](examples/toboggan-guide
 | `toboggan lint -p <folder>` | Lint the deck (`--format`, `--deny`, `--no-spell`) |
 | `toboggan stats -p <folder>` | Word counts and duration estimates |
 | `toboggan pdf -p <folder>` | Render a PDF (needs `typst`) |
-| `toboggan thumbnails -p <folder>` | Per-slide PNGs + `overview.html` + search |
+| `toboggan thumbnails -p <folder>` | Per-slide PNGs (photographed in a headless browser) + `overview.html` + search |
 | `toboggan tui` / `toboggan desktop` | Clients against a running server |
 | `toboggan openapi` | Emit the bundled OpenAPI document |
 | `toboggan mcp [serve\|init]` | MCP authoring server, or install it for Claude Code |
@@ -344,7 +344,9 @@ the client what it got in `Registered`.
 - Rust 1.95+ (2024 edition)
 - Node.js 22+ and `pnpm` (for the web client)
 - [`mise`](https://mise.jdx.dev) (optional, for task automation)
-- `typst` (optional, for `pdf` and `thumbnails`)
+- `typst` (optional, for `pdf`; and for `thumbnails` when no browser is found)
+- Chrome, Chromium or Edge (optional, for `thumbnails`): the slide overview is
+  photographed from the real deck, so the pictures match the projector
 
 ### Everyday commands
 

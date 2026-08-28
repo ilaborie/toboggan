@@ -29,6 +29,28 @@ fn main() -> miette::Result<()> {
     dispatch(cli)
 }
 
+/// Directives applied under whatever `RUST_LOG` says.
+///
+/// `chromiumoxide` logs a warning for every `DevTools` message it cannot fit into
+/// its own enum, and current Chrome sends several per navigation — so
+/// photographing a deck for the slide overview printed a screenful of
+/// `WS Invalid message` at the author over something they can do nothing about
+/// and that did not stop anything. Its real failures come back as errors from
+/// the calls we make, so `error` keeps them.
+const QUIET: &str = "chromiumoxide=error";
+
+/// The env filter every non-TUI logger uses: `RUST_LOG` if set, plus [`QUIET`].
+///
+/// Appended rather than prepended, so a `RUST_LOG=chromiumoxide=debug` meant to
+/// debug the browser still wins.
+fn env_filter() -> EnvFilter {
+    EnvFilter::from_default_env().add_directive(
+        QUIET
+            .parse()
+            .unwrap_or_else(|_| tracing::level_filters::LevelFilter::INFO.into()),
+    )
+}
+
 /// Initializes logging appropriately for the chosen subcommand.
 ///
 /// The TUI needs `tui_logger` (a stdout logger would corrupt the terminal); the
@@ -45,12 +67,12 @@ fn init_logging(command: Option<&Commands>) {
         Some(Commands::Mcp(_)) => {
             tracing_subscriber::fmt()
                 .with_writer(std::io::stderr)
-                .with_env_filter(EnvFilter::from_default_env())
+                .with_env_filter(env_filter())
                 .init();
         }
         _ => {
             tracing_subscriber::fmt()
-                .with_env_filter(EnvFilter::from_default_env())
+                .with_env_filter(env_filter())
                 .init();
         }
     }
@@ -135,12 +157,7 @@ fn run_default(args: DefaultArgs) -> miette::Result<()> {
                 check_overflow,
             ))
         }
-        DefaultCommand::Thumbnails => {
-            let (input, settings) = args.into_thumbnails_args().resolve(config);
-            to_miette(commands::thumbnails::generate(
-                &input, settings, None, true, false,
-            ))
-        }
+        DefaultCommand::Thumbnails => thumbnails_default(args.into_thumbnails_args()),
     }
 }
 
@@ -177,19 +194,20 @@ fn pdf_default(args: cli::PdfArgs) -> miette::Result<()> {
     ))
 }
 
-fn thumbnails_default(args: cli::ThumbnailsArgs) -> miette::Result<()> {
+fn thumbnails_default(mut args: cli::ThumbnailsArgs) -> miette::Result<()> {
     let config = load_config(&args.path.search_root())?;
-    let output = args.output.clone();
-    let search = !args.no_search;
-    let static_links = args.static_links;
+    args.overview.merge(config.overview.clone());
+    let options = commands::thumbnails::Options {
+        output: args.output.clone(),
+        search: !args.no_search,
+        static_links: args.static_links,
+        renderer: args.overview.thumbnail_renderer,
+        browser: args.overview.browser.clone(),
+    };
     let (input, settings) = args.resolve(config);
-    to_miette(commands::thumbnails::generate(
-        &input,
-        settings,
-        output,
-        search,
-        static_links,
-    ))
+    // Async because the browser path serves the deck to itself over loopback
+    // while it photographs it.
+    block_on(commands::thumbnails::generate(&input, settings, options))
 }
 
 /// Writes a shell completion script for `toboggan` to stdout.

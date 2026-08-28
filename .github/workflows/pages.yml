@@ -57,6 +57,14 @@ jobs:
           cache-dependency-path: toboggan-web/pnpm-lock.yaml
       - name: Install Typst
         uses: typst-community/setup-typst@v5
+      # The slide overview is photographed from the real deck, so the published
+      # thumbnails match the projector. Explicit rather than trusting the runner
+      # image to keep shipping Chrome, because a missing browser does not fail
+      # the build — it publishes the approximate Typst overview instead.
+      - name: Install a browser for the slide overview
+        uses: browser-actions/setup-chrome@v2
+        with:
+          install-dependencies: true
 
       # `toboggan-server` embeds this folder at compile time and its build.rs
       # fails without it, so the web bundle comes first even though what we want
@@ -79,7 +87,7 @@ jobs:
           mkdir -p dist
           ./target/release/toboggan build -p examples/toboggan-guide/slides -o dist/index.html
           ./target/release/toboggan pdf -p examples/toboggan-guide/slides -o dist/toboggan-guide.pdf
-          ./target/release/toboggan thumbnails -p examples/toboggan-guide/slides -o dist/overview
+          ./target/release/toboggan thumbnails -p examples/toboggan-guide/slides -o dist/overview --thumbnail-renderer browser
 
       - uses: actions/upload-pages-artifact@v3
         with:

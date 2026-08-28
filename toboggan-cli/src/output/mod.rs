@@ -7,7 +7,9 @@ pub use self::text::TextRenderer;
 
 pub(crate) mod html;
 mod thumbnails;
-pub use self::thumbnails::{ThumbnailOptions, generate_thumbnails};
+pub use self::thumbnails::{
+    ThumbnailOptions, generate_thumbnails, render_typst_thumbnails, write_overview_page,
+};
 mod typst;
 use std::borrow::Cow;
 

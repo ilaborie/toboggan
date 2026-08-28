@@ -14,8 +14,9 @@ use crate::app::App;
 
 mod components;
 pub(crate) use crate::components::{
-    MirrorApp, ToastType, TobogganFooterElement, TobogganHelpElement, TobogganPresenterElement,
-    TobogganQuakeTerminalElement, TobogganSlideElement, TobogganToastElement, WasmElement,
+    MirrorApp, ShotApp, ToastType, TobogganFooterElement, TobogganHelpElement,
+    TobogganPresenterElement, TobogganQuakeTerminalElement, TobogganSlideElement,
+    TobogganToastElement, WasmElement,
 };
 
 mod config;
@@ -71,5 +72,21 @@ pub fn start_mirror_app(elt: &HtmlElement, pane: &str) {
     info!("🪞 Starting a Toboggan deck mirror:", pane.as_str());
 
     let mut app = MirrorApp::new(pane);
+    app.render(elt);
+}
+
+/// Mounts a still of one slide, for a screenshot.
+///
+/// The page behind every thumbnail on `/slides`. Like a mirror it opens no
+/// socket and registers no client — but it is painted from the REST API rather
+/// than by a parent window, because nothing frames it: a headless browser opens
+/// it directly. See [`components::shot`] for the contract it keeps with the
+/// driver that photographs it.
+#[wasm_bindgen]
+pub fn start_shot_app(elt: &HtmlElement, index: usize) {
+    console_error_panic_hook::set_once();
+    info!("📸 Starting a Toboggan slide shot:", index);
+
+    let mut app = ShotApp::new(index);
     app.render(elt);
 }

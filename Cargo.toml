@@ -77,6 +77,12 @@ scraper = "0.27.0"
 
 # Server-specific dependencies
 rust-embed = "8.12.0"
+# Drives a headless Chrome over the DevTools protocol, to photograph `/run` for
+# the slide overview. `default-features = false` drops the Chromium downloader:
+# a browser is found on the machine or the feature degrades, never fetched.
+chromiumoxide = { version = "0.9.1", default-features = false, features = [
+  "bytes",
+] }
 mime_guess = "2.0.5"
 notify = "8.2.0"
 portable-pty = "0.9.0"

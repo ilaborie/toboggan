@@ -308,3 +308,129 @@ button:hover {
 .pacing:empty {
 	display: none;
 }
+
+/* ── The slide grid ──────────────────────────────────────────────────────────
+   Every slide at once, and a way to jump into it. An overlay rather than a
+   fourth area of the grid: the two panes and the notes are what the speaker
+   reads continuously, and none of them should shrink for a panel that is open
+   for the two seconds it takes to find slide 31. `.layout` is the positioning
+   context, so the strip covers the chrome and not the browser's own furniture. */
+.layout {
+	position: relative;
+}
+
+.filmstrip {
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 16px;
+	box-sizing: border-box;
+	/* Nearly opaque rather than opaque: the slide behind stays faintly visible,
+	   which is what makes this read as a layer over the talk rather than a
+	   different page the speaker has to find their way back from. */
+	background: color-mix(in srgb, var(--presenter-bg) 94%, transparent);
+	backdrop-filter: blur(6px);
+}
+
+.filmstrip[hidden] {
+	display: none;
+}
+
+.strip-head {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex: 0 0 auto;
+}
+
+.strip-status {
+	color: var(--presenter-muted);
+	font-size: 14px;
+}
+
+.strip-close {
+	margin-inline-start: auto;
+	font-size: 18px;
+	padding: 2px 12px;
+}
+
+.strip-grid {
+	flex: 1;
+	overflow-y: auto;
+	display: grid;
+	/* Wide enough that a slide's title is readable at a glance, which is the
+	   only thing the speaker is scanning for. */
+	grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+	gap: 10px;
+	align-content: start;
+	padding-block-end: 4px;
+}
+
+.strip-cell {
+	position: relative;
+	padding: 0;
+	border: 2px solid var(--presenter-line);
+	border-radius: 8px;
+	background: var(--presenter-panel);
+	color: inherit;
+	cursor: pointer;
+	overflow: hidden;
+	display: block;
+	/* Reserved before the picture arrives, so the grid does not reflow under
+	   the pointer as forty thumbnails load in. */
+	aspect-ratio: 16 / 9;
+}
+
+.strip-cell:hover {
+	border-color: var(--presenter-accent);
+}
+
+.strip-cell:focus-visible {
+	outline: 2px solid var(--presenter-accent);
+	outline-offset: 2px;
+}
+
+/* Where the deck actually is. Thicker than the hover border rather than a
+   different colour alone, so it survives being looked at on a projector's
+   washed-out gamma. */
+.strip-cell[aria-current="true"] {
+	border-color: var(--presenter-accent);
+	box-shadow: 0 0 0 2px var(--presenter-accent);
+}
+
+.strip-cell img {
+	display: block;
+	inline-size: 100%;
+	block-size: 100%;
+	object-fit: contain;
+	/* The thumbnails are photographs of the deck, which may be any colour; a
+	   white bed keeps a transparent one from reading as a hole in the grid. */
+	background: #fff;
+}
+
+/* Empty until a picture has been asked for. Without this the alt-less `<img>`
+   collapses and the cells are unlabelled boxes while the deck is being
+   photographed for the first time.
+
+   Keyed on the absence of a `src` rather than on the panel's readiness, so a
+   *re*-render — the deck reloaded, every thumbnail is being taken again — leaves
+   the pictures the speaker was just looking at on screen until the new ones
+   arrive, instead of blanking the grid for the several seconds that takes. */
+.strip-cell img:not([src]) {
+	visibility: hidden;
+}
+
+.strip-number {
+	position: absolute;
+	inset-block-start: 4px;
+	inset-inline-start: 4px;
+	padding: 1px 6px;
+	border-radius: 4px;
+	background: color-mix(in srgb, var(--presenter-bg) 80%, transparent);
+	color: var(--presenter-fg);
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+}
