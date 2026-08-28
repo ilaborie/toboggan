@@ -18,6 +18,9 @@ pub(crate) use self::quake_terminal::*;
 mod mirror;
 pub(crate) use self::mirror::*;
 
+mod shot;
+pub(crate) use self::shot::*;
+
 mod presenter;
 pub(crate) use self::presenter::*;
 

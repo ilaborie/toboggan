@@ -1,6 +1,7 @@
 import init, {
 	start_app,
 	start_mirror_app,
+	start_shot_app,
 } from "../toboggan-wasm/pkg/toboggan_wasm";
 
 import { appConfig, ensureTerminalFontLoaded, loadWasm } from "./boot";
@@ -18,7 +19,27 @@ import "./state.css";
 // share one wasm chunk anyway, and `toboggan-server`'s build script asserts that
 // every declared page exists in `dist/`, so a third one makes any server build
 // against a stale `dist/` abort.
-const mirrorPane = new URLSearchParams(location.search).get("mirror");
+const params = new URLSearchParams(location.search);
+const mirrorPane = params.get("mirror");
+
+// A shot is the same page again, opened by a headless browser to photograph one
+// slide for the `/slides` overview. Like a mirror it opens no socket and runs no
+// terminal; unlike a mirror nothing frames it, so it paints itself from the REST
+// API. `?shot=` for the same reason as `?mirror=`: one wasm chunk, and a page of
+// its own would have to be declared in `toboggan-server`'s build script.
+//
+// Rejected rather than clamped when it is not a slide index: a shot of the wrong
+// slide is filed under the right name and nobody notices, whereas a page that
+// mounts nothing is a driver timeout with the URL in it.
+const shotIndex = ((raw) => {
+	if (raw === null) return null;
+	const index = Number(raw);
+	if (!Number.isInteger(index) || index < 0) {
+		console.error(`🚨 Not a slide index: ?shot=${raw}`);
+		return null;
+	}
+	return index;
+})(params.get("shot"));
 
 // Initialize the application when the DOM is loaded
 document.addEventListener("DOMContentLoaded", async () => {
@@ -29,7 +50,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 	// anything. Published as a memoised starter instead: whoever needs the font
 	// first pays for it, everyone after that awaits the same promise.
 	let fonts: Promise<void> | undefined;
-	if (!mirrorPane) {
+	if (!mirrorPane && shotIndex === null) {
 		window.tobogganFontsReady = () => {
 			fonts ??= ensureTerminalFontLoaded();
 			return fonts;
@@ -48,6 +69,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 	if (mirrorPane) {
 		start_mirror_app(elt, mirrorPane);
+		return;
+	}
+
+	if (shotIndex !== null) {
+		start_shot_app(elt, shotIndex);
 		return;
 	}
 

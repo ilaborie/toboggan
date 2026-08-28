@@ -11,7 +11,8 @@ use wasm_bindgen::UnwrapThrowExt as _;
 use web_sys::HtmlElement;
 
 use crate::components::{TobogganFooterElement, TobogganSlideElement, WasmElement};
-use crate::create_html_element;
+use crate::services::mirror::MirrorFrame;
+use crate::{create_html_element, inject_head_html, set_document_lang};
 
 /// The classes [`apply_deck_state`] owns. It replaces its own and leaves every
 /// other class on the host alone, because the host also carries whatever the
@@ -66,4 +67,75 @@ pub(crate) fn apply_deck_state(
     let style = host.style();
     let _ = style.set_property("--current-slide", &current_slide.to_string());
     let _ = style.set_property("--total-slides", &total_slides.to_string());
+}
+
+/// A document that *is* the deck, and the pieces of it a frame touches.
+///
+/// Two pages are one: a presenter mirror, painted by `postMessage` from the
+/// window that frames it, and a shot page, painted once from the REST API for a
+/// screenshot. Neither opens a socket, neither registers a client, and both owe
+/// the room the same layout — so the painting belongs here, beside
+/// [`mount_deck`], rather than in either of them.
+pub(crate) struct DeckPainter {
+    host: HtmlElement,
+    slide: TobogganSlideElement,
+    footer: TobogganFooterElement,
+    /// The `_head.html` already in this document.
+    ///
+    /// Compared before injecting, because the presenter posts a frame on every
+    /// reveal and `inject_head_html` removes and re-adds everything it manages:
+    /// re-injecting an unchanged head would tear the deck's stylesheet out of
+    /// the document and put it back on every press of the space bar, which is a
+    /// frame of unstyled slide each time.
+    head: Option<String>,
+}
+
+impl DeckPainter {
+    /// Builds the deck under `host` and returns the painter for it.
+    pub(crate) fn mount(host: &HtmlElement) -> Self {
+        let mut slide = TobogganSlideElement::default();
+        // Terminals belong to the deck the room is watching. A second set here
+        // would be a second set of shells, in a second session, showing output
+        // nobody asked for — and in the presenter's next-slide pane, for a slide
+        // nobody has reached yet.
+        slide.set_preview(true);
+        let mut footer = TobogganFooterElement::default();
+        mount_deck(host, &mut slide, &mut footer);
+
+        Self {
+            host: host.clone(),
+            slide,
+            footer,
+            head: None,
+        }
+    }
+
+    /// Paints one frame.
+    ///
+    /// Head first, so the slide is laid out against the deck's own fonts rather
+    /// than reflowing once they arrive.
+    pub(crate) fn show(&mut self, frame: MirrorFrame) {
+        let MirrorFrame {
+            head,
+            footer,
+            lang,
+            slide,
+            step,
+            state_class,
+            slide_number,
+            total_slides,
+        } = frame;
+
+        if self.head != head {
+            inject_head_html(head.as_deref());
+            self.head = head;
+        }
+        set_document_lang(lang.as_deref());
+        self.footer.set_content(footer);
+        apply_deck_state(&self.host, &state_class, slide_number, total_slides);
+        // `None` asks for every reveal at once — the presenter's next-slide pane
+        // and every thumbnail — which is what the slide component spells
+        // `usize::MAX`.
+        self.slide.set_slide(slide, step.unwrap_or(usize::MAX));
+    }
 }

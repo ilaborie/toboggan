@@ -1,22 +1,25 @@
 //! Lazily-generated slide-overview thumbnails.
 //!
 //! The everyday `toboggan <folder>` serve does not pre-render thumbnails (that
-//! would add multi-second startup latency and a hard dependency on the `typst`
-//! binary). Instead the overview is generated on the first `/slides` request,
-//! cached in a temp dir, and invalidated whenever the talk reloads. When `typst`
-//! is absent or fails, the service records the reason and the page degrades
-//! gracefully rather than erroring.
+//! would add multi-second startup latency, and a hard dependency on a browser or
+//! the `typst` binary). Instead the overview is generated on the first `/slides`
+//! request, cached in a temp dir, and invalidated whenever the talk reloads.
+//! When neither renderer is available, the service records the reason and the
+//! page degrades gracefully rather than erroring.
+//!
+//! *How* the pictures are made is [`super::generate_overview`]'s business; this
+//! module owns only when they are made, and what happens to a generation a
+//! reload overtakes.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use tempfile::TempDir;
 use toboggan_cli::mermaid::MermaidRenderer;
-use toboggan_cli::output::{ThumbnailOptions, generate_thumbnails};
 use tokio::sync::RwLock;
 use tracing::{error, info, warn};
 
-use super::TalkService;
+use super::{OverviewOptions, TalkService, generate_overview};
 
 /// Lazily-generated slide-overview thumbnails, regenerated after each reload.
 #[derive(Clone)]
@@ -134,10 +137,22 @@ impl ThumbnailService {
     /// A previous [`ThumbState::Unavailable`] is cleared: the reason is usually
     /// "`typst` is missing", and pinning that for the process lifetime meant
     /// installing `typst` and reloading never recovered.
+    /// A generation already in flight is left in [`ThumbState::Generating`]
+    /// rather than reset to `Idle`. The epoch bump above already guarantees it
+    /// cannot commit, and its completion handler puts the state back to `Idle`
+    /// so the next request regenerates against the current talk — whereas
+    /// resetting here published a free slot while the old task was still
+    /// running, and the "generating…" page's own two-second refresh took it
+    /// immediately. Two generators then ran over the same deck; sharing one
+    /// scratch file, they fed `typst` a torn document (`unclosed raw text`) or
+    /// deleted it out from under each other (`input file not found`).
     pub(crate) async fn invalidate(&self) {
         let mut inner = self.inner.write().await;
         inner.epoch = inner.epoch.wrapping_add(1);
-        if matches!(&inner.state, ThumbState::Ready(Source::External(_))) {
+        if matches!(
+            &inner.state,
+            ThumbState::Ready(Source::External(_)) | ThumbState::Generating
+        ) {
             return;
         }
         inner.state = ThumbState::Idle;
@@ -148,6 +163,7 @@ impl ThumbnailService {
         &self,
         talk_service: TalkService,
         mermaid: Arc<MermaidRenderer>,
+        options: Arc<OverviewOptions>,
     ) -> ThumbStatus {
         if let Some(status) = self.snapshot().await {
             return status;
@@ -169,7 +185,7 @@ impl ThumbnailService {
                 }
             }
         };
-        self.spawn(talk_service, mermaid, epoch);
+        self.spawn(talk_service, mermaid, options, epoch);
         ThumbStatus::Pending
     }
 
@@ -220,44 +236,62 @@ impl ThumbnailService {
         }
     }
 
-    fn spawn(&self, talk_service: TalkService, mermaid: Arc<MermaidRenderer>, epoch: u64) {
+    fn spawn(
+        &self,
+        talk_service: TalkService,
+        mermaid: Arc<MermaidRenderer>,
+        options: Arc<OverviewOptions>,
+        epoch: u64,
+    ) {
         let inner = self.inner.clone();
         tokio::spawn(async move {
             let talk = talk_service.source_talk().await;
-            let result = tokio::task::spawn_blocking(move || generate(&talk, &mermaid)).await;
+            let result = generate(&talk, &mermaid, &options).await;
 
             let mut guard = inner.write().await;
-            // A reload (invalidate) bumps the epoch; if ours is stale, a newer
-            // generation owns the slot — drop this result and leave the state for
-            // the next request to regenerate against the current talk.
-            if guard.epoch != epoch || !matches!(&guard.state, ThumbState::Generating) {
+            // Someone else owns the slot (a seeded external directory, say);
+            // leave it entirely alone.
+            if !matches!(&guard.state, ThumbState::Generating) {
+                return;
+            }
+            // A reload (invalidate) bumps the epoch. Our result describes the
+            // previous talk, so it is dropped — but the slot has to be handed
+            // back, because `invalidate` no longer does it for us: it now leaves
+            // an in-flight generation alone precisely so a second one cannot
+            // start beside it. Releasing to `Idle` here is what lets the next
+            // request regenerate against the current talk; returning without it
+            // pinned the page on "generating…" for the life of the process.
+            if guard.epoch != epoch {
+                guard.state = ThumbState::Idle;
                 return;
             }
             guard.state = match result {
-                Ok(Ok(dir)) => {
+                Ok(dir) => {
                     info!("generated slide-overview thumbnails");
                     ThumbState::Ready(Source::Owned(Arc::new(dir)))
                 }
-                Ok(Err(err)) => {
+                Err(err) => {
                     error!("thumbnail generation failed: {err:?}");
                     ThumbState::Unavailable(unavailable_message(&err))
-                }
-                Err(join) => {
-                    error!("thumbnail generation task crashed: {join}");
-                    ThumbState::Unavailable("thumbnail generation crashed".to_owned())
                 }
             };
         });
     }
 }
 
-fn generate(talk: &toboggan_core::Talk, mermaid: &MermaidRenderer) -> anyhow::Result<TempDir> {
+async fn generate(
+    talk: &toboggan_core::Talk,
+    mermaid: &MermaidRenderer,
+    options: &OverviewOptions,
+) -> anyhow::Result<TempDir> {
     let dir = tempfile::tempdir()?;
-    generate_thumbnails(talk, dir.path(), &ThumbnailOptions::new(mermaid.clone()))
-        .map_err(|err| anyhow::anyhow!("{err}"))?;
+    generate_overview(talk, mermaid, dir.path(), options).await?;
     Ok(dir)
 }
 
 fn unavailable_message(err: &anyhow::Error) -> String {
-    format!("Slide thumbnails could not be generated (is the `typst` binary installed?): {err}")
+    format!(
+        "Slide thumbnails could not be generated (is a browser, or the `typst` binary, \
+         installed?): {err}"
+    )
 }

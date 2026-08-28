@@ -21,55 +21,9 @@ use gloo::utils::window;
 use wasm_bindgen::JsCast as _;
 use web_sys::{HtmlElement, MessageEvent};
 
-use crate::components::deck::{apply_deck_state, mount_deck};
-use crate::components::{TobogganFooterElement, TobogganSlideElement, WasmElement};
-use crate::services::mirror::{self, MirrorFrame, MirrorMessage, MirrorPane};
-use crate::{inject_head_html, set_document_lang};
-
-/// The parts a frame touches.
-struct Inner {
-    host: HtmlElement,
-    slide: TobogganSlideElement,
-    footer: TobogganFooterElement,
-    /// The `_head.html` already in this document.
-    ///
-    /// Compared before injecting, because the presenter posts a frame on every
-    /// reveal and `inject_head_html` removes and re-adds everything it manages:
-    /// re-injecting an unchanged head would tear the deck's stylesheet out of
-    /// the document and put it back on every press of the space bar, which is a
-    /// frame of unstyled slide each time.
-    head: Option<String>,
-}
-
-impl Inner {
-    /// Paints one frame.
-    ///
-    /// Head first, so the slide is laid out against the deck's own fonts rather
-    /// than reflowing once they arrive.
-    fn show(&mut self, frame: MirrorFrame) {
-        let MirrorFrame {
-            head,
-            footer,
-            lang,
-            slide,
-            step,
-            state_class,
-            slide_number,
-            total_slides,
-        } = frame;
-
-        if self.head != head {
-            inject_head_html(head.as_deref());
-            self.head = head;
-        }
-        set_document_lang(lang.as_deref());
-        self.footer.set_content(footer);
-        apply_deck_state(&self.host, &state_class, slide_number, total_slides);
-        // `None` is the next-slide pane asking for every reveal at once, which
-        // is what the slide component spells `usize::MAX`.
-        self.slide.set_slide(slide, step.unwrap_or(usize::MAX));
-    }
-}
+use crate::components::WasmElement;
+use crate::components::deck::DeckPainter;
+use crate::services::mirror::{self, MirrorMessage, MirrorPane};
 
 pub(crate) struct MirrorApp {
     pane: MirrorPane,
@@ -83,21 +37,7 @@ impl MirrorApp {
 
 impl WasmElement for MirrorApp {
     fn render(&mut self, host: &HtmlElement) {
-        let mut slide = TobogganSlideElement::default();
-        // Terminals belong to the deck the room is watching. A second set here
-        // would be a second set of shells, in a second session, showing output
-        // nobody asked for — and in the next-slide pane, for a slide nobody has
-        // reached yet.
-        slide.set_preview(true);
-        let mut footer = TobogganFooterElement::default();
-        mount_deck(host, &mut slide, &mut footer);
-
-        let inner = Rc::new(RefCell::new(Inner {
-            host: host.clone(),
-            slide,
-            footer,
-            head: None,
-        }));
+        let inner = Rc::new(RefCell::new(DeckPainter::mount(host)));
 
         let Some(origin) = mirror::page_origin() else {
             return;

@@ -67,6 +67,20 @@ pub struct ServerSettings {
     #[clap(long, env = "TOBOGGAN_OPEN_PRESENTER")]
     pub open_presenter: bool,
 
+    /// How the slide overview's thumbnails are drawn
+    ///
+    /// `auto` photographs the real deck in a headless browser when one can be
+    /// found, and falls back to Typst when it cannot.
+    #[clap(long, env = "TOBOGGAN_THUMBNAIL_RENDERER", value_enum, default_value_t = crate::ThumbnailRenderer::Auto)]
+    pub thumbnail_renderer: crate::ThumbnailRenderer,
+
+    /// Browser binary used to photograph slides (Chrome, Chromium or Edge)
+    ///
+    /// Detected from `CHROME`, the `PATH` and the usual install locations when
+    /// not given.
+    #[clap(long, env = "TOBOGGAN_BROWSER", value_hint = clap::ValueHint::FilePath)]
+    pub browser: Option<PathBuf>,
+
     /// Secret that lets a client **not** on this machine drive the deck.
     ///
     /// Only needed when the server is reachable from the network: a connection

@@ -6,7 +6,9 @@ use toboggan_cli::mermaid::MermaidRenderer;
 use toboggan_core::{Command, Notification, Talk, Timestamp};
 use tokio::sync::RwLock;
 
-use crate::services::{AssetLookup, ClientService, TalkService, ThumbStatus, ThumbnailService};
+use crate::services::{
+    AssetLookup, ClientService, OverviewOptions, TalkService, ThumbStatus, ThumbnailService,
+};
 use crate::{HealthResponse, HealthResponseStatus, PresenterAuth};
 
 impl FromRef<TobogganState> for TalkService {
@@ -68,6 +70,7 @@ pub struct TobogganState {
     /// Deck-level Mermaid settings, so `/download.pdf` and the slide overview
     /// draw a diagram the same way the web client does.
     mermaid: Arc<MermaidRenderer>,
+    overview: Arc<OverviewOptions>,
 }
 
 impl TobogganState {
@@ -88,6 +91,7 @@ impl TobogganState {
             thumbnail_service: ThumbnailService::new(),
             auth: PresenterAuth::default(),
             mermaid: Arc::new(MermaidRenderer::default()),
+            overview: Arc::new(OverviewOptions::default()),
         }
     }
 
@@ -106,6 +110,17 @@ impl TobogganState {
     /// The deck's Mermaid settings.
     pub(crate) fn mermaid(&self) -> Arc<MermaidRenderer> {
         Arc::clone(&self.mermaid)
+    }
+
+    /// Installs how the slide overview is to be rendered.
+    ///
+    /// Separate from [`Self::new`] for the same reason as [`Self::with_mermaid`]:
+    /// the default (`auto`, no `public/`) still produces an overview, it just
+    /// produces one whose pictures are missing the deck's own images.
+    #[must_use]
+    pub fn with_overview(mut self, overview: OverviewOptions) -> Self {
+        self.overview = Arc::new(overview);
+        self
     }
 
     /// Installs the presenter gate.
@@ -174,7 +189,42 @@ impl TobogganState {
     /// Ensures slide-overview thumbnails are being generated and reports status.
     pub(crate) async fn ensure_thumbnails(&self) -> ThumbStatus {
         self.thumbnail_service
-            .ensure(self.talk_service.clone(), self.mermaid())
+            .ensure(
+                self.talk_service.clone(),
+                self.mermaid(),
+                Arc::clone(&self.overview),
+            )
+            .await
+    }
+
+    /// The thumbnail of a *presented* slide, by the index everything else on
+    /// the presenter view uses.
+    ///
+    /// Two index spaces meet here. `Command::GoTo`, `/api/slides/{index}` and
+    /// the presenter's own counter all number the presented deck; the thumbnails
+    /// are named over the deck as authored, because the overview is an authoring
+    /// view that shows the `hidden_in = ["web"]` slides too. Crossing between
+    /// them is the server's job — the client should not have to know the deck
+    /// hides anything, and a client that got it wrong would show the *next*
+    /// slide's picture under the right number, silently.
+    ///
+    /// Generation is kicked off if it has not been: the filmstrip is usually the
+    /// first thing to want thumbnails, and nothing else on the presenter view
+    /// asks for them.
+    pub(crate) async fn presented_thumbnail(&self, presented: usize) -> AssetLookup {
+        let Some(source) = self.talk_service.source_index(presented).await else {
+            return AssetLookup::Missing;
+        };
+        match self.ensure_thumbnails().await {
+            ThumbStatus::Ready => {}
+            ThumbStatus::Pending => return AssetLookup::NotReady,
+            // Distinguishable from "still working" by the caller, which is what
+            // stops the filmstrip polling for ever on a machine that will never
+            // produce a thumbnail.
+            ThumbStatus::Unavailable(_) => return AssetLookup::Missing,
+        }
+        self.thumbnail_service
+            .read_asset(&format!("thumb-{source:04}.png"))
             .await
     }
 

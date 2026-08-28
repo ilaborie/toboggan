@@ -36,6 +36,16 @@ struct LoadedTalk {
     source: Arc<Talk>,
     /// Reveal-step counts for `talk`, by index — so they line up with it.
     step_counts: Arc<[usize]>,
+    /// Where each presented slide sits in `source`, by presented index.
+    ///
+    /// The two lists are numbered differently on purpose, and the difference is
+    /// a trap: everything that presents counts over `talk`, while the slide
+    /// overview — an authoring view, which lists every slide and badges the
+    /// hidden ones — counts over `source`. Anything holding both a presented
+    /// index and an authored artefact needs this to cross between them, and the
+    /// presenter's filmstrip is exactly that: `Command::GoTo` speaks the first
+    /// index space and `thumb-NNNN.png` is named in the second.
+    source_indexes: Arc<[usize]>,
 }
 
 impl LoadedTalk {
@@ -46,10 +56,22 @@ impl LoadedTalk {
             .iter()
             .map(|slide| SlideStats::from_slide(slide).steps)
             .collect();
+        // The same predicate `visible_in` filters on, walked over the authored
+        // list so the positions that survive are recorded in order. Derived here
+        // rather than recomputed per request, for the reason `step_counts` is:
+        // a number that must line up with `talk` is safest computed beside it.
+        let source_indexes = talk
+            .slides
+            .iter()
+            .enumerate()
+            .filter(|(_, slide)| !slide.hidden_in.contains(&RenderTarget::Web))
+            .map(|(index, _)| index)
+            .collect();
         Self {
             talk: Arc::new(presented),
             source: Arc::new(talk),
             step_counts,
+            source_indexes,
         }
     }
 
@@ -156,6 +178,25 @@ impl TalkService {
     /// Returns the per-slide reveal-step counts, computed when the deck loaded.
     pub async fn step_counts(&self) -> Arc<[usize]> {
         Arc::clone(&self.talk.read().await.step_counts)
+    }
+
+    /// Where a presented slide sits in the deck as authored.
+    ///
+    /// `None` when `presented` is past the end.
+    ///
+    /// The two numbers differ because a `hidden_in = ["web"]` slide is dropped
+    /// from what is presented and kept in what was authored — so everything that
+    /// presents counts over one list, and the slide overview, which shows every
+    /// slide and badges the hidden ones, is named over the other. The presenter
+    /// view's slide grid holds both at once and needs this to cross between
+    /// them.
+    pub async fn source_index(&self, presented: usize) -> Option<usize> {
+        self.talk
+            .read()
+            .await
+            .source_indexes
+            .get(presented)
+            .copied()
     }
 
     /// Returns a clone of all slides

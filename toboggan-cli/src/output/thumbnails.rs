@@ -72,12 +72,36 @@ struct SlideEntry {
 }
 
 /// Renders one PNG per slide plus `overview.html` (and `search-index.json`) into
-/// `out_dir`.
+/// `out_dir`, drawing the thumbnails with Typst.
+///
+/// The two halves are also available separately — [`render_typst_thumbnails`]
+/// and [`write_overview_page`] — because the pictures and the page around them
+/// are no longer one decision: `toboggan-server` photographs the real deck in a
+/// headless browser and then writes the same page around the result.
 ///
 /// # Errors
 /// Returns an error if the output directory cannot be created, the `typst`
 /// binary is missing or fails, or the index/overview files cannot be written.
 pub fn generate_thumbnails(talk: &Talk, out_dir: &Path, options: &ThumbnailOptions) -> Result<()> {
+    render_typst_thumbnails(talk, out_dir, &options.mermaid)?;
+    write_overview_page(talk, out_dir, options)
+}
+
+/// Renders one `thumb-NNNN.png` per slide with Typst, and nothing else.
+///
+/// A second rendering of the deck, and a lossy one: Typst has no HTML, so a
+/// slide's `<style>`, its raw markup and its terminals do not survive the trip
+/// (see `output/typst.rs`). Kept as the fallback for a machine with no browser
+/// on it, where an approximate overview beats none.
+///
+/// # Errors
+/// Returns an error if the output directory cannot be created, or the `typst`
+/// binary is missing or fails.
+pub fn render_typst_thumbnails(
+    talk: &Talk,
+    out_dir: &Path,
+    mermaid: &MermaidRenderer,
+) -> Result<()> {
     std::fs::create_dir_all(out_dir)
         .map_err(|source| TobogganCliError::create_file(out_dir.to_path_buf(), source))?;
 
@@ -87,10 +111,26 @@ pub fn generate_thumbnails(talk: &Talk, out_dir: &Path, options: &ThumbnailOptio
     let root = super::typst::deck_root(talk);
     let slides_dir = talk.source_dir.as_deref().map(Path::new);
     for (index, slide) in talk.slides.iter().enumerate() {
-        let typst_source = super::typst::generate_thumbnail_typst(slide, &options.mermaid)?;
+        let typst_source = super::typst::generate_thumbnail_typst(slide, mermaid)?;
         let png = out_dir.join(format!("thumb-{index:04}.png"));
         compile_first_page_png(&typst_source, &png, root.as_deref(), slides_dir)?;
     }
+    Ok(())
+}
+
+/// Writes `overview.html` (and `search-index.json`) around thumbnails that are
+/// already there.
+///
+/// Knows nothing about how the pictures were made — only that slide N is
+/// `thumb-NNNN.png` — which is what lets the browser and Typst renderers share
+/// one page.
+///
+/// # Errors
+/// Returns an error if the output directory cannot be created or the
+/// index/overview files cannot be written.
+pub fn write_overview_page(talk: &Talk, out_dir: &Path, options: &ThumbnailOptions) -> Result<()> {
+    std::fs::create_dir_all(out_dir)
+        .map_err(|source| TobogganCliError::create_file(out_dir.to_path_buf(), source))?;
 
     let entries = build_entries(talk);
 
@@ -125,10 +165,29 @@ fn compile_first_page_png(
     // Alongside the slides when we know where they are, so a slide's relative
     // `#image("../public/…")` resolves the same way it does on disk; a temp dir
     // otherwise (a talk deserialized from `.toml` references no local files).
-    let input = slides_dir.map_or_else(
-        || dir.path().join("slide.typ"),
-        |slides| slides.join(".toboggan-thumb.typ"),
-    );
+    //
+    // A *unique* name, and a handle that removes it on drop, rather than the
+    // fixed `.toboggan-thumb.typ` this used to write. Two generations of the
+    // same deck could overlap — the server used to allow exactly that — and they
+    // then took turns writing and deleting one path: `typst` read a half-written
+    // document (`unclosed raw text`) or found none at all (`input file not
+    // found`). The service no longer runs two generations at once, but the
+    // scratch file is in the *user's* directory and a crash or a Ctrl-C between
+    // the write and the removal used to strand it there; `NamedTempFile` cleans
+    // up on every path out of this function, including a panic.
+    let scratch = slides_dir
+        .map(|slides| {
+            tempfile::Builder::new()
+                .prefix(".toboggan-thumb-")
+                .suffix(".typ")
+                .tempfile_in(slides)
+        })
+        .transpose()
+        .map_err(|source| TobogganCliError::create_file(png.to_path_buf(), source))?;
+    let input = match &scratch {
+        Some(file) => file.path().to_path_buf(),
+        None => dir.path().join("slide.typ"),
+    };
     std::fs::write(&input, typst_source)
         .map_err(|source| TobogganCliError::write_file(input.clone(), source))?;
 
@@ -144,15 +203,12 @@ fn compile_first_page_png(
         .output()
         .map_err(|err| TobogganCliError::typst(&err))?;
 
-    // Removed before the status is checked, not after. This scratch file is
-    // written into the user's own slides folder, and the cleanup used to sit
-    // below the early return — so the one case that leaves it behind was a
-    // failed compile, which is precisely the case where the user then finds an
-    // unexplained `.toboggan-thumb.typ` next to their slides.
-    //
+    // Closed before the status is checked, not after, so the one case that would
+    // leave a file behind is not the failed compile — precisely the case where
+    // the user then finds an unexplained scratch file next to their slides.
     // Best-effort, but not silent: the other two typst call sites already log.
-    if slides_dir.is_some()
-        && let Err(err) = std::fs::remove_file(&input)
+    if let Some(file) = scratch
+        && let Err(err) = file.close()
     {
         tracing::debug!("could not remove {}: {err}", input.display());
     }

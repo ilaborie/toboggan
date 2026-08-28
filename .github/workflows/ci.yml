@@ -70,6 +70,13 @@ jobs:
       # so dropping this step fails the test rather than quietly retiring it.
       - name: Install Typst
         uses: typst-community/setup-typst@v5
+      # `slide_shots` photographs a deck with it, and asserts it is present
+      # whenever `CI` is set — so a workflow that stops installing a browser
+      # fails here rather than quietly skipping the test.
+      - name: Install a browser
+        uses: browser-actions/setup-chrome@v2
+        with:
+          install-dependencies: true
 
       - name: Format (nightly)
         run: cargo +nightly fmt --all --check

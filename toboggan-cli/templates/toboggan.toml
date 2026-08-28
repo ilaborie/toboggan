@@ -101,6 +101,24 @@
 # `http://<your-ip>:8080/run?token=…`.
 # presenter-token = "change-me"
 
+[overview]
+# How the slide overview at /slides draws its thumbnails, and what
+# `toboggan thumbnails` writes.
+#
+#   auto     photograph the real deck in a headless browser when one can be
+#            found, and fall back to Typst when it cannot
+#   browser  photograph it, and fail rather than fall back — what you want in
+#            CI, where a silent switch to the approximate renderer changes how
+#            a published site looks
+#   typst    redraw the deck as a Typst document; needs the `typst` binary
+#            rather than a browser, and cannot render a slide's HTML, CSS or
+#            terminals
+# thumbnail-renderer = "auto"
+
+# Browser used to photograph the slides. Detected from $CHROME, your PATH and
+# the usual install locations for Chrome, Chromium and Edge when not set.
+# browser = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+
 [lint]
 # Severity at or above which `toboggan lint` exits non-zero: info, warning, error.
 # deny = "error"

@@ -76,7 +76,16 @@ pub async fn launch_with_talk(
     report_access_posture(host, port, &auth);
     let state = TobogganState::new(talk_service, client_service, terminal_shell.into())
         .with_auth(auth)
-        .with_mermaid(mermaid);
+        .with_mermaid(mermaid)
+        .with_overview(crate::OverviewOptions {
+            renderer: settings.thumbnail_renderer,
+            browser: settings.browser.clone(),
+            // The same `public/` the router serves, so a slide's pictures
+            // resolve in the private server the shots are taken against as well
+            // as in the one the room is looking at.
+            public_dir: settings.public_dir.clone(),
+            ..crate::OverviewOptions::default()
+        });
 
     // A pre-generated overview directory (`--thumbnails-dir`) seeds the cache as
     // ready; otherwise the overview is generated lazily on the first request.
@@ -137,6 +146,99 @@ pub async fn launch_with_talk(
     info!("Server shutdown complete");
 
     Ok(())
+}
+
+/// A throwaway server on a loopback port the OS picked.
+///
+/// What [`crate::shoot_slides`] photographs. A headless browser needs the deck
+/// over HTTP — the whole point of shooting `/run` is that the thumbnail
+/// and the slide are the same rendering — and it is the *live* server that wants
+/// thumbnails, so the obvious move is to point the browser at it. That would be
+/// wrong in three ways at once: the shots would show up in `/api/clients`, they
+/// would need whatever presenter token the live server was started with, and a
+/// server bound to `0.0.0.0` would be photographed over its public address.
+///
+/// A second, private server sidesteps all three, and gives the *offline* path —
+/// `toboggan thumbnails`, which has no server at all — exactly the same code.
+///
+/// It has no watcher, no `--open`, and no presenter token — which on loopback
+/// means every client presents — and it allows exactly one CORS origin, its own.
+/// Nothing drives it but the browser taking the pictures.
+///
+/// # Errors
+/// Returns an error if the loopback port cannot be bound, the talk service
+/// cannot be built, or the bundled `OpenAPI` document cannot be read.
+pub async fn serve_ephemeral(
+    talk: Talk,
+    mermaid: MermaidRenderer,
+    public_dir: Option<std::path::PathBuf>,
+) -> anyhow::Result<EphemeralServer> {
+    let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+        .await
+        .context("Binding an ephemeral loopback port")?;
+    let addr = listener.local_addr().context("Reading the bound address")?;
+
+    let talk_service = TalkService::new(talk).context("build talk service")?;
+    let state =
+        TobogganState::new(talk_service, ClientService::new(1), "sh".into()).with_mermaid(mermaid);
+    // Its own origin and no other. Nothing cross-origin is ever asked of this
+    // server — the page doing the asking is the page it served — and the `None`
+    // that would otherwise be natural here means *any* origin, which is both a
+    // warning in the log and a small open door on the author's own machine.
+    let own_origin = [format!("http://{addr}")];
+    let router =
+        routes_with_cors(Some(&own_origin), public_dir, create_openapi()?).with_state(state);
+
+    let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+    let serving = tokio::spawn(async move {
+        let served = axum::serve(
+            listener,
+            router.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        // A dropped sender resolves this too, so forgetting to `stop()` leaks
+        // the task only until the handle goes out of scope.
+        .with_graceful_shutdown(async move {
+            let _ = stopped.await;
+        })
+        .await;
+        if let Err(err) = served {
+            warn!(%err, "Ephemeral server stopped early");
+        }
+    });
+
+    info!(%addr, "Serving the deck privately for rendering");
+    Ok(EphemeralServer {
+        addr,
+        stop,
+        serving,
+    })
+}
+
+/// A running [`serve_ephemeral`]. Shuts down when dropped; `stop` waits for it.
+pub struct EphemeralServer {
+    addr: SocketAddr,
+    stop: tokio::sync::oneshot::Sender<()>,
+    serving: tokio::task::JoinHandle<()>,
+}
+
+impl EphemeralServer {
+    /// Where to point a browser.
+    #[must_use]
+    pub const fn addr(&self) -> SocketAddr {
+        self.addr
+    }
+
+    /// The origin to prefix a path with, e.g. `http://127.0.0.1:52341`.
+    #[must_use]
+    pub fn origin(&self) -> String {
+        format!("http://{}", self.addr)
+    }
+
+    /// Asks the server to stop and waits for it to.
+    pub async fn stop(self) {
+        let _ = self.stop.send(());
+        let _ = self.serving.await;
+    }
 }
 
 /// Says out loud who will be able to drive the deck.

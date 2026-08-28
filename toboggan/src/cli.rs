@@ -267,6 +267,41 @@ pub(crate) struct ServeOptions {
     /// machine always presents. Remote clients pass it as `?token=…`.
     #[arg(long, env = "TOBOGGAN_PRESENTER_TOKEN")]
     pub(crate) presenter_token: Option<Secret>,
+
+    #[command(flatten)]
+    pub(crate) overview: OverviewOptions,
+}
+
+/// How `/slides` and `toboggan thumbnails` draw their pictures.
+///
+/// Shared by the serving commands and `thumbnails`, because the overview a deck
+/// publishes and the overview its author browses while writing it should not be
+/// two different renderings.
+#[derive(Debug, Clone, Args)]
+pub(crate) struct OverviewOptions {
+    /// How to draw the slide overview's thumbnails
+    ///
+    /// `auto` photographs the real deck in a headless browser when one can be
+    /// found, and falls back to Typst when it cannot. `browser` fails instead of
+    /// falling back — the right choice for CI, where a silent switch to the
+    /// approximate renderer changes how a published site looks.
+    #[arg(long, value_enum, env = "TOBOGGAN_THUMBNAIL_RENDERER")]
+    pub(crate) thumbnail_renderer: Option<toboggan_server::ThumbnailRenderer>,
+
+    /// Browser binary used to photograph slides (Chrome, Chromium or Edge)
+    ///
+    /// Detected from `CHROME`, the `PATH` and the usual install locations when
+    /// not given.
+    #[arg(long, env = "TOBOGGAN_BROWSER", value_hint = ValueHint::FilePath)]
+    pub(crate) browser: Option<PathBuf>,
+}
+
+impl OverviewOptions {
+    /// Fills unset options from the config file's `[overview]` table.
+    pub(crate) fn merge(&mut self, config: config::OverviewConfig) {
+        self.thumbnail_renderer = self.thumbnail_renderer.or(config.thumbnail_renderer);
+        self.browser = self.browser.take().or(config.browser);
+    }
 }
 
 impl ServeOptions {
@@ -301,6 +336,8 @@ impl ServeOptions {
             open: self.open,
             open_presenter: self.open_presenter,
             presenter_token: self.presenter_token,
+            thumbnail_renderer: self.overview.thumbnail_renderer.unwrap_or_default(),
+            browser: self.overview.browser,
         }
     }
 }
@@ -417,6 +454,7 @@ impl DefaultArgs {
             // The default action serves the deck, so its overview is the
             // server's, not a static site's.
             static_links: false,
+            overview: self.serve.overview,
             build: self.build,
         }
     }
@@ -794,6 +832,9 @@ pub(crate) struct ThumbnailsArgs {
     /// only exists while `toboggan` is serving the deck.
     #[arg(long)]
     pub(crate) static_links: bool,
+
+    #[command(flatten)]
+    pub(crate) overview: OverviewOptions,
 
     #[command(flatten)]
     pub(crate) build: BuildOptions,

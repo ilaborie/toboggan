@@ -74,6 +74,11 @@ pub fn routes_with_cors(
         )
         // Slide overview: lazily generated on first hit, served from the cache.
         .route("/slides", get(pages::overview::slides_page))
+        // Before the catch-all below, which would otherwise swallow it.
+        .route(
+            "/overview/slide/{index}",
+            get(pages::overview::presented_thumbnail),
+        )
         .route("/overview/{*path}", get(pages::overview::overview_asset))
         .merge(Scalar::with_url("/doc", openapi));
 
