@@ -99,6 +99,49 @@ pub fn routes_with_cors(
     router.layer(cors).layer(TraceLayer::new_for_http())
 }
 
+/// The routes a shot page needs, and nothing else.
+///
+/// [`crate::serve_ephemeral`] handed the photographer [`routes_with_cors`], the
+/// whole thing. On loopback every client is granted the presenter role
+/// (`crate::auth`) and a request with no `Origin` header passes `guard_origin`
+/// as "not a browser" — so for the length of a shot run, any other process on
+/// the machine could `GET /api/terminal` and be given a shell. `toboggan
+/// thumbnails` opened no socket at all before this feature, and it now runs on
+/// CI runners and shared machines.
+///
+/// The shot page (`toboggan-wasm`'s `components/shot`) asks for the talk, one
+/// slide, the page itself and the deck's pictures. That is what this serves.
+/// Nothing here moves the deck, names who is connected, opens a shell or spawns
+/// `typst`, so there is no privileged group and no `guard_origin` to apply.
+pub fn routes_for_shots(
+    allowed_origins: Option<&[String]>,
+    assets_dir: Option<PathBuf>,
+) -> Router<TobogganState> {
+    let mut router = Router::new()
+        .nest(
+            "/api",
+            Router::new()
+                .route("/talk", get(api::get_talk))
+                .route("/slides", get(api::get_slides))
+                .route("/slides/{index}", get(api::get_slide_by_index)),
+        )
+        .route("/run", get(pages::run_app));
+
+    if let Some(assets_dir) = assets_dir {
+        router = router.nest("/public", public_assets(assets_dir));
+    }
+
+    // `/run` is an HTML entry point that pulls the wasm bundle and its CSS from
+    // the embedded assets; without the fallback the page answers 200 and never
+    // boots, which the driver would report as "slide N never finished
+    // rendering".
+    router = router.fallback(serve_embedded_web_assets);
+
+    router
+        .layer(create_cors_layer(allowed_origins))
+        .layer(TraceLayer::new_for_http())
+}
+
 /// Serves the deck's own `public/` directory, always revalidated.
 ///
 /// These assets are author-editable and unhashed, so a stylesheet edited during
@@ -206,6 +249,13 @@ mod tests {
         let talk_service = TalkService::new(talk).expect("build talk service");
         let state = TobogganState::new(talk_service, ClientService::new(100), "sh".into());
         routes(None, OpenApi::default()).with_state(state)
+    }
+
+    fn shot_router() -> Router {
+        let talk = Talk::new("Test Talk").add_slide(Slide::cover("Cover"));
+        let talk_service = TalkService::new(talk).expect("build talk service");
+        let state = TobogganState::new(talk_service, ClientService::new(1), "sh".into());
+        routes_for_shots(None, None).with_state(state)
     }
 
     /// Builds a request as if it had arrived over TCP from `peer`.
@@ -474,5 +524,86 @@ mod tests {
             response.headers().contains_key(header::ETAG),
             "ServeDir should still send an ETag to revalidate against"
         );
+    }
+
+    /// The shot server runs on loopback, where every client is granted the
+    /// presenter role — so the gate that stops [`the_network_cannot_open_a_shell`]
+    /// does not apply to it, and the full router would have handed a shell to
+    /// any local process that found the port. The narrow router does not carry
+    /// the route at all, which is the only answer that does not depend on the
+    /// gate.
+    #[tokio::test]
+    async fn a_shot_server_has_no_shell_to_open() {
+        let response = shot_router()
+            .oneshot(request_from(
+                LOCAL,
+                Request::get("/api/terminal?cmd=id")
+                    .body(Body::empty())
+                    .expect("build request"),
+            ))
+            .await
+            .expect("serve request");
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// Same reasoning for everything else privileged: nothing photographing a
+    /// deck needs to drive it, learn who is connected, or spawn `typst`.
+    #[tokio::test]
+    async fn a_shot_server_serves_nothing_privileged() {
+        for path in ["/api/clients", "/api/ws", "/download.pdf", "/presenter"] {
+            let response = shot_router()
+                .oneshot(request_from(
+                    LOCAL,
+                    Request::get(path)
+                        .body(Body::empty())
+                        .expect("build request"),
+                ))
+                .await
+                .expect("serve request");
+
+            assert_eq!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{path} is reachable on the shot server"
+            );
+        }
+
+        let command = serde_json::to_vec(&Command::NextSlide).expect("serialize command");
+        let response = shot_router()
+            .oneshot(request_from(
+                LOCAL,
+                Request::post("/api/command")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(command))
+                    .expect("build request"),
+            ))
+            .await
+            .expect("serve request");
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// …and the four things it does need still answer, or every shot is a
+    /// thirty-second timeout.
+    #[tokio::test]
+    async fn a_shot_server_still_serves_the_deck() {
+        for path in ["/api/talk", "/api/slides", "/api/slides/0", "/run"] {
+            let response = shot_router()
+                .oneshot(request_from(
+                    LOCAL,
+                    Request::get(path)
+                        .body(Body::empty())
+                        .expect("build request"),
+                ))
+                .await
+                .expect("serve request");
+
+            assert_eq!(
+                response.status(),
+                StatusCode::OK,
+                "{path} does not answer on the shot server"
+            );
+        }
     }
 }

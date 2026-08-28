@@ -29,7 +29,7 @@ mod state;
 pub use self::state::*;
 
 mod router;
-pub use self::router::{routes, routes_with_cors};
+pub use self::router::{routes, routes_for_shots, routes_with_cors};
 
 mod watcher;
 pub use self::watcher::*;

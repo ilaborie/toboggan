@@ -10,7 +10,7 @@ use utoipa::openapi::OpenApi;
 
 use crate::{
     ClientService, PresenterAuth, ServerSettings, Settings, TalkService, TobogganState,
-    WatchConfig, WatchTarget, routes_with_cors, start_watch_task,
+    WatchConfig, WatchTarget, routes_for_shots, routes_with_cors, start_watch_task,
 };
 
 /// Loads the talk from `settings.talk` and serves it.
@@ -153,21 +153,29 @@ pub async fn launch_with_talk(
 /// What [`crate::shoot_slides`] photographs. A headless browser needs the deck
 /// over HTTP — the whole point of shooting `/run` is that the thumbnail
 /// and the slide are the same rendering — and it is the *live* server that wants
-/// thumbnails, so the obvious move is to point the browser at it. That would be
-/// wrong in three ways at once: the shots would show up in `/api/clients`, they
-/// would need whatever presenter token the live server was started with, and a
-/// server bound to `0.0.0.0` would be photographed over its public address.
+/// thumbnails, so the obvious move is to point the browser at it.
+///
+/// It cannot be. The live server serves the deck *as presented*, with
+/// `hidden_in = ["web"]` slides dropped and the rest renumbered, while
+/// `thumb-NNNN.png` is named over the deck *as authored* — so photographing by
+/// index through it reads the wrong slide for every index past a hidden one, and
+/// no amount of care at the call site fixes that. A private server can be handed
+/// the unfiltered talk instead; see `shots::shootable`. Two lesser reasons come
+/// free: a server bound to `0.0.0.0` would be photographed over its public
+/// address, and forty-four navigations would go through the room's own server
+/// while a talk is running.
 ///
 /// A second, private server sidesteps all three, and gives the *offline* path —
 /// `toboggan thumbnails`, which has no server at all — exactly the same code.
 ///
-/// It has no watcher, no `--open`, and no presenter token — which on loopback
-/// means every client presents — and it allows exactly one CORS origin, its own.
-/// Nothing drives it but the browser taking the pictures.
+/// It has no watcher and no `--open`, allows exactly one CORS origin (its own),
+/// and serves [`routes_for_shots`] rather than the full router — on loopback
+/// every client is a presenter, so the shell behind `/api/terminal` would
+/// otherwise be a port-scan away for as long as the shots take.
 ///
 /// # Errors
 /// Returns an error if the loopback port cannot be bound, the talk service
-/// cannot be built, or the bundled `OpenAPI` document cannot be read.
+/// cannot be built.
 pub async fn serve_ephemeral(
     talk: Talk,
     mermaid: MermaidRenderer,
@@ -186,8 +194,7 @@ pub async fn serve_ephemeral(
     // that would otherwise be natural here means *any* origin, which is both a
     // warning in the log and a small open door on the author's own machine.
     let own_origin = [format!("http://{addr}")];
-    let router =
-        routes_with_cors(Some(&own_origin), public_dir, create_openapi()?).with_state(state);
+    let router = routes_for_shots(Some(&own_origin), public_dir).with_state(state);
 
     let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
     let serving = tokio::spawn(async move {
@@ -429,5 +436,73 @@ mod tests {
             browse_url(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080, "presenter"),
             "http://127.0.0.1:8080/presenter"
         );
+    }
+
+    /// The shot server is the one place the presenter gate cannot help: it lives
+    /// on loopback, where every client is granted the presenter role. It used to
+    /// be handed the full router, so for as long as a deck took to photograph,
+    /// any other process on the machine that found the port could ask it for a
+    /// shell. Driven against a real socket rather than the router value, so that
+    /// pointing `serve_ephemeral` back at the full router fails here too.
+    #[tokio::test]
+    #[allow(clippy::expect_used)]
+    async fn a_shot_server_offers_the_deck_and_nothing_else() {
+        use toboggan_core::Slide;
+
+        let talk = Talk::new("Shot Deck").add_slide(Slide::cover("Cover"));
+        let server = serve_ephemeral(talk, MermaidRenderer::default(), None)
+            .await
+            .expect("start the ephemeral server");
+
+        for path in [
+            "/api/terminal?cmd=id",
+            "/api/clients",
+            "/download.pdf",
+            "/presenter",
+        ] {
+            assert_eq!(
+                status_of(server.addr(), path).await,
+                404,
+                "{path} is reachable on the shot server"
+            );
+        }
+        // …while what the shot page asks for still answers.
+        for path in ["/api/talk", "/api/slides/0", "/run"] {
+            assert_eq!(
+                status_of(server.addr(), path).await,
+                200,
+                "{path} does not answer on the shot server"
+            );
+        }
+
+        server.stop().await;
+    }
+
+    /// One request over a real socket, without pulling in an HTTP client.
+    #[allow(clippy::expect_used)]
+    async fn status_of(addr: SocketAddr, path: &str) -> u16 {
+        use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+
+        let mut stream = tokio::net::TcpStream::connect(addr)
+            .await
+            .expect("connect to the ephemeral server");
+        let request =
+            format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+        stream
+            .write_all(request.as_bytes())
+            .await
+            .expect("send the request");
+
+        let mut response = Vec::new();
+        stream
+            .read_to_end(&mut response)
+            .await
+            .expect("read the response");
+        String::from_utf8_lossy(&response)
+            .split_whitespace()
+            .nth(1)
+            .expect("a status line")
+            .parse()
+            .expect("a status code")
     }
 }

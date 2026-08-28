@@ -2,8 +2,9 @@
 //!
 //! Thumbnails are generated lazily on the first `/slides` hit (see
 //! [`crate::services::ThumbnailService`]). While generation is in flight the page
-//! auto-refreshes; if `typst` is unavailable it shows a clean explanation instead
-//! of a server error.
+//! auto-refreshes; when neither renderer can draw them — no browser *and* no
+//! `typst`, or one of them failing — it shows a clean explanation instead of a
+//! server error.
 
 use axum::extract::{Path, State};
 use axum::http::{StatusCode, header};
@@ -134,9 +135,13 @@ fn unavailable_page(reason: &str) -> String {
     <div style="font-size:3rem">🛝</div>
     <h1>Slide overview unavailable</h1>
     <p class="muted">{reason}</p>
-    <p>Install the <a href="https://typst.app/">typst</a> binary, then reload. The
-       presentation itself is unaffected — <a href="/run">run it</a> or return to the
-       <a href="/">homepage</a>.</p>
+    <p>Thumbnails are photographed in a headless browser, and redrawn with
+       <a href="https://typst.app/">typst</a> where none can be found. Install
+       Chrome, Chromium or Edge — or <code>typst</code> — then restart
+       <code>toboggan</code>, or save a slide if it is watching the folder.
+       Reloading this page alone will not retry.</p>
+    <p>The presentation itself is unaffected — <a href="/run">run it</a> or return
+       to the <a href="/">homepage</a>.</p>
   </div>
 </body>
 </html>"#,

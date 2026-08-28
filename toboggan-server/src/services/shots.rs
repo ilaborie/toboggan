@@ -199,8 +199,12 @@ fn usable(path: &Path) -> bool {
 /// Photographs every slide of `talk` into `out_dir` as `thumb-NNNN.png`.
 ///
 /// One file per slide over the FULL slide list, no render-target filtering, so
-/// page N is slide N — the overview's click-to-run targets are indexes into
-/// `/api/slides` and must stay aligned with it.
+/// `thumb-NNNN.png` is slide N of the deck *as authored* — which is what the
+/// overview's cards are numbered over, and what `shootable` exists to keep
+/// true. It is deliberately **not** aligned with `/api/slides`, which on the
+/// live server lists the deck *as presented*, with `hidden_in = ["web"]` slides
+/// dropped and the rest renumbered; the server crosses between the two behind
+/// `GET /overview/slide/{index}`.
 ///
 /// # Errors
 /// Returns [`ShotFailure::NoBrowser`] if none can be started, and
