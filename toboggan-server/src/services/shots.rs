@@ -100,9 +100,39 @@ pub struct ShotOptions {
 #[must_use]
 pub fn find_browser(browser: Option<&Path>) -> Option<PathBuf> {
     if let Some(path) = browser {
-        return usable(path).then(|| path.to_path_buf());
+        return resolve_on_path(path).filter(|path| usable(path));
     }
-    candidates().into_iter().find(|path| usable(path))
+    candidates()
+        .into_iter()
+        .filter_map(|candidate| resolve_on_path(&candidate))
+        .find(|path| usable(path))
+}
+
+/// Turns a bare candidate name into the absolute path it runs from.
+///
+/// `usable` proves a candidate runs by spawning it, and `std::process::Command`
+/// searches `PATH` — but what we return is handed to chromiumoxide, which
+/// canonicalizes it against the *current directory* before launching it
+/// (`Browser::launch`). A bare `chrome` therefore answered `--version` and then
+/// failed to launch with `ENOENT`, on every machine whose browser is on the
+/// `PATH` rather than at one of the absolute locations in [`candidates_from`] —
+/// which on Linux is every machine, since the bare names are tried first.
+///
+/// Resolving before `usable` rather than after also stops a name that is
+/// nowhere on the `PATH` from costing a process spawn to rule out.
+fn resolve_on_path(candidate: &Path) -> Option<PathBuf> {
+    // Anything with a directory part is already the answer, resolvable or not:
+    // an explicit `--browser` that is wrong must stay wrong. See `find_browser`.
+    if candidate
+        .parent()
+        .is_some_and(|parent| !parent.as_os_str().is_empty())
+    {
+        return Some(candidate.to_path_buf());
+    }
+
+    std::env::split_paths(&std::env::var_os("PATH")?)
+        .map(|dir| dir.join(candidate))
+        .find(|path| path.is_file())
 }
 
 /// Every browser worth trying, best first.
@@ -438,6 +468,25 @@ mod tests {
         let echo = Path::new("/bin/echo");
         assert!(usable(echo));
         assert_eq!(find_browser(Some(echo)), Some(echo.to_path_buf()));
+    }
+
+    /// The winning candidate is launched by chromiumoxide, which canonicalizes
+    /// it against the current directory — so a name only `PATH` can resolve has
+    /// to be resolved here. It was not: `chrome --version` succeeded, and the
+    /// launch that followed failed with `ENOENT`.
+    #[test]
+    fn a_bare_name_comes_back_as_the_absolute_path_it_runs_from() {
+        let found = find_browser(Some(Path::new("echo"))).expect("echo is on the PATH");
+
+        assert!(found.is_absolute(), "{} is not absolute", found.display());
+        assert!(found.ends_with("echo"), "{} is not echo", found.display());
+    }
+
+    /// A bare name nothing on the `PATH` provides is not a browser — and costs
+    /// no process spawn to say so.
+    #[test]
+    fn a_bare_name_on_no_path_entry_is_not_a_browser() {
+        assert_eq!(find_browser(Some(Path::new("not-a-real-browser"))), None);
     }
 
     /// `CHROME` is how a caller says "this one", so it is asked first.
