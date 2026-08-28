@@ -17,6 +17,7 @@ use std::sync::Arc;
 use tempfile::TempDir;
 use toboggan_cli::mermaid::MermaidRenderer;
 use tokio::sync::RwLock;
+use tokio::task::JoinError;
 use tracing::{error, info, warn};
 
 use super::{OverviewOptions, TalkService, generate_overview};
@@ -243,47 +244,80 @@ impl ThumbnailService {
         options: Arc<OverviewOptions>,
         epoch: u64,
     ) {
-        let inner = self.inner.clone();
+        let service = self.clone();
         tokio::spawn(async move {
-            let talk = talk_service.source_talk().await;
-            let result = generate(&talk, &mermaid, &options).await;
-
-            let mut guard = inner.write().await;
-            // Someone else owns the slot (a seeded external directory, say);
-            // leave it entirely alone.
-            if !matches!(&guard.state, ThumbState::Generating) {
-                return;
-            }
-            // A reload (invalidate) bumps the epoch. Our result describes the
-            // previous talk, so it is dropped — but the slot has to be handed
-            // back, because `invalidate` no longer does it for us: it now leaves
-            // an in-flight generation alone precisely so a second one cannot
-            // start beside it. Releasing to `Idle` here is what lets the next
-            // request regenerate against the current talk; returning without it
-            // pinned the page on "generating…" for the life of the process.
-            if guard.epoch != epoch {
-                guard.state = ThumbState::Idle;
-                return;
-            }
-            guard.state = match result {
-                Ok(dir) => {
-                    info!("generated slide-overview thumbnails");
-                    ThumbState::Ready(Source::Owned(Arc::new(dir)))
-                }
-                Err(err) => {
-                    error!("thumbnail generation failed: {err:?}");
-                    ThumbState::Unavailable(unavailable_message(&err))
-                }
-            };
+            // The work runs in a task of its own so that a panic anywhere on the
+            // async path — chromiumoxide, the CDP pump, `tempfile` — arrives
+            // here as a `JoinError` instead of unwinding this task. Unwinding
+            // would skip the commit below and leave the slot on `Generating`,
+            // which `invalidate` deliberately does not reset, so `/slides` would
+            // sit on "generating…" for the life of the process with no way back.
+            // The pre-photograph code got this from `spawn_blocking`'s
+            // `JoinError` and it was lost when the work became async.
+            let outcome =
+                tokio::spawn(async move { generate(&talk_service, &mermaid, &options).await })
+                    .await;
+            service.finish(epoch, outcome).await;
         });
+    }
+
+    /// Puts a finished generation into the slot, or decides not to.
+    ///
+    /// Separate from [`Self::spawn`] so the three rules it encodes — someone
+    /// else owns the slot, the epoch moved on, the renderer never came back —
+    /// can be tested without a browser or a `typst`.
+    async fn finish(&self, epoch: u64, outcome: Result<anyhow::Result<TempDir>, JoinError>) {
+        let mut guard = self.inner.write().await;
+
+        // Someone else owns the slot (a seeded external directory, say); leave
+        // it entirely alone.
+        if !matches!(&guard.state, ThumbState::Generating) {
+            return;
+        }
+        // A reload (invalidate) bumps the epoch. Our result describes the
+        // previous talk, so it is dropped — but the slot has to be handed back,
+        // because `invalidate` no longer does it for us: it now leaves an
+        // in-flight generation alone precisely so a second one cannot start
+        // beside it. Releasing to `Idle` here is what lets the next request
+        // regenerate against the current talk; returning without it pinned the
+        // page on "generating…" for the life of the process.
+        if guard.epoch != epoch {
+            guard.state = ThumbState::Idle;
+            return;
+        }
+
+        guard.state = match outcome {
+            Ok(Ok(dir)) => {
+                info!("generated slide-overview thumbnails");
+                ThumbState::Ready(Source::Owned(Arc::new(dir)))
+            }
+            Ok(Err(err)) => {
+                error!("thumbnail generation failed: {err:?}");
+                ThumbState::Unavailable(unavailable_message(&err))
+            }
+            // A panic is our bug, not a missing renderer, so it does not get
+            // `unavailable_message`'s "is a browser installed?" advice. Recorded
+            // as `Unavailable` rather than `Idle` so the page says something
+            // instead of retrying a crash every two seconds; a reload clears it.
+            Err(err) => {
+                error!("thumbnail generation did not finish: {err}");
+                ThumbState::Unavailable(
+                    "Slide thumbnails could not be generated: the renderer stopped \
+                     unexpectedly. This is a bug in toboggan — please report it."
+                        .to_owned(),
+                )
+            }
+        };
     }
 }
 
 async fn generate(
-    talk: &toboggan_core::Talk,
+    talk_service: &TalkService,
     mermaid: &MermaidRenderer,
     options: &OverviewOptions,
 ) -> anyhow::Result<TempDir> {
+    let talk = talk_service.source_talk().await;
+    let talk = &talk;
     let dir = tempfile::tempdir()?;
     let drawn = generate_overview(talk, mermaid, dir.path(), options).await?;
     // The log is all the server has: nobody is watching a terminal for `/slides`.
@@ -298,4 +332,114 @@ fn unavailable_message(err: &anyhow::Error) -> String {
         "Slide thumbnails could not be generated (is a browser, or the `typst` binary, \
          installed?): {err}"
     )
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use super::*;
+
+    /// A real [`JoinError`], which is the only way to get one: the type cannot
+    /// be constructed from outside tokio.
+    async fn a_panicking_task() -> JoinError {
+        // The panic is deliberate, so keep its backtrace out of the test output.
+        let hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let err = tokio::spawn(async { panic!("the renderer fell over") })
+            .await
+            .expect_err("the task panicked");
+        std::panic::set_hook(hook);
+        err
+    }
+
+    /// Puts the service in the state a spawned generation leaves behind.
+    async fn generating() -> ThumbnailService {
+        let service = ThumbnailService::new();
+        service.inner.write().await.state = ThumbState::Generating;
+        service
+    }
+
+    async fn status(service: &ThumbnailService) -> Option<ThumbStatus> {
+        service.snapshot().await
+    }
+
+    /// The trap this fix exists for. A panic on the async path used to unwind
+    /// the task that owned the slot, so nothing ever moved it off `Generating` —
+    /// and `invalidate` leaves `Generating` alone by design, so no reload could
+    /// free it either. `/slides` then refreshed itself every two seconds for the
+    /// life of the process.
+    #[tokio::test]
+    async fn a_generation_that_panics_releases_the_slot() {
+        let service = generating().await;
+
+        service.finish(0, Err(a_panicking_task().await)).await;
+
+        match status(&service).await {
+            Some(ThumbStatus::Unavailable(reason)) => {
+                assert!(
+                    reason.contains("stopped unexpectedly"),
+                    "a panic is a bug, not a missing renderer: {reason}"
+                );
+                // Specifically *not* the "is a browser installed?" advice, which
+                // would send the reader after a renderer that is present.
+                assert!(!reason.contains("installed?"), "wrong advice: {reason}");
+            }
+            _ => panic!("the slot is still held by a generation that will never finish"),
+        }
+    }
+
+    /// And having said so, it can recover: `invalidate` clears `Unavailable`, so
+    /// the next request generates again rather than being told about a crash
+    /// that happened before the deck was fixed.
+    #[tokio::test]
+    async fn a_reload_after_a_panic_lets_the_next_request_try_again() {
+        let service = generating().await;
+        service.finish(0, Err(a_panicking_task().await)).await;
+
+        service.invalidate().await;
+
+        assert!(
+            status(&service).await.is_none(),
+            "a reload should hand the slot back as Idle"
+        );
+    }
+
+    /// A reload during a generation bumps the epoch, so the result describes a
+    /// talk that no longer exists. It is dropped — but the slot must come back,
+    /// or the next request has nothing to take.
+    #[tokio::test]
+    async fn a_result_from_before_a_reload_is_dropped_and_the_slot_freed() {
+        let service = generating().await;
+        service.invalidate().await;
+
+        service
+            .finish(0, Ok(Ok(tempfile::tempdir().expect("temp dir"))))
+            .await;
+
+        assert!(
+            status(&service).await.is_none(),
+            "a stale result should leave the slot Idle, not Ready or Generating"
+        );
+    }
+
+    /// An operator's `--thumbnails-dir` owns the slot. A generation that was
+    /// already running when it was seeded must not replace it.
+    #[tokio::test]
+    async fn a_generation_never_overwrites_an_external_directory() {
+        let service = generating().await;
+        let external = tempfile::tempdir().expect("temp dir");
+        std::fs::write(external.path().join(OVERVIEW_ENTRY), "<html></html>")
+            .expect("write overview");
+        service.seed_external(external.path().to_path_buf()).await;
+
+        service
+            .finish(0, Ok(Ok(tempfile::tempdir().expect("temp dir"))))
+            .await;
+
+        let inner = service.inner.read().await;
+        assert!(
+            matches!(&inner.state, ThumbState::Ready(Source::External(path)) if path == external.path()),
+            "the operator's directory was replaced by a generated one"
+        );
+    }
 }
