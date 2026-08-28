@@ -214,6 +214,7 @@ impl Config {
         fill!(self, weaker, path, default_command);
         self.build.fill_from(weaker.build);
         self.serve.fill_from(weaker.serve);
+        self.overview.fill_from(weaker.overview);
         self.lint.fill_from(weaker.lint);
     }
 
@@ -262,6 +263,12 @@ impl ServeConfig {
             open_presenter,
             presenter_token,
         );
+    }
+}
+
+impl OverviewConfig {
+    fn fill_from(&mut self, weaker: Self) {
+        fill!(self, weaker, thumbnail_renderer, browser);
     }
 }
 

@@ -31,9 +31,14 @@ mod tests {
         write(
             root.path(),
             "toboggan.toml",
-            "[build]\ntheme = \"house-style\"\nwpm = 130\n[serve]\nport = 1111\n",
+            "[build]\ntheme = \"house-style\"\nwpm = 130\n[serve]\nport = 1111\n\
+             [overview]\nthumbnail-renderer = \"browser\"\nbrowser = \"/opt/chrome\"\n",
         );
-        write(&deck, "toboggan.toml", "[serve]\nport = 9999\n");
+        write(
+            &deck,
+            "toboggan.toml",
+            "[serve]\nport = 9999\n[overview]\nthumbnail-renderer = \"typst\"\n",
+        );
 
         let config = load_layers(&deck, None).expect("load");
 
@@ -42,6 +47,17 @@ mod tests {
         // It says nothing about the theme or wpm, which fall through.
         assert_eq!(config.build.theme.as_deref(), Some("house-style"));
         assert_eq!(config.build.wpm, Some(130));
+        // `[overview]` layers like every other table. It was left out of
+        // `fill_from` entirely, so *every* config file's `[overview]` was
+        // dropped on the floor before it ever reached a command.
+        assert_eq!(
+            config.overview.thumbnail_renderer,
+            Some(toboggan_server::ThumbnailRenderer::Typst)
+        );
+        assert_eq!(
+            config.overview.browser.as_deref(),
+            Some(Path::new("/opt/chrome"))
+        );
     }
 
     #[test]
