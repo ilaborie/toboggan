@@ -74,10 +74,17 @@ const SHOT_HEIGHT: u32 = 720;
 const SHOT_SCALE: f64 = 0.5;
 
 /// Where the browser comes from, and what it is pointed at.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ShotOptions {
-    /// An explicit browser binary, overriding detection.
-    pub browser: Option<PathBuf>,
+    /// The browser to photograph with, already found.
+    ///
+    /// Resolved by [`ThumbnailRenderer::resolve`] and carried here, rather than
+    /// detected again at launch. Detection costs a `--version` per candidate, and
+    /// running it twice is not just slow: the two answers are separate questions
+    /// asked of a filesystem that can change between them.
+    ///
+    /// [`ThumbnailRenderer::resolve`]: super::ThumbnailRenderer::resolve
+    pub browser: PathBuf,
     /// The deck's `public/` directory, so a slide's `<img src="/public/…">`
     /// resolves. Without it every deck picture is photographed as a broken
     /// image icon.
@@ -424,16 +431,12 @@ async fn launch(
         // containers CI runs in.
         .no_sandbox();
 
-    // Resolved here rather than left to the library's own detection, which
-    // believes the first candidate that exists on disk. See `find_browser`.
-    let executable = find_browser(options.browser.as_deref()).ok_or_else(|| {
-        anyhow::anyhow!(
-            "no Chrome, Chromium or Edge could be started for rendering slide thumbnails. \
-             Install one, set CHROME, or pass --browser"
-        )
-    })?;
+    // Already found, by `ThumbnailRenderer::resolve`. Set explicitly all the
+    // same, because the library's own detection believes the first candidate
+    // that exists on disk — see `find_browser` for why that is not enough.
+    let executable = &options.browser;
     let config = config
-        .chrome_executable(&executable)
+        .chrome_executable(executable)
         .build()
         .map_err(|err| anyhow::anyhow!("{}: {err}", executable.display()))?;
 

@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use toboggan_server::{OverviewOptions, ThumbnailRenderer, find_browser, generate_overview};
+use toboggan_server::{OverviewOptions, ResolvedRenderer, ThumbnailRenderer, generate_overview};
 
 /// What the caller asked for, beyond the deck itself.
 pub(crate) struct Options {
@@ -29,11 +29,16 @@ pub(crate) async fn generate(
     mut settings: toboggan_cli::Settings,
     options: Options,
 ) -> anyhow::Result<()> {
-    let renderer = options.renderer.unwrap_or_default();
-    // Checked before the deck is parsed, so "install typst" is not preceded by
+    // Decided before the deck is parsed, so "install typst" is not preceded by
     // ten seconds of work that is about to be thrown away. Only the Typst path
-    // needs it; the browser path is checked when the browser is launched.
-    if uses_typst(renderer, options.browser.as_deref()) {
+    // needs the binary; the browser path is checked when the browser is
+    // launched.
+    let renderer = options.renderer.unwrap_or_default();
+    let resolved = renderer.resolve(options.browser.as_deref()).await?;
+    if matches!(
+        resolved,
+        ResolvedRenderer::Typst | ResolvedRenderer::TypstInstead(_)
+    ) {
         super::ensure_typst()?;
     }
 
@@ -45,8 +50,16 @@ pub(crate) async fn generate(
 
     let out_dir = options.output.unwrap_or_else(|| PathBuf::from("overview"));
     let overview = OverviewOptions {
+        // The mode is passed through unchanged — it is what decides whether a
+        // browser that will not launch may fall back, and `generate_overview`
+        // owns that. What the decision above saves is the *search*: naming the
+        // browser it found leaves that call a single `--version` instead of
+        // another sweep of every candidate.
         renderer,
-        browser: options.browser,
+        browser: match resolved {
+            ResolvedRenderer::Photograph(browser) => Some(browser),
+            ResolvedRenderer::Typst | ResolvedRenderer::TypstInstead(_) => options.browser,
+        },
         // The deck's own pictures: without this the private server has no
         // `/public/`, and every `<img>` is photographed as a broken image.
         public_dir: deck.public,
@@ -71,17 +84,4 @@ pub(crate) async fn generate(
         drawn.describe(),
     );
     Ok(())
-}
-
-/// Whether this run will shell out to `typst`.
-///
-/// `auto` only will if no browser turns up, which is the same question
-/// [`generate_overview`] asks itself later — asked here too so the failure
-/// arrives before the deck is parsed rather than after.
-fn uses_typst(renderer: ThumbnailRenderer, browser: Option<&Path>) -> bool {
-    match renderer {
-        ThumbnailRenderer::Typst => true,
-        ThumbnailRenderer::Browser => false,
-        ThumbnailRenderer::Auto => find_browser(browser).is_none(),
-    }
 }

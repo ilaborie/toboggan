@@ -7,6 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
+use anyhow::{Context as _, bail};
 use serde::Deserialize;
 use toboggan_cli::mermaid::MermaidRenderer;
 use toboggan_cli::output::{ThumbnailOptions, render_typst_thumbnails, write_overview_page};
@@ -34,6 +35,57 @@ pub enum ThumbnailRenderer {
     /// Needs the `typst` binary rather than a browser, and cannot render a
     /// deck's HTML, CSS or terminals.
     Typst,
+}
+
+/// The renderer choice once it has been made, with the browser it will use.
+///
+/// [`ThumbnailRenderer`] is what the *caller asked for*; this is what will
+/// actually happen, and it is reached by running browser detection exactly once.
+/// The question used to be asked three times over — by the CLI's pre-flight
+/// check, by `render_thumbnails`, and again inside `shots::launch` — each
+/// spawning a `--version` per candidate, and each free to come back with a
+/// different answer than the last.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolvedRenderer {
+    /// Photograph the deck, with this browser.
+    Photograph(PathBuf),
+    /// Redraw it with Typst, which is what was asked for.
+    Typst,
+    /// Redraw it with Typst because [`ThumbnailRenderer::Auto`] found no browser.
+    /// Carries the reason, for [`Drawn::FellBackToTypst`].
+    TypstInstead(String),
+}
+
+impl ThumbnailRenderer {
+    /// Decides how the deck gets drawn, looking for a browser at most once.
+    ///
+    /// Detection shells out once per candidate, so it runs on a blocking thread
+    /// rather than on the runtime the server is answering requests with.
+    ///
+    /// # Errors
+    /// [`ThumbnailRenderer::Browser`] when no browser can be found — the whole
+    /// point of asking for it by name rather than taking `auto`.
+    pub async fn resolve(self, browser: Option<&Path>) -> anyhow::Result<ResolvedRenderer> {
+        if matches!(self, Self::Typst) {
+            return Ok(ResolvedRenderer::Typst);
+        }
+
+        let pinned = browser.map(Path::to_path_buf);
+        let found = tokio::task::spawn_blocking(move || find_browser(pinned.as_deref()))
+            .await
+            .context("Looking for a browser to photograph the deck with")?;
+
+        match found {
+            Some(browser) => Ok(ResolvedRenderer::Photograph(browser)),
+            None if matches!(self, Self::Browser) => bail!(
+                "no Chrome, Chromium or Edge could be started for rendering slide \
+                 thumbnails. Install one, set CHROME, or pass --browser"
+            ),
+            None => Ok(ResolvedRenderer::TypstInstead(
+                "no Chrome, Chromium or Edge could be started".to_owned(),
+            )),
+        }
+    }
 }
 
 /// Which renderer actually drew the overview.
@@ -148,47 +200,46 @@ async fn render_thumbnails(
     out_dir: &Path,
     options: &OverviewOptions,
 ) -> anyhow::Result<Drawn> {
+    let browser = match options.renderer.resolve(options.browser.as_deref()).await? {
+        ResolvedRenderer::Typst => {
+            typst_thumbnails(talk, mermaid, out_dir).await?;
+            return Ok(Drawn::Redrawn);
+        }
+        ResolvedRenderer::TypstInstead(reason) => {
+            typst_thumbnails(talk, mermaid, out_dir).await?;
+            // Reported by the caller, not here: the server logs it, the CLI
+            // prints it, and neither wants the other's channel. See `Drawn`.
+            return Ok(Drawn::FellBackToTypst(reason));
+        }
+        ResolvedRenderer::Photograph(browser) => browser,
+    };
+
+    info!(browser = %browser.display(), "Photographing the deck for the overview");
     let shots = ShotOptions {
-        browser: options.browser.clone(),
+        browser,
         public_dir: options.public_dir.clone(),
     };
 
-    match options.renderer {
-        ThumbnailRenderer::Browser => {
-            shoot_slides(talk, mermaid, out_dir, &shots).await?;
-            Ok(Drawn::Photographed)
-        }
-        ThumbnailRenderer::Typst => {
-            typst_thumbnails(talk, mermaid, out_dir).await?;
-            Ok(Drawn::Redrawn)
-        }
-        ThumbnailRenderer::Auto => {
-            let reason = match find_browser(options.browser.as_deref()) {
-                None => "no Chrome, Chromium or Edge could be started".to_owned(),
-                Some(browser) => {
-                    info!(browser = %browser.display(), "Photographing the deck for the overview");
-                    match shoot_slides(talk, mermaid, out_dir, &shots).await {
-                        Ok(()) => return Ok(Drawn::Photographed),
-                        // Detection said yes and the launch said no — a
-                        // container without the shared libraries, most likely.
-                        // Still a missing browser, so still a fallback rather
-                        // than a failure.
-                        Err(ShotFailure::NoBrowser(err)) => {
-                            format!("the browser would not start ({err})")
-                        }
-                        // The browser ran and the deck did not render. Not a
-                        // reason to publish a different overview and say
-                        // nothing.
-                        Err(err @ ShotFailure::Rendering(_)) => return Err(err.into()),
-                    }
-                }
-            };
-
-            // Reported by the caller, not here: the server logs it, the CLI
-            // prints it, and neither wants the other's channel. See `Drawn`.
-            typst_thumbnails(talk, mermaid, out_dir).await?;
+    match shoot_slides(talk, mermaid, out_dir, &shots).await {
+        Ok(()) => Ok(Drawn::Photographed),
+        // Detection said yes and the launch said no — a container without the
+        // shared libraries, most likely. Still a missing browser, so still a
+        // fallback rather than a failure, but only where a fallback was on
+        // offer: `--thumbnail-renderer browser` asked for a photograph by name.
+        Err(ShotFailure::NoBrowser(err)) if options.renderer == ThumbnailRenderer::Auto => {
+            let reason = format!("the browser would not start ({err})");
+            // Both causes, or the report names Typst for a run that failed
+            // because of the browser. The pre-flight check cannot have covered
+            // this path: it only looks for `typst` when the *decision* was Typst,
+            // and here the decision was a photograph right up until the launch.
+            typst_thumbnails(talk, mermaid, out_dir)
+                .await
+                .with_context(|| format!("Falling back to Typst because {reason}"))?;
             Ok(Drawn::FellBackToTypst(reason))
         }
+        // The browser ran and the deck did not render. Not a reason to publish a
+        // different overview and say nothing.
+        Err(err) => Err(err.into()),
     }
 }
 
@@ -203,4 +254,80 @@ async fn typst_thumbnails(
     tokio::task::spawn_blocking(move || render_typst_thumbnails(&talk, &out_dir, &mermaid))
         .await?
         .map_err(|err| anyhow::anyhow!("{err}"))
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use super::*;
+
+    /// `/bin/echo` answers `--version` with a zero exit, which is all
+    /// `find_browser` asks of a candidate — so it stands in for a browser
+    /// without one being installed.
+    const A_WORKING_BROWSER: &str = "/bin/echo";
+    const NO_SUCH_BROWSER: &str = "/nope/not-a-browser";
+
+    /// Asking for Typst is not a question about browsers, so it must not go
+    /// looking for one — this is the arm that keeps `--thumbnail-renderer typst`
+    /// free of a filesystem sweep it has no use for.
+    #[tokio::test]
+    async fn typst_is_decided_without_looking_for_a_browser() {
+        let resolved = ThumbnailRenderer::Typst
+            .resolve(Some(Path::new(NO_SUCH_BROWSER)))
+            .await
+            .expect("typst needs no browser");
+
+        assert_eq!(resolved, ResolvedRenderer::Typst);
+    }
+
+    /// `browser` means "photograph it, and tell me if you cannot". Resolving up
+    /// front is what moves that failure ahead of parsing the deck.
+    #[tokio::test]
+    async fn an_absent_browser_fails_the_strict_renderer() {
+        let err = ThumbnailRenderer::Browser
+            .resolve(Some(Path::new(NO_SUCH_BROWSER)))
+            .await
+            .expect_err("browser must not fall back");
+
+        assert!(
+            err.to_string().contains("no Chrome"),
+            "the error should name what is missing: {err}"
+        );
+    }
+
+    /// …while `auto` takes the same absence as its cue to redraw, and carries
+    /// the reason out so the caller can say what the deck lost.
+    #[tokio::test]
+    async fn an_absent_browser_sends_auto_to_typst_with_a_reason() {
+        let resolved = ThumbnailRenderer::Auto
+            .resolve(Some(Path::new(NO_SUCH_BROWSER)))
+            .await
+            .expect("auto falls back rather than failing");
+
+        match resolved {
+            ResolvedRenderer::TypstInstead(reason) => assert!(
+                reason.contains("no Chrome"),
+                "the reason reaches the user verbatim: {reason}"
+            ),
+            other => panic!("expected a fallback, got {other:?}"),
+        }
+    }
+
+    /// Both photographing modes come back with the path itself, which is what
+    /// lets `ShotOptions` carry it to the launch instead of asking again.
+    #[tokio::test]
+    async fn a_working_browser_is_carried_out_by_path() {
+        for renderer in [ThumbnailRenderer::Auto, ThumbnailRenderer::Browser] {
+            let resolved = renderer
+                .resolve(Some(Path::new(A_WORKING_BROWSER)))
+                .await
+                .expect("a usable browser resolves");
+
+            assert_eq!(
+                resolved,
+                ResolvedRenderer::Photograph(PathBuf::from(A_WORKING_BROWSER)),
+                "{renderer:?} should photograph with the browser it was given"
+            );
+        }
+    }
 }
