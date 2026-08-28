@@ -23,7 +23,7 @@ pub(crate) struct Options {
 /// # Errors
 /// Returns an error if the folder cannot be parsed, or the thumbnails cannot be
 /// rendered (no browser *and* no `typst`, or either of them failing).
-#[allow(clippy::print_stdout)]
+#[allow(clippy::print_stdout, clippy::print_stderr)]
 pub(crate) async fn generate(
     input: &Path,
     mut settings: toboggan_cli::Settings,
@@ -53,12 +53,22 @@ pub(crate) async fn generate(
         search: options.search,
         static_links: options.static_links,
     };
-    generate_overview(&talk, &mermaid, &out_dir, &overview).await?;
+    let drawn = generate_overview(&talk, &mermaid, &out_dir, &overview).await?;
+
+    // Printed, not logged. `warn!` goes to an env filter that defaults to
+    // `ERROR`, so this said nothing at all unless the user had thought to set
+    // `RUST_LOG` — and the line below reads the same either way, which left a
+    // deck that lost every `<style>`, raw HTML block and terminal announcing
+    // itself as a clean success.
+    if let Some(warning) = drawn.warning() {
+        eprintln!("⚠️  {warning}");
+    }
 
     println!(
-        "✅ Wrote {} thumbnails + overview.html to {}",
+        "✅ Wrote {} thumbnails + overview.html to {} ({})",
         talk.slides.len(),
-        out_dir.display()
+        out_dir.display(),
+        drawn.describe(),
     );
     Ok(())
 }

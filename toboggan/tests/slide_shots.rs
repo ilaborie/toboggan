@@ -245,3 +245,75 @@ fn an_explicit_browser_that_is_not_there_fails_rather_than_falling_back() {
         "an overview was published anyway"
     );
 }
+
+/// Skips when `typst` is absent — unless this is CI, for the same reason
+/// [`browser_available`] does.
+fn typst_available() -> bool {
+    let found = Command::new("typst")
+        .arg("--version")
+        .output()
+        .is_ok_and(|out| out.status.success());
+    assert!(
+        found || std::env::var_os("CI").is_none(),
+        "`typst` is not on PATH but CI is set: the fallback would go untested"
+    );
+    if !found {
+        eprintln!("skipping: `typst` is not on PATH");
+    }
+    found
+}
+
+/// `auto` redraws with Typst when the browser cannot be used — and says so.
+///
+/// The saying is the point. The fallback announced itself with `warn!`, and the
+/// CLI's env filter defaults to `ERROR`, so nothing was printed unless the user
+/// had thought to set `RUST_LOG`: a deck that lost every `<style>`, raw HTML
+/// block and terminal reported the same clean success as one that had been
+/// photographed. Pinning an absent `--browser` makes the fallback happen on a
+/// machine that does have a browser, so this covers the branch either way.
+#[test]
+fn falling_back_to_typst_is_reported_rather_than_logged() {
+    if !typst_available() {
+        return;
+    }
+
+    let dir = tempfile::tempdir().expect("temp dir");
+    let slides = dir.path().join("slides");
+    write_deck(&slides);
+    let out = dir.path().join("overview");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_toboggan"))
+        .arg("thumbnails")
+        .arg("-p")
+        .arg(&slides)
+        .arg("-o")
+        .arg(&out)
+        .arg("--thumbnail-renderer")
+        .arg("auto")
+        .arg("--browser")
+        .arg("/no/such/browser")
+        .env_remove("RUST_LOG")
+        .output()
+        .expect("run toboggan thumbnails");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "the fallback should succeed, not fail: {stderr}"
+    );
+    assert!(
+        out.join("overview.html").is_file(),
+        "no overview page: {stderr}"
+    );
+
+    // Without `RUST_LOG`, which is the state every user is in by default.
+    assert!(
+        stderr.contains("fell back to Typst"),
+        "the fallback was silent on stderr: {stderr:?}"
+    );
+    assert!(
+        stdout.contains("redrawn with Typst"),
+        "the success line does not say what drew the deck: {stdout:?}"
+    );
+}

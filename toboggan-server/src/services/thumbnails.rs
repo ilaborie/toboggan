@@ -285,7 +285,11 @@ async fn generate(
     options: &OverviewOptions,
 ) -> anyhow::Result<TempDir> {
     let dir = tempfile::tempdir()?;
-    generate_overview(talk, mermaid, dir.path(), options).await?;
+    let drawn = generate_overview(talk, mermaid, dir.path(), options).await?;
+    // The log is all the server has: nobody is watching a terminal for `/slides`.
+    if let Some(warning) = drawn.warning() {
+        warn!("{warning}");
+    }
     Ok(dir)
 }
 
