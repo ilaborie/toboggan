@@ -61,10 +61,12 @@ final class TobogganSession: @unchecked Sendable {
             guard let talk = client.getTalk() else {
                 return nil
             }
-            let slides = (0..<talk.slides.count).compactMap {
-                client.getSlide(index: UInt32($0))
-            }
-            return Deck(title: talk.title, date: talk.date, slides: slides)
+            // One consistent read. Asking slide by slide across `talk.titles`
+            // and dropping the misses — which is what this did — silently
+            // *shortened* the deck whenever the talk and slide channels had not
+            // both landed, shifting every slide after the gap and pointing
+            // `goTo` at the wrong one. `getDeck` pairs them under one borrow.
+            return Deck(title: talk.title, date: talk.date, slides: client.getDeck())
         }.value
     }
 }

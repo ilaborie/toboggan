@@ -16,6 +16,11 @@
 
 uniffi::setup_scaffolding!("toboggan");
 
+mod deck;
+
+mod logging;
+pub use self::logging::*;
+
 mod types;
 pub use self::types::*;
 

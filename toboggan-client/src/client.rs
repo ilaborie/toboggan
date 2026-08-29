@@ -5,7 +5,7 @@ use tokio::sync::{mpsc, watch};
 use tracing::{error, info};
 
 use crate::{
-    CommunicationMessage, NotificationHandler, TobogganApi, TobogganApiError,
+    CommunicationMessage, ErrorKind, NotificationHandler, TobogganApi, TobogganApiError,
     TobogganWebsocketConfig, WebSocketClient,
 };
 
@@ -189,7 +189,8 @@ impl<H: NotificationHandler + 'static> TobogganClientCore<H> {
             }
             Err(err) => {
                 error!("Failed to load talk: {err}");
-                self.handler.on_error(format!("Failed to load talk: {err}"));
+                self.handler
+                    .on_error(ErrorKind::Transport, format!("Failed to load talk: {err}"));
             }
         }
 
@@ -201,8 +202,10 @@ impl<H: NotificationHandler + 'static> TobogganClientCore<H> {
             }
             Err(err) => {
                 error!("Failed to load slides: {err}");
-                self.handler
-                    .on_error(format!("Failed to load slides: {err}"));
+                self.handler.on_error(
+                    ErrorKind::Transport,
+                    format!("Failed to load slides: {err}"),
+                );
             }
         }
 
@@ -237,13 +240,23 @@ impl<H: NotificationHandler + 'static> TobogganClientCore<H> {
     }
 
     /// Send a command to the server.
+    ///
+    /// A command that cannot be sent is reported through the handler as well as
+    /// logged. On a phone nothing reads the log — there is no subscriber in the
+    /// host app until one is installed — so a `tracing` line on its own meant a
+    /// tap that did nothing, a projector that did not move, and a connection
+    /// indicator still showing green.
     pub fn send_command(&self, command: Command) {
-        if let Some(tx_cmd) = &self.tx_cmd {
-            if let Err(err) = tx_cmd.send(command) {
-                error!("Failed to send command: {err}");
-            }
-        } else {
-            error!("WebSocket command channel not available");
+        let Some(tx_cmd) = &self.tx_cmd else {
+            let message = "Not connected, so the command was not sent.".to_owned();
+            error!("{message}");
+            self.handler.on_error(ErrorKind::Transport, message);
+            return;
+        };
+        if let Err(err) = tx_cmd.send(command) {
+            let message = format!("The connection dropped before the command was sent: {err}");
+            error!("{message}");
+            self.handler.on_error(ErrorKind::Transport, message);
         }
     }
 
@@ -317,7 +330,9 @@ impl<H: NotificationHandler + 'static> TobogganClientCore<H> {
                     handler.on_talk_change(new_state);
                 }
                 CommunicationMessage::Error { error } => {
-                    handler.on_error(error);
+                    // The server answered and complained; that is not the
+                    // socket failing.
+                    handler.on_error(ErrorKind::Server, error);
                 }
                 CommunicationMessage::Registered { client_id, role } => {
                     // Handed to the handler, role included. The native clients

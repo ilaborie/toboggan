@@ -9,8 +9,8 @@ SwiftUI, iOS 26, talking to the Rust core through [UniFFI](../toboggan-mobile).
 ## What it does
 
 - Follows the talk live over the WebSocket protocol every other client speaks.
-- Shows **speaker notes** for the current slide, rendered from the deck's own
-  markup.
+- Shows **speaker notes** for the current slide, as plain text: notes cross the
+  FFI already flattened, because the phone has no HTML renderer.
 - Shows the next slide's title, the position in the deck, and — when the deck
   plans timings — elapsed time and whether you are ahead of or behind the plan.
 - Drives the deck: previous/next step, previous/next slide, blink, and

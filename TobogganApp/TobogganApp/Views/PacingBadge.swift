@@ -7,10 +7,10 @@ import SwiftUI
 
 /// Elapsed time, and how it compares with the plan.
 ///
-/// Hidden entirely when the deck plans no timings — the same rule the web
-/// presenter view follows, and the reason the old duration badge was worse than
-/// nothing: it was wired to a value that was never set, so it read `00:00` for
-/// the whole talk.
+/// Only rendered when the deck plans timings — the guard is in `SlideHero`, not
+/// here. That is the same rule the web presenter view follows, and the reason
+/// the old duration badge was worse than nothing: it was wired to a value that
+/// was never set, so it read `00:00` for the whole talk.
 struct PacingBadge: View {
     let elapsed: TimeInterval
     let drift: TimeInterval?

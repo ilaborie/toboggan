@@ -70,11 +70,12 @@ device_logs/
 # Backup and temporary files with conflict markers
 .!*!*
 
-# UniFFI generated files (should be regenerated during build)
-**/TobogganCore.swift
+# UniFFI generated files (should be regenerated during build).
+# The Swift side is covered by TobogganApp/.gitignore; these are the names that
+# land outside it. `TobogganCore.swift` and `libtoboggan_ios_core.a` used to be
+# here and matched nothing any build produces.
 **/tobogganFFI.h
 **/tobogganFFI.modulemap
-**/libtoboggan_ios_core.a
 **/*.xcframework
 
 idea.md

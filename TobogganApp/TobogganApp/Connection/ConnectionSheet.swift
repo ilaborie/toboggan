@@ -62,6 +62,17 @@ struct ConnectionSheet: View {
                     SecureField("Presenter token (optional)", text: $settings.presenterToken)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+
+                    if let problem = settings.addressProblem {
+                        Text(problem)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+                    if let warning = settings.storageWarning {
+                        Label(warning, systemImage: "exclamationmark.triangle")
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                    }
                 }
 
                 if settings.isLoopback {
@@ -80,9 +91,7 @@ struct ConnectionSheet: View {
 
                 Section {
                     LabeledContent("Status", value: statusText)
-                    if let role = model.role {
-                        LabeledContent("Role", value: role == .audience ? "Watching" : "Presenting")
-                    }
+                    LabeledContent("Role", value: roleText)
                     Button("Show log") { activeSheet = .log }
                 }
 
@@ -91,7 +100,9 @@ struct ConnectionSheet: View {
                         model.connect(to: settings.clientURL)
                         dismiss()
                     }
-                    .disabled(settings.serverURL.isEmpty)
+                    // Gated on the address being usable, not merely non-empty:
+                    // the sheet is where the user can still fix it.
+                    .disabled(settings.addressProblem != nil)
                 }
             }
             .navigationTitle("Connection")
@@ -134,6 +145,15 @@ struct ConnectionSheet: View {
                 }
             }
         }
+    }
+
+    /// The role, and the fact that it has not arrived yet — which is not the
+    /// same as being audience, though the app treats it that way until told.
+    private var roleText: String {
+        guard model.isRegistered else {
+            return "Not registered yet"
+        }
+        return model.role == .presenter ? "Presenting" : "Watching"
     }
 
     private var statusText: String {

@@ -5,7 +5,7 @@
 
 import SwiftUI
 
-/// The floating controls, and the only glass in the app.
+/// The floating controls, and the only glass the app applies itself.
 ///
 /// One `GlassEffectContainer` holding sibling capsules, with no backing plate:
 /// the container's job is to merge neighbouring glass shapes into one lens, which
@@ -14,7 +14,13 @@ import SwiftUI
 /// shallower.
 ///
 /// `safeAreaBar` supplies no material of its own — it is `safeAreaInset` plus
-/// scroll-edge-effect propagation — so this really is the only glass here.
+/// scroll-edge-effect propagation — so this really is the only glass this view
+/// asks for. The navigation bar's glass is the system's, which `ContentView`
+/// deliberately leaves alone.
+///
+/// Everything here is iOS 26 API (`Glass`, `GlassEffectContainer`,
+/// `glassEffectID`, `buttonStyle(.glass)`) and carries no `#available`: the
+/// deployment target is 26.0, and this file is the reason for that floor.
 struct RemoteBar: View {
     @Environment(PresentationModel.self)
     private var model
@@ -22,18 +28,22 @@ struct RemoteBar: View {
     private var reduceTransparency
     @Namespace private var glassNamespace
 
-    /// Translucency is a setting people turn on deliberately. `Glass.identity`
-    /// leaves content as if no glass had been applied.
+    /// Reduce Transparency is the setting people turn on deliberately, so it is
+    /// obeyed rather than approximated: `Glass.identity` leaves content as if no
+    /// glass had been applied.
     private var glass: Glass {
         reduceTransparency ? .identity : .regular
     }
 
     var body: some View {
         VStack(spacing: 12) {
-            if model.stepCount > 1 {
-                StepProgress(currentStep: model.currentStep, stepCount: model.stepCount)
+            if let states = model.stepStates, states > 1 {
+                StepProgress(currentStep: model.currentStep, stepStates: states)
             }
 
+            // The container's spacing is the merge radius and is deliberately
+            // wider than the layout spacing below it: that gap is what lets
+            // neighbouring capsules fuse into one lens instead of sitting apart.
             GlassEffectContainer(spacing: 16) {
                 HStack(spacing: 12) {
                     // One button, not two branches. Only the label and the

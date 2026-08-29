@@ -92,7 +92,7 @@ Then open:
 
 | Route | What it is |
 | --- | --- |
-| `/` | Homepage — links to everything below |
+| `/` | Homepage — links to everything below, and the QR code the phone app scans |
 | `/run` | The deck. This is what goes on the projector |
 | `/presenter` | Notes, the next slide, a timer and pacing |
 | `/slides` | Thumbnail overview with search |

@@ -14,7 +14,7 @@ are all welcome.
 Run this yourself, whichever VCS you use:
 
 ```bash
-mise check     # fmt + clippy + nextest — the root workspace only
+mise check     # every lane: rust, python, web, ios
 ```
 
 CI re-runs the same gate on every push and pull request regardless, so a skipped
@@ -41,8 +41,10 @@ committed.
 The embedded web client is a separate workspace, rooted at
 `toboggan-web/Cargo.toml` with `toboggan-wasm` as its only member. Neither
 `--workspace` nor `--all-targets` from the repository root reaches it, and
-neither does `cargo nextest run` — **nor does `mise check`**, which runs
-`check:rust` at the root. CI covers it in a job of its own. If you touch it:
+neither does `cargo nextest run` — **nor does `mise check`**: its `check:rust`
+lane runs at the repository root, and its `check:web` lane is Biome over the
+TypeScript, not clippy over this crate. CI covers it in a job of its own. If you
+touch it:
 
 ```bash
 cd toboggan-web/toboggan-wasm
@@ -80,6 +82,38 @@ documented call so the stub's *annotations* are verified rather than just its
 names, and `mypy.stubtest`, which compares the stub against the built module.
 When you change the Python API, change the stub and add the new call to
 `usage.py` — a promise no caller has written down is a promise nobody checks.
+
+## The mobile clients
+
+`toboggan-mobile` is one Rust crate behind two apps, and for eight months
+nothing built either of them. The Rust gate compiles the crate for the *host*,
+so it stayed green while the Swift that consumes it stopped matching — the iOS
+app had not compiled since December, and its own tests asserted things about a
+stub that could not be true.
+
+Each app now has a CI job:
+
+| Job | What it proves |
+| --- | --- |
+| `ios` | SwiftLint `--strict`, the Xcode build, and `TobogganAppTests` on a simulator |
+| `android` | The Kotlin compiles against freshly generated bindings |
+
+Kotlin compilation is the whole Android gate on purpose: it is what catches
+drift, and it needs no NDK and no emulator. Adding `GoTo` to `Command` turned a
+UniFFI `enum class` into a sealed class and renamed every constant the Kotlin
+called — a change no Rust check could see.
+
+```bash
+mise lint:ios   # SwiftLint --strict, the same invocation CI uses
+```
+
+This lane **fails** rather than skips when SwiftLint is missing, for the reason
+the Python lane does: it used to wrap the lint in an `if` and print a green
+summary over a failure, so a violation was green locally and red in CI.
+
+The Xcode build and test suite are not in `mise check` — they need a simulator
+runtime matching the iOS 26 deployment target. `.mise-tasks/check/ios` carries
+the commands.
 
 ## Code guidelines
 

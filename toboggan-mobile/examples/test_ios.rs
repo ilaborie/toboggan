@@ -5,8 +5,8 @@ use std::thread;
 use std::time::Duration;
 
 use toboggan::{
-    ClientConfig, ClientNotificationHandler, ClientRole, ConnectionStatus, PresentationState,
-    TobogganClient,
+    ClientConfig, ClientNotificationHandler, ClientRole, ConnectionStatus, ErrorKind,
+    PresentationState, TobogganClient,
 };
 
 fn main() {
@@ -69,7 +69,7 @@ impl ClientNotificationHandler for NotificationHandler {
         println!("👋 Client disconnected: {client_id} ({name})");
     }
 
-    fn on_error(&self, error: String) {
-        eprintln!("🚨 {error}");
+    fn on_error(&self, kind: ErrorKind, error: String) {
+        eprintln!("🚨 {kind:?}: {error}");
     }
 }

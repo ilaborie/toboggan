@@ -7145,6 +7145,8 @@ dependencies = [
  "toboggan-client",
  "toboggan-core",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "uniffi",
 ]
 

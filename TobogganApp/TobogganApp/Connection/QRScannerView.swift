@@ -14,8 +14,7 @@ import SwiftUI
 /// `isSupported`/`isAvailable` pair to negotiate, and it does not bring its own
 /// full-screen guidance UI along with it.
 struct QRScannerView: UIViewControllerRepresentable {
-    /// Called with the decoded string. The scanner stops before this runs, so it
-    /// fires once.
+    /// Called with the decoded string, exactly once — see `hasScanned`.
     let onScan: (String) -> Void
     let onFailure: (String) -> Void
 
@@ -37,10 +36,68 @@ final class QRScannerController: UIViewController, AVCaptureMetadataOutputObject
     private let session = AVCaptureSession()
     private var preview: AVCaptureVideoPreviewLayer?
 
+    /// `stopRunning` prevents *future* delivery but does not cancel batches
+    /// already dispatched to the main queue, so the stop alone does not make
+    /// `onScan` fire once.
+    private var hasScanned = false
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        configure()
+        observeRuntimeFailures()
+        requestAccessThenConfigure()
+    }
+
+    /// Asks for the camera before touching it.
+    ///
+    /// Without this the refusal was completely silent: with access denied,
+    /// `AVCaptureDevice.default` still returns a device, `AVCaptureDeviceInput`
+    /// still constructs, `canAddInput` is still true and `startRunning`
+    /// succeeds — the session simply never delivers a frame. The presenter got a
+    /// black sheet, no message, no log line, and no way forward, on the app's
+    /// primary path for getting connected.
+    private func requestAccessThenConfigure() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            configure()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    guard granted else {
+                        self.fail(
+                            "Camera access was refused. Turn it on in Settings › Toboggan, "
+                                + "or type the address by hand."
+                        )
+                        return
+                    }
+                    self.configure()
+                    let session = self.session
+                    DispatchQueue.global(qos: .userInitiated).async { session.startRunning() }
+                }
+            }
+        case .denied:
+            fail("Camera access is off for Toboggan. Turn it on in Settings › Toboggan, or type the address by hand.")
+        case .restricted:
+            fail("Camera access is restricted on this device. Type the server address by hand instead.")
+        @unknown default:
+            fail("Camera access could not be determined. Type the server address by hand instead.")
+        }
+    }
+
+    /// A session can also die *after* it starts — the camera claimed by another
+    /// app, a phone call, a Control Center capture. Left unobserved that is the
+    /// same dead end as a refusal: a frozen frame and no explanation.
+    private func observeRuntimeFailures() {
+        NotificationCenter.default.addObserver(
+            forName: .AVCaptureSessionRuntimeError,
+            object: session,
+            queue: .main
+        ) { [weak self] note in
+            let error = note.userInfo?[AVCaptureSessionErrorKey] as? Error
+            let reason = error?.localizedDescription ?? "unknown error"
+            self?.fail("The camera stopped: \(reason). Try again, or type the address by hand.")
+        }
     }
 
     override func viewDidLayoutSubviews() {
@@ -50,7 +107,9 @@ final class QRScannerController: UIViewController, AVCaptureMetadataOutputObject
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        guard !session.isRunning else { return }
+        // Nothing to start when access was refused: `configure` never ran, so
+        // the session has no input.
+        guard !session.isRunning, !session.inputs.isEmpty else { return }
         // Starting the session blocks; the docs are explicit that it belongs off
         // the main thread.
         let session = session
@@ -69,13 +128,19 @@ final class QRScannerController: UIViewController, AVCaptureMetadataOutputObject
         didOutput metadataObjects: [AVMetadataObject],
         from connection: AVCaptureConnection
     ) {
-        guard let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
+        guard !hasScanned,
+              let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
               object.type == .qr,
               let value = object.stringValue
         else {
             return
         }
-        session.stopRunning()
+        hasScanned = true
+        // Off the main thread, for the same reason `startRunning` is: the call
+        // blocks. The flag above is what makes this fire once, so the stop does
+        // not have to be synchronous.
+        let session = session
+        DispatchQueue.global(qos: .userInitiated).async { session.stopRunning() }
         AppLog.shared.log(.ui, .info, "Scanned a QR code")
         onScan?(value)
     }
@@ -118,5 +183,9 @@ final class QRScannerController: UIViewController, AVCaptureMetadataOutputObject
     private func fail(_ message: String) {
         AppLog.shared.log(.ui, .error, message)
         onFailure?(message)
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 }

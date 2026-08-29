@@ -11,14 +11,17 @@ import SwiftUI
 /// interactive glass promises a tap target that does not exist.
 struct StepProgress: View {
     let currentStep: Int
-    let stepCount: Int
+
+    /// How many dots to draw: one per state the slide can be in, which is one
+    /// more than the number of reveals it has.
+    let stepStates: Int
 
     @ScaledMetric(relativeTo: .caption)
     private var dotSize = 10
 
     var body: some View {
         HStack(spacing: 8) {
-            ForEach(0..<stepCount, id: \.self) { step in
+            ForEach(0..<stepStates, id: \.self) { step in
                 Circle()
                     .fill(fill(for: step))
                     .frame(width: dotSize, height: dotSize)
@@ -31,7 +34,7 @@ struct StepProgress: View {
         }
         .animation(.smooth(duration: 0.25), value: currentStep)
         .accessibilityElement()
-        .accessibilityLabel("Step \(currentStep + 1) of \(stepCount)")
+        .accessibilityLabel("Step \(currentStep + 1) of \(stepStates)")
     }
 
     private func fill(for step: Int) -> AnyShapeStyle {

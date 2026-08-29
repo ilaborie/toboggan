@@ -3,7 +3,7 @@ set -eEuv
 
 function error_help()
 {
-    ERROR_MSG="It looks like something went wrong building the Example App Universal Binary."
+    ERROR_MSG="Something went wrong building the Toboggan Rust library for iOS."
     echo "error: ${ERROR_MSG}"
 }
 trap error_help ERR
@@ -15,7 +15,7 @@ PATH="$(bash -l -c 'echo $PATH')"
 if [[ "${#}" -ne 3 ]]
 then
     echo "Usage (note: only call inside xcode!):"
-    echo "path/to/build-scripts/xc-universal-binary.sh <FFI_TARGET> <SRC_ROOT_PATH> <buildvariant>"
+    echo "TobogganApp/xc-universal-binary.sh <FFI_TARGET> <SRC_ROOT_PATH> <buildvariant>"
     exit 1
 fi
 # what to pass to cargo build -p, e.g. logins_ffi
@@ -39,12 +39,14 @@ if [ "${LLVM_TARGET_TRIPLE_SUFFIX-}" = "-simulator" ]; then
 fi
 
 TARGET_DIR="target"
-BUILT_PRODUCTS_DIR="${SRCROOT}/TobogganApp"
 
-# Ensure the destination directory exists
-mkdir -p "${BUILT_PRODUCTS_DIR}"
+# Where the static library and the generated bindings both go: the group Xcode
+# compiles, and the linker search path. Deliberately *not* called
+# `BUILT_PRODUCTS_DIR` — Xcode exports a variable of that name meaning its own
+# build directory, and this script used to shadow it.
+ARTIFACTS_DIR="${SRCROOT}/TobogganApp"
+mkdir -p "${ARTIFACTS_DIR}"
 
-# Change to the correct working directory
 cd "${SRC_ROOT}"
 
 # The actual library name is based on the lib.name in Cargo.toml, not the package name
@@ -52,11 +54,6 @@ LIB_NAME="toboggan"
 
 # Build Rust library for all architectures first, then generate Swift bindings
 # This ensures the bindings are generated after all compilation is complete
-
-BINDINGS_DIR="${SRCROOT}/TobogganApp"
-
-# Ensure the bindings directory exists
-mkdir -p "${BINDINGS_DIR}"
 
 echo "Building Rust library for all architectures..."
 
@@ -73,10 +70,7 @@ for arch in $ARCHS; do
       $HOME/.cargo/bin/cargo rustc -p "${FFI_TARGET}" --lib --crate-type staticlib $RELFLAG --target x86_64-apple-ios
 
       RUST_LIB_PATH="${TARGET_DIR}/x86_64-apple-ios/$([[ "${BUILDVARIANT}" != "debug" ]] && echo "release" || echo "debug")/lib${LIB_NAME}.a"
-      # Copy the built library to where Xcode expects it
-      cp "$RUST_LIB_PATH" "${BUILT_PRODUCTS_DIR}/"
-      # Also copy to project directory for linker search path
-      cp "$RUST_LIB_PATH" "${SRCROOT}/TobogganApp/"
+      cp "$RUST_LIB_PATH" "${ARTIFACTS_DIR}/"
       ;;
 
     arm64)
@@ -86,20 +80,14 @@ for arch in $ARCHS; do
         $HOME/.cargo/bin/cargo rustc -p "${FFI_TARGET}" --lib --crate-type staticlib $RELFLAG --target aarch64-apple-ios
 
         RUST_LIB_PATH="${TARGET_DIR}/aarch64-apple-ios/$([[ "${BUILDVARIANT}" != "debug" ]] && echo "release" || echo "debug")/lib${LIB_NAME}.a"
-        # Copy the built library to where Xcode expects it
-        cp "$RUST_LIB_PATH" "${BUILT_PRODUCTS_DIR}/"
-        # Also copy to project directory for linker search path
-        cp "$RUST_LIB_PATH" "${SRCROOT}/TobogganApp/"
+        cp "$RUST_LIB_PATH" "${ARTIFACTS_DIR}/"
       else
         # M1 iOS simulator
         # export CFLAGS_aarch64_apple_ios_sim="-target aarch64-apple-ios-simulator"
         $HOME/.cargo/bin/cargo rustc -p "${FFI_TARGET}" --lib --crate-type staticlib $RELFLAG --target aarch64-apple-ios-sim
 
         RUST_LIB_PATH="${TARGET_DIR}/aarch64-apple-ios-sim/$([[ "${BUILDVARIANT}" != "debug" ]] && echo "release" || echo "debug")/lib${LIB_NAME}.a"
-        # Copy the built library to where Xcode expects it
-        cp "$RUST_LIB_PATH" "${BUILT_PRODUCTS_DIR}/"
-        # Also copy to project directory for linker search path
-        cp "$RUST_LIB_PATH" "${SRCROOT}/TobogganApp/"
+        cp "$RUST_LIB_PATH" "${ARTIFACTS_DIR}/"
 
       fi
   esac
@@ -119,6 +107,6 @@ if [ -z "${RUST_LIB_PATH:-}" ]; then
 fi
 echo "🍎 Generating Swift bindings from ${RUST_LIB_PATH}"
 $HOME/.cargo/bin/cargo run $RELFLAG -p "${FFI_TARGET}" --bin uniffi-bindgen -- \
-  generate --library --language swift --out-dir "${SRCROOT}/TobogganApp/" "$RUST_LIB_PATH"
+  generate --library --language swift --out-dir "${ARTIFACTS_DIR}/" "$RUST_LIB_PATH"
 
 echo "Build script completed - Rust library built and Swift bindings generated"

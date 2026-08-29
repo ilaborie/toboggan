@@ -20,7 +20,7 @@ struct LogSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.message)
                         .font(.footnote.monospaced())
-                        .foregroundStyle(entry.level == .error ? .red : .primary)
+                        .foregroundStyle(colour(for: entry.level))
                     Text("\(entry.date.formatted(date: .omitted, time: .standard)) · \(entry.category.rawValue)")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -51,6 +51,14 @@ struct LogSheet: View {
                     ContentUnavailableView("No log yet", systemImage: "text.alignleft")
                 }
             }
+        }
+    }
+
+    private func colour(for level: AppLog.Level) -> Color {
+        switch level {
+        case .error: .red
+        case .warning: .orange
+        case .debug, .info: .primary
         }
     }
 }

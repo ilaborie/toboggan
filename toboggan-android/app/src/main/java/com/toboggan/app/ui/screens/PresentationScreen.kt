@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,6 +40,17 @@ fun PresentationScreen(
                 onFirstSlide = viewModel::firstSlide,
                 onLastSlide = viewModel::lastSlide
             )
+
+            // Inline, not a dialog: a refusal is a permissions answer, not a
+            // broken connection. Without this the role was recorded and never
+            // shown, so the dead buttons had no explanation.
+            uiState.notice?.let { notice ->
+                Text(
+                    text = notice,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
             // Current slide display (takes remaining space)
             CurrentSlideCard(
