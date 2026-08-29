@@ -51,20 +51,47 @@ const mirror = async (page: Page): Promise<Frame> => {
 		throw new Error("No current-slide mirror");
 	}
 	// The slide arrives by message, a moment after the document loads.
-	await frame.waitForSelector(".toboggan-slide", { timeout: 15_000 });
+	await settled(frame);
+	return frame;
+};
+
+/**
+ * Waits until a slide is not just present but *carrying a slide*.
+ *
+ * Three states look alike from outside and only one is measurable. The element
+ * is in the DOM before its shadow tree has anything in it; then it holds the
+ * no-slide placeholder, which is a bare `<article></article>` the component
+ * renders when it has been given nothing yet; and only then does it hold a
+ * slide. The placeholder is the trap — it makes `childElementCount` 1, so a
+ * poll for "has children" passes on it, and the measurement that follows reads
+ * an absent `<h2>` as an empty title. Compared against a pane that *did* settle,
+ * that fails as "the two disagree" when the truth is "one had no slide yet".
+ *
+ * So this waits for the slide's own content, not for the container's.
+ */
+const settled = async (target: Frame | Page) => {
+	await target.waitForSelector(".toboggan-slide", { timeout: 15_000 });
 	await expect
 		.poll(
 			() =>
-				frame.evaluate(
-					() =>
-						document
-							.querySelector(".toboggan-slide")
-							?.shadowRoot?.querySelector("section")?.childElementCount ?? 0,
-				),
+				target.evaluate(() => {
+					const section = document
+						.querySelector(".toboggan-slide")
+						?.shadowRoot?.querySelector("section");
+					if (!section) {
+						return false;
+					}
+					// A titled slide has its `<h2>`; an untitled one still has a
+					// body with something in it. The placeholder has neither.
+					const article = section.querySelector("article");
+					return (
+						section.querySelector("h2") !== null ||
+						(article?.childElementCount ?? 0) > 0
+					);
+				}),
 			{ timeout: 15_000 },
 		)
-		.toBeGreaterThan(0);
-	return frame;
+		.toBe(true);
 };
 
 /** What a slide looks like from inside whichever document is rendering it. */
@@ -86,12 +113,21 @@ const measure = (frame: Frame | Page) =>
 	});
 
 test("a pane lays the deck out exactly as the deck does", async ({ page }) => {
-	await goTo(page, 6);
+	const SLIDE = 6;
+	// Named rather than assumed: the assertion below compares two measurements
+	// taken from two separate page loads, and "they disagree" is only meaningful
+	// once both are known to be showing the slide this test asked for.
+	const talk = await (await page.request.get("/api/talk")).json();
+	const expected = talk.titles[SLIDE];
+	expect(expected).toBeTruthy();
+
+	await goTo(page, SLIDE);
 
 	// The deck at the mirror's own viewport, which is what a mirror claims to be.
 	await page.setViewportSize(STAGE);
 	await page.goto("/run");
-	await page.waitForSelector(".toboggan-slide");
+	await settled(page);
+	await expect.poll(async () => (await measure(page)).title).toBe(expected);
 	const deck = await measure(page);
 
 	// The presenter at a size nothing like it. The pane is still 1280x720 inside
@@ -101,7 +137,9 @@ test("a pane lays the deck out exactly as the deck does", async ({ page }) => {
 	// what the `zoom` this replaced did.
 	await page.setViewportSize({ width: 1600, height: 1000 });
 	await page.goto("/presenter");
-	const now = await measure(await mirror(page));
+	const pane = await mirror(page);
+	await expect.poll(async () => (await measure(pane)).title).toBe(expected);
+	const now = await measure(pane);
 
 	expect(now.viewportWidth).toBe(STAGE.width);
 	expect(now.rootFontSize).toBe(deck.rootFontSize);

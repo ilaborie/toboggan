@@ -808,6 +808,16 @@ impl WasmElement for TobogganPresenterElement {
         // the deck when this page opens.
         thumbnails::probe(Rc::clone(&inner), 0);
         self.inner = Some(inner);
+
+        // Every listener above is armed, so the keyboard is now live.
+        //
+        // Said out loud because until this point the page looks finished and is
+        // not: the layout is in the DOM, the buttons are drawn, and a `g` typed
+        // at it goes nowhere because the `keydown` listener that would have
+        // caught it does not exist yet. A browser test that navigates and types
+        // has no other way to tell those two states apart — the same reason the
+        // shot page publishes `data-toboggan-shot`.
+        let _ = layout.set_attribute("data-ready", "true");
     }
 }
 
