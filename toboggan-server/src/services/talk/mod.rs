@@ -1,8 +1,11 @@
 use std::sync::Arc;
 
 use anyhow::bail;
-use toboggan_core::{Command, Content, Notification, RenderTarget, Slide, SlideId, State, Talk};
-use toboggan_stats::SlideStats;
+use toboggan_core::{
+    Command, Content, Notification, RenderTarget, Slide, SlideId, SlideKind, SlideOutline, State,
+    Talk,
+};
+use toboggan_stats::{SlideStats, content_plain_text, notes_plain_text, slide_plain_text};
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
@@ -43,9 +46,16 @@ struct LoadedTalk {
     /// overview — an authoring view, which lists every slide and badges the
     /// hidden ones — counts over `source`. Anything holding both a presented
     /// index and an authored artefact needs this to cross between them, and the
-    /// presenter's filmstrip is exactly that: `Command::GoTo` speaks the first
+    /// presenter's slide picker is exactly that: `Command::GoTo` speaks the first
     /// index space and `thumb-NNNN.png` is named in the second.
     source_indexes: Arc<[usize]>,
+    /// Every presented slide as plain text, for the presenter's slide picker.
+    ///
+    /// Numbered over `talk`, like `step_counts`, so a picker cell's index is
+    /// one `Command::GoTo` takes. Built at load for the same reason: searching
+    /// a deck means parsing every slide's HTML twice — body and notes — which
+    /// is not something to do per request.
+    outline: Arc<[SlideOutline]>,
 }
 
 impl LoadedTalk {
@@ -67,11 +77,13 @@ impl LoadedTalk {
             .filter(|(_, slide)| !slide.hidden_in.contains(&RenderTarget::Web))
             .map(|(index, _)| index)
             .collect();
+        let outline = build_outline(&presented);
         Self {
             talk: Arc::new(presented),
             source: Arc::new(talk),
             step_counts,
             source_indexes,
+            outline,
         }
     }
 
@@ -79,6 +91,38 @@ impl LoadedTalk {
     fn hidden_count(&self) -> usize {
         self.source.slides.len() - self.talk.slides.len()
     }
+}
+
+/// The searchable outline of a deck, in presented order.
+///
+/// A part slide carries no `part` of its own — it *is* the divider — and every
+/// slide after it carries its title until the next one, which is the same walk
+/// the static overview does when it groups its cards.
+fn build_outline(presented: &Talk) -> Arc<[SlideOutline]> {
+    let mut current_part: Option<String> = None;
+    presented
+        .slides
+        .iter()
+        .map(|slide| {
+            let title = content_plain_text(&slide.title).unwrap_or_default();
+            // A divider opens the part it names and is not a member of it, so
+            // both facts fall out of one match: it takes the title as the part
+            // for everything after it, and carries `None` itself.
+            let part = match slide.kind {
+                SlideKind::Part => {
+                    current_part = Some(title.clone());
+                    None
+                }
+                _ => current_part.clone(),
+            };
+            SlideOutline {
+                part,
+                title,
+                text: slide_plain_text(slide),
+                notes: notes_plain_text(slide),
+            }
+        })
+        .collect()
 }
 
 /// Where the deck is, and the number of the change that put it there.
@@ -175,6 +219,14 @@ impl TalkService {
         Arc::clone(&self.talk.read().await.source)
     }
 
+    /// Returns the deck as a searchable outline, computed when it loaded.
+    ///
+    /// Numbered over the presented deck, so an entry's `index` is one
+    /// `Command::GoTo` and `/overview/slide/{index}` both take.
+    pub async fn outline(&self) -> Arc<[SlideOutline]> {
+        Arc::clone(&self.talk.read().await.outline)
+    }
+
     /// Returns the per-slide reveal-step counts, computed when the deck loaded.
     pub async fn step_counts(&self) -> Arc<[usize]> {
         Arc::clone(&self.talk.read().await.step_counts)
@@ -188,8 +240,9 @@ impl TalkService {
     /// from what is presented and kept in what was authored — so everything that
     /// presents counts over one list, and the slide overview, which shows every
     /// slide and badges the hidden ones, is named over the other. The presenter
-    /// view's slide grid holds both at once and needs this to cross between
-    /// them.
+    /// view holds both at once and needs this to cross between them: its slide
+    /// picker and its next-slide pane are both numbered over the presented deck
+    /// and both drawn from `thumb-NNNN.png`, which is not.
     pub async fn source_index(&self, presented: usize) -> Option<usize> {
         self.talk
             .read()
@@ -631,6 +684,116 @@ mod tests {
         let state = service.current_state().await;
         assert_eq!(state.current(), Some(SlideId::new(2)));
         assert_eq!(titles(&service.talk().await), ["shared", "live", "last"]);
+    }
+
+    /// The picker's cells are `Command::GoTo` targets, so its list has to be
+    /// the presented one — the handout slide is absent, and `last` is entry 2
+    /// rather than entry 3.
+    #[tokio::test]
+    async fn the_outline_is_numbered_over_the_presented_deck() {
+        let service = TalkService::new(twinned_deck()).expect("build service");
+        let outline = service.outline().await;
+
+        let titles = outline
+            .iter()
+            .map(|slide| slide.title.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(titles, ["shared", "live", "last"]);
+        // The outline is read by position, and `slides()` is the list the deck
+        // can be told to go to: a picker cell drawn from entry N sends
+        // `GoTo(N)`, so the two lists have to be the same length.
+        assert_eq!(outline.len(), service.slides().await.len());
+    }
+
+    /// The one place the two index spaces meet, and the one that fails silently
+    /// when it is wrong: the thumbnails on disk are named over the deck as
+    /// *authored*, so crossing to them from a presented index has to skip the
+    /// slides the web never sees.
+    ///
+    /// In `twinned_deck` the handout is authored slide 2, so presented `last`
+    /// is authored 3 — one past where a naive identity mapping would look, and
+    /// the picture it would show is the *handout's*, under `last`'s number.
+    #[tokio::test]
+    async fn a_presented_index_crosses_to_its_authored_slide() {
+        let service = TalkService::new(twinned_deck()).expect("build service");
+
+        assert_eq!(service.source_index(0).await, Some(0)); // shared
+        assert_eq!(service.source_index(1).await, Some(1)); // live
+        assert_eq!(service.source_index(2).await, Some(3)); // last, skipping handout
+        // Past the end of the presented deck: no picture, rather than someone
+        // else's.
+        assert_eq!(service.source_index(3).await, None);
+    }
+
+    /// What the speaker actually searches for: the words on the slide and the
+    /// words they meant to say about it, both as plain text rather than markup.
+    ///
+    /// Two parts, not one: a slide carries its part until the *next* divider,
+    /// and a `current_part` that were assigned once and never reassigned would
+    /// pass a deck that has only one.
+    #[tokio::test]
+    async fn the_outline_carries_body_text_notes_and_parts() {
+        let talk = Talk::new("Deck")
+            .add_slide(Slide {
+                kind: SlideKind::Part,
+                title: Content::text("Le début"),
+                ..Default::default()
+            })
+            .add_slide(Slide {
+                title: Content::text("Ownership"),
+                body: Content::html("<p>Le <b>borrow checker</b></p>"),
+                notes: Content::html("<p>Insister sur la durée de vie</p>"),
+                ..Default::default()
+            })
+            .add_slide(Slide {
+                kind: SlideKind::Part,
+                title: Content::text("La suite"),
+                ..Default::default()
+            })
+            .add_slide(Slide {
+                title: Content::text("Lifetimes"),
+                ..Default::default()
+            });
+        let service = TalkService::new(talk).expect("build service");
+        let outline = service.outline().await;
+
+        let divider = outline.first().expect("a part slide");
+        let slide = outline.get(1).expect("a slide after it");
+        // The divider is not a member of its own part.
+        assert_eq!(divider.part, None);
+        assert_eq!(slide.part.as_deref(), Some("Le début"));
+        assert_eq!(slide.text, "Le borrow checker");
+        assert_eq!(slide.notes, "Insister sur la durée de vie");
+
+        // The second divider takes over from the first.
+        assert_eq!(outline.get(2).expect("a second part slide").part, None);
+        assert_eq!(
+            outline
+                .get(3)
+                .expect("a slide in the second part")
+                .part
+                .as_deref(),
+            Some("La suite")
+        );
+    }
+
+    /// A mermaid fence renders to `<svg>`, and its labels are words on the
+    /// slide: a speaker who remembers the diagram has to be able to find it.
+    #[tokio::test]
+    async fn the_outline_searches_inside_diagrams_and_figures() {
+        let talk = Talk::new("Deck").add_slide(Slide {
+            title: Content::text("Architecture"),
+            body: Content::html(
+                "<svg><text>retry loop</text></svg><figure><figcaption>Le schéma</figcaption></figure>",
+            ),
+            ..Default::default()
+        });
+        let service = TalkService::new(talk).expect("build service");
+        let outline = service.outline().await;
+
+        let slide = outline.first().expect("a slide");
+        assert!(slide.text.contains("retry loop"), "got {:?}", slide.text);
+        assert!(slide.text.contains("Le schéma"), "got {:?}", slide.text);
     }
 
     /// Refused rather than served as an empty deck the clients cannot render.

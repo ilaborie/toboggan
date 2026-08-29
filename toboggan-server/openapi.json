@@ -55,6 +55,28 @@
         }
       }
     },
+    "/api/outline": {
+      "get": {
+        "tags": [
+          "outline"
+        ],
+        "description": "Retrieve outline",
+        "operationId": "get-api-outline",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Status code 200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutlineResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/slides": {
       "get": {
         "tags": [
@@ -631,6 +653,22 @@
         ],
         "description": "What the server tells its clients.\n\nMost notifications are broadcast to everyone — the deck is shared state, so\na change one client asked for is news for all of them. [`Self::Error`] and\n[`Self::Registered`] go only to the client concerned."
       },
+      "OutlineResponse": {
+        "type": "object",
+        "description": "The body of `GET /api/outline`: the deck as a searchable list.",
+        "required": [
+          "slides"
+        ],
+        "properties": {
+          "slides": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlideOutline"
+            },
+            "description": "Every presented slide, in order — so a slide's **position** in this list\nis its index in the deck as presented, which is what `Command::GoTo`\ntakes and what `/overview/slide/{index}` is addressed by.\n\nSlides the deck hides from the web are not in this list at all, so the\nposition is never the index of the same slide in the deck as *authored*\n— the number the thumbnails on disk are named by. The server crosses\nbetween the two; no client has to."
+          }
+        }
+      },
       "RenderTarget": {
         "type": "string",
         "description": "Rendering targets for per-slide visibility control.\n\nUsed with `hidden_in` on a slide to exclude it from specific outputs.\nAn empty set means the slide is visible in all targets.",
@@ -760,6 +798,31 @@
           "Part",
           "Standard"
         ]
+      },
+      "SlideOutline": {
+        "type": "object",
+        "description": "One slide as the presenter's slide picker knows it: enough to search for it,\nand enough to jump to it.\n\nPlain text throughout, `title` included. `TalkResponse::titles` is the same\nheading taken a different way — [`crate::Content::display_text`], which hands\nback an HTML title's markup — so the two are not interchangeable even though\na deck whose titles are all plain text makes them look it.",
+        "properties": {
+          "notes": {
+            "type": "string",
+            "description": "The slide's speaker notes, as plain text. Searchable because a speaker\nlooking for a slide mid-talk often remembers what they meant to *say*\nabout it rather than what it shows."
+          },
+          "part": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The part this slide belongs to, if the deck has parts. A part slide\ncarries `None`: it *is* the divider."
+          },
+          "text": {
+            "type": "string",
+            "description": "The slide's body, as plain text extracted from its rendered HTML."
+          },
+          "title": {
+            "type": "string",
+            "description": "The slide's heading, as plain text. Empty for a slide with none."
+          }
+        }
       },
       "SlidesResponse": {
         "type": "object",
@@ -980,6 +1043,9 @@
     },
     {
       "name": "health"
+    },
+    {
+      "name": "outline"
     },
     {
       "name": "slides"

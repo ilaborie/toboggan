@@ -6,8 +6,9 @@ use clawspec_core::test_client::{TestClient, TestServer, TestServerConfig};
 use clawspec_core::{ApiClient, register_schemas};
 use serde_json::{Value, json};
 use toboggan_core::{
-    ClientId, Command, Content, Date, Duration, Notification, RenderTarget, Slide, SlideId,
-    SlideKind, SlidesResponse, State, Style, Talk, TalkResponse, TerminalConfig, Theme, Timestamp,
+    ClientId, Command, Content, Date, Duration, Notification, OutlineResponse, RenderTarget, Slide,
+    SlideId, SlideKind, SlideOutline, SlidesResponse, State, Style, Talk, TalkResponse,
+    TerminalConfig, Theme, Timestamp,
 };
 use toboggan_server::{
     ClientService, HealthResponse, HealthResponseStatus, TalkService, TobogganState, routes,
@@ -123,10 +124,12 @@ async fn should_generate_openapi() -> anyhow::Result<()> {
         HealthResponse,
         HealthResponseStatus,
         Notification,
+        OutlineResponse,
         RenderTarget,
         Slide,
         SlideId,
         SlideKind,
+        SlideOutline,
         SlidesResponse,
         State,
         Style,
@@ -198,6 +201,13 @@ async fn basic_api_operations(app: &mut TestClient<TobogganTestServer>) -> anyho
         .get("/api/slides")?
         .await?
         .as_json::<SlidesResponse>()
+        .await?;
+
+    // Test get outline endpoint
+    let _outline_response = app
+        .get("/api/outline")?
+        .await?
+        .as_json::<OutlineResponse>()
         .await?;
 
     Ok(())

@@ -1,14 +1,19 @@
 //! The presenter view: what the speaker looks at while the room looks at the
 //! deck.
 //!
-//! The two slide panes are `<iframe>`s of the deck itself, painted by
-//! `postMessage` from here — see [`crate::services::mirror`]. They used to be a
+//! The current-slide pane is an `<iframe>` of the deck itself, painted by
+//! `postMessage` from here — see [`crate::services::mirror`]. It used to be a
 //! second rendering of the slide component, scaled with CSS `zoom`, and that
 //! could not be made faithful: the slide inherited this shadow tree's 16px base
 //! instead of the deck's viewport-derived one, the zoom factors were tuned for a
 //! single window size, there was no footer, and the deck's own `_head.html` —
 //! arbitrary author CSS, injected into *this* document — restyled the speaker's
 //! chrome along with the slide.
+//!
+//! The next-slide pane is not a mirror at all but a *photograph*: the same
+//! `/overview/slide/{index}` still the picker's grid shows. A second live deck
+//! in an iframe cost a whole wasm client, a slide fetch per move and a mirror
+//! handshake, to draw a picture the size of a stamp that nobody interacts with.
 //!
 //! The view drives the deck two ways: the keyboard the deck already provides,
 //! and the buttons in the status strip. Both write to the one channel
@@ -23,10 +28,13 @@ use gloo::console::error;
 use gloo::events::EventListener;
 use gloo::timers::callback::Interval;
 use gloo::utils::window;
-use toboggan_core::{Command, Slide, SlideId, State, TalkResponse};
+use toboggan_core::{Command, Slide, SlideId, SlideOutline, State, TalkResponse};
 use wasm_bindgen::JsCast as _;
 use wasm_bindgen::closure::Closure;
-use web_sys::{Element, HtmlElement, HtmlIFrameElement, MessageEvent, ResizeObserver};
+use web_sys::{
+    Element, HtmlDialogElement, HtmlElement, HtmlIFrameElement, HtmlInputElement, MessageEvent,
+    ResizeObserver,
+};
 
 use crate::components::WasmElement;
 use crate::services::mirror::{self, MirrorFrame, MirrorMessage, MirrorPane};
@@ -35,8 +43,10 @@ use crate::{
     render_content,
 };
 
-mod filmstrip;
-use self::filmstrip::Filmstrip;
+mod picker;
+mod thumbnails;
+use self::picker::Picker;
+use self::thumbnails::{Readiness, Thumbnails, thumbnail_src};
 
 const CSS: &str = include_str!("style.css");
 
@@ -179,14 +189,19 @@ struct Inner {
     /// shown rather than this file setting inline styles.
     layout: Element,
     now: Stage,
-    next: Stage,
     notes: Option<Element>,
+    /// The next slide's photograph, `/overview/slide/{index + 1}`.
+    next_shot: Option<Element>,
     next_title: Option<Element>,
     next_number: Option<Element>,
     status: Option<StatusBar>,
-    /// The whole deck at a glance. Shared rather than owned, because its retry
-    /// timer and its click handlers outlive any one call and have to reach it.
-    filmstrip: Option<Rc<RefCell<Filmstrip>>>,
+    /// The whole deck at a glance, searchable. Shared rather than owned, because
+    /// its click handlers outlive any one call and have to reach it.
+    picker: Option<Rc<RefCell<Picker>>>,
+    /// Whether the deck's photographs exist yet, and which generation of them.
+    /// Read by both the next pane and the picker, which is why it is here and
+    /// not in either.
+    thumbs: Thumbnails,
 
     // Everything from `GET /api/talk`. The markup rides on every frame, which is
     // what makes a `TalkChange` that edits only `_head.html` reach both mirrors.
@@ -198,6 +213,15 @@ struct Inner {
     plan: Vec<Option<u64>>,
     /// Reveal steps per slide, so the counter can say `2/3` rather than `2`.
     step_counts: Vec<usize>,
+    /// Every slide's title, as `GET /api/talk` gives them: `Content::display_text`,
+    /// which is the bare text for the `Content::Text` every parser path builds a
+    /// title as, and an HTML title's raw markup otherwise. Treated as text
+    /// either way — see [`Inner::refresh_next`].
+    ///
+    /// The next pane's title is read from here rather than fetched: it is the
+    /// only part of the next slide this view still needs, now that the pane is
+    /// a photograph.
+    titles: Vec<String>,
     total_slides: usize,
 
     // The deck's position and the two slides around it, kept so a frame can be
@@ -207,7 +231,9 @@ struct Inner {
     current_index: usize,
     current_step: usize,
     current_slide: Option<Slide>,
-    next_slide: Option<Slide>,
+    /// Whether the deck is on a slide at all. `current_index` cannot say: before
+    /// the talk starts and past the last slide it is 0, which is also slide one.
+    on_slide: bool,
 
     elapsed: Elapsed,
 }
@@ -257,48 +283,51 @@ impl TobogganPresenterElement {
         let Some(inner) = &self.inner else {
             return;
         };
-        let mut inner = inner.borrow_mut();
-        inner.total_slides = talk.titles.len();
-        // Every reload lands here, including the ones that only edited a slide:
-        // the deck may be a different length, and every thumbnail is potentially
-        // a different picture at the same URL.
-        if let Some(strip) = &inner.filmstrip {
-            let handle = Rc::clone(strip);
-            strip.borrow_mut().invalidate(&handle, talk.titles.len());
-        }
-        inner.plan.clone_from(&talk.durations);
-        inner.step_counts.clone_from(&talk.step_counts);
-        inner.head.clone_from(&talk.head);
-        inner.footer.clone_from(&talk.footer);
-        inner.lang.clone_from(&talk.lang);
-        inner.refresh_status();
-        inner.post_stages();
+        let version = {
+            let mut inner = inner.borrow_mut();
+            inner.total_slides = talk.titles.len();
+            inner.titles.clone_from(&talk.titles);
+            // Every reload lands here, including the ones that only edited a
+            // slide: the deck may be a different length, and every thumbnail is
+            // potentially a different picture at the same URL.
+            inner.thumbs.invalidate();
+            if let Some(picker) = &inner.picker {
+                let mut picker = picker.borrow_mut();
+                // The corpus describes the deck that just went away. `app.rs`
+                // asks for the new one straight after this, and if that request
+                // fails the picker is left unsearchable rather than searching
+                // the old deck's words against the new deck's cells.
+                picker.forget_outline();
+                picker.build(talk.titles.len());
+            }
+            inner.plan.clone_from(&talk.durations);
+            inner.step_counts.clone_from(&talk.step_counts);
+            inner.head.clone_from(&talk.head);
+            inner.footer.clone_from(&talk.footer);
+            inner.lang.clone_from(&talk.lang);
+            inner.refresh_status();
+            inner.refresh_next();
+            inner.refresh_thumbnails();
+            inner.post_now();
+            inner.thumbs.version
+        };
+        // Outside the borrow: the probe takes the handle, and it borrows.
+        thumbnails::probe(Rc::clone(inner), version);
     }
 
-    /// Shows the slide after the current one — its miniature, its title and its
-    /// number — or clears all three at the end of the deck.
-    pub(crate) fn set_next(&self, slide: Option<Slide>) {
+    /// Takes the deck as plain text, so the picker can be searched.
+    ///
+    /// Optional in the sense that everything still works without it: the picker
+    /// opens, shows the deck and jumps: only the filtering is reduced to nothing
+    /// matching more than the whole deck.
+    pub(crate) fn set_outline(&self, slides: &[SlideOutline]) {
         let Some(inner) = &self.inner else {
             return;
         };
-        let mut inner = inner.borrow_mut();
-        let title = slide
-            .as_ref()
-            .map(|slide| render_content(&slide.title, None));
-        inner.next_slide = slide;
-
-        if let Some(element) = &inner.next_title {
-            element.set_inner_html(title.as_deref().unwrap_or_default());
+        let inner = inner.borrow();
+        if let Some(picker) = &inner.picker {
+            picker.borrow_mut().set_outline(slides);
         }
-        if let Some(element) = &inner.next_number {
-            let text = match inner.next_slide {
-                // 1-based, and one past the current slide.
-                Some(_) => format!("{}", inner.current_index + 2),
-                None => String::new(),
-            };
-            element.set_text_content(Some(&text));
-        }
-        inner.post_next();
     }
 
     /// Takes the deck's position and the slide it is on, and redraws everything
@@ -312,6 +341,7 @@ impl TobogganPresenterElement {
         if state.current().is_some() {
             inner.elapsed.start_if_idle();
         }
+        inner.on_slide = state.current().is_some();
         inner.current_index = state.current().map_or(0, SlideId::index);
         inner.current_step = state.current_step();
         state.to_css_class().clone_into(&mut inner.state_class);
@@ -324,12 +354,13 @@ impl TobogganPresenterElement {
             element.set_inner_html(notes.as_deref().unwrap_or_default());
         }
 
-        if let Some(strip) = &inner.filmstrip {
-            strip.borrow_mut().set_current(inner.current_index);
+        if let Some(picker) = &inner.picker {
+            picker.borrow_mut().set_current(inner.current_index);
         }
 
         inner.refresh_steps(state);
         inner.refresh_status();
+        inner.refresh_next();
         inner.post_now();
     }
 
@@ -364,16 +395,6 @@ impl Inner {
                 self.state_class.clone(),
                 self.current_index + 1,
             ),
-            // Every reveal at once: the point of the pane is to see what is
-            // coming, not to re-enact its build. And never `done` — the
-            // end-of-deck celebration in `state.css` does not belong on a
-            // thumbnail of a slide the deck has not reached.
-            MirrorPane::Next => shared(
-                self.next_slide.clone(),
-                None,
-                "running".to_owned(),
-                self.current_index + 2,
-            ),
         }
     }
 
@@ -382,27 +403,69 @@ impl Inner {
         self.now.show(frame);
     }
 
-    fn post_next(&mut self) {
-        let frame = self.frame_for(MirrorPane::Next);
-        self.next.show(frame);
-    }
-
-    fn post_stages(&mut self) {
-        self.post_now();
-        self.post_next();
-    }
-
     /// Answers a mirror that has just come up.
+    ///
+    /// Rebuilt rather than replayed: a mirror that reloaded mid-talk should come
+    /// back to where the deck is now, not to the frame it died on.
     fn welcome(&mut self, pane: MirrorPane) {
         match pane {
-            MirrorPane::Current => self.now.ready = true,
-            MirrorPane::Next => self.next.ready = true,
+            MirrorPane::Current => {
+                self.now.ready = true;
+                self.post_now();
+            }
         }
-        // Rebuilt rather than replayed: a mirror that reloaded mid-talk should
-        // come back to where the deck is now, not to the frame it died on.
-        match pane {
-            MirrorPane::Current => self.post_now(),
-            MirrorPane::Next => self.post_next(),
+    }
+
+    /// Which slide the next pane is showing, or `None` at either end of the
+    /// deck — before it starts, and past its last slide.
+    fn next_index(&self) -> Option<usize> {
+        let next = self.current_index.checked_add(1)?;
+        (self.on_slide && next < self.total_slides).then_some(next)
+    }
+
+    /// Redraws the next-slide pane: its number, its title, and its photograph.
+    fn refresh_next(&self) {
+        let next = self.next_index();
+        if let Some(element) = &self.next_number {
+            // 1-based, the way every other number the speaker reads is.
+            let text = next
+                .map(|index| format!("{}", index + 1))
+                .unwrap_or_default();
+            element.set_text_content(Some(&text));
+        }
+        if let Some(element) = &self.next_title {
+            let title = next.and_then(|index| self.titles.get(index));
+            // Text, never markup. A title is author input, and this pane is the
+            // speaker's chrome: `render_content` — which is what draws a title
+            // on the deck itself — escapes it, and reading it out of
+            // `TalkResponse::titles` instead does not make it safe to set as
+            // HTML. Same reasoning as the picker's captions and snippets.
+            element.set_text_content(title.map(String::as_str));
+        }
+        let Some(image) = &self.next_shot else {
+            return;
+        };
+        match (next, self.thumbs.readiness) {
+            (Some(index), Readiness::Ready) => {
+                let _ = image.set_attribute("src", &thumbnail_src(index, self.thumbs.version));
+            }
+            // No photograph to show: the end of the deck, a machine that cannot
+            // make them, or a deck still being photographed. The pane keeps its
+            // number and its title, and `.next-shot:not([src])` hides the broken
+            // image the browser would otherwise draw.
+            _ => {
+                let _ = image.remove_attribute("src");
+            }
+        }
+    }
+
+    /// Redraws everything that is a photograph of the deck.
+    fn refresh_thumbnails(&mut self) {
+        self.refresh_next();
+        if let Some(picker) = &self.picker {
+            picker
+                .borrow_mut()
+                .refresh(self.thumbs.readiness, self.thumbs.version);
         }
     }
 
@@ -557,7 +620,7 @@ fn layout_html() -> String {
         r#"<div class="now"><div class="pane screen"><iframe class="mirror" title="Current slide" src="{now}"></iframe></div></div>
 <div class="aside">
   <p class="label">Next</p>
-  <div class="next"><div class="pane screen"><iframe class="mirror" title="Next slide" src="{next}"></iframe></div></div>
+  <div class="next"><div class="pane shot"><img class="next-shot" alt="The next slide"></div></div>
   <p class="next-meta"><span class="next-number"></span><span class="next-title"></span></p>
   <div class="notes-head">
     <span class="label">Notes</span>
@@ -580,21 +643,23 @@ fn layout_html() -> String {
   <span class="steps"></span>
   <span class="pacing"></span>
   <nav class="nav">
-    <button type="button" class="strip-toggle" title="All slides (g)" aria-label="All slides" aria-expanded="false">▦</button>
+    <button type="button" class="strip-toggle" title="Find a slide (g, / or Ctrl+K)" aria-label="Find a slide" aria-expanded="false">▦</button>
     <button type="button" class="go-prev" title="Previous step" aria-label="Previous step">‹</button>
     <button type="button" class="go-next" title="Next step" aria-label="Next step">›</button>
   </nav>
 </div>
-<div class="filmstrip" hidden>
+<dialog class="picker">
   <div class="strip-head">
-    <span class="label">All slides</span>
+    <input class="strip-search" type="search" placeholder="Find a slide…" aria-label="Find a slide"
+           autocomplete="off" autofocus role="combobox" aria-expanded="true" aria-controls="slide-grid">
+    <span class="strip-count"></span>
     <span class="strip-status"></span>
-    <button type="button" class="strip-close" title="Close (Esc)" aria-label="Close the slide grid">✕</button>
+    <button type="button" class="strip-close" title="Close (Esc)" aria-label="Close the slide picker">✕</button>
   </div>
-  <div class="strip-grid"></div>
-</div>"#,
+  <div class="strip-grid" id="slide-grid" role="listbox" aria-label="Slides"></div>
+  <p class="strip-hint">type to filter · ↑↓←→ move · ⏎ go · Esc close</p>
+</dialog>"#,
         now = mirror_src(MirrorPane::Current),
-        next = mirror_src(MirrorPane::Next),
     )
 }
 
@@ -669,27 +734,28 @@ impl WasmElement for TobogganPresenterElement {
             find(selector).and_then(|element| element.dyn_into::<HtmlIFrameElement>().ok())
         };
 
-        let (Some(now_frame), Some(next_frame)) = (iframe(".now .mirror"), iframe(".next .mirror"))
-        else {
+        let Some(now_frame) = iframe(".now .mirror") else {
             // Without a pane there is nothing to be a presenter view of, and
             // every method below would quietly do nothing. Say so once instead.
-            error!("Presenter layout has no panes; the view will not show slides");
+            error!("Presenter layout has no pane; the view will not show slides");
             return;
         };
 
         let status = find_status(&find);
 
-        // `None` when the panel is missing from the markup, which costs the view
-        // its slide grid and nothing else — every call below is an `if let`.
-        let filmstrip = match (
-            find(".filmstrip"),
+        // `None` when the dialog is missing from the markup, which costs the
+        // view its picker and nothing else — every call below is an `if let`.
+        let picker = match (
+            find(".picker").and_then(|element| element.dyn_into::<HtmlDialogElement>().ok()),
             find(".strip-grid"),
+            find(".strip-search").and_then(|element| element.dyn_into::<HtmlInputElement>().ok()),
+            find(".strip-count"),
             find(".strip-status"),
         ) {
-            (Some(panel), Some(grid), Some(status)) => {
-                let mut strip = Filmstrip::new(panel, grid, status);
-                strip.set_toggle(find(".strip-toggle"));
-                Some(Rc::new(RefCell::new(strip)))
+            (Some(dialog), Some(grid), Some(input), Some(count), Some(status)) => {
+                let mut picker = Picker::new(dialog, grid, input, count, status);
+                picker.set_toggle(find(".strip-toggle"));
+                Some(Rc::new(RefCell::new(picker)))
             }
             _ => None,
         };
@@ -701,33 +767,31 @@ impl WasmElement for TobogganPresenterElement {
                 last: None,
                 ready: false,
             },
-            next: Stage {
-                frame: next_frame,
-                last: None,
-                ready: false,
-            },
             notes: find(".notes"),
+            next_shot: find(".next-shot"),
             next_title: find(".next-title"),
             next_number: find(".next-number"),
             status,
-            filmstrip: filmstrip.clone(),
+            picker: picker.clone(),
+            thumbs: Thumbnails::default(),
             head: None,
             footer: None,
             lang: None,
             plan: Vec::new(),
             step_counts: Vec::new(),
+            titles: Vec::new(),
             total_slides: 0,
             state_class: "init".to_owned(),
             current_index: 0,
             current_step: 0,
             current_slide: None,
-            next_slide: None,
+            on_slide: false,
             elapsed: Elapsed::default(),
         }));
 
         self.install_inbox(&inner);
         self.install_buttons(&inner, &find);
-        self.install_filmstrip(filmstrip.as_ref(), &find);
+        self.install_picker(&inner, picker.as_ref(), &find);
         self.install_notes_size(host, &find);
         self.install_stage_scale(&layout);
 
@@ -739,6 +803,10 @@ impl WasmElement for TobogganPresenterElement {
         }));
 
         inner.borrow().refresh_status();
+        // Started before anything asks for a picture: the next pane wants one on
+        // the first slide change, and the server is usually still photographing
+        // the deck when this page opens.
+        thumbnails::probe(Rc::clone(&inner), 0);
         self.inner = Some(inner);
     }
 }
@@ -809,18 +877,22 @@ impl TobogganPresenterElement {
         }
     }
 
-    /// Wires the slide grid: its two buttons, `Escape`, and the `g` key.
+    /// Wires the slide picker: its buttons, its search box, and the three keys
+    /// that open it.
     ///
-    /// `g` is caught here rather than added to [`crate::KeyboardMapping`],
-    /// because the grid is a surface only this page has: a binding in the shared
-    /// keymap would appear in the deck's own help dialog naming something the
-    /// deck cannot do.
-    fn install_filmstrip(
+    /// The keys are caught here rather than added to [`crate::KeyboardMapping`],
+    /// because the picker is a surface only this page has: a binding in the
+    /// shared keymap would appear in the deck's own help dialog naming something
+    /// the deck cannot do. The toggle button's tooltip names all three instead —
+    /// the dialog's hint bar cannot, since it is only readable once the picker
+    /// is already open.
+    fn install_picker(
         &mut self,
-        filmstrip: Option<&Rc<RefCell<Filmstrip>>>,
+        inner: &Rc<RefCell<Inner>>,
+        picker: Option<&Rc<RefCell<Picker>>>,
         find: &impl Fn(&str) -> Option<Element>,
     ) {
-        let Some(strip) = filmstrip else {
+        let Some(picker) = picker else {
             return;
         };
 
@@ -828,46 +900,71 @@ impl TobogganPresenterElement {
             let Some(button) = find(selector) else {
                 continue;
             };
-            let strip = Rc::clone(strip);
+            let inner = Rc::clone(inner);
+            let picker = Rc::clone(picker);
             self.listeners
                 .push(EventListener::new(&button, "click", move |_| {
-                    let handle = Rc::clone(&strip);
-                    let mut strip = strip.borrow_mut();
+                    let (readiness, version) = {
+                        let inner = inner.borrow();
+                        (inner.thumbs.readiness, inner.thumbs.version)
+                    };
+                    let mut picker = picker.borrow_mut();
                     if opens {
-                        strip.toggle(&handle);
+                        picker.toggle(readiness, version);
                     } else {
-                        strip.close();
+                        picker.close();
                     }
                 }));
         }
 
         if let Some(commands) = self.commands.clone() {
-            self.listeners
-                .push(filmstrip::install_jump(strip, commands));
+            self.listeners.push(picker::install_jump(picker, commands));
         }
-        self.listeners.push(filmstrip::install_escape(strip));
-
-        // Bare `g`, and only when nothing is being typed into — the same two
-        // guards the deck's own keymap applies, for the same reason: a `g` at
-        // the quake terminal's prompt is a letter, not a command.
-        let strip = Rc::clone(strip);
+        self.listeners.push(picker::install_close(picker));
+        self.listeners.push(picker::install_search(picker));
+        self.listeners.push(picker::install_shot_errors(picker));
         self.listeners
-            .push(EventListener::new(&window(), "keydown", move |event| {
+            .push(picker::install_navigation(picker, self.commands.clone()));
+
+        // Bare `g` or `/`, and `Ctrl`/`Cmd`+`K` — the three a speaker reaches
+        // for. `g` and `/` are both unbound in the deck's keymap, and a modified
+        // key never reaches it at all, so none of the three is taken from the
+        // deck.
+        //
+        // Only when nothing is being typed into, the same guard the deck's own
+        // keymap applies for the same reason: a `g` at the quake terminal's
+        // prompt is a letter, not a command. It is also what makes the picker's
+        // own search box safe — `typing_into_editable` reads the event's
+        // `composedPath`, so it sees an input inside this shadow root.
+        let inner = Rc::clone(inner);
+        let picker = Rc::clone(picker);
+        let options = gloo::events::EventListenerOptions::enable_prevent_default();
+        self.listeners.push(EventListener::new_with_options(
+            &window(),
+            "keydown",
+            options,
+            move |event| {
                 let Some(event) = event.dyn_ref::<web_sys::KeyboardEvent>() else {
                     return;
                 };
-                if event.key() != "g"
-                    || event.ctrl_key()
-                    || event.meta_key()
-                    || event.alt_key()
-                    || crate::deck_keys_captured()
-                    || crate::typing_into_editable(event)
-                {
+                let modified = event.ctrl_key() || event.meta_key();
+                let opens = match event.key().as_str() {
+                    "g" | "/" => !modified && !event.alt_key(),
+                    "k" => modified && !event.alt_key(),
+                    _ => false,
+                };
+                if !opens || crate::deck_keys_captured() || crate::typing_into_editable(event) {
                     return;
                 }
-                let handle = Rc::clone(&strip);
-                strip.borrow_mut().toggle(&handle);
-            }));
+                // `Ctrl+K` and `/` are the browser's own before they are ours.
+                event.prevent_default();
+                let (readiness, version) = {
+                    let inner = inner.borrow();
+                    (inner.thumbs.readiness, inner.thumbs.version)
+                };
+                picker.borrow_mut().toggle(readiness, version);
+            },
+        ));
     }
 
     /// Wires `A−`/`A+`, and restores whatever size was last chosen.
@@ -898,13 +995,13 @@ impl TobogganPresenterElement {
         }
     }
 
-    /// Keeps `--stage-scale` in step with the size of each pane.
+    /// Keeps `--stage-scale` in step with the size of the mirrored pane.
     ///
     /// The scale is a `transform`, which is paint-time and cannot change the
     /// size of the element being observed, so writing the property from inside
     /// the callback cannot start an observation loop.
     fn install_stage_scale(&mut self, layout: &Element) {
-        let Ok(panes) = layout.query_selector_all(".pane.screen") else {
+        let Ok(panes) = layout.query_selector_all(".now .pane.screen") else {
             return;
         };
         let panes = (0..panes.length())

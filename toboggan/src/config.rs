@@ -155,6 +155,8 @@ pub(crate) struct ServeConfig {
     pub(crate) open: Option<bool>,
     /// Also open the presenter view — notes, next slide, and a timer.
     pub(crate) open_presenter: Option<bool>,
+    /// Do not photograph the deck at startup; wait until something asks.
+    pub(crate) no_eager_thumbnails: Option<bool>,
     /// Secret that lets a client not on this machine drive the deck.
     ///
     /// Only consulted when the server is reachable from the network — a client
@@ -261,6 +263,7 @@ impl ServeConfig {
             shell,
             open,
             open_presenter,
+            no_eager_thumbnails,
             presenter_token,
         );
     }

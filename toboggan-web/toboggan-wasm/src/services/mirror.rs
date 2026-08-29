@@ -25,14 +25,16 @@ use web_sys::MessageEvent;
 
 /// Which pane a mirror is. Told to it in its URL, and echoed back on
 /// [`MirrorMessage::Ready`] so the presenter knows which one has come up.
+///
+/// One variant, and still an enum: `?mirror=current` is the wire value and the
+/// handshake names the pane it is about. The presenter view had two of these
+/// until the next-slide pane became a photograph of the deck rather than a
+/// second copy of it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum MirrorPane {
     /// The slide the room is looking at, at the reveal it is looking at.
     Current,
-    /// The slide after it, with every reveal shown at once: the point of the
-    /// pane is to see what is coming, not to re-enact its build.
-    Next,
 }
 
 impl MirrorPane {
@@ -40,7 +42,6 @@ impl MirrorPane {
     pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Self::Current => "current",
-            Self::Next => "next",
         }
     }
 
@@ -49,7 +50,6 @@ impl MirrorPane {
     pub(crate) fn from_str(value: &str) -> Option<Self> {
         match value {
             "current" => Some(Self::Current),
-            "next" => Some(Self::Next),
             _ => None,
         }
     }
@@ -78,9 +78,7 @@ pub(crate) struct MirrorFrame {
     pub lang: Option<String>,
     /// `None` clears the pane — before the talk starts, and past the last slide.
     pub slide: Option<Slide>,
-    /// Which reveal to stop at, or `None` for all of them, which is what the
-    /// next-slide pane wants: the point of that pane is to see what is coming,
-    /// not to re-enact its build.
+    /// Which reveal to stop at, or `None` for all of them.
     ///
     /// `None` rather than the `usize::MAX` the slide component takes for
     /// "everything". That value's JSON depends on the pointer width `usize`

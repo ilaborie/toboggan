@@ -55,6 +55,15 @@ static ANCHOR_SELECTOR: LazyLock<Selector> =
 /// Tags whose content should be excluded from text extraction
 const EXCLUDED_TAGS: &[&str] = &["style", "script", "svg", "figure"];
 
+/// Tags dropped when building a *search* haystack.
+///
+/// Narrower than [`EXCLUDED_TAGS`] on purpose: `style` and `script` are the only
+/// two whose text a reader never sees. A diagram's node labels and a figure's
+/// caption are words on the slide, and a speaker hunting for "the one with the
+/// retry loop in it" is searching for exactly the kind of word that only ever
+/// appears inside a `<svg>` a mermaid fence produced.
+const UNSEARCHABLE_TAGS: &[&str] = &["style", "script"];
+
 /// Tags excluded on top of [`EXCLUDED_TAGS`] when counting *spoken* words.
 ///
 /// Only `pre`, never `code`: comrak renders a fenced or indented block as
@@ -219,6 +228,17 @@ impl HtmlDocument {
     #[must_use]
     pub fn extract_text(&self) -> String {
         self.extract_text_excluding(EXCLUDED_TAGS)
+    }
+
+    /// Extract the text a search should look in, keeping diagrams and figures.
+    ///
+    /// Wider than [`Self::extract_text`]: this drops only `style` and `script`,
+    /// so a mermaid diagram's labels and a figure's caption are searchable. Use
+    /// it for a haystack, not for a word count — [`Self::extract_spoken_text`]
+    /// is what the duration estimate is built on, and it excludes both.
+    #[must_use]
+    pub fn extract_searchable_text(&self) -> String {
+        self.extract_text_excluding(UNSEARCHABLE_TAGS)
     }
 
     /// Extract only the text a speaker actually says, dropping block code.

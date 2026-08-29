@@ -257,6 +257,48 @@ impl TalkResponse {
     }
 }
 
+/// One slide as the presenter's slide picker knows it: enough to search for it,
+/// and enough to jump to it.
+///
+/// Plain text throughout, `title` included. `TalkResponse::titles` is the same
+/// heading taken a different way — [`crate::Content::display_text`], which hands
+/// back an HTML title's markup — so the two are not interchangeable even though
+/// a deck whose titles are all plain text makes them look it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct SlideOutline {
+    /// The slide's heading, as plain text. Empty for a slide with none.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub title: String,
+    /// The part this slide belongs to, if the deck has parts. A part slide
+    /// carries `None`: it *is* the divider.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub part: Option<String>,
+    /// The slide's body, as plain text extracted from its rendered HTML.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub text: String,
+    /// The slide's speaker notes, as plain text. Searchable because a speaker
+    /// looking for a slide mid-talk often remembers what they meant to *say*
+    /// about it rather than what it shows.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub notes: String,
+}
+
+/// The body of `GET /api/outline`: the deck as a searchable list.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct OutlineResponse {
+    /// Every presented slide, in order — so a slide's **position** in this list
+    /// is its index in the deck as presented, which is what `Command::GoTo`
+    /// takes and what `/overview/slide/{index}` is addressed by.
+    ///
+    /// Slides the deck hides from the web are not in this list at all, so the
+    /// position is never the index of the same slide in the deck as *authored*
+    /// — the number the thumbnails on disk are named by. The server crosses
+    /// between the two; no client has to.
+    pub slides: Vec<SlideOutline>,
+}
+
 /// A slide's planned speaking time in whole seconds.
 fn planned_seconds(slide: &Slide) -> Option<u64> {
     slide.duration.map(|duration| duration.as_secs())

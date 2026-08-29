@@ -180,8 +180,17 @@ See [SECURITY.md](SECURITY.md) for the full posture.
 `/presenter` is the same application as `/run` with the things a presenter needs
 around it — the next slide, the notes for where you are, and a status strip with
 the clock, an elapsed timer, deck progress, and how far ahead or behind the
-deck's declared `duration` you are running. Both previews are laid out at
-projector width and painted small, so a line that wraps here wraps in the room.
+deck's declared `duration` you are running. The current slide is the real deck
+laid out at projector width and painted small, so a line that wraps here wraps
+in the room; the next one is the still the slide overview took of it.
+
+`g`, `/` or `Ctrl`/`Cmd`+`K` opens the **slide picker**: every slide as a
+thumbnail, over a search box that reads each slide's title, the part it is in,
+its body *and its speaker notes* — mid-talk you usually remember what you meant
+to say about a slide rather than what it shows. Diagram labels and figure
+captions are searched too. Arrows move, `Enter` jumps, `Esc` closes. The
+pictures are photographed as the server starts, so they are there when you first
+look; `--no-eager-thumbnails` puts that back to the first request.
 
 <div align="center">
   <img src="docs/screenshots/presenter.png" alt="The Toboggan presenter view: current slide, next slide, notes and a status strip" width="840">

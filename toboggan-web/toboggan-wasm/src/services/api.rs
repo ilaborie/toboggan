@@ -1,7 +1,7 @@
 use gloo::net::Error;
 use gloo::net::http::Request;
 use serde::de::DeserializeOwned;
-use toboggan_core::{Slide, SlideId, TalkResponse};
+use toboggan_core::{OutlineResponse, Slide, SlideId, TalkResponse};
 
 /// Client for interacting with the Toboggan API
 #[derive(Debug, Clone)]
@@ -36,6 +36,15 @@ impl TobogganApi {
     /// Fetches the current talk
     pub(crate) async fn get_talk(&self) -> Result<TalkResponse, Error> {
         self.get("api/talk?footer=true&head=true").await
+    }
+
+    /// Fetches the deck as a searchable list of plain-text slides.
+    ///
+    /// Only the presenter view's slide picker asks: the response is every
+    /// slide's body and its notes again, in plain text, which is most of the
+    /// deck a second time and no use to a client that only shows one slide.
+    pub(crate) async fn get_outline(&self) -> Result<OutlineResponse, Error> {
+        self.get("api/outline").await
     }
 
     // /// Fetches all slides

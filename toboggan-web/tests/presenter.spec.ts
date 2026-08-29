@@ -1,15 +1,18 @@
 import { expect, type Frame, type Page, test } from "@playwright/test";
 
 /**
- * The presenter view, and the one claim it exists to make: that the panes show
+ * The presenter view, and the one claim it exists to make: that the pane shows
  * what the room shows.
  *
- * They are iframes of `/run` now, painted by `postMessage`. They used to be the
+ * It is an iframe of `/run` now, painted by `postMessage`. It used to be the
  * slide component re-rendered into the presenter's own shadow tree and shrunk
  * with CSS `zoom`, which could not be faithful — the slide inherited the
  * chrome's 16px base rather than the deck's viewport-derived one, so every type
  * size, which is a percentage, came out at half. The assertions below are
  * written against that failure: the *ratios* matter more than the text.
+ *
+ * The *next* slide is not a mirror but a photograph — the still the slide
+ * overview took of it — so there is exactly one deck in this page now.
  *
  * The whole suite is serial against one server holding one presentation state,
  * so every test here puts the deck where it wants it and assumes nothing about
@@ -36,8 +39,8 @@ const goTo = async (page: Page, slide: number) => {
  * `evaluate` — computed styles inside the mirror's own document are the point —
  * and a `FrameLocator` has none.
  */
-const mirror = async (page: Page, pane: "current" | "next"): Promise<Frame> => {
-	const url = `mirror=${pane}`;
+const mirror = async (page: Page): Promise<Frame> => {
+	const url = "mirror=current";
 	await expect
 		.poll(() => page.frames().some((frame) => frame.url().includes(url)), {
 			timeout: 15_000,
@@ -45,7 +48,7 @@ const mirror = async (page: Page, pane: "current" | "next"): Promise<Frame> => {
 		.toBe(true);
 	const frame = page.frames().find((f) => f.url().includes(url));
 	if (!frame) {
-		throw new Error(`No ${pane} mirror`);
+		throw new Error("No current-slide mirror");
 	}
 	// The slide arrives by message, a moment after the document loads.
 	await frame.waitForSelector(".toboggan-slide", { timeout: 15_000 });
@@ -98,7 +101,7 @@ test("a pane lays the deck out exactly as the deck does", async ({ page }) => {
 	// what the `zoom` this replaced did.
 	await page.setViewportSize({ width: 1600, height: 1000 });
 	await page.goto("/presenter");
-	const now = await measure(await mirror(page, "current"));
+	const now = await measure(await mirror(page));
 
 	expect(now.viewportWidth).toBe(STAGE.width);
 	expect(now.rootFontSize).toBe(deck.rootFontSize);
@@ -108,7 +111,7 @@ test("a pane lays the deck out exactly as the deck does", async ({ page }) => {
 test("the deck's own CSS stays inside the panes", async ({ page }) => {
 	await goTo(page, 6);
 	await page.goto("/presenter");
-	const now = await mirror(page, "current");
+	const now = await mirror(page);
 
 	// The guide's `_head.html` pulls a stylesheet that paints `main` — and
 	// `<main>` is this shell's shadow host, so injected here it repainted the
@@ -123,13 +126,13 @@ test("the deck's own CSS stays inside the panes", async ({ page }) => {
 	await expect(page.locator("html")).toHaveCSS("font-size", "16px");
 });
 
-test("the next pane names and shows the slide after this one", async ({
+test("the next pane names and photographs the slide after this one", async ({
 	page,
 }) => {
 	const talk = await (await page.request.get("/api/talk")).json();
-	// A slide whose successor has both a title and reveals to show.
-	const index = talk.step_counts.findIndex(
-		(steps: number, at: number) => at > 0 && steps > 0 && talk.titles[at],
+	// A slide whose successor has a title to name.
+	const index = talk.titles.findIndex(
+		(title: string, at: number) => at > 0 && title,
 	);
 	expect(index).toBeGreaterThan(0);
 
@@ -141,11 +144,39 @@ test("the next pane names and shows the slide after this one", async ({
 	});
 	await expect(page.locator(".next-number")).toHaveText(String(index + 1));
 
-	// Every reveal at once: the pane is a look at what is coming, not a
-	// re-enactment of its build.
-	const next = await measure(await mirror(page, "next"));
-	expect(next.steps).toBe(talk.step_counts[index]);
-	expect(next.revealed).toBe(next.steps);
+	// A still of the deck, addressed by the *presented* index — the server
+	// crosses to the authored one behind the route.
+	const shot = page.locator(".next-shot");
+	await expect(shot).toHaveAttribute(
+		"src",
+		new RegExp(`^/overview/slide/${index}\\?`),
+		// The deck is photographed as the server starts, and photographing one
+		// takes seconds — so a run that opens this page immediately can still be
+		// waiting on it.
+		{ timeout: 60_000 },
+	);
+	// Decoded, not merely addressed: a `503` sets the attribute perfectly well.
+	await expect
+		.poll(() => shot.evaluate((img) => (img as HTMLImageElement).naturalWidth))
+		.toBeGreaterThan(0);
+
+	// And no second deck: the pane used to be a whole wasm client in an iframe.
+	await expect(page.locator('iframe[src*="mirror=next"]')).toHaveCount(0);
+});
+
+test("the next pane clears at the end of the deck", async ({ page }) => {
+	const talk = await (await page.request.get("/api/talk")).json();
+	await goTo(page, talk.titles.length - 1);
+	await page.goto("/presenter");
+
+	await expect(page.locator(".counter")).toContainText(
+		`${talk.titles.length}/`,
+		{ timeout: 15_000 },
+	);
+	// Nothing to come: no number, no title, and no picture behind them.
+	await expect(page.locator(".next-number")).toHaveText("");
+	await expect(page.locator(".next-title")).toHaveText("");
+	await expect(page.locator(".next-shot")).not.toHaveAttribute("src", /./);
 });
 
 test("the on-screen navigation drives the deck", async ({ page, context }) => {
@@ -191,7 +222,7 @@ test("a pane opens no socket and starts no shell", async ({ page }) => {
 	await goTo(page, index);
 
 	await page.goto("/presenter");
-	await mirror(page, "current");
+	await mirror(page);
 	await page.waitForTimeout(500);
 
 	// A second set of terminals would be a second set of shells, in a second

@@ -208,9 +208,10 @@ impl TobogganState {
     /// hides anything, and a client that got it wrong would show the *next*
     /// slide's picture under the right number, silently.
     ///
-    /// Generation is kicked off if it has not been: the filmstrip is usually the
-    /// first thing to want thumbnails, and nothing else on the presenter view
-    /// asks for them.
+    /// Generation is kicked off if it has not been. The server warms the thumbnails
+    /// at startup unless told not to, so this is usually a no-op — but the
+    /// presenter view's next-slide pane and its picker both ask on their own,
+    /// which is what makes them recover after a reload.
     pub(crate) async fn presented_thumbnail(&self, presented: usize) -> AssetLookup {
         let Some(source) = self.talk_service.source_index(presented).await else {
             return AssetLookup::Missing;
@@ -219,7 +220,7 @@ impl TobogganState {
             ThumbStatus::Ready => {}
             ThumbStatus::Pending => return AssetLookup::NotReady,
             // Distinguishable from "still working" by the caller, which is what
-            // stops the filmstrip polling for ever on a machine that will never
+            // stops the presenter view polling for ever on a machine that will never
             // produce a thumbnail.
             ThumbStatus::Unavailable(_) => return AssetLookup::Missing,
         }
