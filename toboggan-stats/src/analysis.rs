@@ -1,4 +1,4 @@
-use toboggan_core::Content;
+use toboggan_core::{Content, Slide};
 
 use crate::html::HtmlDocument;
 
@@ -104,6 +104,70 @@ pub fn extract_text_from_html(html: &str) -> String {
     HtmlDocument::parse_fragment(html).extract_text()
 }
 
+/// Extract the text of an HTML fragment for a *search* haystack.
+///
+/// Keeps what [`extract_text_from_html`] drops from a diagram or a figure: a
+/// mermaid fence renders to `<svg>`, and the words in it are words on the
+/// slide.
+#[must_use]
+pub fn extract_searchable_text_from_html(html: &str) -> String {
+    HtmlDocument::parse_fragment(html).extract_searchable_text()
+}
+
+/// Best-effort plain text of a piece of content.
+///
+/// [`Content::Empty`] is the only `None`: a `Text` holding `""` is content that
+/// happens to say nothing, which a caller building a search haystack wants to
+/// keep as an empty string rather than as an absent field.
+///
+/// Unlike [`Content::display_text`], an HTML fragment with no alt text is
+/// *parsed* rather than handed back as markup — a search index full of `<p>` is
+/// a search index that matches on tag names.
+#[must_use]
+pub fn content_plain_text(content: &Content) -> Option<String> {
+    match content {
+        Content::Empty => None,
+        Content::Text { text } => Some(text.clone()),
+        Content::Html { alt: Some(alt), .. } => Some(alt.clone()),
+        Content::Html { raw, .. } => Some(extract_text_from_html(raw)),
+    }
+}
+
+/// The text a reader would see, extracted from the rendered markup.
+///
+/// Two things differ from [`content_plain_text`], and both matter to a search
+/// index:
+///
+/// * **The markup, never the alt text.** A slide's body and its notes carry
+///   their *Markdown source* as their alt — `# Titre`, `**gras**`,
+///   `> citation` (see `HtmlRenderer::render_steps`) — so indexing the alt
+///   matches on syntax and quotes syntax back in its snippets. A title is
+///   `Content::Text` and has no alt at all, which is why `content_plain_text`
+///   can prefer one and this cannot.
+/// * **Diagrams and figures are kept**, via
+///   [`extract_searchable_text_from_html`]: a mermaid fence renders to `<svg>`,
+///   and a slide is often best remembered by a word that appears only in it.
+#[must_use]
+pub fn rendered_plain_text(content: &Content) -> Option<String> {
+    match content {
+        Content::Empty => None,
+        Content::Text { text } => Some(text.clone()),
+        Content::Html { raw, .. } => Some(extract_searchable_text_from_html(raw)),
+    }
+}
+
+/// The text of a slide's body, as a reader would see it.
+#[must_use]
+pub fn slide_plain_text(slide: &Slide) -> String {
+    rendered_plain_text(&slide.body).unwrap_or_default()
+}
+
+/// The text of a slide's speaker notes, as the speaker would read them.
+#[must_use]
+pub fn notes_plain_text(slide: &Slide) -> String {
+    rendered_plain_text(&slide.notes).unwrap_or_default()
+}
+
 /// Count images in HTML content
 #[must_use]
 pub fn count_images_in_html(html: &str) -> usize {
@@ -198,6 +262,50 @@ mod tests {
     fn test_extract_text_from_html() {
         let html = "<p>Hello</p><p>World</p>";
         assert_eq!(extract_text_from_html(html), "Hello World");
+    }
+
+    /// The alt text is what the slide says it means; the markup is the fallback,
+    /// and it is parsed rather than passed through — a haystack full of `<p>`
+    /// matches on tag names.
+    #[test]
+    fn content_plain_text_prefers_alt_then_parses_markup() {
+        let with_alt = Content::html_with_alt("<p>Bonjour <b>tout</b></p>", "Bonjour tout");
+        assert_eq!(
+            content_plain_text(&with_alt).as_deref(),
+            Some("Bonjour tout")
+        );
+
+        let without_alt = Content::html("<p>Bonjour <b>tout</b></p>");
+        assert_eq!(
+            content_plain_text(&without_alt).as_deref(),
+            Some("Bonjour tout")
+        );
+    }
+
+    /// Only `Empty` is absent: a `Text` holding `""` is content that happens to
+    /// say nothing, which a search haystack wants as an empty string.
+    #[test]
+    fn only_empty_content_has_no_plain_text() {
+        assert_eq!(content_plain_text(&Content::Empty), None);
+        assert_eq!(content_plain_text(&Content::text("")).as_deref(), Some(""));
+    }
+
+    /// The body and the notes carry their Markdown source as their alt text, so
+    /// reading the alt would index `#` and `**` and quote them back in a
+    /// snippet. The markup is what a reader sees.
+    #[test]
+    fn a_slide_yields_the_rendered_text_of_its_body_and_its_notes() {
+        let slide = Slide {
+            body: Content::html_with_alt("<p>On the <b>projector</b></p>", "On the **projector**"),
+            notes: Content::html_with_alt("<p>For the speaker</p>", "For the speaker"),
+            ..Default::default()
+        };
+        assert_eq!(slide_plain_text(&slide), "On the projector");
+        assert_eq!(notes_plain_text(&slide), "For the speaker");
+
+        let bare = Slide::default();
+        assert_eq!(slide_plain_text(&bare), "");
+        assert_eq!(notes_plain_text(&bare), "");
     }
 
     #[test]

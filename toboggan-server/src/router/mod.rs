@@ -55,6 +55,7 @@ pub fn routes_with_cors(
             "/api",
             Router::new()
                 .route("/talk", get(api::get_talk))
+                .route("/outline", get(api::get_outline))
                 .route("/slides", get(api::get_slides))
                 .route("/slides/{index}", get(api::get_slide_by_index))
                 .merge(privileged),
@@ -478,7 +479,7 @@ mod tests {
     /// gate would have turned a security fix into a broken feature.
     #[tokio::test]
     async fn the_network_can_still_watch() {
-        for path in ["/api/talk", "/api/slides", "/health"] {
+        for path in ["/api/talk", "/api/outline", "/api/slides", "/health"] {
             let response = test_router()
                 .oneshot(request_from(
                     REMOTE,
@@ -538,6 +539,24 @@ mod tests {
             .oneshot(request_from(
                 LOCAL,
                 Request::get("/api/terminal?cmd=id")
+                    .body(Body::empty())
+                    .expect("build request"),
+            ))
+            .await
+            .expect("serve request");
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// The outline is public but not photographic: nothing taking a picture of
+    /// a slide searches the deck, and the response is every slide's body and
+    /// notes again.
+    #[tokio::test]
+    async fn a_shot_server_does_not_serve_the_outline() {
+        let response = shot_router()
+            .oneshot(request_from(
+                LOCAL,
+                Request::get("/api/outline")
                     .body(Body::empty())
                     .expect("build request"),
             ))

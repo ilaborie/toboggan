@@ -6,7 +6,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 use toboggan_core::{
-    ClientsResponse, Command, Notification, SlideId, SlidesResponse, TalkResponse,
+    ClientsResponse, Command, Notification, OutlineResponse, SlideId, SlidesResponse, TalkResponse,
 };
 use tracing::{info, warn};
 
@@ -50,6 +50,17 @@ pub(super) async fn get_slides(State(talk_service): State<TalkService>) -> impl 
     let result = SlidesResponse { slides };
 
     Json(result)
+}
+
+/// The deck as a searchable list, for the presenter's slide picker.
+///
+/// Separate from `GET /api/talk` rather than folded into it: this is a slide's
+/// whole body and its notes as plain text, which is most of the deck again, and
+/// every client that draws a progress bar asks for the talk.
+pub(super) async fn get_outline(State(talk_service): State<TalkService>) -> impl IntoResponse {
+    let slides = talk_service.outline().await.to_vec();
+
+    Json(OutlineResponse { slides })
 }
 
 pub(super) async fn get_slide_by_index(

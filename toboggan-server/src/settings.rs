@@ -74,6 +74,16 @@ pub struct ServerSettings {
     #[clap(long, env = "TOBOGGAN_THUMBNAIL_RENDERER", value_enum, default_value_t = crate::ThumbnailRenderer::Auto)]
     pub thumbnail_renderer: crate::ThumbnailRenderer,
 
+    /// Do not photograph the deck at startup; wait until something asks
+    ///
+    /// Thumbnails are warmed as soon as the server is listening, so the
+    /// presenter's slide picker and its next-slide preview have pictures the
+    /// first time the speaker looks at them rather than several seconds later.
+    /// Opt out on a machine where spawning a browser per serve is unwelcome —
+    /// the overview and the presenter view still generate them on first request.
+    #[clap(long, env = "TOBOGGAN_NO_EAGER_THUMBNAILS")]
+    pub no_eager_thumbnails: bool,
+
     /// Browser binary used to photograph slides (Chrome, Chromium or Edge)
     ///
     /// Detected from `CHROME`, the `PATH` and the usual install locations when

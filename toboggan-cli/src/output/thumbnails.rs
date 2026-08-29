@@ -8,7 +8,8 @@ use std::path::Path;
 use std::process::Command;
 
 use serde::Serialize;
-use toboggan_core::{Content, RenderTarget, Slide, SlideId, SlideKind, Talk};
+use toboggan_core::{RenderTarget, SlideId, SlideKind, Talk};
+use toboggan_stats::{content_plain_text, slide_plain_text};
 
 use crate::error::{Result, TobogganCliError};
 use crate::mermaid::MermaidRenderer;
@@ -236,7 +237,7 @@ fn build_entries(talk: &Talk) -> Vec<SlideEntry> {
 
     for (index, slide) in talk.slides.iter().enumerate() {
         if slide.kind == SlideKind::Part {
-            current_part = content_text(&slide.title);
+            current_part = content_plain_text(&slide.title);
         }
         let hidden_in_web = slide.hidden_in.contains(&RenderTarget::Web);
         let web_number = if hidden_in_web {
@@ -248,35 +249,18 @@ fn build_entries(talk: &Talk) -> Vec<SlideEntry> {
         entries.push(SlideEntry {
             index,
             display_number: SlideId::new(index).display_number(),
-            title: content_text(&slide.title).unwrap_or_default(),
+            title: content_plain_text(&slide.title).unwrap_or_default(),
             part: if slide.kind == SlideKind::Part {
                 None
             } else {
                 current_part.clone()
             },
-            text: slide_text(slide),
+            text: slide_plain_text(slide),
             hidden_in_web,
             web_number,
         });
     }
     entries
-}
-
-/// Best-effort plain text of a slide body for search/popover.
-fn slide_text(slide: &Slide) -> String {
-    match &slide.body {
-        Content::Html { alt: Some(alt), .. } => alt.clone(),
-        Content::Html { raw, .. } => toboggan_stats::extract_text_from_html(raw),
-        Content::Text { text } => text.clone(),
-        Content::Empty => String::new(),
-    }
-}
-
-fn content_text(content: &Content) -> Option<String> {
-    match content {
-        Content::Empty => None,
-        other => Some(other.to_string()),
-    }
 }
 
 fn render_overview(
@@ -463,7 +447,7 @@ fn escape(text: &str) -> String {
 mod tests {
     use std::collections::BTreeSet;
 
-    use toboggan_core::SlideKind;
+    use toboggan_core::{Content, Slide, SlideKind};
 
     use super::*;
 

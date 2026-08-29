@@ -11,6 +11,31 @@ Entries are grouped the way the commits are: this repository uses
 
 ### Added
 
+- **The presenter view has a searchable slide picker.** `g`, `/` or
+  `Ctrl`/`Cmd`+`K` opens a dialog of the overview thumbnails over a search box;
+  arrows move, `Enter` jumps, `Esc` closes. The search reads each slide's title,
+  its part, its body **and its speaker notes**, all as plain text — diagrams and
+  figure captions included, since a slide is often best remembered by a word that
+  appears only in its picture. Mid-talk a speaker looking for a slide usually
+  remembers what they meant to *say* about it rather than what it shows. Matching
+  is accent-folded and every word of the query must appear, and the grid keeps
+  deck order — nothing reshuffles under the eye. The corpus is a new
+  `GET /api/outline`, computed once when a deck loads.
+
+  This replaces the slide grid that was behind `g`, which could only be read, and
+  keeps what that grid got right: forty small stills is forty pictures where
+  forty iframes would be forty copies of the deck, and the cells are numbered
+  over the presented deck the way `Command::GoTo` is, while the thumbnails on
+  disk are named over the deck as authored — `GET /overview/slide/{index}`
+  crosses between the two so a `hidden_in = ["web"]` slide cannot silently shift
+  the grid. When a machine has neither a browser nor `typst`, the picker says so
+  once, rather than for ever, and stops asking.
+
+- **Thumbnails are photographed as the server starts.** They were made on the
+  first request, which is the moment a speaker opens the presenter view and
+  wants them. `--no-eager-thumbnails` (or `TOBOGGAN_NO_EAGER_THUMBNAILS`, or
+  `no-eager-thumbnails` under `[serve]`) puts that back.
+
 - **`toboggan ci` writes the GitHub Pages workflow.** Everything needed to
   publish a deck already existed — the composite action, and an example workflow
   to copy — but copying was the author's job, and the copy is where the pinned
@@ -31,19 +56,16 @@ Entries are grouped the way the commits are: this repository uses
   diagnostics arrive as inline annotations on the changed lines. The generated
   workflow turns it on and builds pull requests without publishing them.
 
-- **The presenter view has a slide grid.** `g` (or the `▦` button) opens every
-  slide at once, as thumbnails; click one to jump, `Esc` closes it. This is the
-  one thing the overview's pictures are genuinely better at than another live
-  pane — forty small stills is forty pictures, where forty iframes would be
-  forty copies of the deck. The cells are numbered over the presented deck, the
-  way `Command::GoTo` is, while the thumbnails on disk are named over the deck as
-  authored; `GET /overview/slide/{index}` crosses between the two so a
-  `hidden_in = ["web"]` slide cannot silently shift the grid. They are generated
-  on first use, so the strip says "Rendering slide previews…" for a few seconds
-  on a cold server, and says so once — rather than for ever — when the machine
-  has neither a browser nor `typst`.
-
 ### Changed
+
+- **The presenter view's next-slide pane is a photograph, not a second deck.**
+  It shows `GET /overview/slide/{index + 1}` — the same still the picker's grid
+  shows — where it used to be a live `/run` in an iframe. That pane cost a whole
+  wasm client, a slide fetch per slide change and a mirror handshake, to draw
+  something the size of a stamp that nobody interacts with; its title now comes
+  from `GET /api/talk`, so the view fetches no slide but the one it is on. On a
+  machine that can photograph nothing — no browser and no `typst` — the pane
+  keeps its number and its title and shows no picture.
 
 - **Slide-overview thumbnails are photographs of the deck, not a redrawing of
   it.** `/slides` used to be illustrated by a second rendering: the same

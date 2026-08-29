@@ -1,12 +1,34 @@
 use gloo::console::error;
-use wasm_bindgen::JsValue;
+use wasm_bindgen::{JsCast as _, JsValue};
 
 /// Log DOM errors without panicking
 pub fn log_dom_error(operation: &str, error: &JsValue) {
-    let error_msg = error
-        .as_string()
-        .unwrap_or_else(|| "Unknown error".to_owned());
-    error!("DOM operation failed:", operation, "Error:", error_msg);
+    error!(
+        "DOM operation failed:",
+        operation,
+        "Error:",
+        describe(error)
+    );
+}
+
+/// The most informative string a rejected DOM call can be reduced to.
+///
+/// `JsValue::as_string` answers only for a JS *string*, and a DOM call rejects
+/// with a `DOMException` object — so reading it alone reported every failure in
+/// this crate as "Unknown error", discarding the one part worth having. Whether
+/// `showModal` threw `InvalidStateError` (already open) or `NotSupportedError`
+/// (the element is not in the document) is the whole diagnosis, and both looked
+/// identical in the console.
+fn describe(error: &JsValue) -> String {
+    if let Some(text) = error.as_string() {
+        return text;
+    }
+    if let Some(exception) = error.dyn_ref::<js_sys::Error>() {
+        return format!("{}: {}", exception.name(), exception.message());
+    }
+    // Not a string and not an `Error`: `String(value)`, which is what a console
+    // would have shown, rather than giving up.
+    String::from(js_sys::JsString::from(error.clone()))
 }
 
 /// Simplified macro for DOM operations with error logging

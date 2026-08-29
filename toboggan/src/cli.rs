@@ -261,6 +261,15 @@ pub(crate) struct ServeOptions {
     #[arg(long, env = "TOBOGGAN_OPEN_PRESENTER")]
     pub(crate) open_presenter: bool,
 
+    /// Do not photograph the deck at startup; wait until something asks
+    ///
+    /// The slide overview and the presenter view's picker and next-slide
+    /// preview are all pictures of the deck, and taking them costs seconds —
+    /// so they are taken as soon as the server is listening. Opt out to keep
+    /// the old behaviour, where the first request pays for them.
+    #[arg(long, env = "TOBOGGAN_NO_EAGER_THUMBNAILS")]
+    pub(crate) no_eager_thumbnails: bool,
+
     /// Secret that lets a client not on this machine drive the deck
     ///
     /// Only relevant with `--host` set to something reachable: a client on this
@@ -326,6 +335,7 @@ impl ServeOptions {
         self.presenter_token = self.presenter_token.take().or(config.presenter_token);
         self.open |= config.open.unwrap_or(false);
         self.open_presenter |= config.open_presenter.unwrap_or(false);
+        self.no_eager_thumbnails |= config.no_eager_thumbnails.unwrap_or(false);
     }
 
     fn into_server_settings(self) -> toboggan_server::ServerSettings {
@@ -343,6 +353,7 @@ impl ServeOptions {
             open: self.open,
             open_presenter: self.open_presenter,
             presenter_token: self.presenter_token,
+            no_eager_thumbnails: self.no_eager_thumbnails,
             thumbnail_renderer: self.overview.thumbnail_renderer.unwrap_or_default(),
             browser: self.overview.browser,
         }

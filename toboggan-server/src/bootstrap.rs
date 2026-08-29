@@ -88,9 +88,22 @@ pub async fn launch_with_talk(
         });
 
     // A pre-generated overview directory (`--thumbnails-dir`) seeds the cache as
-    // ready; otherwise the overview is generated lazily on the first request.
+    // ready and there is nothing to draw. Otherwise the deck is photographed
+    // now, unless `--no-eager-thumbnails` asks for the older behaviour of
+    // waiting for the first request that wants a picture.
     if let Some(thumbnails_dir) = settings.thumbnails_dir.clone() {
         state.seed_thumbnails_dir(thumbnails_dir).await;
+    } else if !settings.no_eager_thumbnails {
+        // Warm them now rather than on the first request. The presenter view
+        // wants a picture of the next slide the moment it opens, and
+        // photographing a deck takes seconds — long enough that a speaker who
+        // opens the view as the room settles would watch it fill in.
+        //
+        // `ensure` spawns the generation and returns, so this costs the startup
+        // path a lock rather than a browser launch; everything that asks in the
+        // meantime is told `Pending` and polls, exactly as it does today.
+        info!("Photographing the deck for the slide overview");
+        state.ensure_thumbnails().await;
     }
 
     let cleanup_interval = settings.cleanup_interval();

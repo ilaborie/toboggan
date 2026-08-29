@@ -381,7 +381,7 @@ impl PresentationStats {
 
         // Create table
         let mut table = Table::new();
-        table.load_preset(UTF8_HORIZONTAL_ONLY);
+        table.load_style(UTF8_HORIZONTAL_ONLY);
 
         // Add headers
         if use_colors {
@@ -464,7 +464,7 @@ impl PresentationStats {
 
         // Create table
         let mut table = Table::new();
-        table.load_preset(UTF8_HORIZONTAL_ONLY);
+        table.load_style(UTF8_HORIZONTAL_ONLY);
 
         // Add headers
         if use_colors {

@@ -5,7 +5,7 @@ use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use gloo::console::{debug, error, info};
 use gloo::utils::document;
-use toboggan_core::{ClientId, ClientRole, Command, Slide, SlideId, State, TalkResponse};
+use toboggan_core::{ClientId, ClientRole, Command, SlideId, State, TalkResponse};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use wasm_bindgen_futures::spawn_local;
@@ -423,10 +423,37 @@ fn apply_talk(talk: &TalkResponse, session: &Session) {
     set_document_lang(talk.lang.as_deref());
 }
 
+/// Fills the presenter's slide picker with the deck as plain text.
+///
+/// The one caller of `/api/outline`, and only on the page that has a picker:
+/// the response is every slide's body and notes again, which nothing that shows
+/// a single slide has any use for. A failure costs the picker its search and
+/// nothing else — it still opens, still shows the deck and still jumps.
+async fn fetch_outline(session: &Session) {
+    if session.elements.borrow().presenter.is_none() {
+        return;
+    }
+    match session.api.get_outline().await {
+        Ok(outline) => {
+            if let Some(presenter) = &session.elements.borrow().presenter {
+                presenter.set_outline(&outline.slides);
+            }
+        }
+        Err(err) => error!(
+            "Failed to fetch the slide outline:",
+            err.to_string(),
+            "— the slide picker cannot be searched"
+        ),
+    }
+}
+
 /// Fills in the deck's metadata: footer, slide count, presenter plan, custom head.
 async fn fetch_talk_metadata(session: Rc<Session>) {
     match session.api.get_talk().await {
-        Ok(talk) => apply_talk(&talk, &session),
+        Ok(talk) => {
+            apply_talk(&talk, &session);
+            fetch_outline(&session).await;
+        }
         // Report what actually failed, and what the presenter will see: the
         // slide counter stays at 0 and the deck's `_head.html` (fonts, custom
         // CSS) is never injected, so the deck renders unstyled.
@@ -492,7 +519,10 @@ async fn handle_talk_change(state: State, session: &Session) {
 
     // Re-fetch talk metadata
     match session.api.get_talk().await {
-        Ok(talk) => apply_talk(&talk, session),
+        Ok(talk) => {
+            apply_talk(&talk, session);
+            fetch_outline(session).await;
+        }
         Err(err) => {
             error!("Failed to refetch talk after TalkChange:", err.to_string());
             session.toast(ToastType::Error, "Failed to reload presentation metadata");
@@ -596,7 +626,6 @@ async fn update_slide_display(state: &State, session: &Session) {
         let mut elements = session.elements.borrow_mut();
         let elements = &mut *elements;
         if let Some(presenter) = &elements.presenter {
-            presenter.set_next(None);
             presenter.set_state(state, None);
         } else {
             elements.slide.set_slide(None, 0);
@@ -630,32 +659,6 @@ async fn update_slide_display(state: &State, session: &Session) {
         } else {
             elems.quake.set_slide_cwd(slide.quake_terminal_cwd.clone());
             elems.slide.set_slide(Some(slide), current_step);
-        }
-    }
-
-    // The next slide is only fetched for the view that shows one, and only when
-    // the deck actually moves — the borrow above is released first because the
-    // fetch is awaited.
-    if session.elements.borrow().presenter.is_some() {
-        let next = next_slide(session, slide_id).await;
-        if let Some(presenter) = &session.elements.borrow().presenter {
-            presenter.set_next(next);
-        }
-    }
-}
-
-/// The slide after `current`, or `None` at the end of the deck.
-async fn next_slide(session: &Session, current: SlideId) -> Option<Slide> {
-    let total = session.meta.borrow().total_slides;
-    let index = current.index() + 1;
-    if index >= total {
-        return None;
-    }
-    match session.api.get_slide(SlideId::new(index)).await {
-        Ok(slide) => Some(slide),
-        Err(err) => {
-            error!("Failed to fetch the next slide:", err.to_string());
-            None
         }
     }
 }

@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+#MISE description="Run wasm-client checks: format, lint, and the pure unit tests"
+
+set -eu
+
+# `toboggan-web/toboggan-wasm` is the repo's second Cargo workspace, so the root
+# `check:rust` lane never reaches it: `cargo +nightly fmt --all` and
+# `cargo clippy --all-targets` both stop at the root manifest's members. CI has
+# always checked it (the `wasm` job), so the local gate could pass green while
+# the push failed on formatting alone — which is exactly what happened when the
+# slide picker landed.
+echo "🕸️  Running wasm client checks..."
+
+cd toboggan-web/toboggan-wasm
+
+echo "📐 Checking wasm formatting..."
+cargo +nightly fmt --all --check
+
+# Linted against wasm32, the only target this crate is ever built for: its
+# web-sys surface is meaningless on a host target, so a host-target lint would
+# check code the browser never runs. Mirrors the CI job.
+echo "🔍 Running wasm clippy (wasm32)..."
+cargo clippy --all-targets --target wasm32-unknown-unknown -- -D warnings
+
+# The crate's `.cargo/config.toml` pins wasm32, where a test binary cannot run —
+# so the host target is named explicitly. Only the DOM-free logic is tested this
+# way (the picker's folding, matching and snippet cutting); anything touching
+# `web_sys` belongs in the Playwright suite, which drives a real browser.
+echo "🧪 Running wasm unit tests (host target)..."
+cargo test --lib --target "$(rustc -vV | sed -n 's|^host: ||p')"
+
+echo "✅ All wasm checks passed!"

@@ -43,7 +43,7 @@ clap = "4.6.2"
 clap_complete = "4.6.7"
 anyhow = "1.0.103"
 serde_json = "1.0.150"
-serde-saphyr = "0.0.29"
+serde-saphyr = "1.1.0"
 tower-http = "0.7.0"
 futures = "0.3.32"
 dashmap = "6.2.1"
@@ -61,9 +61,9 @@ tower = "0.5.2"
 # Other dependencies
 comrak = "0.54.0"
 mermaid-rs-renderer = { version = "0.3.1", default-features = false }
-math-core = { version = "0.7.0", default-features = false }
+math-core = { version = "0.8.0", default-features = false }
 miette = "7.6.0"
-comfy-table = "7.2.2"
+comfy-table = "8.0.0"
 
 # Desktop dependencies
 iced = "0.14.0"
@@ -90,7 +90,7 @@ qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
 open = "5.4.0"
 
 # MCP-specific dependencies
-rmcp = "2.2.0"
+rmcp = "3.1.4"
 schemars = "1"
 toml_edit = "0.25.13"
 

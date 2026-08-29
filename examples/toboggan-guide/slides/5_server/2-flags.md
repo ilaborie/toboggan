@@ -34,6 +34,12 @@ photographs the real deck in a headless browser when it can find one — pass
 `--browser` to name a particular binary — and falls back to Typst when it
 cannot. `browser` refuses to fall back, which is what CI wants.
 
+The deck is photographed as the server starts, so `/slides` and the presenter
+view's picker and next-slide preview have their pictures the first time you
+look. `--no-eager-thumbnails` (or `TOBOGGAN_NO_EAGER_THUMBNAILS`) waits for
+something to ask instead — the old behaviour, and one less browser launch per
+serve.
+
 `--shell` picks which shell the live terminals spawn: point it at `fish` to show
 off your real prompt, or `sh` for a clean, portable demo. The token exists
 because `--shell` is real — the embedded terminals spawn a shell on *this*

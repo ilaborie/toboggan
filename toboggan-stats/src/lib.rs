@@ -13,8 +13,9 @@ mod html;
 mod slide_stats;
 
 pub use analysis::{
-    count_images_in_html, count_list_items_in_html, count_steps_from_content, count_words,
-    extract_text_from_html, strip_markdown_link_urls, strip_slide_counter,
+    content_plain_text, count_images_in_html, count_list_items_in_html, count_steps_from_content,
+    count_words, extract_searchable_text_from_html, extract_text_from_html, notes_plain_text,
+    rendered_plain_text, slide_plain_text, strip_markdown_link_urls, strip_slide_counter,
 };
 pub use html::{CodeBlock, HtmlDocument};
 pub use slide_stats::{DurationEstimate, PresentationStats, SlideStats};

@@ -1,7 +1,8 @@
 //! The slide-overview page (`/slides`) and its generated assets (`/overview/*`).
 //!
-//! Thumbnails are generated lazily on the first `/slides` hit (see
-//! [`crate::services::ThumbnailService`]). While generation is in flight the page
+//! Thumbnails are photographed as the server starts (see
+//! [`crate::services::ThumbnailService`]), and on the first request that wants
+//! them when `--no-eager-thumbnails` says not to. While generation is in flight the page
 //! auto-refreshes; when neither renderer can draw them — no browser *and* no
 //! `typst`, or one of them failing — it shows a clean explanation instead of a
 //! server error.
@@ -24,7 +25,7 @@ pub(crate) async fn slides_page(State(state): State<TobogganState>) -> Response 
     }
 }
 
-/// Serves one presented slide's thumbnail, for the presenter view's filmstrip.
+/// Serves one presented slide's thumbnail, for the presenter view's slide picker.
 ///
 /// Addressed by *presented* index — the same number `Command::GoTo` and
 /// `/api/slides/{index}` take — while the thumbnails on disk are named over the
