@@ -1,6 +1,22 @@
-use toboggan_core::{ClientId, State};
+use toboggan_core::{ClientId, ClientRole, State};
 
 use crate::ConnectionStatus;
+
+/// Where an error came from, which decides how a client should show it.
+///
+/// A refusal is an answer, not a failure: the server received the command,
+/// understood it, and declined. Clients that could not tell the two apart
+/// blamed the network for a permissions decision — and the only thing left to
+/// separate them was the English wording of the server's message, which no
+/// client should be parsing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ErrorKind {
+    /// The server answered, and its answer was a complaint: a command refused
+    /// for want of the presenter role, a slide index out of range.
+    Server,
+    /// The server could not be reached or stopped being reachable.
+    Transport,
+}
 
 /// Trait for handling notifications from the Toboggan server.
 ///
@@ -17,11 +33,23 @@ pub trait NotificationHandler: Send + Sync {
     /// Called when the talk metadata changes (requires refetch of talk and slides)
     fn on_talk_change(&self, state: State);
 
-    /// Called when an error occurs
-    fn on_error(&self, error: String);
+    /// Called when an error occurs.
+    ///
+    /// `kind` separates the server's own complaints from a failure to reach
+    /// it, so a client can show a refusal inline and interrupt only for a
+    /// broken connection.
+    fn on_error(&self, kind: ErrorKind, error: String);
 
-    /// Called when this client is registered with the server
-    fn on_registered(&self, client_id: ClientId);
+    /// Called when this client is registered with the server, with the role the
+    /// server granted it.
+    ///
+    /// The role is told rather than asked for, and it is told *here* because a
+    /// client that cannot present has to say so before the user presses
+    /// something. The native clients read it off
+    /// [`crate::CommunicationMessage::Registered`] instead, which they already
+    /// receive; a foreign client behind the `UniFFI` boundary does not, so this is
+    /// its only path to the same fact.
+    fn on_registered(&self, client_id: ClientId, role: ClientRole);
 
     /// Called when another client connects to the server
     fn on_client_connected(&self, client_id: ClientId, name: String);

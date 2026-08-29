@@ -3,23 +3,18 @@
 
 set -eu
 
-echo "📱 Running iOS linting..."
+echo "📱 Linting the Swift with SwiftLint..."
 
-# Lint Swift code with SwiftLint
-if command -v swiftlint >/dev/null 2>&1; then
-  echo "🔍 Linting Swift code with SwiftLint..."
-  if [ -d "TobogganApp" ]; then
-    if swiftlint lint --config .swiftlint.yml; then
-      echo "✅ SwiftLint check completed successfully"
-    else
-      echo "⚠️  SwiftLint check failed or SourceKit unavailable, skipping Swift linting"
-      echo "Note: This may happen in CI environments or when Xcode tools are not properly configured"
-    fi
-  else
-    echo "ℹ️  No Swift code found in TobogganApp, skipping SwiftLint check"
-  fi
-else
-  echo "⚠️  SwiftLint not found, skipping Swift linting (install with: mise install swiftlint)"
+# `--strict`, and no `if …; then … else echo "skipping"`. Both of these used to
+# swallow the exit code and print a green summary over a lint that had failed —
+# so a violation was green locally and red in CI, which is the one place the
+# difference is expensive. SwiftLint is pinned in `.mise.toml`; if it is missing,
+# say so and fail rather than quietly checking nothing.
+if ! command -v swiftlint >/dev/null 2>&1; then
+  echo "error: swiftlint not found. Run 'mise install'." >&2
+  exit 1
 fi
 
-echo "✅ All iOS linting checks completed!"
+swiftlint lint --strict --config .swiftlint.yml
+
+echo "✅ Swift lint clean"

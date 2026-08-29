@@ -17,17 +17,19 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun StepIndicator(
     currentStep: Int,
-    stepCount: Int,
+    // How many dots to draw: one per state the slide can be in, which is one
+    // more than the number of reveals it has. Zero when uncounted.
+    stepStates: Int,
     modifier: Modifier = Modifier
 ) {
-    if (stepCount <= 1) return
+    if (stepStates <= 1) return
 
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        repeat(stepCount) { index ->
+        repeat(stepStates) { index ->
             StepDot(
                 state = when {
                     index < currentStep -> StepState.Done

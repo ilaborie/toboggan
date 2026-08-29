@@ -352,3 +352,103 @@ jobs:
           name: playwright-report
           path: toboggan-web/playwright-report/
           retention-days: 7
+
+  # The iOS client. Nothing built this before, which is how the app drifted
+  # eight months behind the FFI it sits on: the Rust gate compiles
+  # `toboggan-mobile` for the host, so the crate stayed green while the Swift
+  # that consumes it stopped matching. SwiftLint only ever ran from a local
+  # pre-commit hook, and `.swiftlint.yml` has been configured with
+  # `reporter: github-actions-logging` for a job that did not exist.
+  ios:
+    name: iOS client (SwiftLint + build + test)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios-sim
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+
+      # Selected rather than inherited: the app's deployment target is iOS 26,
+      # and a runner image that changes its *default* Xcode would fail this job
+      # for a reason that has nothing to do with the change under test.
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      # The Xcode run-script phase does this too, so the build does not depend on
+      # the step. It runs here to fail fast and legibly: a Rust or bindgen error
+      # surfaces as its own red step, in seconds, instead of buried in
+      # `xcodebuild` output after a simulator boot.
+      - name: Build the Rust staticlib and Swift bindings
+        run: |
+          cargo build -p toboggan-mobile --lib --target aarch64-apple-ios-sim
+          cargo run -p toboggan-mobile --bin uniffi-bindgen -- \
+            generate --library --language swift \
+            --out-dir TobogganApp/TobogganApp/ \
+            target/aarch64-apple-ios-sim/debug/libtoboggan.dylib
+          cp target/aarch64-apple-ios-sim/debug/libtoboggan.a TobogganApp/TobogganApp/
+
+      - name: SwiftLint
+        run: |
+          brew install swiftlint
+          swiftlint lint --strict --config .swiftlint.yml
+
+      - name: Build and test
+        working-directory: TobogganApp
+        run: |
+          xcodebuild test \
+            -project TobogganApp.xcodeproj \
+            -scheme TobogganApp \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
+            -only-testing:TobogganAppTests \
+            CODE_SIGNING_ALLOWED=NO
+
+  # The Android client, for exactly the reason the iOS job exists. Adding `GoTo`
+  # to `Command` turned a UniFFI `enum class` into a sealed class, which renamed
+  # every constant the Kotlin called — and nothing would have noticed, because
+  # the Rust gate compiles `toboggan-mobile` for the host while the Kotlin that
+  # consumes it is built by no job at all.
+  #
+  # Kotlin compilation is the whole gate: it is what catches the drift, it needs
+  # no NDK and no emulator, and it is a minute rather than twenty.
+  android:
+    name: Android client (Kotlin compiles against the FFI)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # The wrapper JAR is not in the repository, so the version from
+      # `gradle-wrapper.properties` is requested explicitly rather than through
+      # `./gradlew`.
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      # Generated, not checked in — the same arrangement as the Swift bindings.
+      - name: Generate the Kotlin bindings
+        run: |
+          cargo build -p toboggan-mobile --lib
+          cargo run -p toboggan-mobile --bin uniffi-bindgen -- \
+            generate --library --language kotlin \
+            --out-dir toboggan-android/app/src/main/java \
+            target/debug/libtoboggan.so
+
+      - name: Compile
+        working-directory: toboggan-android
+        run: gradle --no-daemon :app:compileDebugKotlin

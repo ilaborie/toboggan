@@ -3,6 +3,7 @@
 #![allow(clippy::missing_panics_doc)]
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use toboggan_client::{TobogganClientCore, TobogganWebsocketConfig};
@@ -10,8 +11,9 @@ use toboggan_core::{RetryConfig, Secret, Slide as CoreSlide, TalkResponse};
 use tokio::runtime::Runtime;
 use tokio::sync::{Mutex, watch};
 
+use crate::deck::deck_snapshot;
 use crate::handler::{ClientNotificationHandler, NotificationAdapter};
-use crate::types::{Command, Slide, State, Talk};
+use crate::types::{Command, PresentationState, Slide, Talk};
 
 /// Client configuration for connecting to a Toboggan server.
 #[derive(Debug, Clone, uniffi::Record)]
@@ -25,10 +27,17 @@ pub struct ClientConfig {
     /// already has to type is the whole configuration.
     pub url: String,
 
-    /// The maximum number of retries if the connection is not working
+    /// The maximum number of retries if the connection is not working.
+    ///
+    /// Also the multiplier for the delay ceiling below, so raising it lengthens
+    /// each wait as well as adding attempts.
     pub max_retries: u32,
 
-    /// The delay between retries
+    /// The delay before the first retry, doubling with jitter after that.
+    ///
+    /// Seconds on both host platforms: `UniFFI` maps `Duration` to Swift's
+    /// `TimeInterval` and Kotlin's `java.time.Duration`, so `1.0` is one second
+    /// and `1000` is a quarter of an hour.
     pub retry_delay: Duration,
 }
 
@@ -69,6 +78,9 @@ pub struct TobogganClient {
 
     // Tokio runtime for async/sync bridging
     runtime: Runtime,
+
+    // Set by the notification adapter, which is where connection status arrives.
+    connected: Arc<AtomicBool>,
 }
 
 #[uniffi::export]
@@ -101,18 +113,22 @@ impl TobogganClient {
             _ => url.clone(),
         };
 
+        // Saturating: `Duration * u32` panics on overflow, and a panic here
+        // unwinds into the host app rather than reporting a silly retry delay.
+        let max_retry_delay = retry_delay.saturating_mul(max_retries);
+
         let websocket_config = TobogganWebsocketConfig {
             websocket_url,
             max_retries: max_retries as usize,
             retry_delay,
-            max_retry_delay: retry_delay * max_retries,
+            max_retry_delay,
             // Built from the same numbers, so a phone that loses signal backs
             // off and jitters like every other client rather than retrying on a
             // flat timer.
             retry: RetryConfig::new(
                 max_retries as usize,
                 retry_delay.into(),
-                (retry_delay * max_retries).into(),
+                max_retry_delay.into(),
                 2.0,
                 true,
             ),
@@ -124,7 +140,13 @@ impl TobogganClient {
         let (talk_tx, talk_rx) = watch::channel::<Option<TalkResponse>>(None);
 
         // Create notification adapter with slides and talk receivers
-        let adapter = NotificationAdapter::new(handler, slides_rx.clone(), talk_rx.clone());
+        let connected = Arc::new(AtomicBool::new(false));
+        let adapter = NotificationAdapter::new(
+            handler,
+            slides_rx.clone(),
+            talk_rx.clone(),
+            Arc::clone(&connected),
+        );
 
         // Create API URL (trim trailing slash)
         let api_url = url.trim_end_matches('/');
@@ -158,6 +180,7 @@ impl TobogganClient {
             talk_rx,
             core: Mutex::new(core),
             runtime,
+            connected,
         }
     }
 
@@ -172,14 +195,16 @@ impl TobogganClient {
         });
     }
 
-    /// Check if the client is connected.
+    /// Whether the WebSocket is currently connected.
     ///
-    /// Note: This checks if we have a command channel, not the actual connection state.
+    /// This used to return `true` unconditionally, which made it worse than
+    /// useless: the app could not tell a live socket from one that never opened,
+    /// and the iOS test that asserted a fresh client is *not* connected could
+    /// never pass. The flag is written by the notification adapter, which is
+    /// where connection status actually arrives.
     #[must_use]
     pub fn is_connected(&self) -> bool {
-        // We consider connected if the core has been connected
-        // A more accurate check would be to track connection status
-        true
+        self.connected.load(Ordering::Relaxed)
     }
 
     /// Send a command to the server.
@@ -192,47 +217,37 @@ impl TobogganClient {
 
     /// Get the current presentation state.
     #[must_use]
-    pub fn get_state(&self) -> Option<State> {
+    pub fn get_state(&self) -> Option<PresentationState> {
         self.runtime.block_on(async {
             let core = self.core.lock().await;
             let state = core.get_state()?;
-            let step_counts = self
-                .talk_rx
-                .borrow()
-                .as_ref()
-                .map(|talk| talk.step_counts.clone())
-                .unwrap_or_default();
-            let slides: Vec<Slide> = self
-                .slides_rx
-                .borrow()
-                .iter()
-                .enumerate()
-                .map(|(i, slide)| {
-                    let step_count = step_counts.get(i).copied().unwrap_or(0);
-                    Slide::from_core_slide(slide, step_count)
-                })
-                .collect();
+            let slides = deck_snapshot(&self.slides_rx, &self.talk_rx);
             if slides.is_empty() {
                 return None;
             }
-            Some(State::new(&slides, &state))
+            Some(PresentationState::new(&slides, &state))
         })
+    }
+
+    /// Every slide, in order, in one consistent read.
+    ///
+    /// The app wants the deck once per connection, not a slide at a time: each
+    /// call across the FFI blocks, and a caller assembling the deck itself has
+    /// to guess how long it is. Asking `get_slide` for `0..talk.titles.len()`
+    /// and discarding the `None`s — which is what the iOS app did — silently
+    /// *shortened* the deck whenever the two channels had not both landed,
+    /// shifting every slide after the gap and pointing `GoTo` at the wrong one.
+    #[must_use]
+    pub fn get_deck(&self) -> Vec<Slide> {
+        deck_snapshot(&self.slides_rx, &self.talk_rx)
     }
 
     /// Get a slide by index.
     #[must_use]
     pub fn get_slide(&self, index: u32) -> Option<Slide> {
-        let step_counts = self
-            .talk_rx
-            .borrow()
-            .as_ref()
-            .map(|talk| talk.step_counts.clone())
-            .unwrap_or_default();
-        let step_count = step_counts.get(index as usize).copied().unwrap_or(0);
-        let slides = self.slides_rx.borrow();
-        slides
-            .get(index as usize)
-            .map(|slide| Slide::from_core_slide(slide, step_count))
+        deck_snapshot(&self.slides_rx, &self.talk_rx)
+            .into_iter()
+            .nth(index as usize)
     }
 
     /// Get the current talk metadata.
@@ -242,5 +257,57 @@ impl TobogganClient {
             let core = self.core.lock().await;
             core.get_talk().map(Into::into)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The shape the server's homepage QR actually emits: a bare origin, a
+    /// trailing slash, and the token in the query.
+    #[test]
+    fn a_scanned_link_splits_into_an_origin_and_a_token() {
+        let (url, token) = split_presenter_token("http://192.168.1.10:8080/?token=s3cr3t");
+        assert_eq!(url, "http://192.168.1.10:8080");
+        assert_eq!(token, Secret::new("s3cr3t"));
+    }
+
+    /// The trailing slash has to go: what is left is the base of every REST and
+    /// WebSocket path, and `…8080//api/ws` is not the same route.
+    #[test]
+    fn the_trailing_slash_does_not_survive() {
+        let (url, _) = split_presenter_token("http://host:8080/?token=x");
+        assert_eq!(url, "http://host:8080");
+    }
+
+    /// A URL with no query is the whole address, and the client is audience.
+    #[test]
+    fn an_address_without_a_token_keeps_all_of_itself() {
+        let (url, token) = split_presenter_token("http://host:8080");
+        assert_eq!(url, "http://host:8080");
+        assert_eq!(token, None);
+    }
+
+    /// `token` is not required to come first.
+    #[test]
+    fn the_token_is_found_wherever_it_sits_in_the_query() {
+        let (_, token) = split_presenter_token("http://host:8080?theme=dark&token=s3cr3t");
+        assert_eq!(token, Secret::new("s3cr3t"));
+    }
+
+    /// The decode this used not to do at all. A token with a space or a `+`
+    /// reached the server as different text than the web client sent, and only
+    /// one of the two could match — so the phone silently registered as
+    /// audience.
+    #[test]
+    fn an_awkward_token_is_decoded_the_way_the_server_decodes_it() {
+        let (_, percent) = split_presenter_token("http://host:8080/?token=a%20b%2Bc");
+        assert_eq!(percent, Secret::new("a b+c"));
+
+        // `+` is a space in a query string, which is why the app must not send a
+        // literal one for a token that contains a plus.
+        let (_, plus) = split_presenter_token("http://host:8080/?token=a+b");
+        assert_eq!(plus, Secret::new("a b"));
     }
 }

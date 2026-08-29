@@ -24,8 +24,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		F84CF58B2E58510800755914 /* toboggan.udl */ = {isa = PBXFileReference; lastKnownFileType = text; name = toboggan.udl; path = "../toboggan-mobile/src/toboggan.udl"; sourceTree = SOURCE_ROOT; };
-		F84CF58C2E58510900755915 /* toboggan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = toboggan.swift; path = Generated/toboggan.swift; sourceTree = SOURCE_ROOT; };
 		F8C2FCF52E5097D30088D80A /* TobogganApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TobogganApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F8C2FD022E5097D40088D80A /* TobogganAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TobogganAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F8C2FD0C2E5097D40088D80A /* TobogganAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TobogganAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -77,8 +75,6 @@
 		F8C2FCEC2E5097D30088D80A = {
 			isa = PBXGroup;
 			children = (
-				F84CF58B2E58510800755914 /* toboggan.udl */,
-				F84CF58C2E58510900755915 /* toboggan.swift */,
 				F8C2FCF72E5097D30088D80A /* TobogganApp */,
 				F8C2FD052E5097D40088D80A /* TobogganAppTests */,
 				F8C2FD0F2E5097D40088D80A /* TobogganAppUITests */,
@@ -350,7 +346,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -408,7 +404,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -433,6 +429,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Toboggan;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Scan the QR code shown on the presentation's home page to connect to the server.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -477,6 +474,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Toboggan;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Scan the QR code shown on the presentation's home page to connect to the server.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -514,7 +512,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.toboggan.TobogganAppTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -532,7 +530,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.toboggan.TobogganAppTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";

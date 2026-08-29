@@ -5,14 +5,17 @@
 pub(super) mod overview;
 pub(super) mod pdf;
 
+use std::net::IpAddr;
 use std::sync::OnceLock;
 
 use axum::extract::{Path, State};
-use axum::http::{StatusCode, Uri};
+use axum::http::{HeaderMap, StatusCode, Uri};
 use axum::response::{Html, IntoResponse, Response};
+use qrcode::QrCode;
+use qrcode::render::svg;
 use toboggan_cli::OutputFormat;
 use toboggan_core::{SlideKind, Talk};
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::services::TalkService;
 
@@ -22,9 +25,103 @@ use crate::services::TalkService;
 /// it was opened with. Without that, a remote presenter who opened `/?token=…`
 /// was demoted to audience by clicking "Run the presentation" — and, before the
 /// presenter view could show a toast, told nothing about it.
-pub(super) async fn homepage(State(talk_service): State<TalkService>, uri: Uri) -> Html<String> {
+pub(super) async fn homepage(
+    State(talk_service): State<TalkService>,
+    headers: HeaderMap,
+    uri: Uri,
+) -> Html<String> {
     let talk = talk_service.talk().await;
-    Html(render_homepage(&talk, &carried_query(&uri)))
+    let query = carried_query(&uri);
+    let phone_link = phone_link(&headers, &query);
+    Html(render_homepage(&talk, &query, phone_link.as_ref()))
+}
+
+/// The address to hand a phone, and whether anything but this machine can use it.
+struct PhoneLink {
+    url: String,
+    /// The address names the loopback interface. The simulator shares its Mac's
+    /// network so it still works there; a real phone is a different device and
+    /// will resolve this to itself.
+    loopback: bool,
+}
+
+/// The URL a phone should be pointed at, as a QR code's payload.
+///
+/// Built from the `Host` header rather than from the bind address on purpose.
+/// A wildcard bind (`--host 0.0.0.0`) has no single address to name — which is
+/// why the startup log prints `<this-machine>` and leaves it to the operator —
+/// so the authority the browser used is the best answer available here. It is
+/// only *that browser's* answer, though: a presenter who opened `localhost:8080`
+/// on the presenting machine gets an address that names the phone itself, which
+/// is why the page says so rather than showing a code that goes nowhere.
+///
+/// The token rides along in `query`, so a presenter who opened this page with
+/// one hands the phone the whole configuration in a single scan.
+///
+/// `Host` is client-controlled, which everywhere else in this server would
+/// disqualify it. Here it decides a displayed address and nothing more — no
+/// privilege turns on it, and the page it lands on is only ever served back to
+/// the requester who supplied it.
+fn phone_link(headers: &HeaderMap, query: &str) -> Option<PhoneLink> {
+    let host = headers.get(axum::http::header::HOST)?.to_str().ok()?;
+    if host.is_empty() {
+        return None;
+    }
+    let scheme = forwarded_scheme(headers).unwrap_or("http");
+    Some(PhoneLink {
+        // The client wants the origin; it appends `/api/…` itself.
+        url: format!("{scheme}://{host}/{query}"),
+        loopback: is_loopback(host),
+    })
+}
+
+/// The scheme the *client* used, which behind a TLS terminator is not the one
+/// this server is speaking.
+///
+/// Hardcoding `http` handed a phone a link that could not connect, and put the
+/// presenter token on a cleartext URL for a deck being served over TLS.
+fn forwarded_scheme(headers: &HeaderMap) -> Option<&str> {
+    let forwarded = headers.get("x-forwarded-proto")?.to_str().ok()?;
+    // Proxies append, so the client's own scheme is the first entry.
+    let scheme = forwarded.split(',').next()?.trim();
+    matches!(scheme, "http" | "https").then_some(scheme)
+}
+
+/// Whether `host` — a `Host` header, so `name` or `name:port` — names the
+/// loopback interface.
+fn is_loopback(host: &str) -> bool {
+    let name = host_name(host);
+    name.eq_ignore_ascii_case("localhost")
+        || name
+            .parse::<IpAddr>()
+            .is_ok_and(|address| address.is_loopback())
+}
+
+/// The host out of a `Host` header, without its port.
+fn host_name(host: &str) -> &str {
+    // An IPv6 literal is bracketed — `[::1]:8080` — and full of the colons the
+    // port split would otherwise cut at.
+    if let Some(rest) = host.strip_prefix('[') {
+        return rest.split(']').next().unwrap_or(rest);
+    }
+    host.split(':').next().unwrap_or(host)
+}
+
+/// Renders `link` as an inline SVG QR code.
+///
+/// Inline because the alternative is another route to serve it from, and this
+/// page is already server-rendered.
+fn qr_svg(link: &str) -> Option<String> {
+    let code = QrCode::new(link.as_bytes())
+        .inspect_err(|err| warn!(%err, "Could not encode the phone link as a QR code"))
+        .ok()?;
+    Some(
+        code.render()
+            .min_dimensions(180, 180)
+            .dark_color(svg::Color("#1b1b1f"))
+            .light_color(svg::Color("#ffffff"))
+            .build(),
+    )
 }
 
 /// The part of this request's query string worth passing to the next page.
@@ -113,7 +210,7 @@ fn render_guide() -> anyhow::Result<String> {
     Ok(String::from_utf8(bytes)?)
 }
 
-fn render_homepage(talk: &Talk, query: &str) -> String {
+fn render_homepage(talk: &Talk, query: &str, phone_link: Option<&PhoneLink>) -> String {
     let title = escape(&talk.title);
     let lang = escape_attribute(talk.lang());
     let date = talk.date.to_string();
@@ -128,6 +225,32 @@ fn render_homepage(talk: &Talk, query: &str) -> String {
         .iter()
         .filter(|slide| slide.kind != SlideKind::Part)
         .count();
+
+    // Rendered only when the request carried a `Host` and the payload encodes:
+    // a page with no QR is better than one showing a code that goes nowhere.
+    let phone_section = phone_link
+        .and_then(|link| Some((link, qr_svg(&link.url)?)))
+        .map(|(link, svg)| {
+            // The address is only reachable from wherever the browser is. Said
+            // here because the alternative is a presenter scanning a code that
+            // points their phone at itself and reading the timeout as "the app
+            // is broken".
+            let warning = if link.loopback {
+                r#"<br><strong class="warn">This address only works on this machine.</strong>
+      Reopen this page on the machine's network address to get a code a phone can use."#
+            } else {
+                ""
+            };
+            format!(
+                r#"<section class="phone">
+      <div class="qr">{svg}</div>
+      <p>Scan with the Toboggan app to drive the deck from your phone.<br>
+      <code>{url}</code>{warning}</p>
+    </section>"#,
+                url = escape(&link.url),
+            )
+        })
+        .unwrap_or_default();
 
     format!(
         r#"<!doctype html>
@@ -153,6 +276,16 @@ fn render_homepage(talk: &Talk, query: &str) -> String {
   .stats {{ display: flex; gap: 1.5rem; margin-bottom: 1.5rem; color: var(--muted); font-size: .9rem; }}
   .stats b {{ color: var(--fg); font-size: 1.4rem; display: block; }}
   .links {{ display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }}
+  .phone {{ display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;
+            padding: 1rem; border-radius: .75rem; background: rgba(127,127,127,.08); }}
+  /* The code has to stay a fixed, generous size: a QR scaled down by a flex
+     row is a QR a phone cannot read. */
+  .phone .qr {{ flex: 0 0 auto; width: 132px; height: 132px; background: #fff;
+                padding: .4rem; border-radius: .5rem; }}
+  .phone .qr svg {{ display: block; width: 100%; height: 100%; }}
+  .phone p {{ margin: 0; color: var(--muted); font-size: .85rem; line-height: 1.5; }}
+  .phone code {{ font-size: .8rem; word-break: break-all; }}
+  .phone .warn {{ color: var(--accent2); }}
   a.btn {{ display: block; padding: .8rem 1rem; border-radius: 10px; text-decoration: none;
     background: #21262d; color: var(--fg); border: 1px solid #30363d; transition: .15s; }}
   a.btn:hover {{ border-color: var(--accent); transform: translateY(-1px); }}
@@ -169,6 +302,7 @@ fn render_homepage(talk: &Talk, query: &str) -> String {
       <div><b>{content_slides}</b> content</div>
       <div><b>{parts}</b> parts</div>
     </div>
+    {phone_section}
     <nav class="links">
       <a class="btn primary" href="/run{query}">▶ Run the presentation</a>
       <a class="btn" href="/presenter{query}">🎙 Presenter view</a>
@@ -203,4 +337,127 @@ pub(super) fn escape(text: &str) -> String {
 /// did not.
 pub(super) fn escape_attribute(text: &str) -> String {
     escape(text).replace('"', "&quot;")
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use axum::http::header::HOST;
+    use axum::http::{HeaderMap, HeaderValue};
+
+    use super::*;
+
+    fn headers(pairs: &[(&'static str, &str)]) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        for (name, value) in pairs {
+            headers.insert(
+                *name,
+                HeaderValue::from_str(value).expect("a valid header value"),
+            );
+        }
+        headers
+    }
+
+    /// No `Host`, no address worth naming — and a QR of a guess is worse than
+    /// no QR at all.
+    #[test]
+    fn a_request_without_a_host_gets_no_phone_link() {
+        assert!(phone_link(&HeaderMap::new(), "").is_none());
+        assert!(phone_link(&headers(&[("host", "")]), "").is_none());
+    }
+
+    #[test]
+    fn the_phone_link_is_the_origin_the_browser_used() {
+        let link = phone_link(&headers(&[("host", "192.168.1.10:8080")]), "?token=s3cr3t")
+            .expect("a host was supplied");
+        assert_eq!(link.url, "http://192.168.1.10:8080/?token=s3cr3t");
+        assert!(!link.loopback);
+    }
+
+    /// Behind a TLS terminator the scheme this server speaks is not the one the
+    /// phone has to use. Hardcoding `http` handed out a link that could not
+    /// connect and put the token on a cleartext URL.
+    #[test]
+    fn a_forwarded_request_keeps_the_scheme_the_client_used() {
+        let link = phone_link(
+            &headers(&[
+                ("host", "talks.example.com"),
+                ("x-forwarded-proto", "https"),
+            ]),
+            "",
+        )
+        .expect("a host was supplied");
+        assert_eq!(link.url, "https://talks.example.com/");
+    }
+
+    /// A proxy chain appends, so the client's own scheme is the first entry.
+    #[test]
+    fn a_chain_of_proxies_is_read_from_the_client_end() {
+        let forwarded = headers(&[("x-forwarded-proto", "https, http")]);
+        assert_eq!(forwarded_scheme(&forwarded), Some("https"));
+    }
+
+    /// Anything that is not a scheme this server speaks is ignored rather than
+    /// interpolated into the link.
+    #[test]
+    fn a_nonsense_forwarded_scheme_falls_back_to_http() {
+        let forwarded = headers(&[("host", "example.com"), ("x-forwarded-proto", "javascript")]);
+        assert_eq!(forwarded_scheme(&forwarded), None);
+        let link = phone_link(&forwarded, "").expect("a host was supplied");
+        assert_eq!(link.url, "http://example.com/");
+    }
+
+    /// The common setup, and the one that used to hand a phone its own address:
+    /// the presenter opens the page on the machine running the server.
+    #[test]
+    fn loopback_addresses_are_flagged_as_unreachable_from_a_phone() {
+        for host in [
+            "localhost:8080",
+            "LocalHost",
+            "127.0.0.1:8080",
+            "[::1]:8080",
+        ] {
+            let link =
+                phone_link(&headers(&[(HOST.as_str(), host)]), "").expect("a host was supplied");
+            assert!(link.loopback, "{host} should read as loopback");
+        }
+    }
+
+    #[test]
+    fn a_routable_address_is_not_flagged() {
+        for host in [
+            "192.168.1.10:8080",
+            "talks.example.com",
+            "[2001:db8::1]:8080",
+        ] {
+            let link =
+                phone_link(&headers(&[(HOST.as_str(), host)]), "").expect("a host was supplied");
+            assert!(!link.loopback, "{host} should not read as loopback");
+        }
+    }
+
+    /// Only the token is carried forward; the rest of a page's query is that
+    /// page's own business.
+    #[test]
+    fn only_the_token_is_carried_into_the_links() {
+        assert_eq!(carried_query(&"/".parse().expect("a uri")), "");
+        assert_eq!(
+            carried_query(&"/?token=s3cr3t".parse().expect("a uri")),
+            "?token=s3cr3t"
+        );
+        assert_eq!(
+            carried_query(&"/?theme=dark&token=s3cr3t".parse().expect("a uri")),
+            "?token=s3cr3t"
+        );
+        assert_eq!(carried_query(&"/?theme=dark".parse().expect("a uri")), "");
+    }
+
+    /// The QR never invents a token: it only re-emits one the requester already
+    /// presented, so a page opened without one hands the phone an address alone.
+    #[test]
+    fn a_page_opened_without_a_token_shares_no_token() {
+        let link = phone_link(&headers(&[("host", "192.168.1.10:8080")]), "")
+            .expect("a host was supplied");
+        assert!(!link.url.contains("token"));
+    }
 }

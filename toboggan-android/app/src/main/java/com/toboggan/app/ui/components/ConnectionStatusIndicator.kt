@@ -53,16 +53,19 @@ fun ConnectionStatusIndicator(
 
 val ConnectionStatus.displayText: String
     get() = when (this) {
-        ConnectionStatus.CONNECTING -> "Connecting..."
-        ConnectionStatus.CONNECTED -> "Connected"
-        ConnectionStatus.CLOSED -> "Disconnected"
-        ConnectionStatus.RECONNECTING -> "Reconnecting..."
-        ConnectionStatus.ERROR -> "Connection Error"
+        is ConnectionStatus.Connecting -> "Connecting..."
+        is ConnectionStatus.Connected -> "Connected"
+        is ConnectionStatus.Closed -> "Disconnected"
+        // The attempt and the delay are carried now rather than dropped, so the
+        // status can say what is actually happening instead of spinning.
+        is ConnectionStatus.Reconnecting ->
+            "Reconnecting $attempt/$maxAttempt in ${delaySecs}s"
+        is ConnectionStatus.Error -> message
     }
 
 fun ConnectionStatus.toColor(): Color = when (this) {
-    ConnectionStatus.CONNECTED -> StatusConnected
-    ConnectionStatus.CONNECTING, ConnectionStatus.RECONNECTING -> StatusConnecting
-    ConnectionStatus.CLOSED -> StatusClosed
-    ConnectionStatus.ERROR -> StatusError
+    is ConnectionStatus.Connected -> StatusConnected
+    is ConnectionStatus.Connecting, is ConnectionStatus.Reconnecting -> StatusConnecting
+    is ConnectionStatus.Closed -> StatusClosed
+    is ConnectionStatus.Error -> StatusError
 }

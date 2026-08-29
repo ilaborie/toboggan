@@ -86,6 +86,7 @@ chromiumoxide = { version = "0.9.1", default-features = false, features = [
 mime_guess = "2.0.5"
 notify = "8.2.0"
 portable-pty = "0.9.0"
+qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
 open = "5.4.0"
 
 # MCP-specific dependencies

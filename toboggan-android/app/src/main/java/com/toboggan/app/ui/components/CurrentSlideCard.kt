@@ -70,7 +70,7 @@ fun CurrentSlideCard(
 
                     StepIndicator(
                         currentStep = uiState.currentStep,
-                        stepCount = uiState.stepCount
+                        stepStates = uiState.stepStates
                     )
                 }
             }

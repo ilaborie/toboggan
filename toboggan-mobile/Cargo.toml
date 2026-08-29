@@ -27,6 +27,8 @@ toboggan-core = { path = "../toboggan-core", features = ["std"] }
 toboggan-client = { path = "../toboggan-client" }
 
 uniffi = { workspace = true, features = ["cli"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 tokio = { workspace = true, features = [
   "rt",
   "rt-multi-thread",
@@ -34,12 +36,6 @@ tokio = { workspace = true, features = [
   "sync",
   "time",
 ] }
-
-[dev-dependencies]
-
-[build-dependencies]
-uniffi = { workspace = true, features = ["build"] }
-
 
 [lints]
 workspace = true
