@@ -12,11 +12,13 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlElement;
 
 use crate::components::deck::{apply_deck_state, mount_deck};
+use crate::utils::errors::log_dom_error;
+use crate::utils::set_notifier;
 use crate::{
     AppConfig, CommunicationMessage, CommunicationService, ConnectionStatus, KeyboardService,
     StateClassMapper, ToastType, TobogganApi, TobogganFooterElement, TobogganHelpElement,
-    TobogganPresenterElement, TobogganQuakeTerminalElement, TobogganSlideElement,
-    TobogganToastElement, WasmElement, create_html_element, inject_head_html,
+    TobogganPickerElement, TobogganPresenterElement, TobogganQuakeTerminalElement,
+    TobogganSlideElement, TobogganToastElement, WasmElement, create_html_element, inject_head_html,
     install_keyboard_release, play_tada, set_document_lang,
 };
 
@@ -53,6 +55,15 @@ struct TobogganElements {
     /// connection, the keyboard and the state handling are shared, and only
     /// what surrounds the current slide differs.
     presenter: Option<TobogganPresenterElement>,
+    /// The slide picker, on the deck page only — the presenter view mounts one
+    /// inside its own chrome, beside the next-slide pane it shares a set of
+    /// photographs with.
+    ///
+    /// The deck is where a speaker presenting off one screen actually is, and
+    /// until now the only way to reach slide 31 from there was to remember the
+    /// number. It opens over the deck, which is to say in front of the room:
+    /// that is the cost, and it is the same screen the speaker is driving.
+    picker: Option<TobogganPickerElement>,
 }
 
 /// Everything the message handlers share.
@@ -208,6 +219,27 @@ impl WasmElement for App {
                 let placeholder = create_html_element("div");
                 elements.quake.render(&placeholder);
                 elements.quake.set_api_base_url(self.api.base_url());
+
+                // Under <body>, like the quake terminal and the help dialog, and
+                // for the reason the picker brings a shadow root at all: this
+                // document is the one `_head.html` is injected into, and a host
+                // among the deck's own children is a host a deck's CSS can name.
+                //
+                // Not mounted at all rather than mounted badly: a picker
+                // rendered into a detached host binds `g` on `window` and then
+                // throws from `showModal` once per keystroke, in silence.
+                // Leaving `elements.picker` unset binds nothing and costs the
+                // deck nothing.
+                let picker_host = create_html_element("div");
+                if append_to_body(&picker_host, "the slide picker") {
+                    let mut picker = TobogganPickerElement::default();
+                    // The same channel the keyboard writes to, so a client that
+                    // may not present is refused and told why in the one place
+                    // that knows how to say it.
+                    picker.set_commands(self.tx_action.clone());
+                    picker.render(&picker_host);
+                    elements.picker = Some(picker);
+                }
             }
 
             let el = create_html_element("div");
@@ -228,6 +260,21 @@ impl WasmElement for App {
             } else {
                 host.append_child(&el).unwrap_throw();
             }
+
+            // Anything on the page may now say something to the speaker, which
+            // components three shadow roots down otherwise have no way to do.
+            // Set here rather than in `App::new`: the toast has to be mounted
+            // before it can show anything.
+            let sink = Rc::clone(&self.elements);
+            set_notifier(Rc::new(move |kind, message| {
+                // `try_borrow`, because a message may well be raised from inside
+                // something this map is already lending out — and a toast is not
+                // worth a panic.
+                match sink.try_borrow() {
+                    Ok(elements) => elements.toast.toast(kind, message),
+                    Err(_) => error!("Could not show a message:", message),
+                }
+            }));
 
             // The help dialog mounts under <body>; the host is unused. Both
             // views get it — the keys are the same in both.
@@ -318,9 +365,15 @@ async fn handle_messages(mut rx: UnboundedReceiver<CommunicationMessage>, sessio
                 // `Session.role`'s default and for its reason — on an ordinary
                 // local deck the handshake confirms rather than corrects, and
                 // starting hidden would flash them away and back.
-                if let Some(presenter) = &session.elements.borrow().presenter {
+                let elements = session.elements.borrow();
+                if let Some(presenter) = &elements.presenter {
                     presenter.set_can_drive(role.is_presenter());
                 }
+                // And the deck page's, which has no other chrome to say it with.
+                if let Some(picker) = &elements.picker {
+                    picker.set_can_drive(role.is_presenter());
+                }
+                drop(elements);
                 if !role.is_presenter() {
                     session.toast(
                         ToastType::Info,
@@ -387,12 +440,50 @@ fn handle_connection_status(status: &ConnectionStatus, session: &Rc<Session>) {
     }
 }
 
+/// Puts `host` under `<body>`, saying which surface was lost if it cannot.
+///
+/// The two ways this fails are worth separating, and used to be one
+/// `unwrap_throw` that got both wrong: a missing `<body>` left `Ok(None)`, so
+/// the unwrap *succeeded* and the caller went on to render into a detached
+/// element, while a rejected `append_child` panicked and took the page with it.
+/// Both are now a `false` the caller can decline to build on.
+fn append_to_body(host: &HtmlElement, what: &str) -> bool {
+    let Some(body) = document().body() else {
+        error!("The page has no <body>, so it has no", what);
+        return false;
+    };
+    if let Err(err) = body.append_child(host) {
+        log_dom_error(what, &err);
+        return false;
+    }
+    true
+}
+
+/// Why the talk metadata is being applied.
+///
+/// The distinction is not cosmetic. Everything made of photographs is thrown
+/// away and remade on a reload, which is right — after an edit every thumbnail
+/// is a different picture at the same URL — and ruinous on a reconnect, which is
+/// the far commoner event: `fetch_talk_metadata` runs on *every*
+/// `ConnectionStatus::Connected`, so a room with unreliable wifi re-fetched the
+/// whole thumbnail set, dropped the search corpus and blanked the picker's grid
+/// on each blip, mid-talk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TalkFetch {
+    /// The socket came up: a first load, or a reconnect. Whatever the server is
+    /// serving, it is the same deck as a moment ago.
+    Connected,
+    /// A `TalkChange`: the folder was edited and the deck rebuilt under the
+    /// speaker.
+    Reloaded,
+}
+
 /// Hands freshly fetched talk metadata to whichever view is mounted.
 ///
 /// The two callers — the first fetch and a live reload — used to carry a copy of
 /// this each, and both needed the same correction, which is a good enough
 /// argument on its own.
-fn apply_talk(talk: &TalkResponse, session: &Session) {
+fn apply_talk(talk: &TalkResponse, session: &Session, reason: TalkFetch) {
     session.meta.borrow_mut().total_slides = talk.titles.len();
 
     let mut elem = session.elements.borrow_mut();
@@ -408,12 +499,24 @@ fn apply_talk(talk: &TalkResponse, session: &Session) {
     // and a rule in the outer document outranks `:host` whatever its
     // specificity.
     let mirrored = if let Some(presenter) = &elements.presenter {
-        presenter.set_talk(talk);
+        presenter.set_talk(talk, reason);
         true
     } else {
         elements.footer.set_content(talk.footer.clone());
         false
     };
+    // The deck's own picker, which nothing else here photographs for. Also its
+    // only initialisation: on this page nothing else builds its cells or starts
+    // its first probe, so both arms have to run on the first `/api/talk` as well
+    // as on every one after it.
+    if let Some(picker) = &elements.picker {
+        match reason {
+            // Every cell is now potentially a different picture at the same URL,
+            // and the deck may be a different length.
+            TalkFetch::Reloaded => picker.reload(talk.titles.len()),
+            TalkFetch::Connected => picker.sync(talk.titles.len()),
+        }
+    }
     drop(elem);
 
     if !mirrored {
@@ -423,27 +526,43 @@ fn apply_talk(talk: &TalkResponse, session: &Session) {
     set_document_lang(talk.lang.as_deref());
 }
 
-/// Fills the presenter's slide picker with the deck as plain text.
+/// Fills the slide picker with the deck as plain text.
 ///
-/// The one caller of `/api/outline`, and only on the page that has a picker:
-/// the response is every slide's body and notes again, which nothing that shows
-/// a single slide has any use for. A failure costs the picker its search and
-/// nothing else — it still opens, still shows the deck and still jumps.
+/// The one caller of `/api/outline`: the response is every slide's body and
+/// notes again, which nothing that shows a single slide has any use for. A
+/// failure costs the picker its search and nothing else — it still opens, still
+/// shows the deck and still jumps — but the failure has to be *told* to it, not
+/// just logged. An empty corpus filters nothing, so every cell goes on matching
+/// every query, and a picker that does not know why answers "40 of 40" to a word
+/// the deck has never contained.
+///
+/// Both pages ask, because both mount a picker — the presenter view inside its
+/// chrome, the deck under `<body>`.
 async fn fetch_outline(session: &Session) {
-    if session.elements.borrow().presenter.is_none() {
-        return;
-    }
     match session.api.get_outline().await {
         Ok(outline) => {
-            if let Some(presenter) = &session.elements.borrow().presenter {
+            let elements = session.elements.borrow();
+            if let Some(presenter) = &elements.presenter {
                 presenter.set_outline(&outline.slides);
             }
+            if let Some(picker) = &elements.picker {
+                picker.set_outline(&outline.slides);
+            }
         }
-        Err(err) => error!(
-            "Failed to fetch the slide outline:",
-            err.to_string(),
-            "— the slide picker cannot be searched"
-        ),
+        Err(err) => {
+            error!(
+                "Failed to fetch the slide outline:",
+                err.to_string(),
+                "— the slide picker cannot be searched"
+            );
+            let elements = session.elements.borrow();
+            if let Some(presenter) = &elements.presenter {
+                presenter.note_outline_failed();
+            }
+            if let Some(picker) = &elements.picker {
+                picker.note_outline_failed();
+            }
+        }
     }
 }
 
@@ -451,7 +570,7 @@ async fn fetch_outline(session: &Session) {
 async fn fetch_talk_metadata(session: Rc<Session>) {
     match session.api.get_talk().await {
         Ok(talk) => {
-            apply_talk(&talk, &session);
+            apply_talk(&talk, &session, TalkFetch::Connected);
             fetch_outline(&session).await;
         }
         // Report what actually failed, and what the presenter will see: the
@@ -520,7 +639,7 @@ async fn handle_talk_change(state: State, session: &Session) {
     // Re-fetch talk metadata
     match session.api.get_talk().await {
         Ok(talk) => {
-            apply_talk(&talk, session);
+            apply_talk(&talk, session, TalkFetch::Reloaded);
             fetch_outline(session).await;
         }
         Err(err) => {
@@ -659,6 +778,11 @@ async fn update_slide_display(state: &State, session: &Session) {
         } else {
             elems.quake.set_slide_cwd(slide.quake_terminal_cwd.clone());
             elems.slide.set_slide(Some(slide), current_step);
+        }
+        // Marked on the deck's picker too, so it opens on the slide the room is
+        // looking at rather than at the top of the deck.
+        if let Some(picker) = &elems.picker {
+            picker.set_current(slide_id.index());
         }
     }
 }

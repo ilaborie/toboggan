@@ -24,6 +24,15 @@ pub(crate) use self::shot::*;
 mod presenter;
 pub(crate) use self::presenter::*;
 
+/// The whole deck at a glance, searchable — the presenter view's, and mountable
+/// anywhere else the deck is shown.
+pub(crate) mod picker;
+pub(crate) use self::picker::*;
+
+/// Whether the deck's photographs are ready, shared by every surface made of
+/// them.
+pub(crate) mod thumbnails;
+
 mod help;
 pub(crate) use self::help::*;
 

@@ -40,7 +40,7 @@ impl TobogganApi {
 
     /// Fetches the deck as a searchable list of plain-text slides.
     ///
-    /// Only the presenter view's slide picker asks: the response is every
+    /// Both pages ask, because both mount a slide picker: the response is every
     /// slide's body and its notes again, in plain text, which is most of the
     /// deck a second time and no use to a client that only shows one slide.
     pub(crate) async fn get_outline(&self) -> Result<OutlineResponse, Error> {

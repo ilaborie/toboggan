@@ -257,7 +257,7 @@ impl TalkResponse {
     }
 }
 
-/// One slide as the presenter's slide picker knows it: enough to search for it,
+/// One slide as the slide picker knows it: enough to search for it,
 /// and enough to jump to it.
 ///
 /// Plain text throughout, `title` included. `TalkResponse::titles` is the same

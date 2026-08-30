@@ -9,6 +9,8 @@ pub use self::dom::*;
 
 mod key_capture;
 pub use self::key_capture::*;
+mod notify;
+pub(crate) use self::notify::*;
 
 pub mod errors;
 

@@ -46,10 +46,10 @@ struct LoadedTalk {
     /// overview — an authoring view, which lists every slide and badges the
     /// hidden ones — counts over `source`. Anything holding both a presented
     /// index and an authored artefact needs this to cross between them, and the
-    /// presenter's slide picker is exactly that: `Command::GoTo` speaks the first
-    /// index space and `thumb-NNNN.png` is named in the second.
+    /// slide picker is exactly that: `Command::GoTo` speaks the first index
+    /// space and `thumb-NNNN.png` is named in the second.
     source_indexes: Arc<[usize]>,
-    /// Every presented slide as plain text, for the presenter's slide picker.
+    /// Every presented slide as plain text, for the slide picker.
     ///
     /// Numbered over `talk`, like `step_counts`, so a picker cell's index is
     /// one `Command::GoTo` takes. Built at load for the same reason: searching

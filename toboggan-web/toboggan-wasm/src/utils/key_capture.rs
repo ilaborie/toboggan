@@ -40,6 +40,45 @@ thread_local! {
     /// One slot: claiming evicts whoever held it, so two terminals can never
     /// both believe they own the keyboard.
     static CLAIM: RefCell<Option<KeyboardClaim>> = const { RefCell::new(None) };
+    /// How many modal overlays are open over the deck.
+    ///
+    /// Counted rather than a flag: nothing stops a page mounting two, and the
+    /// first of them to close must not hand the deck its keys back while the
+    /// other is still up.
+    static MODALS: Cell<usize> = const { Cell::new(0) };
+}
+
+/// A modal overlay's claim on the deck's keys, given up when it is dropped.
+///
+/// A flag rather than `stopPropagation` for the same reason [`claim_keyboard`]
+/// is one: an overlay's own search box sits on the path down from `window`
+/// alongside the deck's handler, so stopping the keys early enough to protect
+/// the deck also stops them ever being typed into the box.
+///
+/// A guard rather than a matching pair of calls because a `<dialog>` has more
+/// ways out than in — `Escape`, its close button, a jump, the page being torn
+/// down — and a claim leaked by any one of them leaves the deck deaf until
+/// reload.
+#[derive(Debug)]
+pub struct ModalKeys(());
+
+impl Drop for ModalKeys {
+    fn drop(&mut self) {
+        MODALS.with(|open| open.set(open.get().saturating_sub(1)));
+    }
+}
+
+/// Stands the deck's keymap down for as long as the returned guard is held.
+///
+/// For an overlay that owns the keyboard while it is up: every key is its own,
+/// whatever inside it holds focus. Focus alone does not answer this —
+/// [`crate::typing_into_editable`] speaks for a text field and nothing else, so
+/// a click on a dialog's own padding moved focus off the box and left the
+/// arrows driving the room from behind an open dialog.
+#[must_use]
+pub fn claim_keys_for_modal() -> ModalKeys {
+    MODALS.with(|open| open.set(open.get().saturating_add(1)));
+    ModalKeys(())
 }
 
 /// Reserves an owner id for a widget that may take the keyboard.
@@ -107,10 +146,11 @@ pub fn release_keyboard(owner: KeyboardOwner) {
     }
 }
 
-/// Whether a terminal currently owns the keyboard.
+/// Whether anything currently owns the keyboard: a terminal on a slide, or a
+/// modal overlay over the deck.
 #[must_use]
 pub fn deck_keys_captured() -> bool {
-    CLAIM.with_borrow(Option::is_some)
+    CLAIM.with_borrow(Option::is_some) || MODALS.with(Cell::get) > 0
 }
 
 /// Installs the two page-lifetime ways to hand the keyboard back.
