@@ -11,6 +11,23 @@ Entries are grouped the way the commits are: this repository uses
 
 ### Added
 
+- **A deck can set the size a terminal opens at, with `--terminal-font-size`.**
+  It joins `--terminal-radius` and `--terminal-titlebar-display` as a custom
+  property that reaches inside the terminal's shadow root, where a selector
+  cannot. A plain number of CSS pixels — unitless, or with `px` — clamped to the
+  same 8–32 that `Cmd +` / `Cmd -` cover on stage, and ignored rather than
+  guessed at if it carries a relative unit. Until now the only size was the
+  hard-coded 22, and the only way past it was two keystrokes per pane, at the
+  start of every live-code slide.
+
+  It is **read once**, when the terminal opens: rioterm fixes `fontSize` when it
+  builds the renderer, and changing it afterwards means rebuilding the terminal
+  and replaying its buffer. So declare it in the slide's own `<style>` and not
+  in a stylesheet reached through `@import` — an import resolves over the
+  network, and a terminal that opens first sees nothing. The first re-fit
+  re-reads it as a safety net, but only that once, and never over a size the
+  presenter has already set from the keyboard.
+
 - **The presenter view has a searchable slide picker.** `g`, `/` or
   `Ctrl`/`Cmd`+`K` opens a dialog of the overview thumbnails over a search box;
   arrows move, `Enter` jumps, `Esc` closes. The search reads each slide's title,
