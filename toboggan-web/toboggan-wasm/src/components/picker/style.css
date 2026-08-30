@@ -79,9 +79,9 @@
 	flex: 0 0 auto;
 }
 
-/* The keys, where the surface they drive is. Presenter-only bindings stay out
-   of the deck's shared help dialog — it would be naming things the deck cannot
-   do — so this bar is where they are documented. */
+/* The keys, where the surface they drive is. The help dialog names them too —
+   both pages that run the app mount a picker — but this bar is where they can
+   be read with the grid already in front of you. */
 .strip-hint {
 	margin: 0;
 	flex: 0 0 auto;
@@ -138,6 +138,18 @@
 
 .strip-cell:hover {
 	border-color: var(--picker-accent);
+}
+
+/* A client that may not drive the deck. The grid stays perfectly readable —
+   knowing where the talk is up to is worth as much to the room as to the
+   speaker — but it stops looking like something to press, because pressing it
+   cannot move anything. The hint bar says why. */
+.picker[data-role="audience"] .strip-cell {
+	cursor: default;
+}
+
+.picker[data-role="audience"] .strip-cell:hover {
+	border-color: var(--picker-line);
 }
 
 .strip-cell:focus-visible {

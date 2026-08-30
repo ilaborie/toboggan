@@ -1,8 +1,8 @@
 import { expect, type Page, test } from "@playwright/test";
 
 /**
- * The presenter view's slide picker: every slide at once, a search box over
- * them, and a way to jump.
+ * The slide picker, on both pages that mount one: every slide at once, a search
+ * box over them, and a way to jump.
  *
  * The Rust gate stubs `toboggan-web/dist`, so nothing on that side can see this
  * dialog at all — and its hardest parts are all invisible when they go wrong. A
@@ -137,14 +137,21 @@ test("the outline is numbered the same way", async ({ request }) => {
 test("every cell shows a picture", async ({ page }) => {
 	await openPicker(page);
 
+	// Through a locator, not `document.querySelectorAll`: the cells are inside
+	// the picker's shadow root, which `querySelectorAll` does not enter. Asking
+	// the document directly returns an empty list on a page that is working and
+	// an empty list on a page that is not — so the assertion below passed for
+	// the whole life of this test without ever seeing an `<img>`. Playwright's
+	// locators pierce shadow roots; that is the entire difference.
+	const images = page.locator(".strip-cell img");
+	expect(await images.count()).toBeGreaterThan(0);
+
 	// `naturalWidth` rather than the `src` attribute: a `503` while the deck is
 	// still being photographed sets the attribute perfectly well and renders a
 	// broken image, which is the failure this whole probe-and-retry exists for.
-	const undecoded = await page.evaluate(
-		() =>
-			[...document.querySelectorAll(".strip-cell img")].filter(
-				(img) => !(img as HTMLImageElement).naturalWidth,
-			).length,
+	const undecoded = await images.evaluateAll(
+		(found) =>
+			found.filter((img) => !(img as HTMLImageElement).naturalWidth).length,
 	);
 	expect(undecoded).toBe(0);
 });
@@ -252,9 +259,10 @@ const selected = (page: Page) =>
 	page.locator('.strip-cell[aria-selected="true"]').getAttribute("data-slide");
 
 test("the arrows move the selection instead of the deck", async ({ page }) => {
-	// The deck's own keymap stands down while the search box has focus —
-	// `typing_into_editable` reads the event's `composedPath`, so it sees an
-	// input inside the presenter's shadow root.
+	// The deck's own keymap stands down for as long as the dialog is open: it
+	// holds a claim on the keyboard, the way a terminal on a slide does. Focus
+	// is not what answers this — see "an open picker keeps the deck's keys when
+	// its box loses focus", which is the case focus alone got wrong.
 	await openPicker(page);
 	const counter = await page.locator(".counter").textContent();
 	// Captured before and after: `show()` already selects the slide the deck is
@@ -351,6 +359,331 @@ test("the picker does not register a client of its own", async ({
 	expect(clients.length).toBe(1);
 });
 
+/**
+ * The same picker, on the deck page.
+ *
+ * `/run` is where a speaker presenting off one screen actually is, and until the
+ * picker became a component the only way to reach slide 31 from there was to
+ * remember the number. What has to hold is that it is the *same* picker — same
+ * keys, same jump — and that the two other pages `/run` serves get none of it: a
+ * picker on the shot page would be photographed into a thumbnail.
+ */
+async function openDeck(page: Page) {
+	await page.goto("/run");
+	// The slide says the client is up; the cells say the picker has heard what
+	// shape the deck is, which arrives a `/api/talk` round trip later.
+	await page.waitForSelector(".toboggan-slide", { timeout: 30_000 });
+	await expect(page.locator(".strip-cell").first()).toBeAttached({
+		timeout: 30_000,
+	});
+}
+
+/** Opens the deck page's picker, and waits for the thumbnails behind it. */
+async function openDeckPicker(page: Page) {
+	await openDeck(page);
+	await page.keyboard.press("g");
+	await expect(page.locator("dialog.picker")).toBeVisible();
+	// The same wait `openPicker` makes on the presenter, and not a formality:
+	// the deck page reaches the probe by a different call altogether — its
+	// picker owns its `Thumbnails` and starts them from `reload`/`sync`, where
+	// the presenter drives the set it shares. A deck picker stuck for ever on
+	// "Rendering slide previews…" passed every test in this file.
+	await expect(page.locator("dialog.picker")).toHaveAttribute(
+		"data-previews",
+		"ready",
+		{ timeout: 60_000 },
+	);
+}
+
+/** Which slide the deck is on, 1-based — what its own CSS counts by. */
+const deckIsOn = (page: Page) =>
+	page.evaluate(() =>
+		document.querySelector("main")?.style.getPropertyValue("--current-slide"),
+	);
+
+test("the deck page mounts the same picker", async ({ page, request }) => {
+	const { slides } = await (await request.get("/api/slides")).json();
+
+	await openDeck(page);
+	await expect(page.locator("dialog.picker")).toBeHidden();
+
+	await page.keyboard.press("g");
+	await expect(page.locator("dialog.picker")).toBeVisible();
+	await expect(page.locator(".strip-cell")).toHaveCount(slides.length);
+
+	await page.keyboard.press("Escape");
+	await expect(page.locator("dialog.picker")).toBeHidden();
+});
+
+test("a jump from the deck's own picker moves the deck", async ({
+	page,
+	request,
+}) => {
+	const outline = await (await request.get("/api/outline")).json();
+	const { word, index } = uniqueWord(outline.slides, "text");
+
+	await openDeck(page);
+	await page.keyboard.press("g");
+	await page.fill(".strip-search", word);
+	// The only match, so `Enter` is the whole jump.
+	await expect(
+		page.locator('.strip-cell[aria-selected="true"]'),
+	).toHaveAttribute("data-slide", String(index));
+
+	await page.keyboard.press("Enter");
+	await expect(page.locator("dialog.picker")).toBeHidden();
+	// Not the picker's own idea of where it is: the deck moved, which on this
+	// page means the slide the room is looking at moved.
+	await expect.poll(() => deckIsOn(page)).toBe(String(index + 1));
+});
+
+test("the deck page's picker is behind a shadow root of its own", async ({
+	page,
+}) => {
+	// Asserted on `/run` and not only on `/presenter`, because `/run` is the
+	// page it matters on: this is the document a deck's `_head.html` is injected
+	// into, and the top layer is not a style boundary. Playwright's locators
+	// pierce shadow roots, so every other deck test in this file would go on
+	// passing if the dialog were mounted into the light DOM tomorrow.
+	//
+	// Structural rather than a computed-style check: the guide's `_head.html`
+	// sets custom properties on `:root`, and those cross a shadow boundary by
+	// design — so a colour test would prove nothing either way.
+	await openDeck(page);
+
+	const placement = await page.evaluate(() => {
+		const hosts = [...document.body.children].filter((el) => el.shadowRoot);
+		return {
+			// Not in the deck's own document, where `_head.html` could reach it...
+			inTheDocument: document.querySelector("dialog.picker") !== null,
+			// ...but inside a shadow root of its own, under <body>.
+			inItsOwn: hosts.some((el) => el.shadowRoot?.querySelector("dialog.picker")),
+		};
+	});
+
+	expect(placement).toEqual({ inTheDocument: false, inItsOwn: true });
+});
+
+test("every one of the deck picker's cells shows a picture", async ({
+	page,
+}) => {
+	await openDeckPicker(page);
+
+	const images = page.locator(".strip-cell img");
+	expect(await images.count()).toBeGreaterThan(0);
+	const undecoded = await images.evaluateAll(
+		(found) =>
+			found.filter((img) => !(img as HTMLImageElement).naturalWidth).length,
+	);
+	expect(undecoded).toBe(0);
+});
+
+test("all three openers work on the deck page", async ({ page }) => {
+	// `g` alone was covered. `/` is Chrome's own quick-find and `Ctrl+K` its
+	// omnibox, so both depend on the `preventDefault` in the picker's `window`
+	// listener, and `Ctrl+K` is the one opener whose modifier logic is inverted
+	// from the other two. On the presenter a dead opener still leaves the `▦`
+	// button; here there is nothing else to press.
+	await openDeck(page);
+
+	for (const key of ["g", "/", "Control+k"]) {
+		await page.keyboard.press(key);
+		await expect(page.locator("dialog.picker")).toBeVisible();
+		await page.keyboard.press("Escape");
+		await expect(page.locator("dialog.picker")).toBeHidden();
+	}
+});
+
+test("typing a query does not reach the deck", async ({ page }) => {
+	// `page.fill()` assigns `.value` and dispatches one `input` event — it emits
+	// no `keydown` at all, so every other test in this file typed a query
+	// without the deck's `window` listener ever seeing a character. This is the
+	// one that does, and it is the only cover `typing_into_editable` has.
+	//
+	// On `/run` the stakes are real: `g` and `/` open the picker, and the digits
+	// are bound to typing a slide number at the *room's* screen.
+	await openDeck(page);
+	const on = await deckIsOn(page);
+
+	await page.keyboard.press("g");
+	await expect(page.locator("dialog.picker")).toBeVisible();
+
+	const query = "g/3 log";
+	await page.locator(".strip-search").pressSequentially(query, { delay: 20 });
+
+	// Still open: the `g` and the `/` were characters, not openers.
+	await expect(page.locator("dialog.picker")).toBeVisible();
+	// Every character landed in the box, and only there.
+	await expect(page.locator(".strip-search")).toHaveValue(query);
+	// The digit did not start a goto on the projected screen.
+	await expect(page.locator("#toboggan-goto")).toHaveCount(0);
+	expect(await deckIsOn(page)).toBe(on);
+
+	await page.keyboard.press("Escape");
+});
+
+test("a click on a cell jumps the deck", async ({ page }) => {
+	// The other half of `install_jump`: `Enter` is covered above, but a click is
+	// what the mouse-holding half of the deck page does, and it arrives through
+	// a delegated listener that has to find its cell inside the shadow root.
+	await openDeckPicker(page);
+
+	const target = page.locator('.strip-cell[data-slide="4"]');
+	await target.click();
+	await expect(page.locator("dialog.picker")).toBeHidden();
+	await expect.poll(() => deckIsOn(page)).toBe("5");
+});
+
+test("the mirror pane mounts no picker", async ({ page }) => {
+	// The pair of "the shot page mounts no picker", and the one the presenter
+	// view depends on: `/run?mirror=current` is the iframe inside the speaker's
+	// own layout, so a picker there would open *inside* the current-slide pane
+	// and eat the keys meant for the presenter. Today `main.ts` returns before
+	// `start_app` ever runs — one `return` in TypeScript, guarded by nothing
+	// else.
+	await page.goto("/run?mirror=current");
+	await page.waitForSelector(".toboggan-slide", { timeout: 30_000 });
+
+	await page.keyboard.press("g");
+	await expect(page.locator("dialog.picker")).toHaveCount(0);
+});
+
+test("an open picker keeps the deck's keys when its box loses focus", async ({
+	page,
+}) => {
+	// The picker's keys hang off the dialog; the deck's hang off `window`; the
+	// event reaches both. What used to stand the deck down was
+	// `typing_into_editable` alone, which answers for a text field and nothing
+	// else — so a click on the dialog's own hint bar, or one `Tab` to the ✕,
+	// moved focus off the search box and left `ArrowRight` advancing the room's
+	// slide from behind an open dialog. On `/run` that slide is the one the
+	// audience is watching.
+	await openDeck(page);
+	await page.keyboard.press("g");
+	await expect(page.locator("dialog.picker")).toBeVisible();
+
+	const on = await deckIsOn(page);
+	const before = await selected(page);
+
+	// Focus onto something inside the dialog that is not an input.
+	await page.locator(".strip-hint").click();
+	await page.keyboard.press("ArrowRight");
+	expect(Number(await selected(page))).toBe(Number(before) + 1);
+	// The picker moved. The room did not.
+	expect(await deckIsOn(page)).toBe(on);
+
+	// And a key the picker's `match` does not name: a digit falls past every arm
+	// of it to the deck's own listener, so nothing written inside the picker's
+	// handler can protect it — only a claim on the keyboard can. The badge is
+	// what the room would see.
+	await page.keyboard.press("3");
+	await page.waitForTimeout(400);
+	await expect(page.locator("#toboggan-goto")).toHaveCount(0);
+	expect(await deckIsOn(page)).toBe(on);
+
+	await page.keyboard.press("Escape");
+	await expect(page.locator("dialog.picker")).toBeHidden();
+	// Handed straight back, so closing the picker does not cost the deck its
+	// keys for the rest of the talk.
+	await page.keyboard.press("ArrowRight");
+	await expect.poll(() => deckIsOn(page)).toBe(String(Number(on) + 1));
+	await page.keyboard.press("ArrowLeft");
+	await expect.poll(() => deckIsOn(page)).toBe(on);
+});
+
+test("a failed outline says so instead of matching everything", async ({
+	page,
+}) => {
+	// An empty corpus filters nothing, so every cell goes on matching every
+	// query. The count is the only thing that can tell a speaker the difference
+	// between "your word is on all forty slides" and "I never looked" — and the
+	// first of those is a specific, confident, wrong answer to a question the
+	// picker never asked.
+	await page.route("**/api/outline", (route) =>
+		route.fulfill({ status: 500, body: "no outline for you" }),
+	);
+
+	await openDeck(page);
+	await page.keyboard.press("g");
+	await expect(page.locator("dialog.picker")).toHaveAttribute(
+		"data-search",
+		"unavailable",
+	);
+
+	const cells = await page.locator(".strip-cell").count();
+	await page.fill(".strip-search", "wordthedeckhasnever");
+	// The grid still shows the deck and still jumps: losing the search is the
+	// documented cost of a failed `/api/outline`, and a picker that showed
+	// nothing would be worse than one that shows everything.
+	await expect(page.locator(".strip-cell:not([hidden])")).toHaveCount(cells);
+	// It just does not call that a result.
+	await expect(page.locator(".strip-count")).toContainText(
+		"search unavailable",
+	);
+	await expect(page.locator(".strip-count")).not.toContainText(
+		`${cells} of ${cells}`,
+	);
+
+	await page.keyboard.press("Escape");
+});
+
+test("a terminal keeps the keys that would open the picker", async ({
+	page,
+}) => {
+	// Only the deck page can go wrong this way — the presenter view has no
+	// terminal. `g` and `/` are ordinary characters at a shell prompt, and a
+	// path alone is full of the second one. The picker installs a `keydown`
+	// listener of its own on `window`, separate from the deck's keymap: both
+	// stand down through the same guard, and nothing else here proves the
+	// picker's half of it.
+	await openDeck(page);
+
+	await page.keyboard.press("Backquote");
+	await expect(page.locator(".toboggan-quake-terminal")).toHaveClass(/open/);
+	await expect(
+		page.locator(".toboggan-quake-inner .terminal-window"),
+	).toHaveClass(/terminal-has-keys/);
+
+	await page.keyboard.press("g");
+	await page.keyboard.press("/");
+	// "Nothing happened" is given time to happen anyway.
+	await page.waitForTimeout(400);
+	await expect(page.locator("dialog.picker")).toBeHidden();
+
+	// Handed back, so the same two keys mean the picker again.
+	await page.keyboard.press("Backquote");
+	await expect(page.locator(".toboggan-quake-terminal")).not.toHaveClass(
+		/open/,
+	);
+	await page.keyboard.press("g");
+	await expect(page.locator("dialog.picker")).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(page.locator("dialog.picker")).toBeHidden();
+});
+
+test("the shot page mounts no picker", async ({ page }) => {
+	// Every thumbnail is a photograph of `/run`, so anything `/run` mounts can
+	// end up inside one. The shot page is a separate entry point for exactly
+	// this kind of reason, and this is what keeps it one.
+	await page.goto("/run?shot=1");
+	await expect(page.locator("html")).toHaveAttribute(
+		"data-toboggan-shot",
+		"ready",
+		{ timeout: 60_000 },
+	);
+
+	await page.keyboard.press("g");
+	await expect(page.locator("dialog.picker")).toHaveCount(0);
+});
+
+// Not covered here: the picker on a client that may not drive the deck. Roles
+// are assigned by peer address (`auth.rs::role_for`) and every connection this
+// suite makes is loopback, so a browser here is always the presenter — there is
+// no way to reach `data-role="audience"` short of serving the deck to a second
+// machine or setting a token. What that path has to do is refuse the jump
+// *without* closing, so the standing hint stays readable rather than a toast
+// arriving behind a dialog that is already shutting.
+//
 // Not covered here: the live-reload path (`set_talk` invalidating thumbnails,
 // rebuilding the grid and re-fetching `/api/outline`). A test for it has to edit
 // a slide on disk, and this whole suite is serial against one server holding one

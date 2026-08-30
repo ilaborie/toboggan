@@ -125,6 +125,12 @@ fn build_help_html(mapping: &KeyboardMapping) -> String {
     navigation.push_str(
         "<dt><kbd>0</kbd>…<kbd>9</kbd> <kbd>Enter</kbd></dt><dd>Go to slide by number</dd>",
     );
+    // Also written out: the slide picker brings its own keys rather than binding
+    // them in the shared keymap, because they open a surface a page mounts and
+    // not something the deck does. Both pages that run the app mount one.
+    navigation.push_str(
+        "<dt><kbd>g</kbd> <kbd>/</kbd> <kbd>Ctrl</kbd>+<kbd>K</kbd></dt><dd>Find a slide by what it says</dd>",
+    );
     push_section(&mut out, "Navigation", &navigation);
     push_section(
         &mut out,

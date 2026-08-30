@@ -263,8 +263,9 @@ pub(crate) struct ServeOptions {
 
     /// Do not photograph the deck at startup; wait until something asks
     ///
-    /// The slide overview and the presenter view's picker and next-slide
-    /// preview are all pictures of the deck, and taking them costs seconds —
+    /// The slide overview, the slide picker on either page and the presenter's
+    /// next-slide preview are all pictures of the deck, and taking them costs
+    /// seconds —
     /// so they are taken as soon as the server is listening. Opt out to keep
     /// the old behaviour, where the first request pays for them.
     #[arg(long, env = "TOBOGGAN_NO_EAGER_THUMBNAILS")]

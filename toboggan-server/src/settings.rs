@@ -76,9 +76,10 @@ pub struct ServerSettings {
 
     /// Do not photograph the deck at startup; wait until something asks
     ///
-    /// Thumbnails are warmed as soon as the server is listening, so the
-    /// presenter's slide picker and its next-slide preview have pictures the
-    /// first time the speaker looks at them rather than several seconds later.
+    /// Thumbnails are warmed as soon as the server is listening, so the slide
+    /// picker — on either page — and the presenter's next-slide preview have
+    /// pictures the first time the speaker looks at them rather than several
+    /// seconds later.
     /// Opt out on a machine where spawning a browser per serve is unwelcome —
     /// the overview and the presenter view still generate them on first request.
     #[clap(long, env = "TOBOGGAN_NO_EAGER_THUMBNAILS")]

@@ -15,8 +15,8 @@ use crate::app::App;
 mod components;
 pub(crate) use crate::components::{
     MirrorApp, ShotApp, ToastType, TobogganFooterElement, TobogganHelpElement,
-    TobogganPresenterElement, TobogganQuakeTerminalElement, TobogganSlideElement,
-    TobogganToastElement, WasmElement,
+    TobogganPickerElement, TobogganPresenterElement, TobogganQuakeTerminalElement,
+    TobogganSlideElement, TobogganToastElement, WasmElement,
 };
 
 mod config;

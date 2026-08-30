@@ -210,8 +210,8 @@ impl TobogganState {
     ///
     /// Generation is kicked off if it has not been. The server warms the thumbnails
     /// at startup unless told not to, so this is usually a no-op — but the
-    /// presenter view's next-slide pane and its picker both ask on their own,
-    /// which is what makes them recover after a reload.
+    /// slide picker and the presenter view's next-slide pane both ask on their
+    /// own, which is what makes them recover after a reload.
     pub(crate) async fn presented_thumbnail(&self, presented: usize) -> AssetLookup {
         let Some(source) = self.talk_service.source_index(presented).await else {
             return AssetLookup::Missing;

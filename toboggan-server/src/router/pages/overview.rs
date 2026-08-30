@@ -25,7 +25,7 @@ pub(crate) async fn slides_page(State(state): State<TobogganState>) -> Response 
     }
 }
 
-/// Serves one presented slide's thumbnail, for the presenter view's slide picker.
+/// Serves one presented slide's thumbnail, for the slide picker.
 ///
 /// Addressed by *presented* index — the same number `Command::GoTo` and
 /// `/api/slides/{index}` take — while the thumbnails on disk are named over the

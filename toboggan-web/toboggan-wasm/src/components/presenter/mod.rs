@@ -33,6 +33,7 @@ use wasm_bindgen::JsCast as _;
 use wasm_bindgen::closure::Closure;
 use web_sys::{Element, HtmlElement, HtmlIFrameElement, MessageEvent, ResizeObserver};
 
+use crate::app::TalkFetch;
 use crate::components::thumbnails::{self, Readiness, Thumbnails, thumbnail_src};
 use crate::components::{TobogganPickerElement, WasmElement};
 use crate::services::mirror::{self, MirrorFrame, MirrorMessage, MirrorPane};
@@ -273,7 +274,11 @@ impl TobogganPresenterElement {
     /// Re-posts both frames, so a live reload that edits only `_footer.html` or
     /// `_head.html` — with the deck sitting on the same slide, so no state
     /// change follows it — still reaches the panes.
-    pub(crate) fn set_talk(&self, talk: &TalkResponse) {
+    ///
+    /// `reason` decides whether the photographs and the corpus survive: see
+    /// [`TalkFetch`], and note that a reconnect brings us here just as a reload
+    /// does.
+    pub(crate) fn set_talk(&self, talk: &TalkResponse, reason: TalkFetch) {
         let Some(inner) = &self.inner else {
             return;
         };
@@ -281,15 +286,17 @@ impl TobogganPresenterElement {
             let mut inner = inner.borrow_mut();
             inner.total_slides = talk.titles.len();
             inner.titles.clone_from(&talk.titles);
-            // Every reload lands here, including the ones that only edited a
-            // slide: the deck may be a different length, and every thumbnail is
-            // potentially a different picture at the same URL.
-            inner.thumbs.borrow_mut().invalidate();
-            // The corpus describes the deck that just went away. `app.rs` asks
-            // for the new one straight after this, and if that request fails the
-            // picker is left unsearchable rather than searching the old deck's
-            // words against the new deck's cells.
-            inner.picker.forget_outline();
+            if reason == TalkFetch::Reloaded {
+                // Every reload lands here, including the ones that only edited a
+                // slide: the deck may be a different length, and every thumbnail
+                // is potentially a different picture at the same URL.
+                inner.thumbs.borrow_mut().invalidate();
+                // The corpus describes the deck that just went away. `app.rs`
+                // asks for the new one straight after this, and if that request
+                // fails the picker is left unsearchable rather than searching the
+                // old deck's words against the new deck's cells.
+                inner.picker.forget_outline();
+            }
             inner.picker.build(talk.titles.len());
             inner.plan.clone_from(&talk.durations);
             inner.step_counts.clone_from(&talk.step_counts);
@@ -300,22 +307,38 @@ impl TobogganPresenterElement {
             inner.refresh_next();
             inner.refresh_thumbnails();
             inner.post_now();
-            inner.thumbs.borrow().version()
+            // Only if nothing is already asking: on a reconnect the chain
+            // started at load is still running, and a second one would race it
+            // on one cell and spend the same budget twice.
+            inner.thumbs.borrow_mut().begin_probe()
         };
         // Outside the borrow: the probe's redraw takes the handle, and it borrows.
-        probe_thumbnails(inner, version);
+        if let Some(version) = version {
+            probe_thumbnails(inner, version);
+        }
     }
 
     /// Takes the deck as plain text, so the picker can be searched.
     ///
-    /// Optional in the sense that everything still works without it: the picker
-    /// opens, shows the deck and jumps: only the filtering is reduced to nothing
-    /// matching more than the whole deck.
+    /// Optional in the sense that everything else still works without it: the
+    /// picker opens, shows the deck and jumps. What is not optional is telling
+    /// it when the ask *failed* — see [`Self::note_outline_failed`] — because a
+    /// picker with no corpus matches every query with every slide, and would
+    /// otherwise report that as a search result.
     pub(crate) fn set_outline(&self, slides: &[SlideOutline]) {
         let Some(inner) = &self.inner else {
             return;
         };
         inner.borrow().picker.set_outline(slides);
+    }
+
+    /// Reports that the deck's words could not be fetched, so the picker stops
+    /// answering queries it never ran.
+    pub(crate) fn note_outline_failed(&self) {
+        let Some(inner) = &self.inner else {
+            return;
+        };
+        inner.borrow().picker.note_outline_failed();
     }
 
     /// Takes the deck's position and the slide it is on, and redraws everything
@@ -358,7 +381,11 @@ impl TobogganPresenterElement {
             return;
         };
         let role = if can_drive { "presenter" } else { "audience" };
-        let _ = inner.borrow().layout.set_attribute("data-role", role);
+        let inner = inner.borrow();
+        let _ = inner.layout.set_attribute("data-role", role);
+        // The picker is a control too, and it is the one that used to close on a
+        // jump the deck would refuse.
+        inner.picker.set_can_drive(can_drive);
     }
 }
 

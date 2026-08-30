@@ -801,7 +801,7 @@
       },
       "SlideOutline": {
         "type": "object",
-        "description": "One slide as the presenter's slide picker knows it: enough to search for it,\nand enough to jump to it.\n\nPlain text throughout, `title` included. `TalkResponse::titles` is the same\nheading taken a different way — [`crate::Content::display_text`], which hands\nback an HTML title's markup — so the two are not interchangeable even though\na deck whose titles are all plain text makes them look it.",
+        "description": "One slide as the slide picker knows it: enough to search for it,\nand enough to jump to it.\n\nPlain text throughout, `title` included. `TalkResponse::titles` is the same\nheading taken a different way — [`crate::Content::display_text`], which hands\nback an HTML title's markup — so the two are not interchangeable even though\na deck whose titles are all plain text makes them look it.",
         "properties": {
           "notes": {
             "type": "string",

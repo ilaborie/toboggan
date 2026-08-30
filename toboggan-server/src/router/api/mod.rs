@@ -52,7 +52,7 @@ pub(super) async fn get_slides(State(talk_service): State<TalkService>) -> impl 
     Json(result)
 }
 
-/// The deck as a searchable list, for the presenter's slide picker.
+/// The deck as a searchable list, for the slide picker.
 ///
 /// Separate from `GET /api/talk` rather than folded into it: this is a slide's
 /// whole body and its notes as plain text, which is most of the deck again, and
