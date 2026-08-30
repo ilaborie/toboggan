@@ -84,6 +84,31 @@ async function openPicker(page: Page) {
 	);
 }
 
+test("the picker is behind a shadow root of its own", async ({ page }) => {
+	// The whole reason this is a component rather than part of the presenter's
+	// markup: the top layer is not a style boundary. Mounted straight into the
+	// document that shows a deck, the dialog would be styled by whatever the
+	// author wrote in `_head.html` — the same way that CSS once restyled the
+	// speaker's chrome. Nothing else here can see the difference, and nothing
+	// else here would fail if it were lost.
+	await openPresenter(page);
+
+	const placement = await page.evaluate(() => {
+		const shell = document.querySelector("main")?.shadowRoot;
+		const hosts = [...(shell?.children ?? [])].filter((el) => el.shadowRoot);
+		return {
+			// Not in the presenter's own tree, where it used to be written...
+			inTheShell: shell?.querySelector("dialog.picker") !== null,
+			// ...but one boundary further down, in the component's.
+			inItsOwn: hosts.some((el) =>
+				el.shadowRoot?.querySelector("dialog.picker"),
+			),
+		};
+	});
+
+	expect(placement).toEqual({ inTheShell: false, inItsOwn: true });
+});
+
 test("the grid has one cell per presented slide", async ({ page, request }) => {
 	// Presented, not authored: `/api/slides` is the list the deck can be told to
 	// go to, and a cell that cannot be reached is a button that does nothing.

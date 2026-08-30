@@ -1,28 +1,39 @@
 //! The whole deck at a glance, searchable, and a way to jump into it.
 //!
-//! The presenter view shows two slides: the one the room is looking at and the
-//! one after it. Everything else the speaker has to remember, or reach by typing
-//! a slide number blind. This is the third surface — every slide at once, with a
-//! search box over it — and it is the one thing the slide-overview thumbnails
-//! are genuinely better at than a live mirror: forty small stills is forty
-//! pictures, where forty iframes is forty copies of the deck.
+//! A page showing a deck shows one slide of it. Everything else the speaker has
+//! to remember, or reach by typing a slide number blind. This is the surface
+//! that shows all of them at once, with a search box over it, and it is the one
+//! thing the slide-overview thumbnails are genuinely better at than a live
+//! mirror: forty small stills is forty pictures, where forty iframes is forty
+//! copies of the deck.
 //!
-//! Three things it must get right, and none is obvious:
+//! It is a component rather than part of the presenter view because nothing in
+//! it is the speaker's chrome: it asks the server for the deck's words
+//! (`GET /api/outline`) and the deck's photographs (`/overview/slide/{index}`),
+//! and it writes back one [`Command::GoTo`]. A host gives it somewhere to mount
+//! and a channel to jump on.
+//!
+//! Four things it must get right, and none is obvious:
 //!
 //! * **One index space.** A cell's position is a *presented* slide index — what
 //!   [`Command::GoTo`] takes — while the thumbnails on disk are named over the
 //!   deck as authored, which includes the `hidden_in = ["web"]` slides the room
 //!   never sees. The server crosses between them behind `/overview/slide/{index}`
 //!   so this file never has to know the deck hides anything.
-//! * **The search box disarms the deck.** `crate::typing_into_editable` walks
-//!   the event's `composedPath`, so it sees this input through the presenter's
-//!   shadow boundary: while it has focus the deck's whole keymap stands down of
-//!   its own accord, and the arrows, the digits and `Enter` belong to the picker
-//!   without anything being taken from the deck.
+//! * **The search box disarms the deck.** [`crate::typing_into_editable`] walks
+//!   the event's `composedPath`, so it sees this input through however many
+//!   shadow boundaries it is mounted behind: while it has focus the deck's whole
+//!   keymap stands down of its own accord, and the arrows, the digits and
+//!   `Enter` belong to the picker without anything being taken from the deck.
 //! * **A `<dialog>`, not a panel.** `showModal` puts it in the top layer, traps
 //!   the focus and closes on `Escape` without a listener — and the `close` event
 //!   it fires is the one place the open state has to be kept in step, however
 //!   the speaker got out of it.
+//! * **A shadow root of its own.** The top layer is not a style boundary: a
+//!   dialog opened over the deck is still in the deck's document, where
+//!   `_head.html` is arbitrary author CSS. Mounted in the presenter view the
+//!   nesting costs nothing; mounted on `/run` it is the only thing standing
+//!   between this grid and a stylesheet written for slides.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -33,11 +44,193 @@ use gloo::events::EventListener;
 use gloo::utils::{document, window};
 use toboggan_core::{Command, SlideId, SlideOutline};
 use wasm_bindgen::JsCast as _;
-use web_sys::{Element, HtmlDialogElement, HtmlInputElement};
+use web_sys::{Element, HtmlDialogElement, HtmlElement, HtmlInputElement};
 
-use super::thumbnails::{Readiness, thumbnail_src};
-use crate::create_html_element;
+use crate::components::WasmElement;
+use crate::components::thumbnails::{Readiness, Thumbnails, thumbnail_src};
 use crate::utils::errors::log_dom_error;
+use crate::{
+    create_and_append_element, create_html_element, create_shadow_root_with_style, dom_try,
+};
+
+const CSS: &str = include_str!("style.css");
+
+/// What the dialog contains.
+///
+/// Out of line from [`WasmElement::render`] only because it is markup: every
+/// selector that page queries is matched against this.
+const MARKUP: &str = r#"<div class="strip-head">
+  <input class="strip-search" type="search" placeholder="Find a slide…" aria-label="Find a slide"
+         autocomplete="off" autofocus role="combobox" aria-expanded="true" aria-controls="slide-grid">
+  <span class="strip-count"></span>
+  <span class="strip-status"></span>
+  <button type="button" class="strip-close" title="Close (Esc)" aria-label="Close the slide picker">✕</button>
+</div>
+<div class="strip-grid" id="slide-grid" role="listbox" aria-label="Slides"></div>
+<p class="strip-hint">type to filter · ↑↓←→ move · ⏎ go · Esc close</p>"#;
+
+/// The slide picker, as a page mounts it.
+///
+/// The state behind it is shared with the listeners that drive it, so every
+/// method here takes `&self`: what a host holds is a handle, not the picker.
+#[derive(Default)]
+pub(crate) struct TobogganPickerElement {
+    /// Where a jump is sent. Set before [`WasmElement::render`], which is where
+    /// the cells and the keys are wired. Without it the picker still opens,
+    /// searches and closes — it is a way of *reading* the deck as much as a way
+    /// of moving it — and only the jump is gone.
+    commands: Option<UnboundedSender<Command>>,
+    /// Shared with whatever else on the page is made of photographs, which is
+    /// the presenter view's next-slide pane: one probe then answers for both,
+    /// and a reload invalidates one set of pictures rather than two.
+    thumbs: Rc<RefCell<Thumbnails>>,
+    /// `None` until `render`, and after a `render` that could not find its own
+    /// markup. Every method below is written to do nothing in that case rather
+    /// than to half-work.
+    picker: Option<Rc<RefCell<Picker>>>,
+    /// Held only to keep them alive for the page's lifetime — dropping a
+    /// listener stops its button, its search box, or the keys that open the
+    /// dialog.
+    listeners: Vec<EventListener>,
+}
+
+impl TobogganPickerElement {
+    /// Points a jump at the channel the host's own navigation writes to. Must be
+    /// called before [`WasmElement::render`].
+    ///
+    /// The same channel, deliberately: that is the one place a client which may
+    /// not present is refused and told why, and a second path would be a second
+    /// copy of the rule that can disagree with it.
+    pub(crate) fn set_commands(&mut self, commands: UnboundedSender<Command>) {
+        self.commands = Some(commands);
+    }
+
+    /// Shares the host's photographs, so a host that draws its own draws them
+    /// from the same verdict and the same generation. Must be called before
+    /// [`WasmElement::render`].
+    ///
+    /// A host with no other pictures leaves this alone and the picker probes
+    /// against one of its own.
+    pub(crate) fn set_thumbnails(&mut self, thumbs: Rc<RefCell<Thumbnails>>) {
+        self.thumbs = thumbs;
+    }
+
+    /// The host's button that opens the picker, if it has one, so its
+    /// `aria-expanded` can be kept in step with the dialog.
+    pub(crate) fn set_toggle(&self, toggle: Option<Element>) {
+        self.with(|picker| picker.set_toggle(toggle));
+    }
+
+    /// Takes the deck's searchable text — see [`Picker::set_outline`].
+    pub(crate) fn set_outline(&self, slides: &[SlideOutline]) {
+        self.with(|picker| picker.set_outline(slides));
+    }
+
+    /// Drops the corpus, because the deck it described is gone.
+    pub(crate) fn forget_outline(&self) {
+        self.with(Picker::forget_outline);
+    }
+
+    /// Builds one cell per slide, for a deck whose length is known before its
+    /// words are.
+    pub(crate) fn build(&self, total: usize) {
+        self.with(|picker| picker.build(total));
+    }
+
+    /// Marks the cell the deck is on.
+    pub(crate) fn set_current(&self, current: usize) {
+        self.with(|picker| picker.set_current(current));
+    }
+
+    /// Repaints the grid from what the thumbnails now say.
+    pub(crate) fn refresh(&self) {
+        self.with(Picker::refresh);
+    }
+
+    /// Opens the picker, or closes it if it is already open.
+    pub(crate) fn toggle(&self) {
+        self.with(Picker::toggle);
+    }
+
+    /// Runs `action` against the picker, if there is one.
+    ///
+    /// One place for that `if`, rather than one per method: a picker whose
+    /// markup did not come up is a picker the host goes on calling, and every
+    /// one of those calls has the same nothing to do.
+    fn with(&self, action: impl FnOnce(&mut Picker)) {
+        if let Some(picker) = &self.picker {
+            action(&mut picker.borrow_mut());
+        }
+    }
+}
+
+impl WasmElement for TobogganPickerElement {
+    fn render(&mut self, host: &HtmlElement) {
+        let root = dom_try!(
+            create_shadow_root_with_style(host, CSS),
+            "create the picker's shadow root"
+        );
+        let dialog = dom_try!(
+            create_and_append_element::<HtmlDialogElement>(&root, "dialog"),
+            "the picker's dialog"
+        );
+        dialog.set_class_name("picker");
+        dialog.set_inner_html(MARKUP);
+
+        // Each miss is named: every selector here is matched against `MARKUP`
+        // sixty lines above, so it fires exactly when someone edits that.
+        let find = |selector: &str| match dialog.query_selector(selector) {
+            Ok(Some(element)) => Some(element),
+            Ok(None) => {
+                error!("The picker's markup is missing an element:", selector);
+                None
+            }
+            Err(err) => {
+                error!("The picker's selector is not valid:", selector, err);
+                None
+            }
+        };
+        let close_button = find(".strip-close");
+        let (Some(grid), Some(input), Some(count), Some(status)) = (
+            find(".strip-grid"),
+            find(".strip-search").and_then(|element| element.dyn_into::<HtmlInputElement>().ok()),
+            find(".strip-count"),
+            find(".strip-status"),
+        ) else {
+            // A half-wired picker is worse than none: it would open on a grid
+            // nothing fills, over a deck the speaker can no longer see.
+            return;
+        };
+
+        let picker = Rc::new(RefCell::new(Picker::new(
+            dialog,
+            grid,
+            input,
+            count,
+            status,
+            Rc::clone(&self.thumbs),
+        )));
+
+        if let Some(commands) = self.commands.clone() {
+            self.listeners.push(install_jump(&picker, commands));
+        }
+        self.listeners.push(install_close(&picker));
+        self.listeners.push(install_search(&picker));
+        self.listeners.push(install_shot_errors(&picker));
+        self.listeners
+            .push(install_navigation(&picker, self.commands.clone()));
+        self.listeners.push(install_keys(&picker));
+        if let Some(button) = close_button {
+            let handle = Rc::clone(&picker);
+            self.listeners
+                .push(EventListener::new(&button, "click", move |_| {
+                    handle.borrow_mut().close();
+                }));
+        }
+
+        self.picker = Some(picker);
+    }
+}
 
 /// How much of a slide's text to show around the first hit.
 const SNIPPET_CHARS: usize = 90;
@@ -60,7 +253,7 @@ struct Entry {
 }
 
 /// The slide picker: its DOM, its corpus, and what the query left of it.
-pub(super) struct Picker {
+struct Picker {
     dialog: HtmlDialogElement,
     grid: Element,
     input: HtmlInputElement,
@@ -80,16 +273,22 @@ pub(super) struct Picker {
     selected: usize,
     /// Where the deck is, as a deck index.
     current: usize,
+    /// Whether the deck's photographs exist yet, and which generation of them.
+    /// Held rather than passed in per call: the picker repaints itself from a
+    /// probe it did not start, and a host that has to remember to hand it a
+    /// verdict is a host that can hand it a stale one.
+    thumbs: Rc<RefCell<Thumbnails>>,
 }
 
 impl Picker {
-    /// Wires the dialog that [`super::layout_html`] wrote.
-    pub(super) fn new(
+    /// Wires the dialog that [`WasmElement::render`] wrote.
+    fn new(
         dialog: HtmlDialogElement,
         grid: Element,
         input: HtmlInputElement,
         count: Element,
         status: Element,
+        thumbs: Rc<RefCell<Thumbnails>>,
     ) -> Self {
         Self {
             dialog,
@@ -103,15 +302,26 @@ impl Picker {
             matches: Vec::new(),
             selected: 0,
             current: 0,
+            thumbs,
         }
     }
 
+    /// What the photographs currently say.
+    ///
+    /// Read through a scope of its own so the borrow is over before the caller
+    /// touches the DOM: `refresh` runs from inside the very probe that writes
+    /// this cell.
+    fn previews(&self) -> (Readiness, u32) {
+        let thumbs = self.thumbs.borrow();
+        (thumbs.readiness(), thumbs.version())
+    }
+
     /// The button that opens the picker, so its `aria-expanded` can be kept true.
-    pub(super) fn set_toggle(&mut self, toggle: Option<Element>) {
+    fn set_toggle(&mut self, toggle: Option<Element>) {
         self.toggle = toggle;
     }
 
-    pub(super) fn is_open(&self) -> bool {
+    fn is_open(&self) -> bool {
         self.dialog.open()
     }
 
@@ -120,7 +330,7 @@ impl Picker {
     /// Scrolled only while the picker is open: scrolling a hidden element moves
     /// it to a position the speaker never asked for, and the next open would
     /// start halfway down the deck.
-    pub(super) fn set_current(&mut self, current: usize) {
+    fn set_current(&mut self, current: usize) {
         self.current = current;
         let open = self.is_open();
         for (index, cell) in self.cells.iter().enumerate() {
@@ -144,12 +354,12 @@ impl Picker {
     /// with a slide that no longer says what they searched for, and jumps them
     /// there confidently. Losing the search is the documented cost of a failed
     /// `/api/outline`; answering it wrong is not.
-    pub(super) fn forget_outline(&mut self) {
+    fn forget_outline(&mut self) {
         self.entries.clear();
     }
 
     /// Takes the deck's searchable text, and captions the cells with it.
-    pub(super) fn set_outline(&mut self, slides: &[SlideOutline]) {
+    fn set_outline(&mut self, slides: &[SlideOutline]) {
         self.entries = slides
             .iter()
             .map(|slide| {
@@ -177,7 +387,7 @@ impl Picker {
 
     /// Builds or trims the grid so there is exactly one cell per slide, and
     /// leaves the filter, the count and the selection describing it.
-    pub(super) fn build(&mut self, total: usize) {
+    fn build(&mut self, total: usize) {
         while self.cells.len() > total {
             if let Some(cell) = self.cells.pop() {
                 let _ = self.grid.remove_child(&cell);
@@ -249,15 +459,15 @@ impl Picker {
     }
 
     /// Shows the picker if it is closed, closes it if it is not.
-    pub(super) fn toggle(&mut self, readiness: Readiness, version: u32) {
+    fn toggle(&mut self) {
         if self.is_open() {
             self.close();
         } else {
-            self.show(readiness, version);
+            self.show();
         }
     }
 
-    pub(super) fn show(&mut self, readiness: Readiness, version: u32) {
+    fn show(&mut self) {
         if let Err(err) = self.dialog.show_modal() {
             log_dom_error("open the slide picker", &err);
             return;
@@ -265,7 +475,7 @@ impl Picker {
         if let Some(toggle) = &self.toggle {
             let _ = toggle.set_attribute("aria-expanded", "true");
         }
-        self.refresh(readiness, version);
+        self.refresh();
         // Opened on the slide the deck is on rather than on the last search: a
         // picker opened mid-talk is a speaker asking "where am I", and the query
         // they typed four slides ago is not an answer.
@@ -283,7 +493,7 @@ impl Picker {
         self.set_current(self.current);
     }
 
-    pub(super) fn close(&mut self) {
+    fn close(&mut self) {
         // Also the path `Escape` takes, which fires `close` without going
         // through here — see [`install_close`], which is where the toggle's
         // `aria-expanded` is put back.
@@ -291,14 +501,15 @@ impl Picker {
     }
 
     /// Keeps the button in step with a dialog that may have closed itself.
-    pub(super) fn note_closed(&self) {
+    fn note_closed(&self) {
         if let Some(toggle) = &self.toggle {
             let _ = toggle.set_attribute("aria-expanded", "false");
         }
     }
 
     /// Points every cell at its thumbnail, or says why it cannot.
-    pub(super) fn refresh(&mut self, readiness: Readiness, version: u32) {
+    fn refresh(&mut self) {
+        let (readiness, version) = self.previews();
         match readiness {
             Readiness::Ready => {
                 self.status.set_text_content(None);
@@ -347,7 +558,7 @@ impl Picker {
     /// its title, its part, its body or its notes — which is what makes a query
     /// of two half-remembered words useful. Accents and case are folded, because
     /// a speaker searching their own French deck mid-talk types neither.
-    pub(super) fn apply_query(&mut self) {
+    fn apply_query(&mut self) {
         let query = fold(&self.input.value());
         let tokens = query.split_whitespace().collect::<Vec<_>>();
 
@@ -389,7 +600,7 @@ impl Picker {
     /// Clamped rather than wrapped: the speaker is reading a grid, and a
     /// selection that jumps from the last slide back to the first is a
     /// selection they have to go looking for.
-    pub(super) fn move_selection(&mut self, delta: isize) {
+    fn move_selection(&mut self, delta: isize) {
         if self.matches.is_empty() {
             return;
         }
@@ -401,11 +612,11 @@ impl Picker {
         self.select(usize::try_from(target).unwrap_or(0));
     }
 
-    pub(super) fn select_first(&mut self) {
+    fn select_first(&mut self) {
         self.select(0);
     }
 
-    pub(super) fn select_last(&mut self) {
+    fn select_last(&mut self) {
         self.select(self.matches.len().saturating_sub(1));
     }
 
@@ -414,7 +625,7 @@ impl Picker {
     /// Read from the resolved `grid-template-columns` rather than computed from
     /// widths: the track list is what the browser actually laid out, and the
     /// grid is `auto-fill`, so nothing here knows the count in advance.
-    pub(super) fn row_len(&self) -> usize {
+    fn row_len(&self) -> usize {
         window()
             .get_computed_style(&self.grid)
             .ok()
@@ -426,7 +637,7 @@ impl Picker {
     }
 
     /// The slide the selection is on, for `Enter`.
-    pub(super) fn selected_slide(&self) -> Option<usize> {
+    fn selected_slide(&self) -> Option<usize> {
         self.matches.get(self.selected).copied()
     }
 
@@ -576,7 +787,7 @@ fn find_chars(haystack: &str, needle: &str) -> Option<usize> {
 ///
 /// Assembled from text nodes and a `<mark>`, never as markup: this is a slide's
 /// own words, and a deck that writes `<img onerror=…>` in its notes would
-/// otherwise have written it into the speaker's chrome.
+/// otherwise have written it into the page showing the deck.
 fn write_snippet(cell: &Element, snippet: Option<&Snippet>) {
     let Ok(Some(element)) = cell.query_selector(".strip-snippet") else {
         return;
@@ -602,10 +813,7 @@ fn write_snippet(cell: &Element, snippet: Option<&Snippet>) {
 /// Closing is the point. The picker covers the whole view, so leaving it up
 /// after a jump hides the very slide the speaker jumped to — along with the
 /// notes they jumped to it to read.
-pub(super) fn install_jump(
-    picker: &Rc<RefCell<Picker>>,
-    commands: UnboundedSender<Command>,
-) -> EventListener {
+fn install_jump(picker: &Rc<RefCell<Picker>>, commands: UnboundedSender<Command>) -> EventListener {
     let grid = picker.borrow().grid.clone();
     let picker = Rc::clone(picker);
     EventListener::new(&grid, "click", move |event| {
@@ -627,7 +835,7 @@ pub(super) fn install_jump(
 
 /// Keeps the toggle button honest however the dialog was closed — the `✕`, a
 /// jump, or the `Escape` the platform handles without asking us.
-pub(super) fn install_close(picker: &Rc<RefCell<Picker>>) -> EventListener {
+fn install_close(picker: &Rc<RefCell<Picker>>) -> EventListener {
     let dialog = picker.borrow().dialog.clone();
     let picker = Rc::clone(picker);
     EventListener::new(&dialog, "close", move |_| {
@@ -645,7 +853,7 @@ pub(super) fn install_close(picker: &Rc<RefCell<Picker>>) -> EventListener {
 /// Capture rather than bubble: `error` on an `<img>` does not bubble, so a
 /// delegated listener has to be told to see it on the way down. One listener
 /// for the grid, for the reason [`install_jump`] takes one.
-pub(super) fn install_shot_errors(picker: &Rc<RefCell<Picker>>) -> EventListener {
+fn install_shot_errors(picker: &Rc<RefCell<Picker>>) -> EventListener {
     let grid = picker.borrow().grid.clone();
     EventListener::new_with_options(
         &grid,
@@ -674,7 +882,7 @@ pub(super) fn install_shot_errors(picker: &Rc<RefCell<Picker>>) -> EventListener
 }
 
 /// Re-filters as the speaker types.
-pub(super) fn install_search(picker: &Rc<RefCell<Picker>>) -> EventListener {
+fn install_search(picker: &Rc<RefCell<Picker>>) -> EventListener {
     let input = picker.borrow().input.clone();
     let picker = Rc::clone(picker);
     EventListener::new(&input, "input", move |_| {
@@ -687,7 +895,7 @@ pub(super) fn install_search(picker: &Rc<RefCell<Picker>>) -> EventListener {
 /// On the dialog rather than on `window`, so it only ever sees keys typed into
 /// the picker — and it stops them there, because `↑`/`↓` in a text field move
 /// the caret and `Enter` in a form submits.
-pub(super) fn install_navigation(
+fn install_navigation(
     picker: &Rc<RefCell<Picker>>,
     commands: Option<UnboundedSender<Command>>,
 ) -> EventListener {
@@ -737,6 +945,45 @@ pub(super) fn install_navigation(
             event.prevent_default();
         },
     )
+}
+
+/// The three keys that open the picker.
+///
+/// Caught here rather than added to [`crate::KeyboardMapping`], because the
+/// picker is not something the deck does: a binding in the shared keymap would
+/// appear in the deck's own help dialog on every page, naming a surface only the
+/// pages that mount this component have. A host's toggle button names all three
+/// in its tooltip instead — the dialog's hint bar cannot, since it is only
+/// readable once the picker is already open.
+///
+/// Bare `g` or `/`, and `Ctrl`/`Cmd`+`K` — the three a speaker reaches for. `g`
+/// and `/` are both unbound in the deck's keymap, and a modified key never
+/// reaches it at all, so none of the three is taken from the deck.
+fn install_keys(picker: &Rc<RefCell<Picker>>) -> EventListener {
+    let picker = Rc::clone(picker);
+    let options = gloo::events::EventListenerOptions::enable_prevent_default();
+    EventListener::new_with_options(&window(), "keydown", options, move |event| {
+        let Some(event) = event.dyn_ref::<web_sys::KeyboardEvent>() else {
+            return;
+        };
+        let modified = event.ctrl_key() || event.meta_key();
+        let opens = match event.key().as_str() {
+            "g" | "/" => !modified && !event.alt_key(),
+            "k" => modified && !event.alt_key(),
+            _ => false,
+        };
+        // Only when nothing is being typed into, the same guard the deck's own
+        // keymap applies for the same reason: a `g` at the quake terminal's
+        // prompt is a letter, not a command. It is also what makes the picker's
+        // own search box safe — `typing_into_editable` reads the event's
+        // `composedPath`, so it sees an input inside this shadow root.
+        if !opens || crate::deck_keys_captured() || crate::typing_into_editable(event) {
+            return;
+        }
+        // `Ctrl+K` and `/` are the browser's own before they are ours.
+        event.prevent_default();
+        picker.borrow_mut().toggle();
+    })
 }
 
 fn jump(commands: &UnboundedSender<Command>, index: usize) {

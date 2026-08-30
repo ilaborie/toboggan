@@ -31,22 +31,15 @@ use gloo::utils::window;
 use toboggan_core::{Command, Slide, SlideId, SlideOutline, State, TalkResponse};
 use wasm_bindgen::JsCast as _;
 use wasm_bindgen::closure::Closure;
-use web_sys::{
-    Element, HtmlDialogElement, HtmlElement, HtmlIFrameElement, HtmlInputElement, MessageEvent,
-    ResizeObserver,
-};
+use web_sys::{Element, HtmlElement, HtmlIFrameElement, MessageEvent, ResizeObserver};
 
-use crate::components::WasmElement;
+use crate::components::thumbnails::{self, Readiness, Thumbnails, thumbnail_src};
+use crate::components::{TobogganPickerElement, WasmElement};
 use crate::services::mirror::{self, MirrorFrame, MirrorMessage, MirrorPane};
 use crate::{
     StateClassMapper as _, create_and_append_element, create_shadow_root_with_style, dom_try,
     render_content,
 };
-
-mod picker;
-mod thumbnails;
-use self::picker::Picker;
-use self::thumbnails::{Readiness, Thumbnails, thumbnail_src};
 
 const CSS: &str = include_str!("style.css");
 
@@ -195,13 +188,14 @@ struct Inner {
     next_title: Option<Element>,
     next_number: Option<Element>,
     status: Option<StatusBar>,
-    /// The whole deck at a glance, searchable. Shared rather than owned, because
-    /// its click handlers outlive any one call and have to reach it.
-    picker: Option<Rc<RefCell<Picker>>>,
+    /// The whole deck at a glance, searchable. A component of its own, mounted
+    /// in a shadow root of its own: nothing in it is the speaker's chrome, and
+    /// `/run` can mount the same one.
+    picker: TobogganPickerElement,
     /// Whether the deck's photographs exist yet, and which generation of them.
-    /// Read by both the next pane and the picker, which is why it is here and
-    /// not in either.
-    thumbs: Thumbnails,
+    /// Read by both the next pane and the picker — owned here, because this view
+    /// is what learns the deck has reloaded and every picture is now stale.
+    thumbs: Rc<RefCell<Thumbnails>>,
 
     // Everything from `GET /api/talk`. The markup rides on every frame, which is
     // what makes a `TalkChange` that edits only `_head.html` reach both mirrors.
@@ -290,16 +284,13 @@ impl TobogganPresenterElement {
             // Every reload lands here, including the ones that only edited a
             // slide: the deck may be a different length, and every thumbnail is
             // potentially a different picture at the same URL.
-            inner.thumbs.invalidate();
-            if let Some(picker) = &inner.picker {
-                let mut picker = picker.borrow_mut();
-                // The corpus describes the deck that just went away. `app.rs`
-                // asks for the new one straight after this, and if that request
-                // fails the picker is left unsearchable rather than searching
-                // the old deck's words against the new deck's cells.
-                picker.forget_outline();
-                picker.build(talk.titles.len());
-            }
+            inner.thumbs.borrow_mut().invalidate();
+            // The corpus describes the deck that just went away. `app.rs` asks
+            // for the new one straight after this, and if that request fails the
+            // picker is left unsearchable rather than searching the old deck's
+            // words against the new deck's cells.
+            inner.picker.forget_outline();
+            inner.picker.build(talk.titles.len());
             inner.plan.clone_from(&talk.durations);
             inner.step_counts.clone_from(&talk.step_counts);
             inner.head.clone_from(&talk.head);
@@ -309,10 +300,10 @@ impl TobogganPresenterElement {
             inner.refresh_next();
             inner.refresh_thumbnails();
             inner.post_now();
-            inner.thumbs.version
+            inner.thumbs.borrow().version()
         };
-        // Outside the borrow: the probe takes the handle, and it borrows.
-        thumbnails::probe(Rc::clone(inner), version);
+        // Outside the borrow: the probe's redraw takes the handle, and it borrows.
+        probe_thumbnails(inner, version);
     }
 
     /// Takes the deck as plain text, so the picker can be searched.
@@ -324,10 +315,7 @@ impl TobogganPresenterElement {
         let Some(inner) = &self.inner else {
             return;
         };
-        let inner = inner.borrow();
-        if let Some(picker) = &inner.picker {
-            picker.borrow_mut().set_outline(slides);
-        }
+        inner.borrow().picker.set_outline(slides);
     }
 
     /// Takes the deck's position and the slide it is on, and redraws everything
@@ -354,9 +342,8 @@ impl TobogganPresenterElement {
             element.set_inner_html(notes.as_deref().unwrap_or_default());
         }
 
-        if let Some(picker) = &inner.picker {
-            picker.borrow_mut().set_current(inner.current_index);
-        }
+        let current = inner.current_index;
+        inner.picker.set_current(current);
 
         inner.refresh_steps(state);
         inner.refresh_status();
@@ -445,9 +432,13 @@ impl Inner {
         let Some(image) = &self.next_shot else {
             return;
         };
-        match (next, self.thumbs.readiness) {
+        let (readiness, version) = {
+            let thumbs = self.thumbs.borrow();
+            (thumbs.readiness(), thumbs.version())
+        };
+        match (next, readiness) {
             (Some(index), Readiness::Ready) => {
-                let _ = image.set_attribute("src", &thumbnail_src(index, self.thumbs.version));
+                let _ = image.set_attribute("src", &thumbnail_src(index, version));
             }
             // No photograph to show: the end of the deck, a machine that cannot
             // make them, or a deck still being photographed. The pane keeps its
@@ -460,13 +451,9 @@ impl Inner {
     }
 
     /// Redraws everything that is a photograph of the deck.
-    fn refresh_thumbnails(&mut self) {
+    fn refresh_thumbnails(&self) {
         self.refresh_next();
-        if let Some(picker) = &self.picker {
-            picker
-                .borrow_mut()
-                .refresh(self.thumbs.readiness, self.thumbs.version);
-        }
+        self.picker.refresh();
     }
 
     /// Redraws the reveal counter for the slide the deck is on.
@@ -647,18 +634,7 @@ fn layout_html() -> String {
     <button type="button" class="go-prev" title="Previous step" aria-label="Previous step">‹</button>
     <button type="button" class="go-next" title="Next step" aria-label="Next step">›</button>
   </nav>
-</div>
-<dialog class="picker">
-  <div class="strip-head">
-    <input class="strip-search" type="search" placeholder="Find a slide…" aria-label="Find a slide"
-           autocomplete="off" autofocus role="combobox" aria-expanded="true" aria-controls="slide-grid">
-    <span class="strip-count"></span>
-    <span class="strip-status"></span>
-    <button type="button" class="strip-close" title="Close (Esc)" aria-label="Close the slide picker">✕</button>
-  </div>
-  <div class="strip-grid" id="slide-grid" role="listbox" aria-label="Slides"></div>
-  <p class="strip-hint">type to filter · ↑↓←→ move · ⏎ go · Esc close</p>
-</dialog>"#,
+</div>"#,
         now = mirror_src(MirrorPane::Current),
     )
 }
@@ -743,22 +719,23 @@ impl WasmElement for TobogganPresenterElement {
 
         let status = find_status(&find);
 
-        // `None` when the dialog is missing from the markup, which costs the
-        // view its picker and nothing else — every call below is an `if let`.
-        let picker = match (
-            find(".picker").and_then(|element| element.dyn_into::<HtmlDialogElement>().ok()),
-            find(".strip-grid"),
-            find(".strip-search").and_then(|element| element.dyn_into::<HtmlInputElement>().ok()),
-            find(".strip-count"),
-            find(".strip-status"),
-        ) {
-            (Some(dialog), Some(grid), Some(input), Some(count), Some(status)) => {
-                let mut picker = Picker::new(dialog, grid, input, count, status);
-                picker.set_toggle(find(".strip-toggle"));
-                Some(Rc::new(RefCell::new(picker)))
-            }
-            _ => None,
-        };
+        // Beside the layout rather than inside it: the picker brings a shadow
+        // root of its own, and a host that took part in this grid would have to
+        // be styled here for a dialog that is in the top layer anyway.
+        let thumbs = Rc::new(RefCell::new(Thumbnails::default()));
+        let picker_host = dom_try!(
+            create_and_append_element::<HtmlElement>(&root, "div"),
+            "the picker's host"
+        );
+        let mut picker = TobogganPickerElement::default();
+        if let Some(commands) = self.commands.clone() {
+            picker.set_commands(commands);
+        }
+        picker.set_thumbnails(Rc::clone(&thumbs));
+        picker.render(&picker_host);
+        // The one part of the picker that belongs to this page: a button in the
+        // status strip, whose tooltip is where the three opening keys are named.
+        picker.set_toggle(find(".strip-toggle"));
 
         let inner = Rc::new(RefCell::new(Inner {
             layout: layout.clone(),
@@ -772,8 +749,8 @@ impl WasmElement for TobogganPresenterElement {
             next_title: find(".next-title"),
             next_number: find(".next-number"),
             status,
-            picker: picker.clone(),
-            thumbs: Thumbnails::default(),
+            picker,
+            thumbs,
             head: None,
             footer: None,
             lang: None,
@@ -791,7 +768,7 @@ impl WasmElement for TobogganPresenterElement {
 
         self.install_inbox(&inner);
         self.install_buttons(&inner, &find);
-        self.install_picker(&inner, picker.as_ref(), &find);
+        self.install_picker_toggle(&inner, &find);
         self.install_notes_size(host, &find);
         self.install_stage_scale(&layout);
 
@@ -806,7 +783,7 @@ impl WasmElement for TobogganPresenterElement {
         // Started before anything asks for a picture: the next pane wants one on
         // the first slide change, and the server is usually still photographing
         // the deck when this page opens.
-        thumbnails::probe(Rc::clone(&inner), 0);
+        probe_thumbnails(&inner, 0);
         self.inner = Some(inner);
 
         // Every listener above is armed, so the keyboard is now live.
@@ -819,6 +796,22 @@ impl WasmElement for TobogganPresenterElement {
         // shot page publishes `data-toboggan-shot`.
         let _ = layout.set_attribute("data-ready", "true");
     }
+}
+
+/// Asks whether the deck's photographs are ready, and redraws both surfaces
+/// made of them when the answer changes.
+///
+/// The redraw is a closure rather than a handle because the probe is shared with
+/// `/run`, which has a picker and no next-slide pane: what a verdict repaints is
+/// the caller's business, not the prober's.
+fn probe_thumbnails(inner: &Rc<RefCell<Inner>>, version: u32) {
+    let thumbs = Rc::clone(&inner.borrow().thumbs);
+    let handle = Rc::clone(inner);
+    thumbnails::probe(
+        &thumbs,
+        version,
+        Rc::new(move || handle.borrow().refresh_thumbnails()),
+    );
 }
 
 impl TobogganPresenterElement {
@@ -887,94 +880,25 @@ impl TobogganPresenterElement {
         }
     }
 
-    /// Wires the slide picker: its buttons, its search box, and the three keys
-    /// that open it.
+    /// Wires the status strip's `▦`, the one part of the picker this page owns.
     ///
-    /// The keys are caught here rather than added to [`crate::KeyboardMapping`],
-    /// because the picker is a surface only this page has: a binding in the
-    /// shared keymap would appear in the deck's own help dialog naming something
-    /// the deck cannot do. The toggle button's tooltip names all three instead —
-    /// the dialog's hint bar cannot, since it is only readable once the picker
-    /// is already open.
-    fn install_picker(
+    /// The dialog's own buttons, its search box and the three keys that open it
+    /// belong to the component — see [`crate::components::picker`]. What is left
+    /// here is a button in this view's chrome, which the audience layout hides
+    /// along with the rest of the navigation.
+    fn install_picker_toggle(
         &mut self,
         inner: &Rc<RefCell<Inner>>,
-        picker: Option<&Rc<RefCell<Picker>>>,
         find: &impl Fn(&str) -> Option<Element>,
     ) {
-        let Some(picker) = picker else {
+        let Some(button) = find(".strip-toggle") else {
             return;
         };
-
-        for (selector, opens) in [(".strip-toggle", true), (".strip-close", false)] {
-            let Some(button) = find(selector) else {
-                continue;
-            };
-            let inner = Rc::clone(inner);
-            let picker = Rc::clone(picker);
-            self.listeners
-                .push(EventListener::new(&button, "click", move |_| {
-                    let (readiness, version) = {
-                        let inner = inner.borrow();
-                        (inner.thumbs.readiness, inner.thumbs.version)
-                    };
-                    let mut picker = picker.borrow_mut();
-                    if opens {
-                        picker.toggle(readiness, version);
-                    } else {
-                        picker.close();
-                    }
-                }));
-        }
-
-        if let Some(commands) = self.commands.clone() {
-            self.listeners.push(picker::install_jump(picker, commands));
-        }
-        self.listeners.push(picker::install_close(picker));
-        self.listeners.push(picker::install_search(picker));
-        self.listeners.push(picker::install_shot_errors(picker));
-        self.listeners
-            .push(picker::install_navigation(picker, self.commands.clone()));
-
-        // Bare `g` or `/`, and `Ctrl`/`Cmd`+`K` — the three a speaker reaches
-        // for. `g` and `/` are both unbound in the deck's keymap, and a modified
-        // key never reaches it at all, so none of the three is taken from the
-        // deck.
-        //
-        // Only when nothing is being typed into, the same guard the deck's own
-        // keymap applies for the same reason: a `g` at the quake terminal's
-        // prompt is a letter, not a command. It is also what makes the picker's
-        // own search box safe — `typing_into_editable` reads the event's
-        // `composedPath`, so it sees an input inside this shadow root.
         let inner = Rc::clone(inner);
-        let picker = Rc::clone(picker);
-        let options = gloo::events::EventListenerOptions::enable_prevent_default();
-        self.listeners.push(EventListener::new_with_options(
-            &window(),
-            "keydown",
-            options,
-            move |event| {
-                let Some(event) = event.dyn_ref::<web_sys::KeyboardEvent>() else {
-                    return;
-                };
-                let modified = event.ctrl_key() || event.meta_key();
-                let opens = match event.key().as_str() {
-                    "g" | "/" => !modified && !event.alt_key(),
-                    "k" => modified && !event.alt_key(),
-                    _ => false,
-                };
-                if !opens || crate::deck_keys_captured() || crate::typing_into_editable(event) {
-                    return;
-                }
-                // `Ctrl+K` and `/` are the browser's own before they are ours.
-                event.prevent_default();
-                let (readiness, version) = {
-                    let inner = inner.borrow();
-                    (inner.thumbs.readiness, inner.thumbs.version)
-                };
-                picker.borrow_mut().toggle(readiness, version);
-            },
-        ));
+        self.listeners
+            .push(EventListener::new(&button, "click", move |_| {
+                inner.borrow().picker.toggle();
+            }));
     }
 
     /// Wires `A−`/`A+`, and restores whatever size was last chosen.
