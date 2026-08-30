@@ -522,6 +522,67 @@ const BODY_V_PADDING: f64 = 5.0;
 /// Stand-in grid for a body that cannot be measured yet.
 const DEFAULT_GRID: (u16, u16) = (80, 24);
 
+/// The custom property a host sets to open its terminals at another size.
+const FONT_SIZE_PROPERTY: &str = "--terminal-font-size";
+/// Below half a CSS pixel two font sizes almost always give the same grid — the
+/// cell is a whole number of pixels, near `.6` by `1.3` of the size — so a
+/// rebuild would replay the buffer for a difference nobody can see.
+const FONT_SIZE_EPSILON: f64 = 0.5;
+
+/// The font size the host asked for, in CSS pixels, or `None` for "not asked".
+///
+/// Custom properties are the only thing that crosses into a component's shadow
+/// tree from outside, and this is the third one the terminal honours, after
+/// `--terminal-radius` and `--terminal-titlebar-display`. It is *read* rather
+/// than applied because rioterm fixes `fontSize` when the renderer is built —
+/// see [`rebuild_for_font_size`] for what changing it afterwards costs.
+///
+/// Read off `.terminal-body`, which inherits it: a slide can therefore declare
+/// it on the terminal element, or anywhere above it, exactly as it declares
+/// `--terminal-radius`.
+///
+/// See [`parse_font_size`] for what counts as an answer.
+///
+/// A value that was declared and refused is warned about here rather than in the
+/// parser: a deck that writes `2em` and gets 22 with no explanation would look
+/// for the fault in its selector for a long time. The parser stays free of
+/// `gloo::console`, which is what lets it be tested on the host target.
+fn css_font_size(body: &HtmlElement) -> Option<f64> {
+    let style = web_sys::window()?.get_computed_style(body).ok()??;
+    let declared = style.get_property_value(FONT_SIZE_PROPERTY).ok()?;
+    let size = parse_font_size(&declared);
+    if size.is_none() && !declared.trim().is_empty() {
+        warn!(
+            "Ignoring --terminal-font-size (want a number of CSS pixels):",
+            declared
+        );
+    }
+    size
+}
+
+/// A declared `--terminal-font-size`, in CSS pixels, or `None` for "not asked".
+///
+/// Unitless or `px`; anything else (`em`, `2vw`, a typo, the empty string a
+/// computed style gives for a property nobody set) is ignored rather than
+/// guessed at — the value has to reach rioterm as a number, and no element is
+/// available to resolve a relative unit against.
+///
+/// Clamped to the same 8–32 the keyboard is bounded by, so a stray `260` opens
+/// a readable terminal rather than a two-column one, on stage, with no way back
+/// but `Cmd -`.
+///
+/// Pure, and deliberately so: it is the one part of this module the host-target
+/// unit tests can reach. Logging lives in [`css_font_size`].
+fn parse_font_size(declared: &str) -> Option<f64> {
+    let declared = declared.trim();
+    let number = declared.strip_suffix("px").unwrap_or(declared).trim();
+    let size = number.parse::<f64>().ok()?;
+    // `clamp` panics on a NaN bound and would hand `inf` back as FONT_SIZE_MAX,
+    // which is a size nobody asked for.
+    size.is_finite()
+        .then(|| size.clamp(FONT_SIZE_MIN, FONT_SIZE_MAX))
+}
+
 /// Mounts a rioterm terminal into `body` and wires its callbacks to `tx`.
 /// Loads the bundled terminal font, so the canvas measures cell width against
 /// the real font rather than a system fallback.
@@ -697,9 +758,13 @@ async fn run_terminal_session(
     rx_key: mpsc::UnboundedReceiver<KeyAction>,
     owner: KeyboardOwner,
 ) {
-    let font_size = Rc::new(RefCell::new(DEFAULT_FONT_SIZE));
+    // A deck that declares nothing opens at DEFAULT_FONT_SIZE; one that declares
+    // `--terminal-font-size` opens at what it asked for. The `Resize` arm below
+    // is where a stylesheet that had not arrived yet gets its second chance.
+    let initial_font_size = css_font_size(&body).unwrap_or(DEFAULT_FONT_SIZE);
+    let font_size = Rc::new(RefCell::new(initial_font_size));
     let Some(session) =
-        open_session(&body, theme, DEFAULT_FONT_SIZE, title_el.clone(), &tx_key).await
+        open_session(&body, theme, initial_font_size, title_el.clone(), &tx_key).await
     else {
         return;
     };
@@ -745,6 +810,10 @@ async fn run_terminal_session(
         // Last grid size sent to the server, so a re-fit that resolves to the
         // same dimensions (a spurious observer callback) is a no-op.
         let mut last_dims = (initial_cols, initial_rows);
+        // Whether `--terminal-font-size` has had its last word. See the `Resize`
+        // arm: the first re-fit is the deadline, and after it the size belongs
+        // to whoever last pressed `Cmd +`.
+        let mut css_size_settled = false;
         while let Some(action) = rx_key.next().await {
             match action {
                 KeyAction::Shutdown => {
@@ -823,9 +892,55 @@ async fn run_terminal_session(
                     session_action.borrow().handle.focus();
                 }
                 KeyAction::Resize => {
-                    last_dims =
-                        refit_and_send(&session_action, &body_action, &ws_write_action, last_dims)
-                            .await;
+                    // A slide's stylesheet can still be loading when its
+                    // terminals open — an `@import` resolves asynchronously, and
+                    // the deck's own CSS usually sits behind one — so the size
+                    // read before `open_session` may have been read too early.
+                    // The first re-fit is the deadline: by then the observer has
+                    // seen a laid-out body, which means styles are resolved.
+                    //
+                    // Once, and only from the *initial* size: after this the
+                    // presenter may have pressed `Cmd +`, and a stylesheet does
+                    // not get to argue with the person on stage.
+                    let late = if css_size_settled {
+                        None
+                    } else {
+                        css_size_settled = true;
+                        let in_force = *font_size_action.borrow();
+                        let untouched = (in_force - initial_font_size).abs() < FONT_SIZE_EPSILON;
+                        css_font_size(&body_action)
+                            .filter(|_| untouched)
+                            .filter(|wanted| (wanted - in_force).abs() >= FONT_SIZE_EPSILON)
+                    };
+                    let rebuilt = match late {
+                        Some(wanted) => {
+                            *font_size_action.borrow_mut() = wanted;
+                            rebuild_for_font_size(
+                                &session_action,
+                                &body_action,
+                                theme,
+                                wanted,
+                                title_el.clone(),
+                                &tx_key,
+                            )
+                            .await
+                        }
+                        None => None,
+                    };
+                    last_dims = match rebuilt {
+                        Some(dims) => {
+                            send_resize_if_changed(&ws_write_action, dims, last_dims).await
+                        }
+                        None => {
+                            refit_and_send(
+                                &session_action,
+                                &body_action,
+                                &ws_write_action,
+                                last_dims,
+                            )
+                            .await
+                        }
+                    };
                 }
                 KeyAction::SessionEnded => break,
             }
@@ -957,4 +1072,52 @@ fn build_terminal_ws_url(
     }
 
     url
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_bare_number_is_a_font_size() {
+        assert_eq!(parse_font_size("26"), Some(26.0));
+        // A computed style hands the value back with the author's whitespace.
+        assert_eq!(parse_font_size(" 26 "), Some(26.0));
+    }
+
+    #[test]
+    fn px_is_tolerated_because_it_is_what_a_reflex_types() {
+        assert_eq!(parse_font_size("26px"), Some(26.0));
+        assert_eq!(parse_font_size(" 26 px "), Some(26.0));
+    }
+
+    #[test]
+    fn nothing_declared_is_not_a_font_size() {
+        // What `getPropertyValue` returns for a property no rule sets.
+        assert_eq!(parse_font_size(""), None);
+        assert_eq!(parse_font_size("   "), None);
+    }
+
+    #[test]
+    fn a_relative_unit_is_refused_rather_than_guessed_at() {
+        // There is no element to resolve these against by the time rioterm
+        // wants a number, so they fall back to DEFAULT_FONT_SIZE.
+        assert_eq!(parse_font_size("2em"), None);
+        assert_eq!(parse_font_size("2vw"), None);
+        assert_eq!(parse_font_size("large"), None);
+    }
+
+    #[test]
+    fn a_typo_cannot_open_an_unusable_terminal() {
+        assert_eq!(parse_font_size("260"), Some(FONT_SIZE_MAX));
+        assert_eq!(parse_font_size("2"), Some(FONT_SIZE_MIN));
+        assert_eq!(parse_font_size("-26"), Some(FONT_SIZE_MIN));
+    }
+
+    #[test]
+    fn infinity_is_not_clamped_into_a_size() {
+        // `clamp` would happily return 32 for `inf`, and NaN panics in it.
+        assert_eq!(parse_font_size("inf"), None);
+        assert_eq!(parse_font_size("NaN"), None);
+    }
 }
