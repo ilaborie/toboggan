@@ -119,7 +119,10 @@
     left: 0;
     right: 0;
     text-align: center;
-    font-family: 'JetBrainsMono Nerd Font Mono', 'MonaspiceNe Nerd Font', 'JetBrainsMono Nerd Font', 'Inconsolata', system-ui, monospace;
+    /* Same two bundled families as the canvas (see `mod.rs`): a shell that puts
+       an icon in its OSC title puts it here. The rest are what a viewer may
+       happen to have installed. */
+    font-family: 'JetBrainsMono Nerd Font Mono', 'JetBrainsMono Nerd Font Symbols', 'MonaspiceNe Nerd Font', 'JetBrainsMono Nerd Font', 'Inconsolata', system-ui, monospace;
     font-size: 13px;
     pointer-events: none;
 }

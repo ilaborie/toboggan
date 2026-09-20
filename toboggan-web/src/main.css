@@ -1,8 +1,18 @@
-/* Bundled Nerd Font (Mono variant) for the live terminal.
-   The "Mono" build forces every icon glyph to a single cell width, which the
-   fixed-cell canvas renderer (toboggan-wasm terminal) requires for powerline /
-   icon glyphs to stay on the grid. Icons are only carried in the Regular face;
-   Bold/Italic keep Latin + Powerline (command output rarely uses Nerd icons). */
+/* Bundled Nerd Font (Mono variant) for the live terminal, cut by
+   `mise build:fonts`. The "Mono" build forces every icon glyph to a single cell
+   width, which the fixed-cell canvas renderer (toboggan-wasm terminal) requires
+   for powerline / icon glyphs to stay on the grid.
+
+   Text and icons are two families, not four faces. The icons are what costs
+   (10610 codepoints, 900 KiB) and a prompt needs them at every weight, so the
+   four faces below carry no private-use codepoint at all and the fifth carries
+   nothing else. The browser falls back into it per glyph, which is why the
+   terminal's stack names both — see `components/terminal/mod.rs`.
+
+   The faces used to be Latin-only apart from Regular, and none of them reached
+   past U+FFFF, where Nerd Fonts v3 moved the Material Design set: a bold prompt
+   segment tofu'd its icons, and U+F0035 tofu'd at any weight. Both are one
+   subsetting mistake, so both are fixed in the generator, not here. */
 @font-face {
 	font-family: "JetBrainsMono Nerd Font Mono";
 	font-style: normal;
@@ -30,6 +40,15 @@
 	font-weight: 700;
 	font-display: swap;
 	src: url("/fonts/JetBrainsMonoNerdFontMono-BoldItalic.woff2") format("woff2");
+}
+/* One weight for all four: the icons are the same drawing bold or not, and a
+   second copy of them would cost more than the difference is worth. */
+@font-face {
+	font-family: "JetBrainsMono Nerd Font Symbols";
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url("/fonts/JetBrainsMonoNerdFontMono-Symbols.woff2") format("woff2");
 }
 
 :root {
