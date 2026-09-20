@@ -27,9 +27,17 @@ const DEFAULT_FONT_SIZE: f64 = 22.0;
 const FONT_SIZE_STEP: f64 = 2.0;
 const FONT_SIZE_MIN: f64 = 8.0;
 const FONT_SIZE_MAX: f64 = 32.0;
-/// Matches `main.ts`, which preloads these faces before the app starts so the
+/// Matches `boot.ts`, which preloads these faces before a terminal opens so the
 /// canvas renderer measures cells with the bundled font rather than a fallback.
-const FONT_FAMILY: &str = "\"JetBrainsMono Nerd Font Mono\", monospace";
+///
+/// Two families, because the bundled font is cut in two: the first carries the
+/// text at four weights, the second every Nerd Font icon at one (see
+/// `main.css`). rioterm hands the whole string to `ctx.font`, so the browser
+/// falls back into the icon family per glyph — which is the only reason a
+/// prompt's icons survive a bold segment. Both faces are cut from the same
+/// `JetBrainsMono` NFM Mono, so an icon takes exactly one cell either way.
+const FONT_FAMILY: &str =
+    "\"JetBrainsMono Nerd Font Mono\", \"JetBrainsMono Nerd Font Symbols\", monospace";
 
 #[derive(Debug)]
 pub(crate) struct TobogganTerminalElement {
@@ -590,8 +598,8 @@ fn parse_font_size(declared: &str) -> Option<f64> {
 /// Calls the page's memoised starter (`window.tobogganFontsReady`) rather than
 /// waiting on `document.fonts.ready`: that one settles only when the document
 /// has no font work left at all, which on a deck that keeps swapping slides can
-/// take a long time — long enough to stall a terminal waiting on four faces.
-/// This is also what pulls the faces down in the first place, so the ~700 KB is
+/// take a long time — long enough to stall a terminal waiting on five faces.
+/// This is also what pulls the faces down in the first place, so the ~1.2 MB is
 /// charged to the terminal that needs it and not to the first slide.
 ///
 /// Returns immediately when the starter is absent — the presenter view has no
@@ -630,7 +638,7 @@ async fn open_session(
     // falls back to a system font if the bundled one has not arrived — box
     // drawing and powerline glyphs then sit out of line for the whole session.
     // Waited for here, at the one place a terminal is built, rather than in
-    // front of `start_app`: gating the whole deck on a 700 KB font download put
+    // front of `start_app`: gating the whole deck on a 1.2 MB font download put
     // a wait only terminals need in front of the first slide.
     await_terminal_fonts().await;
 

@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+#MISE description="Regenerate the terminal's bundled Nerd Font faces from upstream"
+
+set -euo pipefail
+
+# The live terminal is a canvas grid, so it needs its font as woff2 next to the
+# deck rather than whatever the viewer happens to have installed. Upstream ships
+# TTFs of 2.4 MB each; what lands in `assets/fonts` is cut here.
+#
+# Text and icons are split into two families on purpose:
+#
+#   *-{Regular,Bold,Italic,BoldItalic}.woff2   every codepoint but the PUA
+#   *-Symbols.woff2                            the PUA, and nothing else
+#
+# because the icons are what costs (10610 codepoints, ~900 KiB) and a terminal
+# needs them at every weight. Carried per weight that is 3.8 MB of deck; carried
+# once, behind a second family the browser falls back into per glyph, it is one
+# file all four weights share. The price is an icon drawn at Regular weight
+# inside a bold prompt segment, which in an icon nobody has ever spotted.
+#
+# Run it when the version below moves. The output is committed.
+
+NERD_FONTS_VERSION="3.4.0"
+FACES=(Regular Bold Italic BoldItalic)
+OUT_DIR="toboggan-web/assets/fonts"
+
+usage() {
+	cat <<-EOF
+		Usage: mise build:fonts [--from <dir>]
+
+		  --from <dir>  Take the upstream TTFs from <dir> (e.g. ~/Library/Fonts)
+		                instead of downloading JetBrainsMono $NERD_FONTS_VERSION.
+	EOF
+}
+
+src_dir=""
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--from)
+		src_dir="${2:?--from needs a directory}"
+		shift 2
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		usage >&2
+		exit 1
+		;;
+	esac
+done
+
+work_dir="$(mktemp -d)"
+trap 'rm -rf "$work_dir"' EXIT
+
+if [ -z "$src_dir" ]; then
+	url="https://github.com/ryanoasis/nerd-fonts/releases/download/v${NERD_FONTS_VERSION}/JetBrainsMono.zip"
+	echo "⬇️  Downloading JetBrainsMono Nerd Font $NERD_FONTS_VERSION..."
+	curl --fail --location --silent --show-error --output "$work_dir/JetBrainsMono.zip" "$url"
+	unzip -q -o -d "$work_dir" "$work_dir/JetBrainsMono.zip"
+	src_dir="$work_dir"
+fi
+
+for face in "${FACES[@]}"; do
+	if [ ! -f "$src_dir/JetBrainsMonoNerdFontMono-$face.ttf" ]; then
+		echo "🚨 Missing $src_dir/JetBrainsMonoNerdFontMono-$face.ttf" >&2
+		exit 1
+	fi
+done
+
+echo "✂️  Subsetting into $OUT_DIR..."
+uvx --quiet --from "fonttools[woff]" python - "$src_dir" "$OUT_DIR" "${FACES[@]}" <<'PY'
+import sys
+from pathlib import Path
+
+from fontTools.subset import Options, Subsetter
+from fontTools.ttLib import TTFont
+
+src, out, *faces = sys.argv[1:]
+src, out = Path(src), Path(out)
+
+# Nerd Fonts v3 split its icons across two private-use areas: the original BMP
+# one, and plane 15, where the whole Material Design set moved. A subset that
+# stops at U+FFFF drops 6896 icons and says nothing — which is the bug this
+# script exists to keep fixed.
+ICON_RANGES = ((0xE000, 0xF8FF), (0xF0000, 0x10FFFD))
+
+
+def is_icon(codepoint):
+    return any(low <= codepoint <= high for low, high in ICON_RANGES)
+
+
+def source(face):
+    return TTFont(src / f"JetBrainsMonoNerdFontMono-{face}.ttf")
+
+
+def rename(font, family):
+    """Retitle the family, so opening the file says what it carries."""
+    for record in font["name"].names:
+        if record.nameID in (1, 16):
+            record.string = family
+        elif record.nameID in (4, 18):
+            record.string = f"{family} Regular"
+        elif record.nameID == 6:
+            record.string = family.replace(" ", "") + "-Regular"
+
+
+def write(font, codepoints, target):
+    options = Options()
+    # Keep every feature and the whole name table: the shaping the terminal draws
+    # with, and the version string that told us the last subset had lost plane 15.
+    options.layout_features = ["*"]
+    options.name_IDs = ["*"]
+    subsetter = Subsetter(options=options)
+    subsetter.populate(unicodes=codepoints)
+    subsetter.subset(font)
+    font.flavor = "woff2"
+    font.save(target)
+    return target.stat().st_size
+
+
+for face in faces:
+    font = source(face)
+    text = [cp for cp in font.getBestCmap() if not is_icon(cp)]
+    target = out / f"JetBrainsMonoNerdFontMono-{face}.woff2"
+    size = write(font, text, target)
+    print(f"   {target.name:44} {len(text):6} codepoints {size / 1024:7.0f} KiB")
+
+font = source("Regular")
+icons = [cp for cp in font.getBestCmap() if is_icon(cp)]
+rename(font, "JetBrainsMono Nerd Font Symbols")
+target = out / "JetBrainsMonoNerdFontMono-Symbols.woff2"
+size = write(font, icons, target)
+print(f"   {target.name:44} {len(icons):6} codepoints {size / 1024:7.0f} KiB")
+PY
+
+echo ""
+echo "✅ Fonts rebuilt. Faces are declared in toboggan-web/src/main.css."

@@ -24,7 +24,7 @@ test("the deck renders a slide", async ({ page }) => {
 	//
 	// The budget is deliberately tight. Getting here used to mean a WebSocket
 	// handshake, a whole `/api/talk` round trip wedged in front of the state
-	// frame, and ~700 KB of terminal font — none of which the first slide needs
+	// frame, and ~1.2 MB of terminal font — none of which the first slide needs
 	// — so 15s was generous enough to hide all of it. Locally this is a few tens
 	// of milliseconds; a second is still far more than it should ever take, and
 	// little enough that putting any of that back fails here.

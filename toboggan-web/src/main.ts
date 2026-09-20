@@ -44,7 +44,7 @@ const shotIndex = ((raw) => {
 // Initialize the application when the DOM is loaded
 document.addEventListener("DOMContentLoaded", async () => {
 	// The terminal renders to a <canvas>, which silently falls back to a system
-	// font if the web font isn't loaded yet. The faces are ~700 KB, and only
+	// font if the web font isn't loaded yet. The faces are ~1.2 MB, and only
 	// terminals need them, so the download is neither started nor awaited on the
 	// way to the first slide — the deck used to wait on all of it before drawing
 	// anything. Published as a memoised starter instead: whoever needs the font

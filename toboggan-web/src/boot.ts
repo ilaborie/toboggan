@@ -27,33 +27,46 @@ export const appConfig = (): AppConfig => {
 };
 
 /**
- * Preload the bundled terminal Nerd Font (all four faces the renderer uses) so
- * the canvas renderer measures cell width and draws glyphs with the right font.
+ * Preload the bundled terminal Nerd Font (the four text faces the renderer uses
+ * and the icon face they fall back into) so the canvas renderer measures cell
+ * width and draws glyphs with the right font.
  */
 export const ensureTerminalFontLoaded = async (): Promise<void> => {
 	if (!("fonts" in document)) {
 		return;
 	}
-	const family = '"JetBrainsMono Nerd Font Mono"';
+	const text = '"JetBrainsMono Nerd Font Mono"';
+	// Probed with an icon rather than the default `BESbswy`: this face carries
+	// the private-use planes and nothing else, so a Latin probe would match no
+	// codepoint in it the day it grows a `unicode-range`.
+	const symbols = '"JetBrainsMono Nerd Font Symbols"';
 	const faces = [
-		`16px ${family}`,
-		`bold 16px ${family}`,
-		`italic 16px ${family}`,
-		`bold italic 16px ${family}`,
+		{ font: `16px ${text}` },
+		{ font: `bold 16px ${text}` },
+		{ font: `italic 16px ${text}` },
+		{ font: `bold italic 16px ${text}` },
+		{ font: `16px ${symbols}`, probe: "\u{f0035}" },
 	];
 	const results = await Promise.allSettled(
-		faces.map((face) => document.fonts.load(face)),
+		faces.map(({ font, probe }) => document.fonts.load(font, probe)),
 	);
 	// `allSettled` is chosen so a missing face does not stop the page, and the
 	// array was then thrown away — which made the fallback this function exists
 	// to avoid completely invisible. A terminal measured against the wrong font
 	// draws its box-drawing and powerline glyphs out of line.
-	const failed = results.filter((result) => result.status === "rejected");
+	//
+	// A resolved-but-empty result counts as a failure too: `load()` matched no
+	// face, which is what a family named here and not in `main.css` looks like.
+	const failed = results.filter(
+		(result) => result.status === "rejected" || result.value.length === 0,
+	);
 	if (failed.length > 0) {
 		console.error(
 			`⚠️ ${failed.length}/${faces.length} terminal font faces failed to load; ` +
 				"terminals will fall back to a system font and may render misaligned",
-			failed.map((result) => (result as PromiseRejectedResult).reason),
+			failed.map((result) =>
+				result.status === "rejected" ? result.reason : "matched no @font-face",
+			),
 		);
 	}
 };
