@@ -457,7 +457,9 @@ test("the deck page's picker is behind a shadow root of its own", async ({
 			// Not in the deck's own document, where `_head.html` could reach it...
 			inTheDocument: document.querySelector("dialog.picker") !== null,
 			// ...but inside a shadow root of its own, under <body>.
-			inItsOwn: hosts.some((el) => el.shadowRoot?.querySelector("dialog.picker")),
+			inItsOwn: hosts.some((el) =>
+				el.shadowRoot?.querySelector("dialog.picker"),
+			),
 		};
 	});
 

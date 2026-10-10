@@ -240,7 +240,9 @@ async fn forward_commands(mut rx_cmd: UnboundedReceiver<Command>, sink: SharedSi
             // Dropping `write` closes this socket, and the read half will see it
             // and reconnect. The loop keeps going: it has to still be here to
             // serve the socket that replaces this one.
-            Err(err) => error!("Failed to send command:", err.to_string()),
+            Err(err) => {
+                error!("Failed to send command:", err.to_string());
+            }
         }
     }
 }

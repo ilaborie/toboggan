@@ -133,7 +133,7 @@ mod tests {
             ..LintConfig::default()
         };
         let at_limit = slide_with(&code_block(3));
-        assert!(slide_diagnostics_with(&CodeTooLong, &at_limit, &config).is_empty());
+        assert_eq!(slide_diagnostics_with(&CodeTooLong, &at_limit, &config), []);
 
         let over = slide_with(&code_block(4));
         assert_eq!(

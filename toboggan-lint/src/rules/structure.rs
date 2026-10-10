@@ -415,7 +415,7 @@ mod tests {
     #[test]
     fn distinct_slide_titles_are_quiet() {
         let talk = talk_of(&[standard("1.1 Setup"), standard("1.2 Teardown")]);
-        assert!(talk_diagnostics(&DuplicateSlideTitle, &talk).is_empty());
+        assert_eq!(talk_diagnostics(&DuplicateSlideTitle, &talk), []);
     }
 
     /// Parts and slides are counted separately: a part named "Setup"
@@ -423,8 +423,8 @@ mod tests {
     #[test]
     fn a_part_and_a_slide_may_share_a_name() {
         let talk = talk_of(&[part("1. Setup"), standard("1.1 Setup")]);
-        assert!(talk_diagnostics(&DuplicateSlideTitle, &talk).is_empty());
-        assert!(talk_diagnostics(&DuplicatePartName, &talk).is_empty());
+        assert_eq!(talk_diagnostics(&DuplicateSlideTitle, &talk), []);
+        assert_eq!(talk_diagnostics(&DuplicatePartName, &talk), []);
     }
 
     fn budget_of(seconds: u64) -> LintConfig {
@@ -439,7 +439,7 @@ mod tests {
     #[test]
     fn over_budget_is_silent_without_a_budget() {
         let talk = talk_of(&[standard("A").with_duration(Duration::from_hours(3))]);
-        assert!(talk_diagnostics(&OverBudget, &talk).is_empty());
+        assert_eq!(talk_diagnostics(&OverBudget, &talk), []);
     }
 
     /// The comparison is `>`, so a deck that exactly fills its slot is fine.
@@ -449,7 +449,10 @@ mod tests {
             standard("A").with_duration(Duration::from_mins(20)),
             standard("B").with_duration(Duration::from_mins(25)),
         ]);
-        assert!(talk_diagnostics_with(&OverBudget, &at_limit, &budget_of(45 * 60)).is_empty());
+        assert_eq!(
+            talk_diagnostics_with(&OverBudget, &at_limit, &budget_of(45 * 60)),
+            []
+        );
 
         let over = talk_of(&[
             standard("A").with_duration(Duration::from_mins(20)),
@@ -497,7 +500,10 @@ mod tests {
     #[test]
     fn a_slide_with_notes_is_quiet() {
         let slide = standard("A").with_notes(Content::text("say this"));
-        assert!(slide_diagnostics_with(&MissingNotes, &slide, &requiring_notes()).is_empty());
+        assert_eq!(
+            slide_diagnostics_with(&MissingNotes, &slide, &requiring_notes()),
+            []
+        );
     }
 
     /// Covers and parts are signposts, not something anyone speaks to at
@@ -524,6 +530,6 @@ mod tests {
             ..Default::default()
         };
         let talk = talk_of(&[blank.clone(), blank]);
-        assert!(talk_diagnostics(&DuplicateSlideTitle, &talk).is_empty());
+        assert_eq!(talk_diagnostics(&DuplicateSlideTitle, &talk), []);
     }
 }

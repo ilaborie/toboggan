@@ -1080,7 +1080,10 @@ mod tests {
             )
             .expect("dry run");
         assert!(changes.dry_run);
-        assert!(!changes.renamed.is_empty());
+        assert!(
+            !changes.renamed.is_empty(),
+            "a dry run still reports its renames"
+        );
         // Files unchanged.
         assert_eq!(
             numbered_entries(dir.path()).expect("list"),

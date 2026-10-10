@@ -42,6 +42,8 @@ pub(crate) fn notify(kind: ToastType, message: &str) {
     let sink = SINK.with_borrow(Clone::clone);
     match sink {
         Some(sink) => sink(kind, message),
-        None => error!("Nowhere to show a message:", message),
+        None => {
+            error!("Nowhere to show a message:", message);
+        }
     }
 }

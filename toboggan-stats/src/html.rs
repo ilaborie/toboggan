@@ -478,10 +478,9 @@ mod query_tests {
         );
         assert_eq!(document.image_sources(), vec!["one.png", "two.png"]);
         // An `<img>` with no `src` has nothing to check and is not reported.
-        assert!(
-            HtmlDocument::parse_fragment("<img alt=\"a\">")
-                .image_sources()
-                .is_empty()
+        assert_eq!(
+            HtmlDocument::parse_fragment("<img alt=\"a\">").image_sources(),
+            Vec::<&str>::new()
         );
     }
 

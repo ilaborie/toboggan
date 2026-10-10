@@ -296,14 +296,18 @@ pub(crate) fn probe(thumbs: &Rc<RefCell<Thumbnails>>, version: u32, redraw: Redr
             // Said out loud where the chain ends, rather than inside `verdict`,
             // which is a rule and not a reporter.
             match (answer, ask_again_in) {
-                (Answer::Working, None) => error!(
-                    "Slide previews are still being generated after",
-                    MAX_WAITS, "asks — pausing until something asks again"
-                ),
-                (Answer::Failed, None) => error!(
-                    "Giving up on slide previews after",
-                    MAX_FAILURES, "failed asks"
-                ),
+                (Answer::Working, None) => {
+                    error!(
+                        "Slide previews are still being generated after",
+                        MAX_WAITS, "asks — pausing until something asks again"
+                    );
+                }
+                (Answer::Failed, None) => {
+                    error!(
+                        "Giving up on slide previews after",
+                        MAX_FAILURES, "failed asks"
+                    );
+                }
                 _ => {}
             }
 
