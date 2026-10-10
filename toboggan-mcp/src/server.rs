@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use rmcp::handler::server::wrapper::{Json, Parameters};
-use rmcp::model::{ServerCapabilities, ServerInfo};
+use rmcp::model::{ServerCapabilities, ServerConfig};
 use rmcp::{ErrorData, ServerHandler, tool, tool_handler, tool_router};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -339,8 +339,8 @@ impl TobogganServer {
 #[allow(unknown_lints, clippy::unused_async_trait_impl)]
 #[tool_handler]
 impl ServerHandler for TobogganServer {
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(
             "Authoring tools for a Toboggan presentation folder (the server's root is the \
              slides folder). Start with `talk_outline`: it lists the cover, parts, and slides \
              with the relative `path` every editing tool addresses. Inspect quality with \
