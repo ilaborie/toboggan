@@ -3,6 +3,16 @@
 	background-color: var(--bg);
 }
 
+/* Selection inverts the slide colours: the browser default is a pale tint that
+   vanishes over pastel syntax tokens and the code `text-shadow`. Like the sizes
+   below, a deck retunes it from `_head.html` with `--selection-fg` and
+   `--selection-bg`, which inherit across the shadow boundary. */
+::selection {
+	color: var(--selection-fg, var(--bg));
+	background-color: var(--selection-bg, var(--fg));
+	text-shadow: none;
+}
+
 /* Fonts */
 h1,
 h2,

@@ -108,6 +108,13 @@ Entries are grouped the way the commits are: this repository uses
 
 ### Fixed
 
+- **Selected text on a slide is readable again.** The browser's default
+  selection tint, a pale gray in Firefox, all but erased pastel syntax tokens
+  and code comments. The slide theme now inverts `--fg` / `--bg` for
+  `::selection` and drops the code `text-shadow` under it. A deck can pick its
+  own colours with `--selection-fg` and `--selection-bg` in `_head.html`, since
+  a selector there cannot reach the slide's shadow root.
+
 - **`toboggan` on a deck could lose its slide overview entirely**, with
   `unclosed raw text` or `input file not found` for a `.toboggan-thumb.typ`
   nobody wrote. A feedback loop: the thumbnail renderer wrote its scratch file
