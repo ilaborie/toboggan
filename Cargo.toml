@@ -48,11 +48,11 @@ futures = "0.3.34"
 slotmap = "1.1.1"
 
 # OpenAPI dependencies
-utoipa = "5.5.0"
-utoipa-scalar = "0.3.0"
+utoipa = "6.0.0"
+utoipa-scalar = "0.4.0"
 
 # Dev dependencies
-clawspec-core = "0.4.4"
+clawspec-core = "0.5.0"
 tempfile = "3.27.0"
 tower = "0.5.3"
 
