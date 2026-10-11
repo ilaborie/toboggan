@@ -173,6 +173,13 @@ Entries are grouped the way the commits are: this repository uses
   shifted every link after it. A hidden slide's card is now not a link at all,
   since there is nothing in the export to point at.
 
+- **Starting `toboggan` no longer logs `ERROR … 503 Service Unavailable`.** The
+  presenter and the picker ask for each slide thumbnail while the deck is still
+  being photographed, and the server answers `503` with `Retry-After` until it
+  is ready. The request log counted every such answer as a failure. A `503`
+  that says when to retry is now a normal response; any other 5xx still logs
+  at `ERROR`.
+
 ## [0.2.0] - 2026-08-25
 
 ### Added
