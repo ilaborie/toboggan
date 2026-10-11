@@ -1,5 +1,5 @@
 {
-  "openapi": "3.1.0",
+  "openapi": "3.2.0",
   "info": {
     "title": "toboggan-server",
     "description": "Axum WebSocket server with REST API and real-time presentation synchronization",
@@ -682,12 +682,8 @@
         "description": "One slide: what it says, how it looks, and what it is meant to cost in time.\n\nBuilt by the parser from one Markdown file — [`Slide::from_markdown`] is the\nconstructor that keeps `body` and `body_source` consistent.",
         "properties": {
           "body": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/Content",
-                "description": "Everything below the heading."
-              }
-            ],
+            "$ref": "#/components/schemas/Content",
+            "description": "Everything below the heading.",
             "default": {
               "type": "Empty"
             }
@@ -720,12 +716,8 @@
             "uniqueItems": true
           },
           "kind": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/SlideKind",
-                "description": "Whether this is the cover, a section title, or an ordinary slide."
-              }
-            ],
+            "$ref": "#/components/schemas/SlideKind",
+            "description": "Whether this is the cover, a section title, or an ordinary slide.",
             "default": "Standard"
           },
           "lint_disabled": {
@@ -737,12 +729,8 @@
             "default": []
           },
           "notes": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/Content",
-                "description": "Speaker notes — shown in the presenter view and the terminal client,\nnever on the projector."
-              }
-            ],
+            "$ref": "#/components/schemas/Content",
+            "description": "Speaker notes — shown in the presenter view and the terminal client,\nnever on the projector.",
             "default": {
               "type": "Empty"
             }
@@ -756,12 +744,8 @@
             "default": null
           },
           "style": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/Style",
-                "description": "Classes and inline style applied to the slide's `<section>`."
-              }
-            ],
+            "$ref": "#/components/schemas/Style",
+            "description": "Classes and inline style applied to the slide's `<section>`.",
             "default": {}
           },
           "terminals": {
@@ -773,12 +757,8 @@
             "default": []
           },
           "title": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/Content",
-                "description": "The slide's heading. Empty for a slide that deliberately has none."
-              }
-            ],
+            "$ref": "#/components/schemas/Content",
+            "description": "The slide's heading. Empty for a slide that deliberately has none.",
             "default": {
               "type": "Empty"
             }
