@@ -610,6 +610,12 @@ impl Picker {
     /// Builds or trims the grid so there is exactly one cell per slide, and
     /// leaves the filter, the count and the selection describing it.
     fn build(&mut self, total: usize) {
+        // Taken before the rebuild, because `apply_query` ends on `select(0)` —
+        // the reset a new *query* wants, and the wrong one here. The outline
+        // lands, or the socket comes back, under a picker the speaker may have
+        // open; its selection was on the slide the deck is on, and jumping it to
+        // the first slide sent `Enter` back to the start of the talk.
+        let kept = self.selected_slide();
         while self.cells.len() > total {
             if let Some(cell) = self.cells.pop() {
                 let _ = self.grid.remove_child(&cell);
@@ -632,6 +638,9 @@ impl Picker {
         // deck, and `selected` still points into the old match list. This
         // re-hides, recounts and re-selects in one place.
         self.apply_query();
+        if let Some(slide) = kept {
+            self.select_slide(slide);
+        }
     }
 
     /// One cell, carrying its own slide index for [`install_jump`] to read back.
