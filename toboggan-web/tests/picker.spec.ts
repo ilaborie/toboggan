@@ -72,6 +72,39 @@ async function openPresenter(page: Page) {
 	});
 }
 
+/**
+ * Asserts that every cell of an open picker decodes its picture.
+ *
+ * Each cell is scrolled into view first: the `<img>` is `loading="lazy"`, and
+ * under Chromium 156 (Playwright 1.64) the off-screen ones were still undecoded
+ * when the grid said `ready`, so counting `naturalWidth` up front failed on
+ * cells that had simply never been shown. Playwright 1.62's Chromium decoded them.
+ *
+ * `naturalWidth` rather than the `src` attribute: a `503` while the deck is
+ * still being photographed sets the attribute perfectly well and renders a
+ * broken image, which is the failure this whole probe-and-retry exists for.
+ */
+async function expectEveryCellDecoded(page: Page) {
+	// Through a locator, not `document.querySelectorAll`: the cells are inside
+	// the picker's shadow root, which `querySelectorAll` does not enter. Asking
+	// the document directly returns an empty list on a page that is working and
+	// an empty list on a page that is not — so the assertion passed for a long
+	// time without ever seeing an `<img>`. Playwright's locators pierce shadow
+	// roots; that is the entire difference.
+	const images = page.locator(".strip-cell img");
+	const count = await images.count();
+	expect(count).toBeGreaterThan(0);
+	for (let index = 0; index < count; index++) {
+		const image = images.nth(index);
+		await image.scrollIntoViewIfNeeded();
+		await expect
+			.poll(() =>
+				image.evaluate((img) => (img as HTMLImageElement).naturalWidth),
+			)
+			.toBeGreaterThan(0);
+	}
+}
+
 /** Opens the picker, and waits for the thumbnails behind it. */
 async function openPicker(page: Page) {
 	await openPresenter(page);
@@ -136,24 +169,7 @@ test("the outline is numbered the same way", async ({ request }) => {
 
 test("every cell shows a picture", async ({ page }) => {
 	await openPicker(page);
-
-	// Through a locator, not `document.querySelectorAll`: the cells are inside
-	// the picker's shadow root, which `querySelectorAll` does not enter. Asking
-	// the document directly returns an empty list on a page that is working and
-	// an empty list on a page that is not — so the assertion below passed for
-	// the whole life of this test without ever seeing an `<img>`. Playwright's
-	// locators pierce shadow roots; that is the entire difference.
-	const images = page.locator(".strip-cell img");
-	expect(await images.count()).toBeGreaterThan(0);
-
-	// `naturalWidth` rather than the `src` attribute: a `503` while the deck is
-	// still being photographed sets the attribute perfectly well and renders a
-	// broken image, which is the failure this whole probe-and-retry exists for.
-	const undecoded = await images.evaluateAll(
-		(found) =>
-			found.filter((img) => !(img as HTMLImageElement).naturalWidth).length,
-	);
-	expect(undecoded).toBe(0);
+	await expectEveryCellDecoded(page);
 });
 
 test("the current slide is marked", async ({ page }) => {
@@ -470,14 +486,7 @@ test("every one of the deck picker's cells shows a picture", async ({
 	page,
 }) => {
 	await openDeckPicker(page);
-
-	const images = page.locator(".strip-cell img");
-	expect(await images.count()).toBeGreaterThan(0);
-	const undecoded = await images.evaluateAll(
-		(found) =>
-			found.filter((img) => !(img as HTMLImageElement).naturalWidth).length,
-	);
-	expect(undecoded).toBe(0);
+	await expectEveryCellDecoded(page);
 });
 
 test("all three openers work on the deck page", async ({ page }) => {

@@ -21,7 +21,7 @@ wasm-opt = ["-Os", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]
 [dependencies]
 toboggan-core = { path = "../../toboggan-core", features = ["js"] }
 
-wasm-bindgen = "0.2.126"
+wasm-bindgen = "0.2.129"
 gloo = { version = "0.12.0", default-features = false, features = [
   "timers",
   "events",
@@ -29,7 +29,7 @@ gloo = { version = "0.12.0", default-features = false, features = [
   "utils",
   "net",
 ] }
-web-sys = { version = "0.3.103", features = [
+web-sys = { version = "0.3.106", features = [
   "BeforeUnloadEvent",
   "HtmlElement",
   "HtmlDialogElement",
@@ -61,11 +61,11 @@ web-sys = { version = "0.3.103", features = [
   "HtmlInputElement",
   "Text",
 ] }
-js-sys = "0.3.103"
+js-sys = "0.3.106"
 serde-wasm-bindgen = "0.6.5"
-wasm-bindgen-futures = "0.4.76"
-futures = "0.3.32"
-serde = "1.0.228"
+wasm-bindgen-futures = "0.4.79"
+futures = "0.3.34"
+serde = "1.0.229"
 # Already in the lockfile via gloo-net; a direct dependency adds no bytes. The
 # presenter view and its mirrors exchange JSON strings rather than cloned object
 # graphs — see services/mirror.rs.
