@@ -130,6 +130,6 @@ mod tests {
     #[test]
     fn an_empty_deck_is_empty() {
         let (slides_rx, talk_rx) = channels(vec![], None);
-        assert!(deck_snapshot(&slides_rx, &talk_rx).is_empty());
+        assert_eq!(deck_snapshot(&slides_rx, &talk_rx), []);
     }
 }

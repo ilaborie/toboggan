@@ -180,14 +180,14 @@ mod tests {
         let slide = Slide::new("T").with_terminal(TerminalConfig::new("."));
         let mut talk = talk_of(&[slide]);
         talk.source_dir = Some("/talks/demo".to_owned());
-        assert!(diagnostics_in(&UnresolvedCwd, &talk).is_empty());
+        assert_eq!(diagnostics_in(&UnresolvedCwd, &talk), []);
     }
 
     /// An absolute cwd needs no deck root at all.
     #[test]
     fn an_absolute_cwd_needs_nothing() {
         let slide = Slide::new("T").with_terminal(TerminalConfig::new("/tmp/demo"));
-        assert!(diagnostics_in(&UnresolvedCwd, &talk_of(&[slide])).is_empty());
+        assert_eq!(diagnostics_in(&UnresolvedCwd, &talk_of(&[slide])), []);
     }
 
     /// The quake overlay's cwd is resolved the same way, and it is the reason
@@ -205,7 +205,10 @@ mod tests {
     /// A slide with no terminal and no overlay cwd has nothing to resolve.
     #[test]
     fn a_slide_without_terminals_is_not_asked_for_a_cwd() {
-        assert!(diagnostics_in(&UnresolvedCwd, &talk_of(&[Slide::new("T")])).is_empty());
+        assert_eq!(
+            diagnostics_in(&UnresolvedCwd, &talk_of(&[Slide::new("T")])),
+            []
+        );
     }
 
     /// Two panes running the same command in the same directory is a

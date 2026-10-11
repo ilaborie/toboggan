@@ -193,7 +193,7 @@ mod tests {
         let talk = result.to_talk();
 
         assert_eq!(result.talk_metadata.title, "Test Presentation");
-        assert!(!talk.slides.is_empty());
+        assert!(!talk.slides.is_empty(), "the folder parsed to no slide");
 
         Ok(())
     }

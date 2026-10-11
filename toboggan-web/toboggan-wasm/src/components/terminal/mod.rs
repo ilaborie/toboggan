@@ -132,15 +132,21 @@ impl TobogganTerminalElement {
         let theme = config.theme;
         let title_el = title_text
             .dyn_into::<HtmlElement>()
-            .map_err(|_| error!("Failed to cast title element to HtmlElement"))
+            .map_err(|_| {
+                error!("Failed to cast title element to HtmlElement");
+            })
             .ok();
         let body_el = body
             .dyn_into::<HtmlElement>()
-            .map_err(|_| error!("Failed to cast terminal body to HtmlElement"))
+            .map_err(|_| {
+                error!("Failed to cast terminal body to HtmlElement");
+            })
             .ok()?;
         let window_html = window_el
             .dyn_into::<HtmlElement>()
-            .map_err(|_| error!("Failed to cast window element to HtmlElement"))
+            .map_err(|_| {
+                error!("Failed to cast window element to HtmlElement");
+            })
             .ok();
 
         // Set up action channel (shared between font shortcuts, button clicks,
@@ -329,7 +335,9 @@ fn setup_resize_observer(target: &HtmlElement, tx: mpsc::UnboundedSender<KeyActi
             // Keep the observer alive for the page's lifetime.
             std::mem::forget(observer);
         }
-        Err(err) => error!("Failed to create ResizeObserver:", err),
+        Err(err) => {
+            error!("Failed to create ResizeObserver:", err);
+        }
     }
     closure.forget();
 }

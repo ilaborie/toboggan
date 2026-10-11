@@ -145,7 +145,7 @@ str_to_string = "warn"
 unnecessary_safety_doc = "warn"
 unwrap_used = "warn"
 
-missing-errors-doc = "allow"
+missing_errors_doc = "allow"
 module_name_repetitions = "allow"
 
 [profile.dev]

@@ -122,9 +122,15 @@ mod tests {
     #[test]
     fn the_limits_are_exclusive() {
         let at_word_limit = Slide::default().with_body(Content::html("<p>one two three</p>"));
-        assert!(slide_diagnostics_with(&ExcessiveWords, &at_word_limit, &limits()).is_empty());
+        assert_eq!(
+            slide_diagnostics_with(&ExcessiveWords, &at_word_limit, &limits()),
+            []
+        );
 
         let at_image_limit = Slide::new("T").with_body(Content::html(IMG));
-        assert!(slide_diagnostics_with(&TooManyImages, &at_image_limit, &limits()).is_empty());
+        assert_eq!(
+            slide_diagnostics_with(&TooManyImages, &at_image_limit, &limits()),
+            []
+        );
     }
 }

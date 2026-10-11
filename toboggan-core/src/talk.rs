@@ -388,8 +388,8 @@ mod tests {
             Slide::new("nowhere").with_hidden_in([RenderTarget::Web, RenderTarget::Pdf]),
         );
 
-        assert!(talk.visible_in(RenderTarget::Web).slides.is_empty());
-        assert!(talk.visible_in(RenderTarget::Pdf).slides.is_empty());
+        assert_eq!(talk.visible_in(RenderTarget::Web).slides, []);
+        assert_eq!(talk.visible_in(RenderTarget::Pdf).slides, []);
     }
 
     /// An untitled slide contributes an empty name, not a placeholder that
@@ -426,6 +426,6 @@ mod tests {
     #[test]
     fn a_converted_talk_carries_no_step_counts_yet() {
         let talk = Talk::new("t").add_slide(Slide::new("one"));
-        assert!(TalkResponse::from(&talk).step_counts.is_empty());
+        assert_eq!(TalkResponse::from(&talk).step_counts, Vec::<usize>::new());
     }
 }

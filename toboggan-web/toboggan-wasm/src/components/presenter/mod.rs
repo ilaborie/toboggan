@@ -985,7 +985,9 @@ impl TobogganPresenterElement {
                 self.scale = Some(observer);
                 self.scale_callback = Some(callback);
             }
-            Err(err) => error!("Presenter panes will not follow the window:", err),
+            Err(err) => {
+                error!("Presenter panes will not follow the window:", err);
+            }
         }
     }
 }

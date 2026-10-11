@@ -272,7 +272,9 @@ impl WasmElement for App {
                 // worth a panic.
                 match sink.try_borrow() {
                     Ok(elements) => elements.toast.toast(kind, message),
-                    Err(_) => error!("Could not show a message:", message),
+                    Err(_) => {
+                        error!("Could not show a message:", message);
+                    }
                 }
             }));
 
@@ -576,11 +578,13 @@ async fn fetch_talk_metadata(session: Rc<Session>) {
         // Report what actually failed, and what the presenter will see: the
         // slide counter stays at 0 and the deck's `_head.html` (fonts, custom
         // CSS) is never injected, so the deck renders unstyled.
-        Err(err) => error!(
-            "Failed to fetch talk:",
-            err.to_string(),
-            "— slide count and custom head styles are unavailable"
-        ),
+        Err(err) => {
+            error!(
+                "Failed to fetch talk:",
+                err.to_string(),
+                "— slide count and custom head styles are unavailable"
+            );
+        }
     }
 }
 
