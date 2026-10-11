@@ -602,6 +602,56 @@ test("an open picker keeps the deck's keys when its box loses focus", async ({
 	await expect.poll(() => deckIsOn(page)).toBe(on);
 });
 
+test("an outline that lands under an open picker keeps its selection", async ({
+	page,
+}) => {
+	// The grid is rebuilt when the outline arrives, and a rebuild used to end
+	// on `select(0)` — the reset a new *query* wants. Opened with `g` before
+	// `/api/outline` answered, the picker selected the slide the deck was on,
+	// then jumped to the first one under the speaker's eyes; `Enter` took the
+	// room back to the start. Held here so the race goes the same way each run.
+	let release = () => {};
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.route("**/api/outline", async (route) => {
+		await held;
+		await route.continue();
+	});
+
+	await openDeck(page);
+	// Anywhere but the first slide, or keeping the selection and losing it
+	// would look the same. `--current-slide` is the 1-based number the room
+	// sees; a cell's `data-slide` is the 0-based index.
+	if ((await deckIsOn(page)) === "1") {
+		await page.keyboard.press("ArrowRight");
+		await expect.poll(() => deckIsOn(page)).not.toBe("1");
+	}
+	const on = String(Number(await deckIsOn(page)) - 1);
+	// `<main>` hears where the room is before the picker does: the picker is
+	// told once the slide itself has been fetched. Opened in between, it opens
+	// on the first slide for a different reason than the one tested here.
+	await expect(
+		page.locator('.strip-cell[aria-current="true"]'),
+	).toHaveAttribute("data-slide", on);
+
+	await page.keyboard.press("g");
+	await expect(page.locator("dialog.picker")).toHaveAttribute(
+		"data-search",
+		"pending",
+	);
+	expect(await selected(page)).toBe(on);
+
+	release();
+	await expect(page.locator("dialog.picker")).toHaveAttribute(
+		"data-search",
+		"ready",
+	);
+	expect(await selected(page)).toBe(on);
+
+	await page.keyboard.press("Escape");
+});
+
 test("a failed outline says so instead of matching everything", async ({
 	page,
 }) => {

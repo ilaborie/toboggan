@@ -192,6 +192,12 @@ Entries are grouped the way the commits are: this repository uses
   that says when to retry is now a normal response; any other 5xx still logs
   at `ERROR`.
 
+- **The slide picker no longer jumps back to the first slide on its own.**
+  Opened right after the page loaded, it selected the slide the deck was on,
+  then reset to slide 1 when the deck's searchable text arrived, or when the
+  connection came back; `Enter` then took the room to the start of the talk.
+  A rebuilt grid now keeps the slide that was selected.
+
 ## [0.2.0] - 2026-08-25
 
 ### Added
