@@ -8,7 +8,6 @@ use axum::{Json, Router, middleware};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
 use tower_http::set_header::SetResponseHeaderLayer;
-use tower_http::trace::TraceLayer;
 use tracing::error;
 use utoipa::openapi::OpenApi;
 use utoipa_scalar::{Scalar, Servable};
@@ -21,6 +20,7 @@ mod pages;
 mod presenter;
 mod static_assets;
 mod terminal_ws;
+mod trace;
 mod ws;
 
 pub fn routes(assets_dir: Option<PathBuf>, openapi: OpenApi) -> Router<TobogganState> {
@@ -97,7 +97,7 @@ pub fn routes_with_cors(
     // routes registered *before* it: with the tracing layer sitting up by `/api`,
     // none of the pages, `/public`, or the fallback were traced, and CORS missed
     // the last two as well.
-    router.layer(cors).layer(TraceLayer::new_for_http())
+    router.layer(cors).layer(trace::trace_layer())
 }
 
 /// The routes a shot page needs, and nothing else.
@@ -140,7 +140,7 @@ pub fn routes_for_shots(
 
     router
         .layer(create_cors_layer(allowed_origins))
-        .layer(TraceLayer::new_for_http())
+        .layer(trace::trace_layer())
 }
 
 /// Serves the deck's own `public/` directory, always revalidated.
