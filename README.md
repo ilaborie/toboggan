@@ -351,7 +351,7 @@ the client what it got in `Registered`.
 
 ### Prerequisites
 
-- Rust 1.95+ (2024 edition)
+- Rust 1.96+ (2024 edition)
 - Node.js 22+ and `pnpm` (for the web client)
 - [`mise`](https://mise.jdx.dev) (optional, for task automation)
 - `typst` (optional, for `pdf`; and for `thumbnails` when no browser is found)

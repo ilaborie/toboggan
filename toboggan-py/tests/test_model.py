@@ -53,7 +53,10 @@ def test_the_talks_per_slide_arrays_line_up_with_its_titles(presenter):
     assert len(talk.durations) == slides
 
     # The documented use, which must never be silently empty.
-    assert len(list(zip(talk.titles, talk.step_counts, talk.durations))) == slides
+    assert (
+        len(list(zip(talk.titles, talk.step_counts, talk.durations, strict=True)))
+        == slides
+    )
 
 
 def test_the_talk_reports_its_metadata(presenter):
