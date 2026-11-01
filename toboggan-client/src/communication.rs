@@ -545,6 +545,7 @@ async fn handle_ws_message(
         Notification::Registered {
             client_id: id,
             role,
+            ..
         } => {
             info!(?id, ?role, "✅ Registered");
             if let Ok(mut guard) = client_id.write() {

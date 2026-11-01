@@ -327,13 +327,21 @@ fn process_message(message: Message, tx: &UnboundedSender<CommunicationMessage>)
         Notification::Blink => {
             play_chime();
         }
-        Notification::Registered { client_id, role } => {
+        Notification::Registered {
+            client_id,
+            role,
+            server_started_at,
+        } => {
             info!(
                 "Registered with id",
                 format!("{client_id:?}"),
                 format!("{role:?}")
             );
-            let _ = tx.unbounded_send(CommunicationMessage::Registered { client_id, role });
+            let _ = tx.unbounded_send(CommunicationMessage::Registered {
+                client_id,
+                role,
+                server_started_at,
+            });
         }
         Notification::ClientConnected { client_id, name } => {
             info!("Client connected:", &name, "id:", format!("{client_id:?}"));

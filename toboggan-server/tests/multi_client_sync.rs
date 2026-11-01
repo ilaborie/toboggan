@@ -14,7 +14,7 @@ use axum::extract::FromRef;
 use common::create_multi_slide_talk;
 use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
-use toboggan_core::{ClientId, Command, Notification};
+use toboggan_core::{ClientId, Command, Notification, Timestamp};
 use toboggan_server::{ClientService, TalkService, TobogganState, routes_with_cors};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::protocol::Message as TungsteniteMessage;
@@ -292,4 +292,44 @@ async fn back_to_back_notifications_are_not_collapsed() {
         messages,
         vec!["\"first\"".to_owned(), "\"second\"".to_owned()]
     );
+}
+
+/// The start time the server announces in its `Registered` reply.
+async fn announced_start(server_url: &str) -> Timestamp {
+    let (ws_stream, _) = connect_async(server_url).await.expect("connect");
+    let (mut ws_sender, mut ws_receiver) = ws_stream.split();
+    let register_cmd = Command::Register {
+        name: "start-probe".to_owned(),
+        token: None,
+    };
+    let register_msg = serde_json::to_string(&register_cmd).expect("serialize register");
+    ws_sender
+        .send(TungsteniteMessage::text(register_msg))
+        .await
+        .expect("send register");
+
+    let Some(Ok(TungsteniteMessage::Text(text))) = ws_receiver.next().await else {
+        panic!("expected a text frame answering the registration");
+    };
+    match serde_json::from_str::<Notification>(&text).expect("parse notification") {
+        Notification::Registered {
+            server_started_at, ..
+        } => server_started_at.expect("the handshake carries the server's start time"),
+        other => panic!("expected Registered, got {other:?}"),
+    }
+}
+
+/// What the web client compares to tell a dropped socket from a server
+/// restarted in another folder: the same process must announce the same start
+/// time on every connection, and another process a different one. Otherwise a
+/// reconnecting page would either reload for nothing or keep the previous
+/// deck's stylesheets.
+#[tokio::test]
+async fn the_handshake_tells_one_server_from_another() {
+    let (first_url, _first_state) = create_test_server().await;
+    let (second_url, _second_state) = create_test_server().await;
+
+    let first = announced_start(&first_url).await;
+    assert_eq!(first, announced_start(&first_url).await);
+    assert_ne!(first, announced_start(&second_url).await);
 }

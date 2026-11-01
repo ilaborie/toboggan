@@ -240,6 +240,13 @@ impl TobogganState {
         &self.terminal_shell
     }
 
+    /// When this server process started, which is what tells a reconnecting
+    /// client it reached a different process. See
+    /// [`Notification::Registered`]'s `server_started_at`.
+    pub(crate) fn started_at(&self) -> Timestamp {
+        self.started_at
+    }
+
     /// Returns the health status of the server
     pub(crate) async fn health(&self) -> HealthResponse {
         let status = HealthResponseStatus::Ok;

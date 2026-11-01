@@ -49,7 +49,8 @@ async fn handle_websocket(socket: WebSocket, state: TobogganState, ip_addr: IpAd
                         {
                             Ok((id, channel)) => {
                                 // Send Registered notification to this client
-                                let registered = Notification::registered(id, role);
+                                let registered =
+                                    Notification::registered(id, role, state.started_at());
                                 if let Ok(msg) = serde_json::to_string(&registered)
                                     && ws_sender.send(Message::Text(msg.into())).await.is_err()
                                 {

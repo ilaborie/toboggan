@@ -5,7 +5,7 @@ use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use gloo::console::{debug, error, info};
 use gloo::utils::document;
-use toboggan_core::{ClientId, ClientRole, Command, SlideId, State, TalkResponse};
+use toboggan_core::{ClientId, ClientRole, Command, SlideId, State, TalkResponse, Timestamp};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use wasm_bindgen_futures::spawn_local;
@@ -90,6 +90,11 @@ struct Session {
     /// would make the first keypresses after load do nothing on an ordinary
     /// local deck.
     role: Cell<ClientRole>,
+    /// When the server this page first registered with started.
+    ///
+    /// Kept so a reconnection can tell a dropped socket from a different
+    /// server process. See [`server_restarted`].
+    server_started_at: Cell<Option<Timestamp>>,
 }
 
 impl Session {
@@ -304,6 +309,7 @@ impl WasmElement for App {
             meta: RefCell::new(PresentationMeta::default()),
             client_id: Cell::new(None),
             role: Cell::new(ClientRole::Presenter),
+            server_started_at: Cell::new(None),
         });
 
         // Register beforeunload listener to send Unregister command
@@ -358,7 +364,14 @@ async fn handle_messages(mut rx: UnboundedReceiver<CommunicationMessage>, sessio
             CommunicationMessage::Registered {
                 client_id: id,
                 role,
+                server_started_at,
             } => {
+                let known = session.server_started_at.get();
+                if server_restarted(known, server_started_at) {
+                    reload_page();
+                    continue;
+                }
+                session.server_started_at.set(server_started_at.or(known));
                 session.client_id.set(Some(id));
                 session.role.set(role);
                 // The presenter view's buttons say the same thing the toast
@@ -390,6 +403,29 @@ async fn handle_messages(mut rx: UnboundedReceiver<CommunicationMessage>, sessio
                 session.toast(ToastType::Info, &format!("{name} disconnected"));
             }
         }
+    }
+}
+
+/// Whether a handshake answered by `announced` reached a different server
+/// process from the `known` one this page registered with first.
+///
+/// A different process may serve a different deck: `toboggan` stopped and
+/// started again in another folder, on the same port. The page then holds the
+/// old deck's stylesheets at URLs the new deck reuses (`/public/style.css`),
+/// and Firefox reuses a stylesheet its document has already parsed for a URL
+/// without sending a request, so the socket reconnects onto the new deck
+/// dressed in the old one's CSS. Only a new document fixes that. A missing
+/// value on either side, from a server that predates the field, is no
+/// evidence of a restart.
+fn server_restarted(known: Option<Timestamp>, announced: Option<Timestamp>) -> bool {
+    matches!((known, announced), (Some(known), Some(announced)) if known != announced)
+}
+
+/// Loads the page again from the server, for [`server_restarted`].
+fn reload_page() {
+    info!("Reconnected to a restarted server, reloading the page");
+    if let Err(err) = gloo::utils::window().location().reload() {
+        error!("Failed to reload after a server restart:", err);
     }
 }
 
@@ -820,5 +856,41 @@ async fn handle_actions(mut rx: UnboundedReceiver<Command>, session: Rc<Session>
         if session.tx_cmd.unbounded_send(cmd).is_err() {
             error!("Failed to send command");
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use super::*;
+
+    /// A start time as the handshake carries it on the wire.
+    fn started(second: u8) -> Timestamp {
+        let json = format!("\"2026-11-01T10:00:{second:02}Z\"");
+        serde_json::from_str::<Timestamp>(&json).expect("valid timestamp")
+    }
+
+    /// A dropped socket that comes back to the same process keeps the page.
+    #[test]
+    fn the_same_server_keeps_the_page() {
+        assert!(!server_restarted(Some(started(1)), Some(started(1))));
+    }
+
+    /// The case the reload exists for: stopped, started in another folder.
+    #[test]
+    fn a_restarted_server_reloads_the_page() {
+        assert!(server_restarted(Some(started(1)), Some(started(2))));
+    }
+
+    /// The first handshake has nothing to compare against.
+    #[test]
+    fn the_first_handshake_keeps_the_page() {
+        assert!(!server_restarted(None, Some(started(1))));
+    }
+
+    /// A server that predates the field says nothing either way.
+    #[test]
+    fn an_older_server_keeps_the_page() {
+        assert!(!server_restarted(Some(started(1)), None));
     }
 }

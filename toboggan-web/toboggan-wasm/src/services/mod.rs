@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use std::time::Duration;
 
-use toboggan_core::{ClientId, ClientRole, State};
+use toboggan_core::{ClientId, ClientRole, State, Timestamp};
 
 mod api;
 pub(crate) use self::api::TobogganApi;
@@ -65,6 +65,7 @@ pub(crate) enum CommunicationMessage {
     Registered {
         client_id: ClientId,
         role: ClientRole,
+        server_started_at: Option<Timestamp>,
     },
     ClientConnected {
         client_id: ClientId,

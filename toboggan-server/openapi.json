@@ -592,6 +592,17 @@
                 "$ref": "#/components/schemas/ClientRole",
                 "description": "What this client is allowed to do."
               },
+              "server_started_at": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/Timestamp",
+                    "description": "When the server process answering this socket started.\n\nA client that reconnects to a *different* process is no longer\nlooking at the deck it loaded: the server may have been restarted\nin another folder, with a new `_head.html` and a new\n`public/style.css` at the same URLs. Firefox then reuses the\nstylesheet its document already parsed for that URL, without a\nrequest, so no cache header can tell it otherwise. Comparing this\nvalue across reconnections is how the web client knows to reload.\n\n`None` from a server that predates the field."
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "type": {
                 "type": "string",
                 "enum": [

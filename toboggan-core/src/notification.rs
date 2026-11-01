@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{ClientId, ClientRole, State};
+use crate::{ClientId, ClientRole, State, Timestamp};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -57,6 +57,19 @@ pub enum Notification {
         /// What this client is allowed to do.
         #[serde(default)]
         role: ClientRole,
+        /// When the server process answering this socket started.
+        ///
+        /// A client that reconnects to a *different* process is no longer
+        /// looking at the deck it loaded: the server may have been restarted
+        /// in another folder, with a new `_head.html` and a new
+        /// `public/style.css` at the same URLs. Firefox then reuses the
+        /// stylesheet its document already parsed for that URL, without a
+        /// request, so no cache header can tell it otherwise. Comparing this
+        /// value across reconnections is how the web client knows to reload.
+        ///
+        /// `None` from a server that predates the field.
+        #[serde(default)]
+        server_started_at: Option<Timestamp>,
     },
     /// Broadcast when a client connects
     ClientConnected {
@@ -142,8 +155,12 @@ impl Notification {
 
     #[must_use]
     /// The answer to a successful registration.
-    pub fn registered(client_id: ClientId, role: ClientRole) -> Self {
-        Self::Registered { client_id, role }
+    pub fn registered(client_id: ClientId, role: ClientRole, server_started_at: Timestamp) -> Self {
+        Self::Registered {
+            client_id,
+            role,
+            server_started_at: Some(server_started_at),
+        }
     }
 
     #[must_use]

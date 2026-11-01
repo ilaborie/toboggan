@@ -72,8 +72,14 @@ impl ConnectionHandler {
                     // was read-only by pressing a key and getting an error
                     // dialog back from the server.
                     CommunicationMessage::Registered { client_id, role } => {
+                        // The TUI has no stylesheet to go stale, so it has no use
+                        // for the server's start time.
                         let _ = event_tx_clone.send(AppEvent::NotificationReceived(
-                            Notification::registered(client_id, role),
+                            Notification::Registered {
+                                client_id,
+                                role,
+                                server_started_at: None,
+                            },
                         ));
                     }
                     CommunicationMessage::ClientConnected { .. }
