@@ -11,6 +11,19 @@ trap error_help ERR
 # XCode tries to be helpful and overwrites the PATH. Reset that.
 PATH="$(bash -l -c 'echo $PATH')"
 
+# Where cargo lives depends on how rustup was installed: `$HOME/.cargo/bin` for
+# rustup.rs, Homebrew's prefix for `brew install rustup` (what the GitHub macOS
+# runner image ships). A caller that knows passes it as the `CARGO` build
+# setting (CI does); otherwise the login shell's PATH, then rustup.rs's.
+CARGO="${CARGO:-$(command -v cargo || echo "$HOME/.cargo/bin/cargo")}"
+# Xcode lists only the `error:` lines, so a bare "No such file" from the first
+# cargo call would reach the developer as the trap's generic message alone.
+if [[ ! -x "${CARGO}" ]]; then
+    echo "error: cargo not found: CARGO is unset, cargo is not on the login shell's PATH, and ${CARGO} does not exist. Set the CARGO build setting to your cargo binary."
+    exit 1
+fi
+echo "Using cargo at ${CARGO}"
+
 # This should be invoked from inside xcode, not manually
 if [[ "${#}" -ne 3 ]]
 then
@@ -67,7 +80,7 @@ for arch in $ARCHS; do
 
       # Intel iOS simulator
       export CFLAGS_x86_64_apple_ios="-target x86_64-apple-ios"
-      $HOME/.cargo/bin/cargo rustc -p "${FFI_TARGET}" --lib --crate-type staticlib $RELFLAG --target x86_64-apple-ios
+      "$CARGO" rustc -p "${FFI_TARGET}" --lib --crate-type staticlib $RELFLAG --target x86_64-apple-ios
 
       RUST_LIB_PATH="${TARGET_DIR}/x86_64-apple-ios/$([[ "${BUILDVARIANT}" != "debug" ]] && echo "release" || echo "debug")/lib${LIB_NAME}.a"
       cp "$RUST_LIB_PATH" "${ARTIFACTS_DIR}/"
@@ -77,14 +90,14 @@ for arch in $ARCHS; do
       if [ $IS_SIMULATOR -eq 0 ]; then
         # Hardware iOS targets
         # export CFLAGS_aarch64_apple_ios="-target aarch64-apple-ios"
-        $HOME/.cargo/bin/cargo rustc -p "${FFI_TARGET}" --lib --crate-type staticlib $RELFLAG --target aarch64-apple-ios
+        "$CARGO" rustc -p "${FFI_TARGET}" --lib --crate-type staticlib $RELFLAG --target aarch64-apple-ios
 
         RUST_LIB_PATH="${TARGET_DIR}/aarch64-apple-ios/$([[ "${BUILDVARIANT}" != "debug" ]] && echo "release" || echo "debug")/lib${LIB_NAME}.a"
         cp "$RUST_LIB_PATH" "${ARTIFACTS_DIR}/"
       else
         # M1 iOS simulator
         # export CFLAGS_aarch64_apple_ios_sim="-target aarch64-apple-ios-simulator"
-        $HOME/.cargo/bin/cargo rustc -p "${FFI_TARGET}" --lib --crate-type staticlib $RELFLAG --target aarch64-apple-ios-sim
+        "$CARGO" rustc -p "${FFI_TARGET}" --lib --crate-type staticlib $RELFLAG --target aarch64-apple-ios-sim
 
         RUST_LIB_PATH="${TARGET_DIR}/aarch64-apple-ios-sim/$([[ "${BUILDVARIANT}" != "debug" ]] && echo "release" || echo "debug")/lib${LIB_NAME}.a"
         cp "$RUST_LIB_PATH" "${ARTIFACTS_DIR}/"
@@ -106,7 +119,7 @@ if [ -z "${RUST_LIB_PATH:-}" ]; then
   exit 2
 fi
 echo "🍎 Generating Swift bindings from ${RUST_LIB_PATH}"
-$HOME/.cargo/bin/cargo run $RELFLAG -p "${FFI_TARGET}" --bin uniffi-bindgen -- \
+"$CARGO" run $RELFLAG -p "${FFI_TARGET}" --bin uniffi-bindgen -- \
   generate --library --language swift --out-dir "${ARTIFACTS_DIR}/" "$RUST_LIB_PATH"
 
 echo "Build script completed - Rust library built and Swift bindings generated"

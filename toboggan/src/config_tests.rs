@@ -266,6 +266,10 @@ mod tests {
         // (everything still commented) cannot pass this test.
         assert_eq!(config.default_command, Some(DefaultCommand::Serve));
         assert_eq!(config.build.wpm, Some(150));
+        assert_eq!(
+            config.build.html_target,
+            Some(toboggan_core::RenderTarget::Web)
+        );
         assert_eq!(config.serve.port, Some(8080));
         assert_eq!(config.lint.deny, Some(DenyLevel::Error));
         assert_eq!(config.lint.max_words_per_slide, Some(120));

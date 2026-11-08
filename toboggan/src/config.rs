@@ -128,6 +128,8 @@ pub(crate) struct BuildConfig {
     pub(crate) date: Option<Date>,
     pub(crate) lang: Option<String>,
     pub(crate) base_url: Option<String>,
+    /// Slides the HTML export keeps: `web` or `pdf`.
+    pub(crate) html_target: Option<toboggan_core::RenderTarget>,
     pub(crate) theme: Option<String>,
     /// Mermaid config JSON applied to every ` ```mermaid ` fence.
     ///
@@ -239,6 +241,7 @@ impl BuildConfig {
             date,
             lang,
             base_url,
+            html_target,
             theme,
             mermaid_config,
             typst_preamble,

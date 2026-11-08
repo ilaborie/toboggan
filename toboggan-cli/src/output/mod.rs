@@ -44,6 +44,8 @@ pub fn serialize_talk(
 /// the live demo the talk had — wants the `pdf` selection in a browser instead,
 /// and `html_target` is how it asks. Typst always renders the `pdf` slides.
 ///
+/// `base_url` is as in [`serialize_talk`].
+///
 /// # Errors
 /// Returns an error if the talk cannot be rendered in `format`.
 pub fn serialize_talk_for(
@@ -197,6 +199,31 @@ mod tests {
         assert!(!html.contains("Live Slide"), "pdf-hidden live slide absent");
         assert!(
             html.contains("Static Slide"),
+            "web-hidden static slide present"
+        );
+        Ok(())
+    }
+
+    /// `html_target` is for the HTML export alone: Typst prints the `pdf`
+    /// selection whatever it says.
+    #[test]
+    fn test_typst_ignores_the_html_target() -> anyhow::Result<()> {
+        let talk = talk_with_hidden_slides()?;
+        let bytes = serialize_talk_for(
+            &talk,
+            OutputFormat::Typst,
+            RenderTarget::Web,
+            "",
+            &MermaidRenderer::default(),
+        )?;
+        let typst = String::from_utf8(bytes).expect("utf8");
+
+        assert!(
+            !typst.contains("Live Slide"),
+            "pdf-hidden live slide absent"
+        );
+        assert!(
+            typst.contains("Static Slide"),
             "web-hidden static slide present"
         );
         Ok(())

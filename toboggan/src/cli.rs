@@ -129,7 +129,7 @@ pub(crate) struct BuildOptions {
     #[arg(long)]
     pub(crate) base_url: Option<String>,
 
-    /// Slides the HTML export keeps: `web` (as presented, the default) or
+    /// Slides `build -o *.html` keeps: `web` (as presented, the default) or
     /// `pdf` (as printed, for a published copy without the live demo)
     #[arg(long, value_parser = toboggan_cli::parse_render_target)]
     pub(crate) html_target: Option<toboggan_core::RenderTarget>,
@@ -185,6 +185,7 @@ impl BuildOptions {
         self.theme = self.theme.take().or(config.theme);
         self.lang = self.lang.take().or(config.lang);
         self.base_url = self.base_url.take().or(config.base_url);
+        self.html_target = self.html_target.or(config.html_target);
         self.mermaid_config = self.mermaid_config.take().or(config.mermaid_config);
         self.typst_preamble = self.typst_preamble.take().or(config.typst_preamble);
         self.wpm = self.wpm.or(config.wpm);
@@ -1070,6 +1071,45 @@ mod tests {
         assert_eq!(
             settings.server.thumbnail_renderer,
             toboggan_server::ThumbnailRenderer::Typst
+        );
+    }
+
+    fn html_target_of(flags: &[&str], config: config::BuildConfig) -> toboggan_core::RenderTarget {
+        let command_line = ["toboggan", "build", "-p", "deck", "-o", "deck.html"]
+            .into_iter()
+            .chain(flags.iter().copied());
+        let cli = Cli::try_parse_from(command_line).expect("parse");
+        let Some(Commands::Build(mut args)) = cli.command else {
+            panic!("expected the build subcommand, got {:?}", cli.command);
+        };
+        args.build.merge(config);
+        args.build
+            .into_cli_settings(PathBuf::from("deck"), true)
+            .html_target
+    }
+
+    /// `--html-target` beats `[build] html-target`, which beats the `web` default.
+    #[test]
+    fn html_target_comes_from_the_flag_then_the_config_then_web() {
+        use toboggan_core::RenderTarget;
+
+        let pdf_in_config = || config::BuildConfig {
+            html_target: Some(RenderTarget::Pdf),
+            ..config::BuildConfig::default()
+        };
+
+        assert_eq!(
+            html_target_of(&[], config::BuildConfig::default()),
+            RenderTarget::Web
+        );
+        assert_eq!(
+            html_target_of(&["--html-target", "pdf"], config::BuildConfig::default()),
+            RenderTarget::Pdf
+        );
+        assert_eq!(html_target_of(&[], pdf_in_config()), RenderTarget::Pdf);
+        assert_eq!(
+            html_target_of(&["--html-target", "web"], pdf_in_config()),
+            RenderTarget::Web
         );
     }
 }
