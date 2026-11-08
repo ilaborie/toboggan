@@ -20,7 +20,7 @@ use crate::error::Result;
 use crate::mermaid::MermaidRenderer;
 use crate::settings::OutputFormat;
 
-/// Serializes `talk` in `format`.
+/// Serializes `talk` in `format`, the HTML export keeping the `web` slides.
 ///
 /// `base_url` is only meaningful for [`OutputFormat::Html`]: it is the URL the
 /// exported file will be served from, used to resolve the deck's assets.
@@ -33,13 +33,33 @@ pub fn serialize_talk(
     base_url: &str,
     mermaid: &MermaidRenderer,
 ) -> Result<Vec<u8>> {
+    serialize_talk_for(talk, format, RenderTarget::Web, base_url, mermaid)
+}
+
+/// Serializes `talk` in `format`, the HTML export keeping the slides visible
+/// in `html_target`.
+///
+/// The HTML export is a web page, so it keeps the `web` slides by default. A
+/// deck published as a handout — the slides that stand on their own, without
+/// the live demo the talk had — wants the `pdf` selection in a browser instead,
+/// and `html_target` is how it asks. Typst always renders the `pdf` slides.
+///
+/// # Errors
+/// Returns an error if the talk cannot be rendered in `format`.
+pub fn serialize_talk_for(
+    talk: &Talk,
+    format: OutputFormat,
+    html_target: RenderTarget,
+    base_url: &str,
+    mermaid: &MermaidRenderer,
+) -> Result<Vec<u8>> {
     match format {
         OutputFormat::Toml => TextRenderer::toml(talk),
         OutputFormat::Json => TextRenderer::json(talk),
         OutputFormat::Yaml => TextRenderer::yaml(talk),
 
         OutputFormat::Html => {
-            let filtered = filter_for(talk, RenderTarget::Web);
+            let filtered = filter_for(talk, html_target);
             html::generate_html(&filtered, filtered.head.as_deref(), base_url)
         }
 
@@ -155,6 +175,38 @@ mod tests {
             "static (web-hidden) slide absent from HTML"
         );
         Ok(())
+    }
+
+    /// A published copy of the talk: the printed selection, in a browser.
+    #[test]
+    fn test_html_for_pdf_target_keeps_the_printed_slides() -> anyhow::Result<()> {
+        let talk = talk_with_hidden_slides()?;
+        let bytes = serialize_talk_for(
+            &talk,
+            OutputFormat::Html,
+            RenderTarget::Pdf,
+            "",
+            &MermaidRenderer::default(),
+        )?;
+        let html = String::from_utf8(bytes).expect("utf8");
+
+        assert!(
+            html.contains("Always Visible"),
+            "always-visible slide present"
+        );
+        assert!(!html.contains("Live Slide"), "pdf-hidden live slide absent");
+        assert!(
+            html.contains("Static Slide"),
+            "web-hidden static slide present"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_render_target_parses_front_matter_spelling() {
+        assert_eq!(crate::parse_render_target("web"), Ok(RenderTarget::Web));
+        assert_eq!(crate::parse_render_target("pdf"), Ok(RenderTarget::Pdf));
+        assert!(crate::parse_render_target("PDF").is_err());
     }
 
     #[test]

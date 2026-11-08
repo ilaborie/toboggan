@@ -24,10 +24,59 @@
 
 	const stepsOf = (index) => [...slides[index].querySelectorAll(".step")];
 
+	// Whether anything drawn in `section` reaches past the edges of `slide`.
+	// Every descendant is measured, not just the article: a code block clips its
+	// own lines, but the spans inside it still report where they would end.
+	function overflows(slide, section) {
+		const frame = slide.getBoundingClientRect();
+		return [...section.querySelectorAll("*")].some((element) => {
+			const box = element.getBoundingClientRect();
+			return (
+				box.height > 0 &&
+				(box.bottom > frame.bottom + 0.5 || box.right > frame.right + 0.5)
+			);
+		});
+	}
+
+	// Shrinks a `fit` slide to the largest zoom at which it fits the screen.
+	// Hidden steps are laid out too (they are only transparent), so the size is
+	// settled once for the whole slide and revealing a step never changes it.
+	// A bisection rather than one ratio: shrinking also gives lines more width,
+	// so fewer wrap, and the height does not scale linearly with the zoom.
+	function fit(slide) {
+		const section = slide.querySelector(":scope > section.fit");
+		if (!section) {
+			return;
+		}
+		const setZoom = (zoom) => section.style.setProperty("--toboggan-fit", zoom);
+		setZoom(1);
+		if (!overflows(slide, section)) {
+			return;
+		}
+		let fits = 0.25;
+		let tooBig = 1;
+		for (let round = 0; round < 8; round += 1) {
+			const zoom = (fits + tooBig) / 2;
+			setZoom(zoom);
+			if (overflows(slide, section)) {
+				tooBig = zoom;
+			} else {
+				fits = zoom;
+			}
+		}
+		setZoom(fits);
+	}
+
+	// The first render happens before the deck's web fonts arrive, and a
+	// fallback font has other metrics: measured then, the zoom would be wrong.
+	addEventListener("resize", () => fit(slides[slideIndex]));
+	document.fonts?.ready.then(() => fit(slides[slideIndex]));
+
 	function render() {
 		slides.forEach((slide, index) =>
 			slide.classList.toggle("current", index === slideIndex),
 		);
+		fit(slides[slideIndex]);
 		stepsOf(slideIndex).forEach((step, index) => {
 			step.classList.toggle("step-done", index < revealed);
 			step.classList.toggle("step-current", index + 1 === revealed);

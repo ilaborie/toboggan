@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use toboggan_core::Date;
+use toboggan_core::{Date, RenderTarget};
 
 use crate::parse_date_string;
 
@@ -80,6 +80,21 @@ pub struct Settings {
         help = "Base URL the exported HTML is served from (e.g. /my-talk/)"
     )]
     pub base_url: Option<String>,
+
+    /// Which slides the HTML export keeps: those visible in `web` or in `pdf`.
+    ///
+    /// `web` — the default — is the deck as it is presented. `pdf` is the deck
+    /// as it is printed: the `hidden_in = ["web"]` slides come back and the
+    /// `hidden_in = ["pdf"]` ones go, which is what a published copy of a talk
+    /// whose live demo has a written-out stand-in wants. Ignored by every
+    /// other format.
+    #[clap(
+        long,
+        value_parser = parse_render_target,
+        default_value = "web",
+        help = "Slides the HTML export keeps: web (default) or pdf"
+    )]
+    pub html_target: RenderTarget,
 
     /// Syntax highlighting theme for code blocks.
     ///
@@ -207,5 +222,17 @@ impl Settings {
 
         // Default to TOML if no format specified and can't auto-detect
         OutputFormat::Toml
+    }
+}
+
+/// Parses a `hidden_in` target name, spelled as in a slide's front matter.
+///
+/// # Errors
+/// Returns a message naming the accepted values when `value` is neither.
+pub fn parse_render_target(value: &str) -> Result<RenderTarget, String> {
+    match value {
+        "web" => Ok(RenderTarget::Web),
+        "pdf" => Ok(RenderTarget::Pdf),
+        other => Err(format!("unknown target `{other}`: expected `web` or `pdf`")),
     }
 }

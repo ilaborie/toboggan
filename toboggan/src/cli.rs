@@ -129,6 +129,11 @@ pub(crate) struct BuildOptions {
     #[arg(long)]
     pub(crate) base_url: Option<String>,
 
+    /// Slides the HTML export keeps: `web` (as presented, the default) or
+    /// `pdf` (as printed, for a published copy without the live demo)
+    #[arg(long, value_parser = toboggan_cli::parse_render_target)]
+    pub(crate) html_target: Option<toboggan_core::RenderTarget>,
+
     /// Syntax-highlighting theme for code blocks [default: base16-ocean.light]
     #[arg(long)]
     pub(crate) theme: Option<String>,
@@ -205,6 +210,7 @@ impl BuildOptions {
             date: self.date,
             lang: self.lang,
             base_url: self.base_url,
+            html_target: self.html_target.unwrap_or(toboggan_core::RenderTarget::Web),
             theme: self.theme.unwrap_or_else(|| DEFAULT_THEME.to_owned()),
             mermaid_config: self.mermaid_config,
             typst_preamble: self.typst_preamble,
