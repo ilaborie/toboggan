@@ -19,7 +19,7 @@ At its centre is a composite action that downloads the prebuilt binary for a
 pinned release, plus `typst`, then runs the commands you use locally:
 
 ```yaml
-- uses: ilaborie/toboggan@v0.2.0
+- uses: ilaborie/toboggan@v0.3.0
   with:
     folder: ./slides
     outputs: html,pdf,thumbnails

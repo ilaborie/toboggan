@@ -121,7 +121,7 @@ toboggan ci --stdout   # print it instead
 At its centre is the composite action:
 
 ```yaml
-- uses: ilaborie/toboggan@v0.2.0
+- uses: ilaborie/toboggan@v0.3.0
   with:
     folder: ./slides
     outputs: html,pdf,thumbnails

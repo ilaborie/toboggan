@@ -37,7 +37,7 @@ jobs:
 
       - name: Lint and build the deck
         id: build
-        uses: ilaborie/toboggan@v0.2.0
+        uses: ilaborie/toboggan@v0.3.0
         with:
           folder: ./slides
           # Lint runs before the build and fails the job on an error, so a

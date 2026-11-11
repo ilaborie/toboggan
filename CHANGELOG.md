@@ -9,6 +9,8 @@ Entries are grouped the way the commits are: this repository uses
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-11
+
 ### Added
 
 - **A deck can recolour its terminals: the chrome and the palette.** Until now
@@ -98,6 +100,11 @@ Entries are grouped the way the commits are: this repository uses
   workflow turns it on and builds pull requests without publishing them.
 
 ### Changed
+
+- **The Python wheel needs Python 3.10 or later** (it was 3.8). pyo3 0.30
+  dropped 3.8; the wheel is built `abi3-py310`, the oldest version current
+  mypy accepts.
+- **The minimum Rust version is 1.96** (it was 1.95), for math-core 0.9.
 
 - **The presenter view's next-slide pane is a photograph, not a second deck.**
   It shows `GET /overview/slide/{index + 1}` — the same still the picker's grid
@@ -556,9 +563,10 @@ First release. The unified `toboggan` command, a `toboggan.toml` configuration
 layer, a rioterm-based embedded terminal, and binaries for
 `x86_64-unknown-linux-gnu` and `aarch64-apple-darwin`.
 
+[0.3.0]: https://github.com/ilaborie/toboggan/releases/tag/v0.3.0
 [0.2.0]: https://github.com/ilaborie/toboggan/releases/tag/v0.2.0
 [0.1.0]: https://github.com/ilaborie/toboggan/releases/tag/v0.1.0
 [conventional commits]: https://www.conventionalcommits.org/en/v1.0.0/
 [keep a changelog]: https://keepachangelog.com/en/1.1.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
-[unreleased]: https://github.com/ilaborie/toboggan/compare/v0.2.0...HEAD
+[unreleased]: https://github.com/ilaborie/toboggan/compare/v0.3.0...HEAD

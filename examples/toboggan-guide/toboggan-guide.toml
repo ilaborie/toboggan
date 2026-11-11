@@ -4367,7 +4367,7 @@ At its centre is a composite action that downloads the prebuilt binary for a
 pinned release, plus `typst`, then runs the commands you use locally:
 
 ```yaml
-- uses: ilaborie/toboggan@v0.2.0
+- uses: ilaborie/toboggan@v0.3.0
   with:
     folder: ./slides
     outputs: html,pdf,thumbnails
@@ -4398,7 +4398,7 @@ handout, and the searchable thumbnail overview:</p>
 <div class="step step-0"><!-- begin step -->
 <p>At its centre is a composite action that downloads the prebuilt binary for a
 pinned release, plus <code>typst</code>, then runs the commands you use locally:</p>
-<pre style="background-color:#eff1f5;"><code class="language-yaml"><span style="color:#4f5b66;">- </span><span style="color:#bf616a;">uses</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">ilaborie/toboggan@v0.2.0
+<pre style="background-color:#eff1f5;"><code class="language-yaml"><span style="color:#4f5b66;">- </span><span style="color:#bf616a;">uses</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">ilaborie/toboggan@v0.3.0
 </span><span style="color:#4f5b66;">  </span><span style="color:#bf616a;">with</span><span style="color:#4f5b66;">:
 </span><span style="color:#4f5b66;">    </span><span style="color:#bf616a;">folder</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">./slides
 </span><span style="color:#4f5b66;">    </span><span style="color:#bf616a;">outputs</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">html,pdf,thumbnails
@@ -4421,7 +4421,7 @@ At its centre is a composite action that downloads the prebuilt binary for a
 pinned release, plus `typst`, then runs the commands you use locally:
 
 ```yaml
-- uses: ilaborie/toboggan@v0.2.0
+- uses: ilaborie/toboggan@v0.3.0
   with:
     folder: ./slides
     outputs: html,pdf,thumbnails

@@ -252,7 +252,7 @@ unless you pass `--force`.
 Underneath is a composite action you can also use directly:
 
 ```yaml
-- uses: ilaborie/toboggan@v0.2.0
+- uses: ilaborie/toboggan@v0.3.0
   with:
     folder: ./slides          # default ./slides
     outputs: html,pdf,thumbnails
@@ -260,7 +260,7 @@ Underneath is a composite action you can also use directly:
     lint: true                # lint first; errors annotate the PR diff
     lint-deny: error          # info | warning | error
     base-url: ""              # only for absolute asset URLs
-    version: v0.2.0           # release of toboggan to install
+    version: v0.3.0           # release of toboggan to install
 ```
 
 The generated file is the same one committed at

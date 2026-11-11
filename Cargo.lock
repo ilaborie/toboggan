@@ -7167,7 +7167,7 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "toboggan"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -7194,7 +7194,7 @@ dependencies = [
 
 [[package]]
 name = "toboggan-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -7218,7 +7218,7 @@ dependencies = [
 
 [[package]]
 name = "toboggan-client"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "derive_more",
  "futures",
@@ -7234,7 +7234,7 @@ dependencies = [
 
 [[package]]
 name = "toboggan-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "derive_more",
  "getrandom 0.4.3",
@@ -7249,7 +7249,7 @@ dependencies = [
 
 [[package]]
 name = "toboggan-desktop"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -7266,7 +7266,7 @@ dependencies = [
 
 [[package]]
 name = "toboggan-lint"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -7277,7 +7277,7 @@ dependencies = [
 
 [[package]]
 name = "toboggan-mcp"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "rmcp",
@@ -7295,7 +7295,7 @@ dependencies = [
 
 [[package]]
 name = "toboggan-mobile"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "toboggan-client",
  "toboggan-core",
@@ -7307,7 +7307,7 @@ dependencies = [
 
 [[package]]
 name = "toboggan-server"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -7342,7 +7342,7 @@ dependencies = [
 
 [[package]]
 name = "toboggan-stats"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "scraper",
  "toboggan-core",
@@ -7350,7 +7350,7 @@ dependencies = [
 
 [[package]]
 name = "toboggan-tui"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
