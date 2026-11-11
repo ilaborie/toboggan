@@ -140,13 +140,14 @@ impl<'a> HtmlRenderer<'a> {
     }
 
     fn latex_to_mathml(&self, latex: &str, display: MathDisplay) -> Result<String> {
-        // Cheap to build (the default config defines no macros, which is the
-        // only thing `new` can reject), and math is rare enough that hoisting
-        // the converter into `HtmlRenderer` would buy nothing.
-        let converter =
-            LatexToMathML::new(MathCoreConfig::default()).map_err(|(err, index, definition)| {
+        // Cheap to build (we pass no macros, which are the only thing `new`
+        // can reject), and math is rare enough that hoisting the converter
+        // into `HtmlRenderer` would buy nothing.
+        let converter = LatexToMathML::new(MathCoreConfig::default(), Vec::new()).map_err(
+            |(err, index, definition)| {
                 self.math_error(latex, &format!("macro {index} (`{definition}`): {err}"))
-            })?;
+            },
+        )?;
         converter
             .convert_with_local_state(latex, display)
             .map(|result| result.mathml)

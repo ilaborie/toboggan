@@ -117,7 +117,7 @@ the commands.
 
 ## Code guidelines
 
-- **Edition 2024**, MSRV 1.95. `cargo +nightly fmt` — the repo's `rustfmt.toml`
+- **Edition 2024**, MSRV 1.96. `cargo +nightly fmt` — the repo's `rustfmt.toml`
   uses nightly-only options, so stable `cargo fmt` will disagree with CI.
 - **No warnings.** Every commit must compile and pass
   `cargo clippy --all-targets --all-features -- -D warnings`.

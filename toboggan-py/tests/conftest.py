@@ -113,7 +113,7 @@ def _wait_until_healthy(process, port, log):
                 if response.status == 200:
                     return
                 last_answer = f"HTTP {response.status}"
-        except (urllib.error.URLError, ConnectionError, socket.timeout) as unready:
+        except (TimeoutError, urllib.error.URLError, ConnectionError) as unready:
             # `HTTPError` is a `URLError`, so a server answering 500 on every
             # poll lands here too — hence recording what it said rather than
             # reporting only that the deadline passed.

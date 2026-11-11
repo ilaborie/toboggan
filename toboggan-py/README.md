@@ -12,11 +12,11 @@ extensions.
 - A socket that reports what *other* clients did, and deck reloads
 - Async architecture with Tokio runtime
 - Type-safe Python API with full type stubs
-- ABI3 wheels for forward compatibility (Python 3.8+)
+- ABI3 wheels for forward compatibility (Python 3.10+)
 
 ## Requirements
 
-- Python 3.8 or higher
+- Python 3.10 or higher
 - Rust toolchain (for building from source)
 - Running Toboggan server (see main repository)
 
