@@ -17,7 +17,10 @@
 //! binding. This module is bindings only; the session logic lives in the parent
 //! module.
 
+use std::borrow::Cow;
+
 use serde::Serialize;
+use toboggan_core::Theme;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
 use web_sys::HtmlElement;
@@ -136,81 +139,129 @@ pub(super) struct OpenOptions {
 /// rioterm's 16-colour palette plus the default and selection colours.
 ///
 /// Carries the same Catppuccin Latte / Mocha values the hand-written emulator
-/// used, so replacing the engine does not restyle every existing deck.
-#[derive(Debug, Clone, Copy, Serialize)]
+/// used, so replacing the engine does not restyle every existing deck. A deck
+/// recolours any slot through the custom property [`Self::slots_mut`] names.
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct RioTheme {
-    pub(super) foreground: &'static str,
-    pub(super) background: &'static str,
-    pub(super) cursor: &'static str,
-    pub(super) selection_foreground: &'static str,
-    pub(super) selection_background: &'static str,
-    pub(super) black: &'static str,
-    pub(super) red: &'static str,
-    pub(super) green: &'static str,
-    pub(super) yellow: &'static str,
-    pub(super) blue: &'static str,
-    pub(super) magenta: &'static str,
-    pub(super) cyan: &'static str,
-    pub(super) white: &'static str,
-    pub(super) bright_black: &'static str,
-    pub(super) bright_red: &'static str,
-    pub(super) bright_green: &'static str,
-    pub(super) bright_yellow: &'static str,
-    pub(super) bright_blue: &'static str,
-    pub(super) bright_magenta: &'static str,
-    pub(super) bright_cyan: &'static str,
-    pub(super) bright_white: &'static str,
+    pub(super) foreground: Cow<'static, str>,
+    pub(super) background: Cow<'static, str>,
+    pub(super) cursor: Cow<'static, str>,
+    pub(super) selection_foreground: Cow<'static, str>,
+    pub(super) selection_background: Cow<'static, str>,
+    pub(super) black: Cow<'static, str>,
+    pub(super) red: Cow<'static, str>,
+    pub(super) green: Cow<'static, str>,
+    pub(super) yellow: Cow<'static, str>,
+    pub(super) blue: Cow<'static, str>,
+    pub(super) magenta: Cow<'static, str>,
+    pub(super) cyan: Cow<'static, str>,
+    pub(super) white: Cow<'static, str>,
+    pub(super) bright_black: Cow<'static, str>,
+    pub(super) bright_red: Cow<'static, str>,
+    pub(super) bright_green: Cow<'static, str>,
+    pub(super) bright_yellow: Cow<'static, str>,
+    pub(super) bright_blue: Cow<'static, str>,
+    pub(super) bright_magenta: Cow<'static, str>,
+    pub(super) bright_cyan: Cow<'static, str>,
+    pub(super) bright_white: Cow<'static, str>,
 }
 
 impl RioTheme {
+    /// The built-in palette a deck in `theme` starts from, before its own
+    /// `--terminal-<slot>` properties are applied.
+    pub(super) fn for_theme(theme: Theme) -> Self {
+        match theme {
+            Theme::Light => Self::LIGHT,
+            Theme::Dark => Self::DARK,
+        }
+    }
+
+    /// Every colour slot, paired with the custom property that overrides it.
+    ///
+    /// The property is the field name in kebab-case behind `--terminal-`, so a
+    /// deck reads the same vocabulary as rioterm's own `Theme`. Written out
+    /// rather than derived: the list is the public contract, and a renamed field
+    /// must not rename a property some deck already declares.
+    pub(super) fn slots_mut(&mut self) -> [(&'static str, &mut Cow<'static, str>); 21] {
+        [
+            ("--terminal-foreground", &mut self.foreground),
+            ("--terminal-background", &mut self.background),
+            ("--terminal-cursor", &mut self.cursor),
+            (
+                "--terminal-selection-foreground",
+                &mut self.selection_foreground,
+            ),
+            (
+                "--terminal-selection-background",
+                &mut self.selection_background,
+            ),
+            ("--terminal-black", &mut self.black),
+            ("--terminal-red", &mut self.red),
+            ("--terminal-green", &mut self.green),
+            ("--terminal-yellow", &mut self.yellow),
+            ("--terminal-blue", &mut self.blue),
+            ("--terminal-magenta", &mut self.magenta),
+            ("--terminal-cyan", &mut self.cyan),
+            ("--terminal-white", &mut self.white),
+            ("--terminal-bright-black", &mut self.bright_black),
+            ("--terminal-bright-red", &mut self.bright_red),
+            ("--terminal-bright-green", &mut self.bright_green),
+            ("--terminal-bright-yellow", &mut self.bright_yellow),
+            ("--terminal-bright-blue", &mut self.bright_blue),
+            ("--terminal-bright-magenta", &mut self.bright_magenta),
+            ("--terminal-bright-cyan", &mut self.bright_cyan),
+            ("--terminal-bright-white", &mut self.bright_white),
+        ]
+    }
+
     /// Catppuccin Mocha, matching the old emulator's `DARK_COLORS`.
     pub(super) const DARK: Self = Self {
-        foreground: "#cdd6f4",
-        background: "#1e1e2e",
-        cursor: "#f5e0dc",
-        selection_foreground: "#cdd6f4",
-        selection_background: "#585b70",
-        black: "#45475a",
-        red: "#f38ba8",
-        green: "#a6e3a1",
-        yellow: "#f9e2af",
-        blue: "#89b4fa",
-        magenta: "#cba6f7",
-        cyan: "#94e2d5",
-        white: "#bac2de",
-        bright_black: "#585b70",
-        bright_red: "#f38ba8",
-        bright_green: "#a6e3a1",
-        bright_yellow: "#f9e2af",
-        bright_blue: "#89b4fa",
-        bright_magenta: "#cba6f7",
-        bright_cyan: "#94e2d5",
-        bright_white: "#cdd6f4",
+        foreground: Cow::Borrowed("#cdd6f4"),
+        background: Cow::Borrowed("#1e1e2e"),
+        cursor: Cow::Borrowed("#f5e0dc"),
+        selection_foreground: Cow::Borrowed("#cdd6f4"),
+        selection_background: Cow::Borrowed("#585b70"),
+        black: Cow::Borrowed("#45475a"),
+        red: Cow::Borrowed("#f38ba8"),
+        green: Cow::Borrowed("#a6e3a1"),
+        yellow: Cow::Borrowed("#f9e2af"),
+        blue: Cow::Borrowed("#89b4fa"),
+        magenta: Cow::Borrowed("#cba6f7"),
+        cyan: Cow::Borrowed("#94e2d5"),
+        white: Cow::Borrowed("#bac2de"),
+        bright_black: Cow::Borrowed("#585b70"),
+        bright_red: Cow::Borrowed("#f38ba8"),
+        bright_green: Cow::Borrowed("#a6e3a1"),
+        bright_yellow: Cow::Borrowed("#f9e2af"),
+        bright_blue: Cow::Borrowed("#89b4fa"),
+        bright_magenta: Cow::Borrowed("#cba6f7"),
+        bright_cyan: Cow::Borrowed("#94e2d5"),
+        bright_white: Cow::Borrowed("#cdd6f4"),
     };
 
     /// Catppuccin Latte, matching the old emulator's `LIGHT_COLORS`.
     pub(super) const LIGHT: Self = Self {
-        foreground: "#4c4f69",
-        background: "#eff1f5",
-        cursor: "#dc8a78",
-        selection_foreground: "#4c4f69",
-        selection_background: "#bcc0cc",
-        black: "#acb0be",
-        red: "#d20f39",
-        green: "#40a02b",
-        yellow: "#df8e1d",
-        blue: "#1e66f5",
-        magenta: "#8839ef",
-        cyan: "#179299",
-        white: "#5c5f77",
-        bright_black: "#bcc0cc",
-        bright_red: "#d20f39",
-        bright_green: "#40a02b",
-        bright_yellow: "#df8e1d",
-        bright_blue: "#1e66f5",
-        bright_magenta: "#8839ef",
-        bright_cyan: "#179299",
-        bright_white: "#4c4f69",
+        foreground: Cow::Borrowed("#4c4f69"),
+        background: Cow::Borrowed("#eff1f5"),
+        cursor: Cow::Borrowed("#dc8a78"),
+        selection_foreground: Cow::Borrowed("#4c4f69"),
+        selection_background: Cow::Borrowed("#bcc0cc"),
+        black: Cow::Borrowed("#acb0be"),
+        red: Cow::Borrowed("#d20f39"),
+        green: Cow::Borrowed("#40a02b"),
+        yellow: Cow::Borrowed("#df8e1d"),
+        blue: Cow::Borrowed("#1e66f5"),
+        magenta: Cow::Borrowed("#8839ef"),
+        cyan: Cow::Borrowed("#179299"),
+        white: Cow::Borrowed("#5c5f77"),
+        bright_black: Cow::Borrowed("#bcc0cc"),
+        bright_red: Cow::Borrowed("#d20f39"),
+        bright_green: Cow::Borrowed("#40a02b"),
+        bright_yellow: Cow::Borrowed("#df8e1d"),
+        bright_blue: Cow::Borrowed("#1e66f5"),
+        bright_magenta: Cow::Borrowed("#8839ef"),
+        bright_cyan: Cow::Borrowed("#179299"),
+        bright_white: Cow::Borrowed("#4c4f69"),
     };
 }

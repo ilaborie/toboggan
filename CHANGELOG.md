@@ -11,6 +11,30 @@ Entries are grouped the way the commits are: this repository uses
 
 ### Added
 
+- **A deck can recolour its terminals: the chrome and the palette.** Until now
+  both were Catppuccin, Mocha or Latte, written into the terminal's shadow
+  stylesheet and into the Rust constants rioterm is opened with — a deck with a
+  palette of its own got a grey-blue window in the middle of it, with no way
+  in. Both now go through custom properties, the only thing that crosses the
+  shadow boundary.
+
+  The chrome is plain CSS: `--terminal-window-bg`, `--terminal-border`,
+  `--terminal-shadow`, `--terminal-titlebar-bg`, `--terminal-titlebar-border`,
+  `--terminal-title-color`, and `--terminal-btn-close` / `-minimize` /
+  `-maximize`. The palette is one property per slot of rioterm's theme —
+  `--terminal-foreground`, `--terminal-background`, `--terminal-cursor`, the two
+  selection colours and the sixteen ANSI ones, `--terminal-black` to
+  `--terminal-bright-white` — in hex, `#rgb` or `#rrggbb`; anything else is
+  ignored with a console warning, and `#rgb` reaches rioterm as `#rrggbb`. The
+  window background falls back on the background the canvas took, so the 3px
+  around it match even when a colour was refused.
+
+  Every property falls back on the colour it replaces: a deck that declares
+  nothing renders exactly as before. Like `--terminal-font-size`, the palette is
+  **read when the terminal opens** and once more at its first re-fit, because
+  rioterm takes its theme with the renderer: a palette that lands late, behind
+  an `@import`, costs a rebuild. Declare it in the slide's own `<style>`.
+
 - **A deck can set the size a terminal opens at, with `--terminal-font-size`.**
   It joins `--terminal-radius` and `--terminal-titlebar-display` as a custom
   property that reaches inside the terminal's shadow root, where a selector

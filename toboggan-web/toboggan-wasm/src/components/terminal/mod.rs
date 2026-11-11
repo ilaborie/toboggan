@@ -1,5 +1,6 @@
 mod rioterm;
 
+use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -540,6 +541,10 @@ const DEFAULT_GRID: (u16, u16) = (80, 24);
 
 /// The custom property a host sets to open its terminals at another size.
 const FONT_SIZE_PROPERTY: &str = "--terminal-font-size";
+
+/// Set inline on the window by [`paint_frame`]: the background the canvas was
+/// built with, which `style.css` paints the frame in.
+const CANVAS_BACKGROUND_PROPERTY: &str = "--terminal-canvas-background";
 /// Below half a CSS pixel two font sizes almost always give the same grid — the
 /// cell is a whole number of pixels, near `.6` by `1.3` of the size — so a
 /// rebuild would replay the buffer for a difference nobody can see.
@@ -599,6 +604,88 @@ fn parse_font_size(declared: &str) -> Option<f64> {
         .then(|| size.clamp(FONT_SIZE_MIN, FONT_SIZE_MAX))
 }
 
+/// `base` recoloured by whatever `--terminal-<slot>` properties the host set.
+///
+/// The palette's counterpart to [`css_font_size`], and read off the same
+/// `.terminal-body` for the same reason: a custom property is the only thing
+/// that crosses into the shadow tree. Read rather than applied because rioterm
+/// takes its theme when it builds the renderer and has no call to change it
+/// afterwards. Like the font size, it is read when the terminal opens and once
+/// more at the first re-fit, for a stylesheet behind an `@import` that landed
+/// late; a palette that changed then costs a rebuild.
+///
+/// The slots and their property names are listed in [`RioTheme::slots_mut`]. A
+/// slot nobody declared keeps the base colour; one declared with a value
+/// [`parse_color`] refuses keeps it too, and says so.
+fn css_palette(body: &HtmlElement, mut theme: RioTheme) -> RioTheme {
+    let Some(style) = web_sys::window().and_then(|window| window.get_computed_style(body).ok()?)
+    else {
+        return theme;
+    };
+    for (property, slot) in theme.slots_mut() {
+        let Ok(declared) = style.get_property_value(property) else {
+            continue;
+        };
+        match parse_color(&declared) {
+            Some(color) => *slot = Cow::Owned(color),
+            None if !declared.trim().is_empty() => {
+                warn!(
+                    "Ignoring a terminal colour (want #rgb or #rrggbb):",
+                    property, declared
+                );
+            }
+            None => {}
+        }
+    }
+    theme
+}
+
+/// A declared terminal colour, or `None` for "not asked".
+///
+/// Hex only, `#rgb` or `#rrggbb`. That is what every built-in palette is written
+/// in, and it is checkable without a browser — the one thing the host-target
+/// tests below can reach. A deck that keeps its colours in tokens still gets
+/// them through: the computed style substitutes a `var()` before this sees it.
+///
+/// Always handed back as `#rrggbb`: rioterm 0.1.8 dims a colour by slicing six
+/// digits out of it, so a `#rgb` it received as written came out garbled on
+/// every faint glyph.
+fn parse_color(declared: &str) -> Option<String> {
+    let digits = declared.trim().strip_prefix('#')?;
+    if !digits.chars().all(|digit| digit.is_ascii_hexdigit()) {
+        return None;
+    }
+    match digits.len() {
+        6 => Some(format!("#{digits}")),
+        3 => Some(digits.chars().fold(String::from("#"), |mut color, digit| {
+            color.push(digit);
+            color.push(digit);
+            color
+        })),
+        _ => None,
+    }
+}
+
+/// Gives the window the background the canvas was actually built with.
+///
+/// The 3px of `.terminal-body` padding around the canvas show the window's
+/// background, so it has to match the canvas. Left to CSS, it would follow
+/// `--terminal-background` as declared, which [`parse_color`] may have refused
+/// (an `rgb()`, a named colour) and the canvas then never took: a light frame
+/// around a dark terminal. `style.css` reads this property under the deck's own
+/// `--terminal-window-bg`.
+fn paint_frame(window_el: Option<&HtmlElement>, palette: &RioTheme) {
+    let Some(window_el) = window_el else {
+        return;
+    };
+    if let Err(err) = window_el
+        .style()
+        .set_property(CANVAS_BACKGROUND_PROPERTY, &palette.background)
+    {
+        warn!("Could not paint the terminal frame:", err);
+    }
+}
+
 /// Mounts a rioterm terminal into `body` and wires its callbacks to `tx`.
 /// Loads the bundled terminal font, so the canvas measures cell width against
 /// the real font rather than a system fallback.
@@ -637,7 +724,7 @@ async fn await_terminal_fonts() {
 
 async fn open_session(
     body: &HtmlElement,
-    theme: Theme,
+    palette: &RioTheme,
     font_size: f64,
     title_el: Option<HtmlElement>,
     tx: &mpsc::UnboundedSender<KeyAction>,
@@ -670,11 +757,9 @@ async fn open_session(
         predictive_echo: false,
         font_family: FONT_FAMILY.to_owned(),
         font_size,
-        theme: if theme == Theme::Light {
-            RioTheme::LIGHT
-        } else {
-            RioTheme::DARK
-        },
+        // The palette in force, so a rebuild for a new font size keeps the
+        // deck's colours without reading (and warning about) them again.
+        theme: palette.clone(),
     };
     let options = match serde_wasm_bindgen::to_value(&options) {
         Ok(value) => value,
@@ -779,8 +864,18 @@ async fn run_terminal_session(
     // is where a stylesheet that had not arrived yet gets its second chance.
     let initial_font_size = css_font_size(&body).unwrap_or(DEFAULT_FONT_SIZE);
     let font_size = Rc::new(RefCell::new(initial_font_size));
-    let Some(session) =
-        open_session(&body, theme, initial_font_size, title_el.clone(), &tx_key).await
+    // Same for the palette, which the `Resize` arm also reads once more.
+    let base_palette = RioTheme::for_theme(theme);
+    let mut palette = css_palette(&body, base_palette.clone());
+    paint_frame(window_el.as_ref(), &palette);
+    let Some(session) = open_session(
+        &body,
+        &palette,
+        initial_font_size,
+        title_el.clone(),
+        &tx_key,
+    )
+    .await
     else {
         return;
     };
@@ -826,10 +921,10 @@ async fn run_terminal_session(
         // Last grid size sent to the server, so a re-fit that resolves to the
         // same dimensions (a spurious observer callback) is a no-op.
         let mut last_dims = (initial_cols, initial_rows);
-        // Whether `--terminal-font-size` has had its last word. See the `Resize`
-        // arm: the first re-fit is the deadline, and after it the size belongs
-        // to whoever last pressed `Cmd +`.
-        let mut css_size_settled = false;
+        // Whether the stylesheet (`--terminal-font-size` and the palette) has
+        // had its last word. See the `Resize` arm: the first re-fit is the
+        // deadline, and after it the size belongs to whoever last pressed `Cmd +`.
+        let mut css_settled = false;
         while let Some(action) = rx_key.next().await {
             match action {
                 KeyAction::Shutdown => {
@@ -867,7 +962,7 @@ async fn run_terminal_session(
                     if let Some(dims) = rebuild_for_font_size(
                         &session_action,
                         &body_action,
-                        theme,
+                        &palette,
                         new_size,
                         title_el.clone(),
                         &tx_key,
@@ -917,31 +1012,40 @@ async fn run_terminal_session(
                     //
                     // Once, and only from the *initial* size: after this the
                     // presenter may have pressed `Cmd +`, and a stylesheet does
-                    // not get to argue with the person on stage.
-                    let late = if css_size_settled {
-                        None
-                    } else {
-                        css_size_settled = true;
+                    // not get to argue with the person on stage. The palette is
+                    // nobody's on stage, so it is taken whenever it changed.
+                    let mut late = false;
+                    if !css_settled {
+                        css_settled = true;
                         let in_force = *font_size_action.borrow();
                         let untouched = (in_force - initial_font_size).abs() < FONT_SIZE_EPSILON;
-                        css_font_size(&body_action)
+                        if let Some(wanted) = css_font_size(&body_action)
                             .filter(|_| untouched)
                             .filter(|wanted| (wanted - in_force).abs() >= FONT_SIZE_EPSILON)
-                    };
-                    let rebuilt = match late {
-                        Some(wanted) => {
+                        {
                             *font_size_action.borrow_mut() = wanted;
-                            rebuild_for_font_size(
-                                &session_action,
-                                &body_action,
-                                theme,
-                                wanted,
-                                title_el.clone(),
-                                &tx_key,
-                            )
-                            .await
+                            late = true;
                         }
-                        None => None,
+                        let reread = css_palette(&body_action, base_palette.clone());
+                        if reread != palette {
+                            paint_frame(window_el_action.as_ref(), &reread);
+                            palette = reread;
+                            late = true;
+                        }
+                    }
+                    let rebuilt = if late {
+                        let size = *font_size_action.borrow();
+                        rebuild_for_font_size(
+                            &session_action,
+                            &body_action,
+                            &palette,
+                            size,
+                            title_el.clone(),
+                            &tx_key,
+                        )
+                        .await
+                    } else {
+                        None
                     };
                     last_dims = match rebuilt {
                         Some(dims) => {
@@ -1016,7 +1120,7 @@ async fn run_terminal_session(
 async fn rebuild_for_font_size(
     session: &Rc<RefCell<Session>>,
     body: &HtmlElement,
-    theme: Theme,
+    palette: &RioTheme,
     font_size: f64,
     title_el: Option<HtmlElement>,
     tx: &mpsc::UnboundedSender<KeyAction>,
@@ -1029,7 +1133,7 @@ async fn rebuild_for_font_size(
         dump
     };
 
-    let next = open_session(body, theme, font_size, title_el, tx).await?;
+    let next = open_session(body, palette, font_size, title_el, tx).await?;
     next.terminal.write(dump.as_bytes());
     let dims = refit(&next, body);
     *session.borrow_mut() = next;
@@ -1091,6 +1195,7 @@ fn build_terminal_ws_url(
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
     use super::*;
 
@@ -1128,6 +1233,58 @@ mod tests {
         assert_eq!(parse_font_size("260"), Some(FONT_SIZE_MAX));
         assert_eq!(parse_font_size("2"), Some(FONT_SIZE_MIN));
         assert_eq!(parse_font_size("-26"), Some(FONT_SIZE_MIN));
+    }
+
+    #[test]
+    fn a_hex_colour_is_a_colour() {
+        assert_eq!(parse_color("#efe2cc").as_deref(), Some("#efe2cc"));
+        assert_eq!(parse_color("#EFE2CC").as_deref(), Some("#EFE2CC"));
+        // Long form only: rioterm dims a colour by slicing six digits.
+        assert_eq!(parse_color("#abc").as_deref(), Some("#aabbcc"));
+        // A computed style hands the value back with the author's whitespace.
+        assert_eq!(parse_color(" #efe2cc ").as_deref(), Some("#efe2cc"));
+    }
+
+    #[test]
+    fn nothing_declared_is_not_a_colour() {
+        assert_eq!(parse_color(""), None);
+        assert_eq!(parse_color("   "), None);
+    }
+
+    #[test]
+    fn anything_but_hex_is_refused_rather_than_guessed_at() {
+        assert_eq!(parse_color("red"), None);
+        assert_eq!(parse_color("rgb(239 226 204)"), None);
+        assert_eq!(parse_color("var(--code-bg)"), None);
+        assert_eq!(parse_color("efe2cc"), None);
+        assert_eq!(parse_color("#efe2c"), None);
+        assert_eq!(parse_color("#efe2cg"), None);
+        assert_eq!(parse_color("#efe2cc80"), None);
+    }
+
+    #[test]
+    fn every_palette_property_names_the_slot_it_writes() {
+        // Write each property's own name into its slot, then read the slots back
+        // by field: a pair wired to the wrong field shows up as a mismatch.
+        let mut theme = RioTheme::LIGHT;
+        for (property, slot) in theme.slots_mut() {
+            *slot = Cow::Borrowed(property);
+        }
+        let fields = serde_json::to_value(&theme).expect("a theme serializes to JSON");
+        let fields = fields.as_object().expect("a theme serializes to an object");
+        assert_eq!(fields.len(), 21);
+        for (field, property) in fields {
+            let kebab = field
+                .chars()
+                .fold(String::from("--terminal-"), |mut name, letter| {
+                    if letter.is_ascii_uppercase() {
+                        name.push('-');
+                    }
+                    name.push(letter.to_ascii_lowercase());
+                    name
+                });
+            assert_eq!(property.as_str(), Some(kebab.as_str()), "field {field}");
+        }
     }
 
     #[test]

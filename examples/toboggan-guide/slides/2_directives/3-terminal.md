@@ -25,10 +25,24 @@ plain number of CSS pixels, clamped to 8-32, the same range `Cmd +` / `Cmd -`
 covers on stage. Declare them on the `.toboggan-terminal` element or anywhere
 above it.
 
-The font size is *read once*, when the terminal opens, because rioterm fixes it
-when it builds the renderer. Declare it in the slide's own `<style>` rather
-than in a stylesheet reached through `@import`: an import resolves over the
-network, and a terminal that opens first sees nothing and falls back to 22.
+The chrome takes its colours the same way: `--terminal-window-bg`,
+`--terminal-border`, `--terminal-shadow`, `--terminal-titlebar-bg`,
+`--terminal-titlebar-border`, `--terminal-title-color`,
+`--terminal-focus-ring`, and `--terminal-btn-close` / `-minimize` / `-maximize`
+for the three buttons. Undeclared, each keeps its Catppuccin value.
+
+The palette inside the canvas is one property per slot, hex only:
+`--terminal-foreground`, `--terminal-background`, `--terminal-cursor`,
+`--terminal-selection-foreground`, `--terminal-selection-background`, and the
+sixteen ANSI colours from `--terminal-black` to `--terminal-bright-white`. The
+window background follows the canvas, so the frame matches it without saying
+it twice.
+
+The font size and the palette are read when the terminal opens, because
+rioterm fixes both when it builds the renderer, and once more when it is first
+laid out. Declare them in the slide's own `<style>`: a stylesheet reached
+through `@import` that lands late costs a rebuild of the terminal. The chrome
+is plain CSS and has no such race.
 
 Multiple `term` comments on one slide render side by side. The shell is chosen
 by the server's --shell flag. The fenced examples above stay as text; the bare
