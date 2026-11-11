@@ -35,38 +35,54 @@
     height: 100%;
 }
 
+/* The chrome's colours.
+   Every one goes through a custom property, for the same reason as
+   `--terminal-titlebar-display` below: custom properties inherit across the
+   shadow boundary, selectors from the outside do not. The fallbacks are the
+   Catppuccin Mocha / Latte values the chrome always had, so a deck that declares
+   nothing renders exactly as before.
+
+   The window background falls back on `--terminal-canvas-background` before
+   the theme's own. `paint_frame` in `mod.rs` sets it inline to the background
+   the canvas was actually built with: the 3px of `.terminal-body` padding around
+   the canvas show this background, and reading `--terminal-background` here
+   would paint a colour the canvas refused (anything but hex) or has not taken
+   yet. */
+
 /* Dark theme (default) */
 .terminal-dark {
-    background: #1e1e2e;
-    box-shadow:
+    background: var(--terminal-window-bg, var(--terminal-canvas-background, #1e1e2e));
+    box-shadow: var(--terminal-shadow,
         0 8px 32px rgba(0, 0, 0, 0.4),
-        0 2px 8px rgba(0, 0, 0, 0.2);
+        0 2px 8px rgba(0, 0, 0, 0.2));
+    border: var(--terminal-border, none);
 }
 
 .terminal-dark .terminal-titlebar {
-    background: #181825;
+    background: var(--terminal-titlebar-bg, #181825);
+    border-bottom: var(--terminal-titlebar-border, none);
 }
 
 .terminal-dark .terminal-title {
-    color: #6c7086;
+    color: var(--terminal-title-color, #6c7086);
 }
 
 /* Light theme */
 .terminal-light {
-    background: #eff1f5;
-    box-shadow:
+    background: var(--terminal-window-bg, var(--terminal-canvas-background, #eff1f5));
+    box-shadow: var(--terminal-shadow,
         0 8px 32px rgba(0, 0, 0, 0.15),
-        0 2px 8px rgba(0, 0, 0, 0.08);
-    border: 1px solid #ccd0da;
+        0 2px 8px rgba(0, 0, 0, 0.08));
+    border: var(--terminal-border, 1px solid #ccd0da);
 }
 
 .terminal-light .terminal-titlebar {
-    background: #e6e9ef;
-    border-bottom: 1px solid #ccd0da;
+    background: var(--terminal-titlebar-bg, #e6e9ef);
+    border-bottom: var(--terminal-titlebar-border, 1px solid #ccd0da);
 }
 
 .terminal-light .terminal-title {
-    color: #8c8fa1;
+    color: var(--terminal-title-color, #8c8fa1);
 }
 
 /* Title bar.
@@ -101,16 +117,16 @@
 }
 
 .terminal-btn-close {
-    background: #ed6a5e;
+    background: var(--terminal-btn-close, #ed6a5e);
     cursor: default;
 }
 
 .terminal-btn-minimize {
-    background: #f5bf4f;
+    background: var(--terminal-btn-minimize, #f5bf4f);
 }
 
 .terminal-btn-maximize {
-    background: #61c554;
+    background: var(--terminal-btn-maximize, #61c554);
 }
 
 /* Title text */
