@@ -375,9 +375,10 @@ fn display_results(parse_result: &ParseResult, settings: &Settings) -> Result<()
 fn write_output(parse_result: &ParseResult, output: &Path, settings: &Settings) -> Result<()> {
     let format = settings.resolve_format();
     let talk = parse_result.to_talk();
-    let serialized = output::serialize_talk(
+    let serialized = output::serialize_talk_for(
         &talk,
         format,
+        settings.html_target,
         settings.base_url.as_deref().unwrap_or_default(),
         &mermaid_renderer(settings)?,
     )?;

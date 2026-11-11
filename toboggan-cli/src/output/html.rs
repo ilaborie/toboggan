@@ -355,6 +355,27 @@ mod tests {
         Ok(())
     }
 
+    /// Auto-fit belongs to presentation mode: a printed or script-less deck
+    /// keeps every slide at its own size.
+    #[test]
+    fn fit_zoom_is_screen_only_and_script_gated() -> anyhow::Result<()> {
+        let html = String::from_utf8(generate_html(&Talk::new("Test"), None, "")?)?;
+
+        let gate = html
+            .find("html.toboggan-js")
+            .expect("presentation mode is gated on the script having run");
+        let zoom = html
+            .find("zoom: var(--toboggan-fit")
+            .expect("the fit zoom is in the export");
+        let print = html.find("@media print").expect("print rules exist");
+        assert!(
+            gate < zoom && zoom < print,
+            "fit zoom sits in the screen-only block"
+        );
+
+        Ok(())
+    }
+
     #[test]
     fn test_generate_html_with_custom_head() -> anyhow::Result<()> {
         let mut talk = Talk::new("Test");

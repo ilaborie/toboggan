@@ -398,6 +398,8 @@ jobs:
           brew install swiftlint
           swiftlint lint --strict --config .swiftlint.yml
 
+      # `CARGO` because Xcode wipes PATH for the run-script phase, and the
+      # image's rustup is Homebrew's: see `xc-universal-binary.sh`.
       - name: Build and test
         working-directory: TobogganApp
         run: |
@@ -406,7 +408,8 @@ jobs:
             -scheme TobogganApp \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
             -only-testing:TobogganAppTests \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            CARGO="$(command -v cargo)"
 
   # The Android client, for exactly the reason the iOS job exists. Adding `GoTo`
   # to `Command` turned a UniFFI `enum class` into a sealed class, which renamed

@@ -36,6 +36,10 @@
 # as well as at a site root. Set this only if they must be addressed absolutely.
 # base-url = "/my-talk/"
 
+# Slides `toboggan build -o deck.html` keeps: `web` (as presented) or `pdf`
+# (as printed: the `hidden_in = ["web"]` stand-ins in, the live demo out).
+# html-target = "web"
+
 # Syntax-highlighting theme for code blocks. `toboggan build --list-themes`
 # prints the available names.
 # theme = "base16-ocean.light"

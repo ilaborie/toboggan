@@ -73,6 +73,15 @@ main {
 		.toboggan-slide .step:not(.step-done) a {
 			pointer-events: none;
 		}
+
+		/* A slide opted in with `classes = ["fit"]` is shrunk until it fits the
+		   screen; navigate.js finds the factor. `zoom` rather than `font-size`
+		   because a deck sizes its text in rem, vw and vh as much as in em, and
+		   zoom scales them all — layout included — where font-size would miss
+		   most of it. The title stays full size: only the body shrinks. */
+		.toboggan-slide section.fit > article {
+			zoom: var(--toboggan-fit, 1);
+		}
 	}
 }
 
