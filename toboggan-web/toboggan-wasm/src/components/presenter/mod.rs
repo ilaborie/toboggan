@@ -372,6 +372,11 @@ impl TobogganPresenterElement {
         inner.refresh_status();
         inner.refresh_next();
         inner.post_now();
+
+        // The pair of `data-ready`: the counter reads `1/N` from the moment the
+        // layout is drawn, before the room has said where it is, so a browser
+        // test has no other way to tell "on slide 1" from "not told yet".
+        let _ = inner.layout.set_attribute("data-synced", "true");
     }
 
     /// Shows or hides the navigation, matching the "Following along" toast: a

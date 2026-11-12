@@ -277,6 +277,11 @@ test("the timer pauses and resets", async ({ page }) => {
 	await page.goto("/presenter");
 	const elapsed = page.locator(".elapsed");
 	await expect(elapsed).toBeVisible({ timeout: 15_000 });
+	// The first state starts the timer when it is idle: a pause clicked before
+	// it arrived was undone by it, and the button read ⏸ again.
+	await expect(page.locator(".layout")).toHaveAttribute("data-synced", "true", {
+		timeout: 15_000,
+	});
 
 	await page.locator(".pause").click();
 	await expect(page.locator(".pause")).toHaveText("▶");
