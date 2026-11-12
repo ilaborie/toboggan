@@ -336,9 +336,14 @@ jobs:
       # The deck is compiled Rust behind a shadow root: a page can answer 200
       # with a blank body when the wasm bundle fails to boot, so the assertions
       # wait for something the client itself had to render.
+      #
+      # Without `--with-deps`: the system libraries chromium needs are already
+      # there from `setup-chrome` above, and what `--with-deps` adds on top is a
+      # dozen font packages fetched with `apt-get`. That tied this job to the
+      # Ubuntu mirrors, which stopped resolving on the runner (#92, #93).
       - name: Install Playwright browsers
         working-directory: toboggan-web
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install chromium
       - name: Smoke test the served deck
         working-directory: toboggan-web
         env:
@@ -398,6 +403,41 @@ jobs:
           brew install swiftlint
           swiftlint lint --strict --config .swiftlint.yml
 
+      # A runner can come up with CoreSimulator listing no device at all, and
+      # `xcodebuild` then fails with an empty destination list (main, run
+      # 42978694408). So the device is resolved here: wait for an iOS runtime,
+      # reuse its iPhone 17 Pro or create one, and boot it. A sick simulator
+      # service then fails this step, by name, rather than the build.
+      - name: Pick an iOS simulator
+        id: simulator
+        run: |
+          set -euo pipefail
+          newest_ios_runtime() {
+            xcrun simctl list runtimes available -j | jq -r '
+              [.runtimes[] | select(.platform == "iOS")]
+              | sort_by(.version | split(".") | map(tonumber)) | last | .identifier // empty'
+          }
+          runtime=""
+          for attempt in 1 2 3 4 5 6; do
+            runtime=$(newest_ios_runtime)
+            [ -n "$runtime" ] && break
+            echo "no iOS runtime listed yet (attempt $attempt), waiting"
+            sleep 10
+          done
+          if [ -z "$runtime" ]; then
+            xcrun simctl list runtimes
+            echo "::error::no iOS simulator runtime on this runner"
+            exit 1
+          fi
+          udid=$(xcrun simctl list devices available -j | jq -r --arg runtime "$runtime" '
+            .devices[$runtime] // [] | map(select(.name == "iPhone 17 Pro")) | first | .udid // empty')
+          if [ -z "$udid" ]; then
+            udid=$(xcrun simctl create "iPhone 17 Pro" \
+              com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro "$runtime")
+          fi
+          xcrun simctl bootstatus "$udid" -b
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
       # `CARGO` because Xcode wipes PATH for the run-script phase, and the
       # image's rustup is Homebrew's: see `xc-universal-binary.sh`.
       - name: Build and test
@@ -406,7 +446,7 @@ jobs:
           xcodebuild test \
             -project TobogganApp.xcodeproj \
             -scheme TobogganApp \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
+            -destination 'id=${{ steps.simulator.outputs.udid }}' \
             -only-testing:TobogganAppTests \
             CODE_SIGNING_ALLOWED=NO \
             CARGO="$(command -v cargo)"
