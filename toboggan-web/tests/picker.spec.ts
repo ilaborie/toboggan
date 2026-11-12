@@ -70,6 +70,11 @@ async function openPresenter(page: Page) {
 	await expect(page.locator(".layout")).toHaveAttribute("data-ready", "true", {
 		timeout: 30_000,
 	});
+	// The room's slide has reached the view: until then the counter reads
+	// `1/N` whatever the room is on (#95).
+	await expect(page.locator(".layout")).toHaveAttribute("data-synced", "true", {
+		timeout: 30_000,
+	});
 }
 
 /**
@@ -392,6 +397,11 @@ async function openDeck(page: Page) {
 	await expect(page.locator(".strip-cell").first()).toBeAttached({
 		timeout: 30_000,
 	});
+	// And the room's slide has reached the deck. `--current-slide` is set from
+	// the first state over the socket, which can land after the slide is drawn:
+	// a test that read `deckIsOn` too early compared the room's slide with ""
+	// and failed, then passed on retry (#94).
+	await expect.poll(() => deckIsOn(page), { timeout: 30_000 }).toMatch(/^\d+$/);
 }
 
 /** Opens the deck page's picker, and waits for the thumbnails behind it. */
